@@ -10,7 +10,8 @@ CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET")
 
 # Must match exactly what you register in Yahoo Developer Console
 # Streamlit apps don't support custom paths, so we use the root URL
-REDIRECT_URI = "https://leaguehistory.streamlit.app/"
+# Try both with and without trailing slash - Yahoo can be picky
+REDIRECT_URI = "https://leaguehistory.streamlit.app"
 
 AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
 TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
@@ -175,9 +176,9 @@ def main():
 
         1. **Check Redirect URI**: In your Yahoo Developer Console, ensure the redirect URI is EXACTLY:
            ```
-           https://leaguehistory.streamlit.app/
+           https://leaguehistory.streamlit.app
            ```
-           (With trailing slash, exact match)
+           (No trailing slash - try both with and without if one doesn't work)
 
         2. **Verify Client Credentials**: Make sure your `YAHOO_CLIENT_ID` and `YAHOO_CLIENT_SECRET` 
            environment variables are set correctly in Streamlit Cloud.
