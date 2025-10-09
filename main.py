@@ -19,9 +19,14 @@ CALLBACK_URI = "oob"
 
 def get_request_token():
     """Get OAuth 1.0a request token"""
-    oauth = OAuth1Session(CLIENT_ID, client_secret=CLIENT_SECRET, callback_uri=CALLBACK_URI)
-    fetch_response = oauth.fetch_request_token(REQUEST_TOKEN_URL)
-    return fetch_response.get('oauth_token'), fetch_response.get('oauth_token_secret')
+    try:
+        oauth = OAuth1Session(CLIENT_ID, client_secret=CLIENT_SECRET, callback_uri=CALLBACK_URI)
+        fetch_response = oauth.fetch_request_token(REQUEST_TOKEN_URL)
+        return fetch_response.get('oauth_token'), fetch_response.get('oauth_token_secret')
+    except Exception as e:
+        if "429" in str(e):
+            raise Exception("Rate limited by Yahoo. Please wait 15-30 minutes before trying again.")
+        raise e
 
 
 def get_authorization_url(request_token):
@@ -128,6 +133,20 @@ def main():
         st.write("### Step 1: Connect Your Yahoo Fantasy Account")
         st.write("This app uses OAuth 1.0a for secure authentication with Yahoo.")
 
+        # Check if rate limited recently
+        if "rate_limited_until" in st.session_state:
+            wait_until = st.session_state.rate_limited_until
+            now = datetime.now()
+            if now < wait_until:
+                remaining = (wait_until - now).total_seconds() / 60
+                st.warning(f"⏳ Rate limited. Please wait {remaining:.1f} more minutes.")
+                if st.button("I've waited - try again"):
+                    del st.session_state.rate_limited_until
+                    st.rerun()
+                return
+            else:
+                del st.session_state.rate_limited_until
+
         if st.button("🔐 Start Authorization"):
             with st.spinner("Getting authorization URL..."):
                 try:
@@ -146,8 +165,16 @@ def main():
                     st.rerun()
 
                 except Exception as e:
-                    st.error(f"Error getting request token: {e}")
-                    st.error("Please check your Client ID and Secret are correct.")
+                    error_msg = str(e)
+                    if "429" in error_msg or "rate limit" in error_msg.lower():
+                        st.error("🚫 Rate Limited by Yahoo")
+                        st.warning("You've made too many requests. Please wait 15-30 minutes before trying again.")
+                        st.info("This happens when testing OAuth repeatedly. Yahoo will reset the limit soon.")
+                        # Set rate limit timer
+                        st.session_state.rate_limited_until = datetime.now() + timedelta(minutes=20)
+                    else:
+                        st.error(f"Error getting request token: {e}")
+                        st.error("Please check your Client ID and Secret are correct.")
 
         st.divider()
 
