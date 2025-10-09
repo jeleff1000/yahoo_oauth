@@ -1,0 +1,12 @@
+# Python
+   __pycache__/
+   *.py[cod]
+   *$py.class
+   
+   # Streamlit
+   .streamlit/secrets.toml
+   
+   # Environment
+   .env
+   .venv
+   venv/
