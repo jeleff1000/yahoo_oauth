@@ -140,12 +140,20 @@ def main():
             if now < wait_until:
                 remaining = (wait_until - now).total_seconds() / 60
                 st.warning(f"⏳ Rate limited. Please wait {remaining:.1f} more minutes.")
-                if st.button("I've waited - try again"):
-                    del st.session_state.rate_limited_until
-                    st.rerun()
+                st.info("Yahoo's rate limit typically resets after 30 minutes of no activity.")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Clear Timer & Try Now"):
+                        del st.session_state.rate_limited_until
+                        st.rerun()
+                with col2:
+                    if st.button("🔄 Refresh Timer"):
+                        st.rerun()
                 return
             else:
                 del st.session_state.rate_limited_until
+                st.success("⏰ Rate limit timer expired! You can try again now.")
 
         if st.button("🔐 Start Authorization"):
             with st.spinner("Getting authorization URL..."):
