@@ -24,9 +24,19 @@ def get_request_token():
         fetch_response = oauth.fetch_request_token(REQUEST_TOKEN_URL)
         return fetch_response.get('oauth_token'), fetch_response.get('oauth_token_secret')
     except Exception as e:
+        error_details = {
+            "error": str(e),
+            "type": type(e).__name__
+        }
+        # Try to get more info from the exception
+        if hasattr(e, 'response'):
+            error_details['status_code'] = getattr(e.response, 'status_code', None)
+            error_details['headers'] = dict(getattr(e.response, 'headers', {}))
+            error_details['body'] = getattr(e.response, 'text', None)
+
         if "429" in str(e):
-            raise Exception("Rate limited by Yahoo. Please wait 15-30 minutes before trying again.")
-        raise e
+            raise Exception(f"Rate limited by Yahoo. Error details: {error_details}")
+        raise Exception(f"Request failed: {error_details}")
 
 
 def get_authorization_url(request_token):
@@ -176,13 +186,26 @@ def main():
                     error_msg = str(e)
                     if "429" in error_msg or "rate limit" in error_msg.lower():
                         st.error("🚫 Rate Limited by Yahoo")
-                        st.warning("You've made too many requests. Please wait 15-30 minutes before trying again.")
-                        st.info("This happens when testing OAuth repeatedly. Yahoo will reset the limit soon.")
-                        # Set rate limit timer
-                        st.session_state.rate_limited_until = datetime.now() + timedelta(minutes=20)
+                        st.warning(
+                            "You've made too many requests. This rate limit may last 1-24 hours depending on Yahoo's policy.")
+
+                        # Show detailed error info
+                        with st.expander("📋 Detailed Error Information"):
+                            st.code(error_msg)
+
+                        st.info("""
+                        **Solutions:**
+                        1. **Wait longer** - Yahoo's rate limits can last up to 24 hours
+                        2. **Create a new Yahoo app** - This will give you fresh credentials with no rate limit
+                        3. **Try from a different network** - The rate limit might be IP-based
+                        """)
+
+                        # Set rate limit timer for 24 hours
+                        st.session_state.rate_limited_until = datetime.now() + timedelta(hours=24)
                     else:
                         st.error(f"Error getting request token: {e}")
-                        st.error("Please check your Client ID and Secret are correct.")
+                        with st.expander("📋 Error Details"):
+                            st.code(error_msg)
 
         st.divider()
 
