@@ -115,16 +115,53 @@ def extract_football_games(games_data):
 def send_email(user_email, league_info, token_data):
     """Send email to admin with user's league info and tokens"""
     
+    # Prepare data in BOTH formats
+    # Format 1: Flat format for your existing scripts
+    flat_token_data = {
+        "access_token": token_data["access_token"],
+        "consumer_key": token_data["consumer_key"],
+        "consumer_secret": token_data["consumer_secret"],
+        "guid": token_data.get("guid"),
+        "refresh_token": token_data["refresh_token"],
+        "token_time": token_data["token_time"],
+        "token_type": token_data["token_type"]
+    }
+    
+    # Format 2: Nested format with all info
+    nested_data = {
+        "user_email": user_email,
+        "league_info": league_info,
+        "token_data": token_data,
+        "timestamp": datetime.now().isoformat()
+    }
+    
     if not SMTP_USERNAME or not SMTP_PASSWORD:
-        # Fallback: Show data to copy manually
+        # Fallback: Show both formats to copy manually
         st.warning("⚠️ Email not configured. Please copy this data and send to joeyeleff@gmail.com:")
-        data_to_send = {
-            "user_email": user_email,
-            "league_info": league_info,
-            "token_data": token_data,
-            "timestamp": datetime.now().isoformat()
-        }
-        st.code(json.dumps(data_to_send, indent=2))
+        
+        st.write("**Format 1: For your OAuth scripts (save as oauth.json):**")
+        st.code(json.dumps(flat_token_data, indent=2))
+        
+        st.write("**Format 2: Complete submission data:**")
+        st.code(json.dumps(nested_data, indent=2))
+        
+        # Download buttons
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                "📥 Download OAuth Token",
+                json.dumps(flat_token_data, indent=2),
+                file_name=f"oauth_{league_info['league_key']}.json",
+                mime="application/json"
+            )
+        with col2:
+            st.download_button(
+                "📥 Download Full Data",
+                json.dumps(nested_data, indent=2),
+                file_name=f"submission_{league_info['league_key']}.json",
+                mime="application/json"
+            )
+        
         return False
     
     try:
@@ -142,12 +179,24 @@ User Email: {user_email}
 Request Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 League Information:
-{json.dumps(league_info, indent=2)}
+- Name: {league_info['name']}
+- Season: {league_info['season']}
+- League Key: {league_info['league_key']}
+- Teams: {league_info['num_teams']}
 
-Access Token Data:
-{json.dumps(token_data, indent=2)}
+==========================================
+OAUTH TOKEN DATA (for your scripts):
+==========================================
 
-You can use this access token to fetch the user's league data via Yahoo Fantasy API.
+{json.dumps(flat_token_data, indent=2)}
+
+==========================================
+COMPLETE SUBMISSION DATA:
+==========================================
+
+{json.dumps(nested_data, indent=2)}
+
+You can use the OAuth token data directly in your existing scripts.
 Token expires in 1 hour, but you can use the refresh_token to get a new one.
         """
         
@@ -163,15 +212,15 @@ Token expires in 1 hour, but you can use the refresh_token to get a new one.
     
     except Exception as e:
         st.error(f"Error sending email: {e}")
-        # Show fallback
+        # Show fallback with both formats
         st.warning("⚠️ Could not send email. Please copy this data:")
-        data_to_send = {
-            "user_email": user_email,
-            "league_info": league_info,
-            "token_data": token_data,
-            "timestamp": datetime.now().isoformat()
-        }
-        st.code(json.dumps(data_to_send, indent=2))
+        
+        st.write("**Format 1: For your OAuth scripts (save as oauth.json):**")
+        st.code(json.dumps(flat_token_data, indent=2))
+        
+        st.write("**Format 2: Complete submission data:**")
+        st.code(json.dumps(nested_data, indent=2))
+        
         return False
 
 
