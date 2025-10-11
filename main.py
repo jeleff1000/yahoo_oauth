@@ -30,7 +30,6 @@ def build_authorize_url(state: str = None) -> str:
         "client_id": CLIENT_ID,
         "redirect_uri": REDIRECT_URI,
         "response_type": "code",
-        "language": "en-us"
     }
     if state:
         params["state"] = state
