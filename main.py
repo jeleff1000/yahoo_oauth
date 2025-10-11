@@ -4,14 +4,23 @@ import urllib.parse
 import requests
 import base64
 import json
-import pandas as pd
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 
 # Load your client credentials
 CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID") or st.secrets.get("YAHOO_CLIENT_ID", None)
 CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or st.secrets.get("YAHOO_CLIENT_SECRET", None)
 
-# For deployment, use your actual domain
+# Email configuration
+ADMIN_EMAIL = "joeyeleff@gmail.com"
+SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USERNAME = os.environ.get("SMTP_USERNAME", None)  # Your email
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", None)  # Your email app password
+
+# For deployment - NO TRAILING SLASH
 REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app")
 
 # OAuth 2.0 endpoints
@@ -56,24 +65,6 @@ def exchange_code_for_tokens(code: str) -> dict:
     return resp.json()
 
 
-def refresh_access_token(refresh_token: str) -> dict:
-    """Refresh an expired access token"""
-    headers = {
-        "Authorization": get_auth_header(),
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    
-    data = {
-        "grant_type": "refresh_token",
-        "redirect_uri": REDIRECT_URI,
-        "refresh_token": refresh_token,
-    }
-    
-    resp = requests.post(TOKEN_URL, headers=headers, data=data)
-    resp.raise_for_status()
-    return resp.json()
-
-
 def yahoo_api_call(access_token: str, endpoint: str):
     """Make a call to Yahoo Fantasy API"""
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -91,21 +82,6 @@ def get_user_games(access_token: str):
 def get_user_football_leagues(access_token: str, game_key: str):
     """Get user's leagues for a specific football game"""
     return yahoo_api_call(access_token, f"users;use_login=1/games;game_keys={game_key}/leagues?format=json")
-
-
-def get_league_standings(access_token: str, league_key: str):
-    """Get standings for a specific league"""
-    return yahoo_api_call(access_token, f"league/{league_key}/standings?format=json")
-
-
-def get_league_settings(access_token: str, league_key: str):
-    """Get settings for a specific league"""
-    return yahoo_api_call(access_token, f"league/{league_key}/settings?format=json")
-
-
-def get_league_scoreboard(access_token: str, league_key: str):
-    """Get scoreboard for a specific league"""
-    return yahoo_api_call(access_token, f"league/{league_key}/scoreboard?format=json")
 
 
 def extract_football_games(games_data):
@@ -136,13 +112,75 @@ def extract_football_games(games_data):
     return football_games
 
 
+def send_email(user_email, league_info, token_data):
+    """Send email to admin with user's league info and tokens"""
+    
+    if not SMTP_USERNAME or not SMTP_PASSWORD:
+        # Fallback: Show data to copy manually
+        st.warning("⚠️ Email not configured. Please copy this data and send to joeyeleff@gmail.com:")
+        data_to_send = {
+            "user_email": user_email,
+            "league_info": league_info,
+            "token_data": token_data,
+            "timestamp": datetime.now().isoformat()
+        }
+        st.code(json.dumps(data_to_send, indent=2))
+        return False
+    
+    try:
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USERNAME
+        msg['To'] = ADMIN_EMAIL
+        msg['Subject'] = f"New League History Request - {league_info.get('name', 'Unknown League')}"
+        
+        # Email body
+        body = f"""
+New League History Request
+
+User Email: {user_email}
+Request Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+League Information:
+{json.dumps(league_info, indent=2)}
+
+Access Token Data:
+{json.dumps(token_data, indent=2)}
+
+You can use this access token to fetch the user's league data via Yahoo Fantasy API.
+Token expires in 1 hour, but you can use the refresh_token to get a new one.
+        """
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Send email
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+        
+        return True
+    
+    except Exception as e:
+        st.error(f"Error sending email: {e}")
+        # Show fallback
+        st.warning("⚠️ Could not send email. Please copy this data:")
+        data_to_send = {
+            "user_email": user_email,
+            "league_info": league_info,
+            "token_data": token_data,
+            "timestamp": datetime.now().isoformat()
+        }
+        st.code(json.dumps(data_to_send, indent=2))
+        return False
+
+
 def main():
-    st.title("🏈 Yahoo Fantasy Football League History Downloader")
+    st.title("🏈 Yahoo Fantasy Football League History")
     
     # Check if credentials are loaded
     if not CLIENT_ID or not CLIENT_SECRET:
         st.error("❌ Credentials not configured!")
-        st.write("Please add your Yahoo credentials to secrets.")
         return
     
     # Check for errors in URL
@@ -151,7 +189,6 @@ def main():
         st.error(f"❌ OAuth Error: {qp.get('error')}")
         if "error_description" in qp:
             st.error(f"Description: {qp.get('error_description')}")
-        st.info("Please try authorizing again.")
         if st.button("Clear Error & Retry"):
             st.query_params.clear()
             st.rerun()
@@ -161,34 +198,33 @@ def main():
     if "code" in qp:
         code = qp["code"]
         
-        with st.spinner("Exchanging authorization code for access token..."):
+        with st.spinner("Connecting to Yahoo..."):
             try:
                 token_data = exchange_code_for_tokens(code)
                 
-                access_token = token_data.get("access_token")
-                refresh_token = token_data.get("refresh_token")
-                expires_in = token_data.get("expires_in", 3600)
+                # Store token data
+                st.session_state.token_data = {
+                    "access_token": token_data.get("access_token"),
+                    "refresh_token": token_data.get("refresh_token"),
+                    "consumer_key": CLIENT_ID,
+                    "consumer_secret": CLIENT_SECRET,
+                    "token_type": token_data.get("token_type"),
+                    "expires_in": token_data.get("expires_in"),
+                    "token_time": datetime.utcnow().timestamp(),
+                    "guid": token_data.get("xoauth_yahoo_guid")
+                }
                 
-                expiry_time = datetime.utcnow() + timedelta(seconds=int(expires_in))
+                st.session_state.access_token = token_data.get("access_token")
+                st.session_state.token_expiry = datetime.utcnow() + timedelta(seconds=token_data.get("expires_in", 3600))
                 
-                st.success("✅ Successfully authenticated with Yahoo!")
-                
-                # Store tokens in session state
-                st.session_state.access_token = access_token
-                st.session_state.refresh_token = refresh_token
-                st.session_state.token_expiry = expiry_time
+                st.success("✅ Successfully connected!")
                 
                 # Clear the code from URL
                 st.query_params.clear()
                 st.rerun()
                 
-            except requests.exceptions.HTTPError as e:
-                st.error(f"❌ HTTP Error: {e}")
-                if e.response is not None:
-                    st.error(f"Status Code: {e.response.status_code}")
-                    st.error(f"Response: {e.response.text}")
             except Exception as e:
-                st.error(f"❌ Error exchanging code for token: {e}")
+                st.error(f"❌ Error: {e}")
         
         return
     
@@ -196,17 +232,17 @@ def main():
     if "access_token" in st.session_state:
         access_token = st.session_state.access_token
         
-        st.success("🔐 You are authenticated!")
+        st.success("🔐 Connected to Yahoo Fantasy!")
         
         # Fetch user's games if not already loaded
         if "games_data" not in st.session_state:
-            with st.spinner("Loading your fantasy games..."):
+            with st.spinner("Loading your fantasy seasons..."):
                 try:
                     games_data = get_user_games(access_token)
                     st.session_state.games_data = games_data
                 except Exception as e:
-                    st.error(f"Error fetching games: {e}")
-                    if st.button("Logout and Try Again"):
+                    st.error(f"Error: {e}")
+                    if st.button("Start Over"):
                         st.session_state.clear()
                         st.rerun()
                     return
@@ -221,29 +257,29 @@ def main():
                 st.rerun()
             return
         
-        st.subheader("📋 Select a Football Season")
+        st.subheader("📋 Select Your League")
         
         # Display football seasons
-        season_options = {f"{game['season']} - {game['name']}": game['game_key'] 
+        season_options = {f"{game['season']} NFL Season": game['game_key'] 
                          for game in football_games}
         
         selected_season = st.selectbox(
-            "Choose a season to view leagues:",
+            "1. Choose a season:",
             options=list(season_options.keys())
         )
         
         if selected_season:
             game_key = season_options[selected_season]
             
-            # Fetch leagues for selected season
-            if st.button("Load Leagues"):
-                with st.spinner(f"Loading leagues for {selected_season}..."):
+            # Auto-load leagues for selected season
+            if "current_game_key" not in st.session_state or st.session_state.current_game_key != game_key:
+                with st.spinner("Loading leagues..."):
                     try:
                         leagues_data = get_user_football_leagues(access_token, game_key)
                         st.session_state.current_leagues = leagues_data
                         st.session_state.current_game_key = game_key
                     except Exception as e:
-                        st.error(f"Error fetching leagues: {e}")
+                        st.error(f"Error: {e}")
             
             # Display leagues if loaded
             if "current_leagues" in st.session_state:
@@ -261,101 +297,79 @@ def main():
                             "league_key": league.get("league_key"),
                             "name": league.get("name"),
                             "num_teams": league.get("num_teams"),
+                            "season": league.get("season"),
                         })
                     
                     if league_list:
-                        st.subheader("🏆 Your Leagues")
+                        st.write("2. Choose your league:")
                         
-                        for league in league_list:
-                            with st.expander(f"{league['name']} ({league['num_teams']} teams)"):
-                                league_key = league['league_key']
-                                
-                                col1, col2, col3 = st.columns(3)
-                                
-                                with col1:
-                                    if st.button("📊 View Standings", key=f"standings_{league_key}"):
-                                        with st.spinner("Loading standings..."):
-                                            standings = get_league_standings(access_token, league_key)
-                                            st.session_state[f"standings_{league_key}"] = standings
-                                
-                                with col2:
-                                    if st.button("⚙️ View Settings", key=f"settings_{league_key}"):
-                                        with st.spinner("Loading settings..."):
-                                            settings = get_league_settings(access_token, league_key)
-                                            st.session_state[f"settings_{league_key}"] = settings
-                                
-                                with col3:
-                                    if st.button("📥 Download All Data", key=f"download_{league_key}"):
-                                        with st.spinner("Preparing download..."):
-                                            try:
-                                                standings = get_league_standings(access_token, league_key)
-                                                settings = get_league_settings(access_token, league_key)
-                                                
-                                                all_data = {
-                                                    "league_info": league,
-                                                    "standings": standings,
-                                                    "settings": settings,
-                                                }
-                                                
-                                                json_str = json.dumps(all_data, indent=2)
-                                                st.download_button(
-                                                    label="💾 Download JSON",
-                                                    data=json_str,
-                                                    file_name=f"{league['name'].replace(' ', '_')}_{league_key}.json",
-                                                    mime="application/json"
-                                                )
-                                            except Exception as e:
-                                                st.error(f"Error: {e}")
-                                
-                                # Display stored data
-                                if f"standings_{league_key}" in st.session_state:
-                                    st.write("**Standings:**")
-                                    st.json(st.session_state[f"standings_{league_key}"])
-                                
-                                if f"settings_{league_key}" in st.session_state:
-                                    st.write("**Settings:**")
-                                    st.json(st.session_state[f"settings_{league_key}"])
+                        league_names = [f"{league['name']} ({league['num_teams']} teams)" for league in league_list]
+                        selected_league_name = st.radio("", league_names, key="league_radio")
+                        
+                        selected_league = league_list[league_names.index(selected_league_name)]
+                        
+                        st.divider()
+                        
+                        st.write("3. Enter your email:")
+                        user_email = st.text_input("Your email address:", placeholder="your.email@example.com")
+                        
+                        st.write("4. Submit your request:")
+                        
+                        if st.button("📤 Submit League History Request", type="primary"):
+                            if not user_email or "@" not in user_email:
+                                st.error("Please enter a valid email address.")
+                            else:
+                                with st.spinner("Sending your request..."):
+                                    success = send_email(
+                                        user_email,
+                                        selected_league,
+                                        st.session_state.token_data
+                                    )
+                                    
+                                    if success:
+                                        st.success("✅ Request submitted successfully!")
+                                        st.info("We'll email you your league history within 24-48 hours.")
+                                        st.balloons()
+                                    else:
+                                        st.success("✅ Request received!")
+                                        st.info("Please send the data shown above to joeyeleff@gmail.com")
                     
                     else:
                         st.info("No leagues found for this season.")
                 
                 except Exception as e:
                     st.error(f"Error parsing leagues: {e}")
-                    st.json(leagues_data)
         
         st.divider()
         
-        if st.button("🔓 Logout"):
+        if st.button("Start Over"):
             st.session_state.clear()
             st.rerun()
     
     else:
         # Show the authorization button
-        st.write("### Connect Your Yahoo Fantasy Account")
-        st.write("This app will download your fantasy football league history including:")
-        st.write("- League standings and results")
-        st.write("- League settings and scoring")
-        st.write("- Team rosters and matchups")
-        st.write("- Historical data from all seasons")
+        st.write("### Get Your Fantasy Football League History")
         
-        st.warning("⚠️ Your data is only accessed while you're using the app. Nothing is stored on our servers.")
-        
-        auth_url = build_authorize_url()
-        
-        st.link_button("🔐 Connect Yahoo Account", auth_url)
+        st.write("📊 We'll create a custom website with your league's complete history including:")
+        st.write("- All-time standings and championships")
+        st.write("- Season-by-season records")
+        st.write("- Head-to-head records")
+        st.write("- Playoff brackets")
+        st.write("- And much more!")
         
         st.divider()
         
-        with st.expander("ℹ️ How does this work?"):
-            st.markdown("""
-            1. Click "Connect Yahoo Account"
-            2. Log in to Yahoo and authorize the app
-            3. Select which seasons you want to view
-            4. Download your league data as JSON files
-            
-            **Privacy:** We use Yahoo's OAuth 2.0 for secure authentication. 
-            Your credentials are never stored, and data is only accessed during your session.
-            """)
+        st.write("**How it works:**")
+        st.write("1. Connect your Yahoo account")
+        st.write("2. Select your league")
+        st.write("3. We'll build your custom history site")
+        st.write("4. Receive your site within 24-48 hours")
+        
+        st.warning("⚠️ We only access your league data to build your history site. Your Yahoo credentials are never stored.")
+        
+        auth_url = build_authorize_url()
+        
+        st.link_button("🔐 Connect Yahoo Account", auth_url, type="primary")
 
 
 if __name__ == "__main__":
