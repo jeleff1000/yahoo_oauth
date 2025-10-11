@@ -3,14 +3,16 @@ import streamlit as st
 import urllib.parse
 import requests
 import base64
+import json
+import pandas as pd
 from datetime import datetime, timedelta
 
 # Load your client credentials
 CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID") or st.secrets.get("YAHOO_CLIENT_ID", None)
 CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or st.secrets.get("YAHOO_CLIENT_SECRET", None)
 
-# For deployment, use your actual domain. For local testing, use localhost
-REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app")
+# For deployment, use your actual domain
+REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app/")
 
 # OAuth 2.0 endpoints
 AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
@@ -72,31 +74,76 @@ def refresh_access_token(refresh_token: str) -> dict:
     return resp.json()
 
 
-def fetch_user_league_data(access_token: str):
-    """Fetch user's fantasy league data from Yahoo API"""
+def yahoo_api_call(access_token: str, endpoint: str):
+    """Make a call to Yahoo Fantasy API"""
     headers = {"Authorization": f"Bearer {access_token}"}
-    url = "https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games?format=json"
+    url = f"https://fantasysports.yahooapis.com/fantasy/v2/{endpoint}"
     resp = requests.get(url, headers=headers)
     resp.raise_for_status()
     return resp.json()
 
 
+def get_user_games(access_token: str):
+    """Get all games the user has participated in"""
+    return yahoo_api_call(access_token, "users;use_login=1/games?format=json")
+
+
+def get_user_football_leagues(access_token: str, game_key: str):
+    """Get user's leagues for a specific football game"""
+    return yahoo_api_call(access_token, f"users;use_login=1/games;game_keys={game_key}/leagues?format=json")
+
+
+def get_league_standings(access_token: str, league_key: str):
+    """Get standings for a specific league"""
+    return yahoo_api_call(access_token, f"league/{league_key}/standings?format=json")
+
+
+def get_league_settings(access_token: str, league_key: str):
+    """Get settings for a specific league"""
+    return yahoo_api_call(access_token, f"league/{league_key}/settings?format=json")
+
+
+def get_league_scoreboard(access_token: str, league_key: str):
+    """Get scoreboard for a specific league"""
+    return yahoo_api_call(access_token, f"league/{league_key}/scoreboard?format=json")
+
+
+def extract_football_games(games_data):
+    """Extract football games from the games data"""
+    football_games = []
+    
+    try:
+        games = games_data.get("fantasy_content", {}).get("users", {}).get("0", {}).get("user", [])[1].get("games", {})
+        
+        for key in games:
+            if key == "count":
+                continue
+            
+            game = games[key].get("game")
+            if isinstance(game, list):
+                game = game[0]
+            
+            if game and game.get("code") == "nfl":
+                football_games.append({
+                    "game_key": game.get("game_key"),
+                    "season": game.get("season"),
+                    "name": game.get("name"),
+                    "is_game_over": game.get("is_game_over"),
+                })
+    except Exception as e:
+        st.error(f"Error parsing games: {e}")
+    
+    return football_games
+
+
 def main():
-    st.title("Yahoo Fantasy League History")
+    st.title("🏈 Yahoo Fantasy Football League History Downloader")
     
     # Check if credentials are loaded
     if not CLIENT_ID or not CLIENT_SECRET:
         st.error("❌ Credentials not configured!")
         st.write("Please add your Yahoo credentials to secrets.")
         return
-    
-    # Debug info
-    with st.expander("🔍 Debug Info"):
-        st.write("**Client ID configured:**", "✅ Yes" if CLIENT_ID else "❌ No")
-        st.write("**Client Secret configured:**", "✅ Yes" if CLIENT_SECRET else "❌ No")
-        st.write("**Redirect URI:**", REDIRECT_URI)
-        st.write("**Current URL params:**", dict(st.query_params))
-        st.write("**Platform:**", "Hugging Face" if "SPACE_ID" in os.environ else "Other")
     
     # Check for errors in URL
     qp = st.query_params
@@ -140,10 +187,6 @@ def main():
                 if e.response is not None:
                     st.error(f"Status Code: {e.response.status_code}")
                     st.error(f"Response: {e.response.text}")
-                    
-                    # Check if it's a rate limit
-                    if e.response.status_code == 429:
-                        st.warning("🚫 Rate limited. Try deploying to a different platform or running locally.")
             except Exception as e:
                 st.error(f"❌ Error exchanging code for token: {e}")
         
@@ -155,74 +198,164 @@ def main():
         
         st.success("🔐 You are authenticated!")
         
-        # Show token expiry
-        if "token_expiry" in st.session_state:
-            expiry = st.session_state.token_expiry
-            now = datetime.utcnow()
-            if now < expiry:
-                remaining = (expiry - now).total_seconds() / 60
-                st.info(f"Token expires in {remaining:.0f} minutes")
-            else:
-                st.warning("Token expired. Refreshing...")
+        # Fetch user's games if not already loaded
+        if "games_data" not in st.session_state:
+            with st.spinner("Loading your fantasy games..."):
                 try:
-                    new_tokens = refresh_access_token(st.session_state.refresh_token)
-                    st.session_state.access_token = new_tokens.get("access_token")
-                    st.session_state.refresh_token = new_tokens.get("refresh_token")
-                    st.session_state.token_expiry = datetime.utcnow() + timedelta(seconds=new_tokens.get("expires_in", 3600))
-                    st.rerun()
+                    games_data = get_user_games(access_token)
+                    st.session_state.games_data = games_data
                 except Exception as e:
-                    st.error(f"Failed to refresh token: {e}")
-                    del st.session_state.access_token
-                    st.rerun()
-        
-        if st.button("Fetch League Data"):
-            with st.spinner("Fetching your fantasy league data..."):
-                try:
-                    data = fetch_user_league_data(access_token)
-                    st.subheader("Your Fantasy Data")
-                    st.json(data)
-                except requests.exceptions.HTTPError as e:
-                    if e.response.status_code == 401:
-                        st.warning("Token expired. Please re-authenticate.")
-                        del st.session_state.access_token
+                    st.error(f"Error fetching games: {e}")
+                    if st.button("Logout and Try Again"):
+                        st.session_state.clear()
                         st.rerun()
-                    else:
-                        st.error(f"Error fetching data: {e}")
-                        st.error(f"Response: {e.response.text}")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                    return
         
-        if st.button("Logout"):
+        games_data = st.session_state.games_data
+        football_games = extract_football_games(games_data)
+        
+        if not football_games:
+            st.warning("No football leagues found for your account.")
+            if st.button("Logout"):
+                st.session_state.clear()
+                st.rerun()
+            return
+        
+        st.subheader("📋 Select a Football Season")
+        
+        # Display football seasons
+        season_options = {f"{game['season']} - {game['name']}": game['game_key'] 
+                         for game in football_games}
+        
+        selected_season = st.selectbox(
+            "Choose a season to view leagues:",
+            options=list(season_options.keys())
+        )
+        
+        if selected_season:
+            game_key = season_options[selected_season]
+            
+            # Fetch leagues for selected season
+            if st.button("Load Leagues"):
+                with st.spinner(f"Loading leagues for {selected_season}..."):
+                    try:
+                        leagues_data = get_user_football_leagues(access_token, game_key)
+                        st.session_state.current_leagues = leagues_data
+                        st.session_state.current_game_key = game_key
+                    except Exception as e:
+                        st.error(f"Error fetching leagues: {e}")
+            
+            # Display leagues if loaded
+            if "current_leagues" in st.session_state:
+                leagues_data = st.session_state.current_leagues
+                
+                try:
+                    leagues = leagues_data.get("fantasy_content", {}).get("users", {}).get("0", {}).get("user", [])[1].get("games", {}).get("0", {}).get("game", [])[1].get("leagues", {})
+                    
+                    league_list = []
+                    for key in leagues:
+                        if key == "count":
+                            continue
+                        league = leagues[key].get("league", [])[0]
+                        league_list.append({
+                            "league_key": league.get("league_key"),
+                            "name": league.get("name"),
+                            "num_teams": league.get("num_teams"),
+                        })
+                    
+                    if league_list:
+                        st.subheader("🏆 Your Leagues")
+                        
+                        for league in league_list:
+                            with st.expander(f"{league['name']} ({league['num_teams']} teams)"):
+                                league_key = league['league_key']
+                                
+                                col1, col2, col3 = st.columns(3)
+                                
+                                with col1:
+                                    if st.button("📊 View Standings", key=f"standings_{league_key}"):
+                                        with st.spinner("Loading standings..."):
+                                            standings = get_league_standings(access_token, league_key)
+                                            st.session_state[f"standings_{league_key}"] = standings
+                                
+                                with col2:
+                                    if st.button("⚙️ View Settings", key=f"settings_{league_key}"):
+                                        with st.spinner("Loading settings..."):
+                                            settings = get_league_settings(access_token, league_key)
+                                            st.session_state[f"settings_{league_key}"] = settings
+                                
+                                with col3:
+                                    if st.button("📥 Download All Data", key=f"download_{league_key}"):
+                                        with st.spinner("Preparing download..."):
+                                            try:
+                                                standings = get_league_standings(access_token, league_key)
+                                                settings = get_league_settings(access_token, league_key)
+                                                
+                                                all_data = {
+                                                    "league_info": league,
+                                                    "standings": standings,
+                                                    "settings": settings,
+                                                }
+                                                
+                                                json_str = json.dumps(all_data, indent=2)
+                                                st.download_button(
+                                                    label="💾 Download JSON",
+                                                    data=json_str,
+                                                    file_name=f"{league['name'].replace(' ', '_')}_{league_key}.json",
+                                                    mime="application/json"
+                                                )
+                                            except Exception as e:
+                                                st.error(f"Error: {e}")
+                                
+                                # Display stored data
+                                if f"standings_{league_key}" in st.session_state:
+                                    st.write("**Standings:**")
+                                    st.json(st.session_state[f"standings_{league_key}"])
+                                
+                                if f"settings_{league_key}" in st.session_state:
+                                    st.write("**Settings:**")
+                                    st.json(st.session_state[f"settings_{league_key}"])
+                    
+                    else:
+                        st.info("No leagues found for this season.")
+                
+                except Exception as e:
+                    st.error(f"Error parsing leagues: {e}")
+                    st.json(leagues_data)
+        
+        st.divider()
+        
+        if st.button("🔓 Logout"):
             st.session_state.clear()
             st.rerun()
     
     else:
         # Show the authorization button
         st.write("### Connect Your Yahoo Fantasy Account")
-        st.write("Click the button below to authorize this app to access your Yahoo Fantasy Sports data.")
+        st.write("This app will download your fantasy football league history including:")
+        st.write("- League standings and results")
+        st.write("- League settings and scoring")
+        st.write("- Team rosters and matchups")
+        st.write("- Historical data from all seasons")
+        
+        st.warning("⚠️ Your data is only accessed while you're using the app. Nothing is stored on our servers.")
         
         auth_url = build_authorize_url()
         
-        # Use Streamlit's link_button
         st.link_button("🔐 Connect Yahoo Account", auth_url)
         
         st.divider()
         
-        st.subheader("📋 Setup Instructions")
-        st.markdown("""
-        **Yahoo Developer Console Setup:**
-        
-        1. Go to https://developer.yahoo.com/apps/
-        2. Create or select your app
-        3. Set **Redirect URI** to your app URL (e.g., `https://leaguehistory.streamlit.app`)
-        4. Enable **Fantasy Sports - Read** permissions
-        5. Set to **Confidential Client**
-        
-        **If you're getting rate limited:**
-        - Yahoo may have blocked cloud hosting IPs
-        - Try running locally: `streamlit run main.py`
-        - Or deploy to a VPS with dedicated IP
-        """)
+        with st.expander("ℹ️ How does this work?"):
+            st.markdown("""
+            1. Click "Connect Yahoo Account"
+            2. Log in to Yahoo and authorize the app
+            3. Select which seasons you want to view
+            4. Download your league data as JSON files
+            
+            **Privacy:** We use Yahoo's OAuth 2.0 for secure authentication. 
+            Your credentials are never stored, and data is only accessed during your session.
+            """)
 
 
 if __name__ == "__main__":
