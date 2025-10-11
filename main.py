@@ -12,7 +12,7 @@ CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID") or st.secrets.get("YAHOO_CLIENT_ID
 CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or st.secrets.get("YAHOO_CLIENT_SECRET", None)
 
 # For deployment, use your actual domain
-REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app/")
+REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app")
 
 # OAuth 2.0 endpoints
 AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
