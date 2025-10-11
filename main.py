@@ -1,230 +1,228 @@
 import os
 import streamlit as st
+import urllib.parse
 import requests
-from requests_oauthlib import OAuth1Session
+import base64
 from datetime import datetime, timedelta
 
-# Load your client credentials from env vars or secrets
-CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET")
+# Load your client credentials
+CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID") or st.secrets.get("YAHOO_CLIENT_ID", None)
+CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or st.secrets.get("YAHOO_CLIENT_SECRET", None)
 
-# OAuth 1.0a endpoints
-REQUEST_TOKEN_URL = "https://api.login.yahoo.com/oauth/v2/get_request_token"
-AUTHORIZE_URL = "https://api.login.yahoo.com/oauth/v2/request_auth"
-ACCESS_TOKEN_URL = "https://api.login.yahoo.com/oauth/v2/get_token"
+# For deployment, use your actual domain. For local testing, use localhost
+REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app")
 
-# Callback URL - using 'oob' for out-of-band (manual code entry)
-CALLBACK_URI = "oob"
-
-
-def get_request_token():
-    """Get OAuth 1.0a request token"""
-    try:
-        oauth = OAuth1Session(CLIENT_ID, client_secret=CLIENT_SECRET, callback_uri=CALLBACK_URI)
-        fetch_response = oauth.fetch_request_token(REQUEST_TOKEN_URL)
-        return fetch_response.get('oauth_token'), fetch_response.get('oauth_token_secret')
-    except Exception as e:
-        error_details = {
-            "error": str(e),
-            "type": type(e).__name__
-        }
-        # Try to get more info from the exception
-        if hasattr(e, 'response'):
-            error_details['status_code'] = getattr(e.response, 'status_code', None)
-            error_details['headers'] = dict(getattr(e.response, 'headers', {}))
-            error_details['body'] = getattr(e.response, 'text', None)
-
-        if "429" in str(e):
-            raise Exception(f"Rate limited by Yahoo. Error details: {error_details}")
-        raise Exception(f"Request failed: {error_details}")
+# OAuth 2.0 endpoints
+AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
+TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
 
 
-def get_authorization_url(request_token):
-    """Build the authorization URL"""
-    return f"{AUTHORIZE_URL}?oauth_token={request_token}"
+def get_auth_header():
+    """Create Basic Auth header as per Yahoo's requirements"""
+    credentials = f"{CLIENT_ID}:{CLIENT_SECRET}"
+    encoded = base64.b64encode(credentials.encode()).decode()
+    return f"Basic {encoded}"
 
 
-def get_access_token(request_token, request_token_secret, verifier):
-    """Exchange verifier for access token"""
-    oauth = OAuth1Session(
-        CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-        resource_owner_key=request_token,
-        resource_owner_secret=request_token_secret,
-        verifier=verifier
-    )
-    oauth_tokens = oauth.fetch_access_token(ACCESS_TOKEN_URL)
-    return oauth_tokens.get('oauth_token'), oauth_tokens.get('oauth_token_secret')
+def build_authorize_url(state: str = None) -> str:
+    """Build the Yahoo OAuth authorization URL"""
+    params = {
+        "client_id": CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "response_type": "code",
+        "language": "en-us"
+    }
+    if state:
+        params["state"] = state
+    return AUTH_URL + "?" + urllib.parse.urlencode(params)
 
 
-def fetch_user_league_data(access_token, access_token_secret):
+def exchange_code_for_tokens(code: str) -> dict:
+    """Exchange authorization code for access token"""
+    headers = {
+        "Authorization": get_auth_header(),
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    
+    data = {
+        "grant_type": "authorization_code",
+        "redirect_uri": REDIRECT_URI,
+        "code": code,
+    }
+    
+    resp = requests.post(TOKEN_URL, headers=headers, data=data)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def refresh_access_token(refresh_token: str) -> dict:
+    """Refresh an expired access token"""
+    headers = {
+        "Authorization": get_auth_header(),
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    
+    data = {
+        "grant_type": "refresh_token",
+        "redirect_uri": REDIRECT_URI,
+        "refresh_token": refresh_token,
+    }
+    
+    resp = requests.post(TOKEN_URL, headers=headers, data=data)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def fetch_user_league_data(access_token: str):
     """Fetch user's fantasy league data from Yahoo API"""
-    oauth = OAuth1Session(
-        CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-        resource_owner_key=access_token,
-        resource_owner_secret=access_token_secret
-    )
+    headers = {"Authorization": f"Bearer {access_token}"}
     url = "https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games?format=json"
-    resp = oauth.get(url)
+    resp = requests.get(url, headers=headers)
     resp.raise_for_status()
     return resp.json()
 
 
 def main():
     st.title("Yahoo Fantasy League History")
-
+    
+    # Check if credentials are loaded
+    if not CLIENT_ID or not CLIENT_SECRET:
+        st.error("❌ Credentials not configured!")
+        st.write("Please add your Yahoo credentials to secrets.")
+        return
+    
     # Debug info
     with st.expander("🔍 Debug Info"):
         st.write("**Client ID configured:**", "✅ Yes" if CLIENT_ID else "❌ No")
         st.write("**Client Secret configured:**", "✅ Yes" if CLIENT_SECRET else "❌ No")
-        st.write("**OAuth Method:**", "OAuth 1.0a (out-of-band)")
-        st.write("**Session State:**", {k: "..." if "secret" in k.lower() else v for k, v in st.session_state.items()})
-
+        st.write("**Redirect URI:**", REDIRECT_URI)
+        st.write("**Current URL params:**", dict(st.query_params))
+        st.write("**Platform:**", "Hugging Face" if "SPACE_ID" in os.environ else "Other")
+    
+    # Check for errors in URL
+    qp = st.query_params
+    if "error" in qp:
+        st.error(f"❌ OAuth Error: {qp.get('error')}")
+        if "error_description" in qp:
+            st.error(f"Description: {qp.get('error_description')}")
+        st.info("Please try authorizing again.")
+        if st.button("Clear Error & Retry"):
+            st.query_params.clear()
+            st.rerun()
+        return
+    
+    # Check if Yahoo redirected back with authorization code
+    if "code" in qp:
+        code = qp["code"]
+        
+        with st.spinner("Exchanging authorization code for access token..."):
+            try:
+                token_data = exchange_code_for_tokens(code)
+                
+                access_token = token_data.get("access_token")
+                refresh_token = token_data.get("refresh_token")
+                expires_in = token_data.get("expires_in", 3600)
+                
+                expiry_time = datetime.utcnow() + timedelta(seconds=int(expires_in))
+                
+                st.success("✅ Successfully authenticated with Yahoo!")
+                
+                # Store tokens in session state
+                st.session_state.access_token = access_token
+                st.session_state.refresh_token = refresh_token
+                st.session_state.token_expiry = expiry_time
+                
+                # Clear the code from URL
+                st.query_params.clear()
+                st.rerun()
+                
+            except requests.exceptions.HTTPError as e:
+                st.error(f"❌ HTTP Error: {e}")
+                if e.response is not None:
+                    st.error(f"Status Code: {e.response.status_code}")
+                    st.error(f"Response: {e.response.text}")
+                    
+                    # Check if it's a rate limit
+                    if e.response.status_code == 429:
+                        st.warning("🚫 Rate limited. Try deploying to a different platform or running locally.")
+            except Exception as e:
+                st.error(f"❌ Error exchanging code for token: {e}")
+        
+        return
+    
     # Check if we have a stored access token
-    if "access_token" in st.session_state and "access_token_secret" in st.session_state:
+    if "access_token" in st.session_state:
+        access_token = st.session_state.access_token
+        
         st.success("🔐 You are authenticated!")
-
+        
+        # Show token expiry
+        if "token_expiry" in st.session_state:
+            expiry = st.session_state.token_expiry
+            now = datetime.utcnow()
+            if now < expiry:
+                remaining = (expiry - now).total_seconds() / 60
+                st.info(f"Token expires in {remaining:.0f} minutes")
+            else:
+                st.warning("Token expired. Refreshing...")
+                try:
+                    new_tokens = refresh_access_token(st.session_state.refresh_token)
+                    st.session_state.access_token = new_tokens.get("access_token")
+                    st.session_state.refresh_token = new_tokens.get("refresh_token")
+                    st.session_state.token_expiry = datetime.utcnow() + timedelta(seconds=new_tokens.get("expires_in", 3600))
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to refresh token: {e}")
+                    del st.session_state.access_token
+                    st.rerun()
+        
         if st.button("Fetch League Data"):
             with st.spinner("Fetching your fantasy league data..."):
                 try:
-                    data = fetch_user_league_data(
-                        st.session_state.access_token,
-                        st.session_state.access_token_secret
-                    )
+                    data = fetch_user_league_data(access_token)
                     st.subheader("Your Fantasy Data")
                     st.json(data)
+                except requests.exceptions.HTTPError as e:
+                    if e.response.status_code == 401:
+                        st.warning("Token expired. Please re-authenticate.")
+                        del st.session_state.access_token
+                        st.rerun()
+                    else:
+                        st.error(f"Error fetching data: {e}")
+                        st.error(f"Response: {e.response.text}")
                 except Exception as e:
-                    st.error(f"Error fetching data: {e}")
-
+                    st.error(f"Error: {e}")
+        
         if st.button("Logout"):
             st.session_state.clear()
             st.rerun()
-
-    # Step 2: If we have request token, show verifier input
-    elif "request_token" in st.session_state:
-        st.write("### Step 2: Enter Verification Code")
-        st.write("After authorizing the app, Yahoo will show you a verification code.")
-
-        verifier = st.text_input("Enter the verification code from Yahoo:", key="verifier_input")
-
-        if st.button("Submit Verification Code"):
-            if verifier:
-                with st.spinner("Exchanging verification code for access token..."):
-                    try:
-                        access_token, access_token_secret = get_access_token(
-                            st.session_state.request_token,
-                            st.session_state.request_token_secret,
-                            verifier
-                        )
-
-                        st.session_state.access_token = access_token
-                        st.session_state.access_token_secret = access_token_secret
-
-                        # Clean up request token
-                        del st.session_state.request_token
-                        del st.session_state.request_token_secret
-
-                        st.success("✅ Successfully authenticated!")
-                        st.rerun()
-
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-                        st.error("Please try again or start over.")
-            else:
-                st.warning("Please enter the verification code.")
-
-        if st.button("Start Over"):
-            st.session_state.clear()
-            st.rerun()
-
-    # Step 1: Initial authorization
+    
     else:
-        st.write("### Step 1: Connect Your Yahoo Fantasy Account")
-        st.write("This app uses OAuth 1.0a for secure authentication with Yahoo.")
-
-        # Check if rate limited recently
-        if "rate_limited_until" in st.session_state:
-            wait_until = st.session_state.rate_limited_until
-            now = datetime.now()
-            if now < wait_until:
-                remaining = (wait_until - now).total_seconds() / 60
-                st.warning(f"⏳ Rate limited. Please wait {remaining:.1f} more minutes.")
-                st.info("Yahoo's rate limit typically resets after 30 minutes of no activity.")
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Clear Timer & Try Now"):
-                        del st.session_state.rate_limited_until
-                        st.rerun()
-                with col2:
-                    if st.button("🔄 Refresh Timer"):
-                        st.rerun()
-                return
-            else:
-                del st.session_state.rate_limited_until
-                st.success("⏰ Rate limit timer expired! You can try again now.")
-
-        if st.button("🔐 Start Authorization"):
-            with st.spinner("Getting authorization URL..."):
-                try:
-                    request_token, request_token_secret = get_request_token()
-
-                    st.session_state.request_token = request_token
-                    st.session_state.request_token_secret = request_token_secret
-
-                    auth_url = get_authorization_url(request_token)
-
-                    st.success("✅ Authorization URL generated!")
-                    st.write("**Click the link below to authorize:**")
-                    st.markdown(f"### [Authorize with Yahoo]({auth_url})")
-                    st.write("After authorizing, you'll receive a verification code. Copy it and return here.")
-
-                    st.rerun()
-
-                except Exception as e:
-                    error_msg = str(e)
-                    if "429" in error_msg or "rate limit" in error_msg.lower():
-                        st.error("🚫 Rate Limited by Yahoo")
-                        st.warning(
-                            "You've made too many requests. This rate limit may last 1-24 hours depending on Yahoo's policy.")
-
-                        # Show detailed error info
-                        with st.expander("📋 Detailed Error Information"):
-                            st.code(error_msg)
-
-                        st.info("""
-                        **Solutions:**
-                        1. **Wait longer** - Yahoo's rate limits can last up to 24 hours
-                        2. **Create a new Yahoo app** - This will give you fresh credentials with no rate limit
-                        3. **Try from a different network** - The rate limit might be IP-based
-                        """)
-
-                        # Set rate limit timer for 24 hours
-                        st.session_state.rate_limited_until = datetime.now() + timedelta(hours=24)
-                    else:
-                        st.error(f"Error getting request token: {e}")
-                        with st.expander("📋 Error Details"):
-                            st.code(error_msg)
-
+        # Show the authorization button
+        st.write("### Connect Your Yahoo Fantasy Account")
+        st.write("Click the button below to authorize this app to access your Yahoo Fantasy Sports data.")
+        
+        auth_url = build_authorize_url()
+        
+        # Use Streamlit's link_button
+        st.link_button("🔐 Connect Yahoo Account", auth_url)
+        
         st.divider()
-
+        
         st.subheader("📋 Setup Instructions")
         st.markdown("""
         **Yahoo Developer Console Setup:**
-
-        1. Make sure your app is set to **"Confidential Client"**
-        2. Enable **Fantasy Sports - Read** permissions
-        3. For OAuth 1.0a, you don't need to configure a redirect URI
-        4. Make sure your app is active/published
-
-        **Streamlit Secrets:**
-
-        Add to your Streamlit Cloud secrets:
-        ```toml
-        YAHOO_CLIENT_ID = "your_client_id"
-        YAHOO_CLIENT_SECRET = "your_client_secret"
-        ```
+        
+        1. Go to https://developer.yahoo.com/apps/
+        2. Create or select your app
+        3. Set **Redirect URI** to your app URL (e.g., `https://leaguehistory.streamlit.app`)
+        4. Enable **Fantasy Sports - Read** permissions
+        5. Set to **Confidential Client**
+        
+        **If you're getting rate limited:**
+        - Yahoo may have blocked cloud hosting IPs
+        - Try running locally: `streamlit run main.py`
+        - Or deploy to a VPS with dedicated IP
         """)
 
 
