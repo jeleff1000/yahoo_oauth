@@ -327,7 +327,21 @@ def main():
 
                         st.divider()
 
-                        st.write("3. Import your league data:")
+                        # Show league details
+                        st.write("3. Review league details:")
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("League", selected_league['name'])
+                        with col2:
+                            st.metric("Season", selected_league['season'])
+                        with col3:
+                            st.metric("Teams", selected_league['num_teams'])
+
+                        st.info(f"📊 **Data to import:** All historical data for '{selected_league['name']}' (league key: {selected_league['league_key']})")
+
+                        st.divider()
+
+                        st.write("4. Import your league data:")
                         st.info("This will fetch all historical data from your league and save it locally.")
 
                         if st.button("📥 Import League Data Now", type="primary"):
@@ -342,16 +356,54 @@ def main():
                             # Run initial import
                             if run_initial_import():
                                 st.success("🎉 All done! Your league data has been imported.")
-                                st.info(f"Data saved to: {DATA_DIR}")
-
+                                
+                                # Show file locations
+                                st.write("### 📁 Files Saved:")
+                                st.write(f"**OAuth Token:** `{OAUTH_DIR / 'Oauth.json'}`")
+                                st.write(f"**League Data:** `{DATA_DIR}/`")
+                                
                                 # Show what was created
                                 if DATA_DIR.exists():
-                                    st.write("**Files created:**")
+                                    st.write("#### Data Files Created:")
                                     parquet_files = list(DATA_DIR.glob("*.parquet"))
                                     if parquet_files:
-                                        for pf in parquet_files:
+                                        for pf in sorted(parquet_files):
                                             size = pf.stat().st_size / 1024  # KB
-                                            st.write(f"- {pf.name} ({size:.1f} KB)")
+                                            st.write(f"- `{pf.name}` ({size:.1f} KB)")
+                                    
+                                    st.divider()
+                                    
+                                    # Download options
+                                    st.write("#### 💾 Download Your Data:")
+                                    st.info("⚠️ **Important:** On Streamlit Cloud, these files are temporary. Download them now to save locally!")
+                                    
+                                    # Download OAuth token
+                                    oauth_file_path = OAUTH_DIR / "Oauth.json"
+                                    if oauth_file_path.exists():
+                                        with open(oauth_file_path, 'r') as f:
+                                            oauth_json = f.read()
+                                        st.download_button(
+                                            "📥 Download OAuth Token (Oauth.json)",
+                                            oauth_json,
+                                            file_name="Oauth.json",
+                                            mime="application/json",
+                                            help="Save this file to your oauth/ folder to use with your scripts"
+                                        )
+                                    
+                                    # Download individual parquet files
+                                    if parquet_files:
+                                        st.write("**Download Data Files:**")
+                                        for pf in sorted(parquet_files):
+                                            with open(pf, 'rb') as f:
+                                                st.download_button(
+                                                    f"📥 {pf.name}",
+                                                    f.read(),
+                                                    file_name=pf.name,
+                                                    mime="application/octet-stream",
+                                                    help=f"Download {pf.name} to your fantasy_football_data/ folder"
+                                                )
+                                    
+                                    st.success("✅ All files ready for download above!")
 
                     else:
                         st.info("No leagues found for this season.")
