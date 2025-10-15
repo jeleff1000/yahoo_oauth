@@ -164,7 +164,6 @@ def run_initial_import():
         with st.spinner("Importing league data..."):
             process = subprocess.Popen(
                 cmd,
-                cwd=str(SCRIPTS_DIR),
                 env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
