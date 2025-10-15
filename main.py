@@ -4,28 +4,28 @@ import urllib.parse
 import requests
 import base64
 import json
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import subprocess
+import sys
+from pathlib import Path
 from datetime import datetime, timedelta
 
 # Load your client credentials
 CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID") or st.secrets.get("YAHOO_CLIENT_ID", None)
 CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or st.secrets.get("YAHOO_CLIENT_SECRET", None)
 
-# Email configuration
-ADMIN_EMAIL = "joeyeleff@gmail.com"
-SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USERNAME = os.environ.get("SMTP_USERNAME", None)  # Your email
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", None)  # Your email app password
-
 # For deployment - NO TRAILING SLASH
-REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app")
+REDIRECT_URI = os.environ.get("REDIRECT_URI", "http://localhost:8501")
 
 # OAuth 2.0 endpoints
 AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
 TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
+
+# Paths
+ROOT_DIR = Path(__file__).parent
+OAUTH_DIR = ROOT_DIR / "oauth"
+DATA_DIR = ROOT_DIR / "fantasy_football_data"
+SCRIPTS_DIR = ROOT_DIR / "fantasy_football_data_scripts"
+INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import.py"
 
 
 def get_auth_header():
@@ -112,115 +112,87 @@ def extract_football_games(games_data):
     return football_games
 
 
-def send_email(user_email, league_info, token_data):
-    """Send email to admin with user's league info and tokens"""
-    
-    # Prepare data in BOTH formats
-    # Format 1: Flat format for your existing scripts
-    flat_token_data = {
-        "access_token": token_data["access_token"],
-        "consumer_key": token_data["consumer_key"],
-        "consumer_secret": token_data["consumer_secret"],
-        "guid": token_data.get("guid"),
-        "refresh_token": token_data["refresh_token"],
-        "token_time": token_data["token_time"],
-        "token_type": token_data["token_type"]
-    }
-    
-    # Format 2: Nested format with all info
-    nested_data = {
-        "user_email": user_email,
-        "league_info": league_info,
-        "token_data": token_data,
+def save_oauth_token(token_data: dict, league_info: dict = None):
+    """Save OAuth token in the format expected by the scripts"""
+    OAUTH_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    oauth_file = OAUTH_DIR / "Oauth.json"
+
+    # Format 2 (nested structure) - compatible with oauth_utils.py
+    oauth_data = {
+        "token_data": {
+            "access_token": token_data.get("access_token"),
+            "refresh_token": token_data.get("refresh_token"),
+            "consumer_key": CLIENT_ID,
+            "consumer_secret": CLIENT_SECRET,
+            "token_type": token_data.get("token_type", "bearer"),
+            "expires_in": token_data.get("expires_in", 3600),
+            "token_time": datetime.utcnow().timestamp(),
+            "guid": token_data.get("xoauth_yahoo_guid")
+        },
         "timestamp": datetime.now().isoformat()
     }
     
-    if not SMTP_USERNAME or not SMTP_PASSWORD:
-        # Fallback: Show both formats to copy manually
-        st.warning("⚠️ Email not configured. Please copy this data and send to joeyeleff@gmail.com:")
-        
-        st.write("**Format 1: For your OAuth scripts (save as oauth.json):**")
-        st.code(json.dumps(flat_token_data, indent=2))
-        
-        st.write("**Format 2: Complete submission data:**")
-        st.code(json.dumps(nested_data, indent=2))
-        
-        # Download buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                "📥 Download OAuth Token",
-                json.dumps(flat_token_data, indent=2),
-                file_name=f"oauth_{league_info['league_key']}.json",
-                mime="application/json"
-            )
-        with col2:
-            st.download_button(
-                "📥 Download Full Data",
-                json.dumps(nested_data, indent=2),
-                file_name=f"submission_{league_info['league_key']}.json",
-                mime="application/json"
-            )
-        
+    if league_info:
+        oauth_data["league_info"] = league_info
+
+    with open(oauth_file, 'w') as f:
+        json.dump(oauth_data, f, indent=2)
+
+    return oauth_file
+
+
+def run_initial_import():
+    """Run the initial_import.py script to fetch all league data"""
+    if not INITIAL_IMPORT_SCRIPT.exists():
+        st.error(f"❌ Initial import script not found at: {INITIAL_IMPORT_SCRIPT}")
         return False
     
     try:
-        # Create message
-        msg = MIMEMultipart()
-        msg['From'] = SMTP_USERNAME
-        msg['To'] = ADMIN_EMAIL
-        msg['Subject'] = f"New League History Request - {league_info.get('name', 'Unknown League')}"
-        
-        # Email body
-        body = f"""
-New League History Request
+        st.info("🚀 Starting initial data import... This may take several minutes.")
 
-User Email: {user_email}
-Request Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        # Create a placeholder for progress
+        progress_placeholder = st.empty()
+        log_placeholder = st.empty()
 
-League Information:
-- Name: {league_info['name']}
-- Season: {league_info['season']}
-- League Key: {league_info['league_key']}
-- Teams: {league_info['num_teams']}
+        # Run the script
+        env = dict(os.environ)
+        env["PYTHONUNBUFFERED"] = "1"
 
-==========================================
-OAUTH TOKEN DATA (for your scripts):
-==========================================
+        cmd = [sys.executable, str(INITIAL_IMPORT_SCRIPT)]
 
-{json.dumps(flat_token_data, indent=2)}
+        with st.spinner("Importing league data..."):
+            process = subprocess.Popen(
+                cmd,
+                cwd=str(SCRIPTS_DIR),
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
 
-==========================================
-COMPLETE SUBMISSION DATA:
-==========================================
+            # Stream output to UI
+            output_lines = []
+            for line in process.stdout:
+                output_lines.append(line.strip())
+                # Show last 10 lines of output
+                log_placeholder.code('\n'.join(output_lines[-10:]))
 
-{json.dumps(nested_data, indent=2)}
+            process.wait()
 
-You can use the OAuth token data directly in your existing scripts.
-Token expires in 1 hour, but you can use the refresh_token to get a new one.
-        """
-        
-        msg.attach(MIMEText(body, 'plain'))
-        
-        # Send email
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.send_message(msg)
-        
-        return True
-    
+            if process.returncode == 0:
+                st.success("✅ Data import completed successfully!")
+                st.balloons()
+                return True
+            else:
+                st.error(f"❌ Import failed with exit code {process.returncode}")
+                st.code('\n'.join(output_lines))
+                return False
+
     except Exception as e:
-        st.error(f"Error sending email: {e}")
-        # Show fallback with both formats
-        st.warning("⚠️ Could not send email. Please copy this data:")
-        
-        st.write("**Format 1: For your OAuth scripts (save as oauth.json):**")
-        st.code(json.dumps(flat_token_data, indent=2))
-        
-        st.write("**Format 2: Complete submission data:**")
-        st.code(json.dumps(nested_data, indent=2))
-        
+        st.error(f"❌ Error running import: {e}")
         return False
 
 
@@ -230,6 +202,7 @@ def main():
     # Check if credentials are loaded
     if not CLIENT_ID or not CLIENT_SECRET:
         st.error("❌ Credentials not configured!")
+        st.info("Set YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET environment variables or in Streamlit secrets.")
         return
     
     # Check for errors in URL
@@ -251,16 +224,13 @@ def main():
             try:
                 token_data = exchange_code_for_tokens(code)
                 
-                # Store token data
+                # Store token data in session state
                 st.session_state.token_data = {
                     "access_token": token_data.get("access_token"),
                     "refresh_token": token_data.get("refresh_token"),
-                    "consumer_key": CLIENT_ID,
-                    "consumer_secret": CLIENT_SECRET,
                     "token_type": token_data.get("token_type"),
                     "expires_in": token_data.get("expires_in"),
-                    "token_time": datetime.utcnow().timestamp(),
-                    "guid": token_data.get("xoauth_yahoo_guid")
+                    "xoauth_yahoo_guid": token_data.get("xoauth_yahoo_guid")
                 }
                 
                 st.session_state.access_token = token_data.get("access_token")
@@ -359,30 +329,32 @@ def main():
                         
                         st.divider()
                         
-                        st.write("3. Enter your email:")
-                        user_email = st.text_input("Your email address:", placeholder="your.email@example.com")
-                        
-                        st.write("4. Submit your request:")
-                        
-                        if st.button("📤 Submit League History Request", type="primary"):
-                            if not user_email or "@" not in user_email:
-                                st.error("Please enter a valid email address.")
-                            else:
-                                with st.spinner("Sending your request..."):
-                                    success = send_email(
-                                        user_email,
-                                        selected_league,
-                                        st.session_state.token_data
-                                    )
-                                    
-                                    if success:
-                                        st.success("✅ Request submitted successfully!")
-                                        st.info("We'll email you your league history within 24-48 hours.")
-                                        st.balloons()
-                                    else:
-                                        st.success("✅ Request received!")
-                                        st.info("Please send the data shown above to joeyeleff@gmail.com")
-                    
+                        st.write("3. Import your league data:")
+                        st.info("This will fetch all historical data from your league and save it locally.")
+
+                        if st.button("📥 Import League Data Now", type="primary"):
+                            with st.spinner("Saving OAuth credentials..."):
+                                # Save OAuth token with league info
+                                oauth_file = save_oauth_token(
+                                    st.session_state.token_data,
+                                    selected_league
+                                )
+                                st.success(f"✅ OAuth credentials saved to: {oauth_file}")
+
+                            # Run initial import
+                            if run_initial_import():
+                                st.success("🎉 All done! Your league data has been imported.")
+                                st.info(f"Data saved to: {DATA_DIR}")
+
+                                # Show what was created
+                                if DATA_DIR.exists():
+                                    st.write("**Files created:**")
+                                    parquet_files = list(DATA_DIR.glob("*.parquet"))
+                                    if parquet_files:
+                                        for pf in parquet_files:
+                                            size = pf.stat().st_size / 1024  # KB
+                                            st.write(f"- {pf.name} ({size:.1f} KB)")
+
                     else:
                         st.info("No leagues found for this season.")
                 
@@ -397,25 +369,25 @@ def main():
     
     else:
         # Show the authorization button
-        st.write("### Get Your Fantasy Football League History")
-        
-        st.write("📊 We'll create a custom website with your league's complete history including:")
-        st.write("- All-time standings and championships")
-        st.write("- Season-by-season records")
-        st.write("- Head-to-head records")
-        st.write("- Playoff brackets")
-        st.write("- And much more!")
-        
+        st.write("### Import Your Fantasy Football League Data")
+
+        st.write("📊 This tool will fetch and save your complete league history including:")
+        st.write("- All-time schedules and matchups")
+        st.write("- Player statistics")
+        st.write("- Transaction history")
+        st.write("- Draft data")
+        st.write("- Playoff information")
+
         st.divider()
         
         st.write("**How it works:**")
         st.write("1. Connect your Yahoo account")
         st.write("2. Select your league")
-        st.write("3. We'll build your custom history site")
-        st.write("4. Receive your site within 24-48 hours")
-        
-        st.warning("⚠️ We only access your league data to build your history site. Your Yahoo credentials are never stored.")
-        
+        st.write("3. Data is automatically imported and saved locally")
+        st.write("4. Use the data with your analysis scripts")
+
+        st.warning("⚠️ We only access your league data to build local files. Your Yahoo credentials are stored securely in the `oauth/` folder.")
+
         auth_url = build_authorize_url()
         
         st.link_button("🔐 Connect Yahoo Account", auth_url, type="primary")
