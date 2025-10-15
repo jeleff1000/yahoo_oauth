@@ -133,7 +133,7 @@ def save_oauth_token(token_data: dict, league_info: dict = None):
         },
         "timestamp": datetime.now().isoformat()
     }
-    
+
     if league_info:
         oauth_data["league_info"] = league_info
 
@@ -152,8 +152,7 @@ def run_initial_import():
     try:
         st.info("🚀 Starting initial data import... This may take several minutes.")
 
-        # Create a placeholder for progress
-        progress_placeholder = st.empty()
+        # Create placeholders for progress
         log_placeholder = st.empty()
 
         # Run the script
