@@ -1,2 +1,6 @@
 requests_oauthlib
 duckdb
+streamlit
+requests
+pandas
+yahoo-oauth

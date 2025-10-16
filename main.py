@@ -161,6 +161,14 @@ def run_initial_import():
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
 
+        # Pass league info as environment variables for MotherDuck upload
+        if "league_info" in st.session_state:
+            league_info = st.session_state.league_info
+            env["LEAGUE_NAME"] = league_info.get("name", "Unknown League")
+            env["LEAGUE_KEY"] = league_info.get("league_key", "unknown")
+            env["LEAGUE_SEASON"] = str(league_info.get("season", ""))
+            env["LEAGUE_NUM_TEAMS"] = str(league_info.get("num_teams", ""))
+
         cmd = [sys.executable, str(INITIAL_IMPORT_SCRIPT)]
 
         with st.spinner("Importing league data..."):
@@ -346,7 +354,28 @@ def main():
                         st.write("4. Import your league data:")
                         st.info("This will fetch all historical data from your league and save it locally.")
 
+                        # MotherDuck configuration
+                        motherduck_token = None
+                        with st.expander("🦆 MotherDuck Configuration (Optional)"):
+                            st.write("Automatically upload your data to MotherDuck cloud database:")
+                            motherduck_token = st.text_input(
+                                "MotherDuck Token",
+                                type="password",
+                                value=os.environ.get("MOTHERDUCK_TOKEN", ""),
+                                help="Get your token from https://app.motherduck.com/ → Settings → API Keys"
+                            )
+                            if motherduck_token:
+                                st.success("✅ MotherDuck token configured")
+                                st.info(f"Database will be created as: `{selected_league['name'].lower().replace(' ', '_')}`")
+
                         if st.button("📥 Import League Data Now", type="primary"):
+                            # Set MotherDuck token in environment if provided
+                            if motherduck_token:
+                                os.environ["MOTHERDUCK_TOKEN"] = motherduck_token
+
+                            # Store league info in session state for environment variables
+                            st.session_state.league_info = selected_league
+
                             with st.spinner("Saving OAuth credentials..."):
                                 # Save OAuth token with league info
                                 oauth_file = save_oauth_token(
