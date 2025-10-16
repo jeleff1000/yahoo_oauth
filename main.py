@@ -6,6 +6,8 @@ import base64
 import json
 import subprocess
 import sys
+import zipfile
+import io
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -356,7 +358,7 @@ def main():
                             # Run initial import
                             if run_initial_import():
                                 st.success("🎉 All done! Your league data has been imported.")
-                                
+
                                 # Show file locations
                                 st.write("### 📁 Files Saved:")
                                 st.write(f"**OAuth Token:** `{OAUTH_DIR / 'Oauth.json'}`")
@@ -403,6 +405,28 @@ def main():
                                                     help=f"Download {pf.name} to your fantasy_football_data/ folder"
                                                 )
                                     
+                                    # Download all files as ZIP
+                                    with st.spinner("Creating ZIP archive of your data..."):
+                                        zip_buffer = io.BytesIO()
+                                        with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+                                            # Add OAuth file
+                                            if oauth_file_path.exists():
+                                                zip_file.write(oauth_file_path, arcname="Oauth.json")
+
+                                            # Add all parquet files
+                                            for pf in sorted(parquet_files):
+                                                zip_file.write(pf, arcname=pf.name)
+
+                                        zip_buffer.seek(0)
+
+                                        st.download_button(
+                                            "📥 Download All Files as ZIP",
+                                            zip_buffer,
+                                            file_name="fantasy_football_data.zip",
+                                            mime="application/zip",
+                                            help="Download all data files as a single ZIP archive"
+                                        )
+
                                     st.success("✅ All files ready for download above!")
 
                     else:
