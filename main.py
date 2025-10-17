@@ -1,500 +1,434 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
 import os
-import streamlit as st
-import urllib.parse
-import requests
-import base64
-import json
-import subprocess
 import sys
-import zipfile
 import io
-from pathlib import Path
+import json
+import base64
+import zipfile
+import urllib.parse
+import subprocess
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-# Load your client credentials
-CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID") or st.secrets.get("YAHOO_CLIENT_ID", None)
-CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or st.secrets.get("YAHOO_CLIENT_SECRET", None)
+import requests
+import streamlit as st
 
-# For deployment - NO TRAILING SLASH
-REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app")
+# =====================================================================================
+# Config & Secrets
+# =====================================================================================
 
-# OAuth 2.0 endpoints
+APP_ROOT = Path(__file__).resolve().parent
+DATA_DIR = (APP_ROOT / "fantasy_football_data").resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# Load client secrets (from env first, then st.secrets)
+CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID") or (st.secrets.get("YAHOO_CLIENT_ID") if hasattr(st, "secrets") else None)
+CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or (st.secrets.get("YAHOO_CLIENT_SECRET") if hasattr(st, "secrets") else None)
+REDIRECT_URI = os.environ.get("YAHOO_REDIRECT_URI") or (st.secrets.get("YAHOO_REDIRECT_URI") if hasattr(st, "secrets") else "https://localhost/")
+
+# MotherDuck token (NO UI! only env or secrets)
+MD_TOKEN = os.environ.get("MOTHERDUCK_TOKEN") or (st.secrets.get("MOTHERDUCK_TOKEN") if hasattr(st, "secrets") else None)
+
+# Yahoo OAuth endpoints
 AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
 TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
 
-# Paths
-ROOT_DIR = Path(__file__).parent
-OAUTH_DIR = ROOT_DIR / "oauth"
-DATA_DIR = ROOT_DIR / "fantasy_football_data"
-SCRIPTS_DIR = ROOT_DIR / "fantasy_football_data_scripts"
-INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import.py"
+# Yahoo Fantasy endpoints
+YF_BASE = "https://fantasysports.yahooapis.com/fantasy/v2"
 
+# =====================================================================================
+# Helpers
+# =====================================================================================
 
-def get_auth_header():
-    """Create Basic Auth header as per Yahoo's requirements"""
-    credentials = f"{CLIENT_ID}:{CLIENT_SECRET}"
-    encoded = base64.b64encode(credentials.encode()).decode()
-    return f"Basic {encoded}"
+def _slug_db_name(name: str) -> str:
+    """Create a safe DB name from league name for MD."""
+    s = (name or "leaguehistory").lower()
+    for ch in " -./\\:()[]{}'\"":
+        s = s.replace(ch, "_")
+    s = "_".join(filter(None, s.split("_")))
+    return s[:63]
 
+def _save_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
 
-def build_authorize_url(state: str = None) -> str:
-    """Build the Yahoo OAuth authorization URL"""
+def _save_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+def _load_json(path: Path) -> Optional[dict]:
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+    return None
+
+def _dump_json(path: Path, obj: dict) -> None:
+    _save_text(path, json.dumps(obj, indent=2, ensure_ascii=False))
+
+def _now_utc() -> datetime:
+    return datetime.utcnow()
+
+def _to_epoch(dt: datetime) -> int:
+    return int(dt.timestamp())
+
+# =====================================================================================
+# Yahoo OAuth
+# =====================================================================================
+
+def build_auth_url(state: Optional[str] = None, scope: str = "fspt-w"):
+    assert CLIENT_ID and REDIRECT_URI, "Missing CLIENT_ID or REDIRECT_URI"
     params = {
         "client_id": CLIENT_ID,
         "redirect_uri": REDIRECT_URI,
         "response_type": "code",
+        "language": "en-us",
+        "scope": scope
     }
     if state:
         params["state"] = state
     return AUTH_URL + "?" + urllib.parse.urlencode(params)
 
-
-def exchange_code_for_tokens(code: str) -> dict:
-    """Exchange authorization code for access token"""
+def exchange_code_for_token(code: str) -> dict:
+    assert CLIENT_ID and CLIENT_SECRET and REDIRECT_URI, "Missing Yahoo OAuth config"
+    auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
     headers = {
-        "Authorization": get_auth_header(),
+        "Authorization": f"Basic {auth}",
         "Content-Type": "application/x-www-form-urlencoded"
     }
-
     data = {
         "grant_type": "authorization_code",
         "redirect_uri": REDIRECT_URI,
-        "code": code,
+        "code": code
     }
-
-    resp = requests.post(TOKEN_URL, headers=headers, data=data)
+    resp = requests.post(TOKEN_URL, headers=headers, data=data, timeout=60)
     resp.raise_for_status()
     return resp.json()
 
-
-def yahoo_api_call(access_token: str, endpoint: str):
-    """Make a call to Yahoo Fantasy API"""
-    headers = {"Authorization": f"Bearer {access_token}"}
-    url = f"https://fantasysports.yahooapis.com/fantasy/v2/{endpoint}"
-    resp = requests.get(url, headers=headers)
+def refresh_access_token(refresh_token: str) -> dict:
+    assert CLIENT_ID and CLIENT_SECRET and REDIRECT_URI, "Missing Yahoo OAuth config"
+    auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
+    headers = {
+        "Authorization": f"Basic {auth}",
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    data = {
+        "grant_type": "refresh_token",
+        "redirect_uri": REDIRECT_URI,
+        "refresh_token": refresh_token
+    }
+    resp = requests.post(TOKEN_URL, headers=headers, data=data, timeout=60)
     resp.raise_for_status()
     return resp.json()
 
+def token_expiry_time(token_data: dict) -> datetime:
+    # Yahoo returns "expires_in" seconds; compute wall time
+    issued = st.session_state.get("token_issued_at") or _now_utc()
+    return issued + timedelta(seconds=int(token_data.get("expires_in", 3600)))
 
-def get_user_games(access_token: str):
-    """Get all games the user has participated in"""
-    return yahoo_api_call(access_token, "users;use_login=1/games?format=json")
+def token_is_expired(token_data: dict) -> bool:
+    expires_at = token_expiry_time(token_data)
+    # refresh a bit early
+    return _now_utc() >= (expires_at - timedelta(seconds=60))
 
+def ensure_access_token(token_data: dict) -> dict:
+    """Ensure token is valid. If expired and we have refresh_token, refresh it."""
+    if not token_data:
+        raise RuntimeError("Missing token_data")
+    if not token_is_expired(token_data):
+        return token_data
+    rt = token_data.get("refresh_token")
+    if not rt:
+        raise RuntimeError("Token expired and refresh_token not available.")
+    new_tok = refresh_access_token(rt)
+    # carry forward refresh_token if not sent again
+    if "refresh_token" not in new_tok and "refresh_token" in token_data:
+        new_tok["refresh_token"] = token_data["refresh_token"]
+    st.session_state["token_data"] = new_tok
+    st.session_state["token_issued_at"] = _now_utc()
+    return new_tok
 
-def get_user_football_leagues(access_token: str, game_key: str):
-    """Get user's leagues for a specific football game"""
-    return yahoo_api_call(access_token, f"users;use_login=1/games;game_keys={game_key}/leagues?format=json")
+# =====================================================================================
+# Yahoo Fantasy API utilities
+# =====================================================================================
 
+def yahoo_api_call(access_token: str, path: str, params: dict | None = None) -> requests.Response:
+    url = f"{YF_BASE}/{path}"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json"
+    }
+    return requests.get(url, headers=headers, params=params, timeout=60)
 
-def extract_football_games(games_data):
-    """Extract football games from the games data"""
-    football_games = []
+def fetch_user_guid(access_token: str) -> str:
+    resp = yahoo_api_call(access_token, "users;use_login=1/games?format=json")
+    resp.raise_for_status()
+    data = resp.json()
+    # Grab the user's GUID safely
+    users = data.get("fantasy_content", {}).get("users", {})
+    # The Yahoo JSON is nested; try a few paths
+    # If not found, raise helpful error.
+    for k, v in users.items():
+        if isinstance(v, dict) and "user" in v:
+            user = v["user"][0]
+            guid = user[0].get("guid")
+            if guid:
+                return guid
+    raise RuntimeError("Unable to determine Yahoo user GUID from response.")
 
-    try:
-        games = games_data.get("fantasy_content", {}).get("users", {}).get("0", {}).get("user", [])[1].get("games", {})
+def fetch_user_leagues(access_token: str, season: Optional[int] = None) -> list[dict]:
+    # When season is not provided, Yahoo returns all current games/leagues
+    # The structure is nested; we’ll parse for fantasy leagues.
+    resp = yahoo_api_call(access_token, "users;use_login=1/games;game_keys=nfl/leagues?format=json")
+    resp.raise_for_status()
+    data = resp.json()
+    leagues_out: list[dict] = []
 
-        for key in games:
-            if key == "count":
+    games = data.get("fantasy_content", {}).get("users", {}).get("0", {}).get("user", [None, {}])[1].get("games", {})
+    # Walk the nested JSON carefully
+    for _, game_obj in games.items():
+        if not isinstance(game_obj, dict) or "game" not in game_obj:
+            continue
+        game = game_obj["game"][0]
+        game_key = game.get("game_key")
+        game_code = game.get("code")
+        game_season = game.get("season")
+        leagues = game_obj["game"][1].get("leagues", {})
+        if not isinstance(leagues, dict):
+            continue
+        for _, lg in leagues.items():
+            if not isinstance(lg, dict) or "league" not in lg:
                 continue
+            league_node = lg["league"][0]
+            league_key = league_node.get("league_key")
+            name = league_node.get("name")
+            num_teams = league_node.get("num_teams")
+            # filter by requested season if provided
+            if season and str(game_season) != str(season):
+                continue
+            leagues_out.append({
+                "name": name,
+                "league_key": league_key,
+                "game_key": game_key,
+                "season": game_season,
+                "game_code": game_code,
+                "num_teams": num_teams,
+            })
+    return leagues_out
 
-            game = games[key].get("game")
-            if isinstance(game, list):
-                game = game[0]
+# =====================================================================================
+# Persist token & league selection
+# =====================================================================================
 
-            if game and game.get("code") == "nfl":
-                football_games.append({
-                    "game_key": game.get("game_key"),
-                    "season": game.get("season"),
-                    "name": game.get("name"),
-                    "is_game_over": game.get("is_game_over"),
-                })
-    except Exception as e:
-        st.error(f"Error parsing games: {e}")
+OAUTH_STORE = APP_ROOT / ".oauth" / "yahoo_token.json"
+LEAGUE_STORE = APP_ROOT / ".oauth" / "league_selection.json"
 
-    return football_games
-
-
-def save_oauth_token(token_data: dict, league_info: dict = None):
-    """Save OAuth token in the format expected by the scripts"""
-    OAUTH_DIR.mkdir(parents=True, exist_ok=True)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    oauth_file = OAUTH_DIR / "Oauth.json"
-
-    # Format 2 (nested structure) - compatible with oauth_utils.py
-    oauth_data = {
+def save_oauth_token(token_data: dict, selected_league: dict | None) -> Path:
+    OAUTH_STORE.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
         "token_data": {
             "access_token": token_data.get("access_token"),
             "refresh_token": token_data.get("refresh_token"),
-            "consumer_key": CLIENT_ID,
-            "consumer_secret": CLIENT_SECRET,
-            "token_type": token_data.get("token_type", "bearer"),
-            "expires_in": token_data.get("expires_in", 3600),
-            "token_time": datetime.utcnow().timestamp(),
-            "guid": token_data.get("xoauth_yahoo_guid")
+            "token_type": token_data.get("token_type"),
+            "expires_in": token_data.get("expires_in"),
         },
-        "timestamp": datetime.now().isoformat()
+        "issued_at": _to_epoch(st.session_state.get("token_issued_at") or _now_utc()),
+        "selected_league": selected_league or {},
     }
+    _dump_json(OAUTH_STORE, payload)
+    return OAUTH_STORE
 
-    if league_info:
-        oauth_data["league_info"] = league_info
+def load_saved_state() -> tuple[dict | None, dict | None]:
+    token_blob = _load_json(OAUTH_STORE)
+    league_blob = _load_json(LEAGUE_STORE)
+    token_data = token_blob.get("token_data") if token_blob else None
+    if token_blob and "issued_at" in token_blob:
+        st.session_state["token_issued_at"] = datetime.utcfromtimestamp(token_blob["issued_at"])
+    selected_league = league_blob.get("league") if league_blob else None
+    return token_data, selected_league
 
-    with open(oauth_file, 'w') as f:
-        json.dump(oauth_data, f, indent=2)
+def save_league_selection(league: dict) -> None:
+    LEAGUE_STORE.parent.mkdir(parents=True, exist_ok=True)
+    _dump_json(LEAGUE_STORE, {"league": league})
 
-    return oauth_file
+# =====================================================================================
+# Initial Import Runner
+# =====================================================================================
 
-
-def run_initial_import():
-    """Run the initial_import.py script to fetch all league data"""
-    if not INITIAL_IMPORT_SCRIPT.exists():
-        st.error(f"❌ Initial import script not found at: {INITIAL_IMPORT_SCRIPT}")
+def run_initial_import() -> bool:
+    """
+    Runs initial_import.py as a subprocess so it can use the env vars we've set.
+    Returns True on success.
+    """
+    script = APP_ROOT / "initial_import.py"
+    if not script.exists():
+        st.error("initial_import.py not found next to main.py")
         return False
 
+    env = os.environ.copy()
+    # Respect MD env already configured above.
+    cmd = [sys.executable, str(script)]
+    st.info("Starting initial data import…")
     try:
-        st.info("🚀 Starting initial data import... This may take several minutes.")
-
-        # Create placeholders for progress
-        log_placeholder = st.empty()
-
-        # Run the script
-        env = dict(os.environ)
-        env["PYTHONUNBUFFERED"] = "1"
-
-        # Pass league info as environment variables for MotherDuck upload
-        if "league_info" in st.session_state:
-            league_info = st.session_state.league_info
-            env["LEAGUE_NAME"] = league_info.get("name", "Unknown League")
-            env["LEAGUE_KEY"] = league_info.get("league_key", "unknown")
-            env["LEAGUE_SEASON"] = str(league_info.get("season", ""))
-            env["LEAGUE_NUM_TEAMS"] = str(league_info.get("num_teams", ""))
-
-        cmd = [sys.executable, str(INITIAL_IMPORT_SCRIPT)]
-
-        with st.spinner("Importing league data..."):
-            process = subprocess.Popen(
-                cmd,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1
-            )
-
-            # Stream output to UI
-            output_lines = []
-            for line in process.stdout:
-                output_lines.append(line.strip())
-                # Show last 10 lines of output
-                log_placeholder.code('\n'.join(output_lines[-10:]))
-
-            process.wait()
-
-            if process.returncode == 0:
-                st.success("✅ Data import completed successfully!")
-                st.balloons()
-                return True
-            else:
-                st.error(f"❌ Import failed with exit code {process.returncode}")
-                st.code('\n'.join(output_lines))
-                return False
-
-    except Exception as e:
-        st.error(f"❌ Error running import: {e}")
+        out = subprocess.run(cmd, env=env, check=True, capture_output=True, text=True)
+        st.success("Initial import completed.")
+        with st.expander("Import logs"):
+            st.code(out.stdout or "(no stdout)")
+            if out.stderr:
+                st.code(out.stderr)
+        return True
+    except subprocess.CalledProcessError as e:
+        st.error("Initial import failed.")
+        with st.expander("Import logs (error)"):
+            st.code(e.stdout or "(no stdout)")
+            st.code(e.stderr or "(no stderr)")
         return False
 
+# =====================================================================================
+# UI
+# =====================================================================================
 
-def main():
-    st.title("🏈 Yahoo Fantasy Football League History")
+st.set_page_config(page_title="KMFFL Stats", page_icon="🦆", layout="wide")
 
-    # Check if credentials are loaded
-    if not CLIENT_ID or not CLIENT_SECRET:
-        st.error("❌ Credentials not configured!")
-        st.info("Set YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET environment variables or in Streamlit secrets.")
-        return
+st.title("KMFFL Stats")
+st.caption("Yahoo + NFL merged stats • Automatic local/MD storage • No token prompts")
 
-    # Check for errors in URL
-    qp = st.query_params
-    if "error" in qp:
-        st.error(f"❌ OAuth Error: {qp.get('error')}")
-        if "error_description" in qp:
-            st.error(f"Description: {qp.get('error_description')}")
-        if st.button("Clear Error & Retry"):
-            st.query_params.clear()
-            st.rerun()
-        return
-
-    # Check if Yahoo redirected back with authorization code
-    if "code" in qp:
-        code = qp["code"]
-
-        with st.spinner("Connecting to Yahoo..."):
-            try:
-                token_data = exchange_code_for_tokens(code)
-
-                # Store token data in session state
-                st.session_state.token_data = {
-                    "access_token": token_data.get("access_token"),
-                    "refresh_token": token_data.get("refresh_token"),
-                    "token_type": token_data.get("token_type"),
-                    "expires_in": token_data.get("expires_in"),
-                    "xoauth_yahoo_guid": token_data.get("xoauth_yahoo_guid")
-                }
-
-                st.session_state.access_token = token_data.get("access_token")
-                st.session_state.token_expiry = datetime.utcnow() + timedelta(seconds=token_data.get("expires_in", 3600))
-
-                st.success("✅ Successfully connected!")
-
-                # Clear the code from URL
-                st.query_params.clear()
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
-
-        return
-
-    # Check if we have a stored access token
-    if "access_token" in st.session_state:
-        access_token = st.session_state.access_token
-
-        st.success("🔐 Connected to Yahoo Fantasy!")
-
-        # Fetch user's games if not already loaded
-        if "games_data" not in st.session_state:
-            with st.spinner("Loading your fantasy seasons..."):
-                try:
-                    games_data = get_user_games(access_token)
-                    st.session_state.games_data = games_data
-                except Exception as e:
-                    st.error(f"Error: {e}")
-                    if st.button("Start Over"):
-                        st.session_state.clear()
-                        st.rerun()
-                    return
-
-        games_data = st.session_state.games_data
-        football_games = extract_football_games(games_data)
-
-        if not football_games:
-            st.warning("No football leagues found for your account.")
-            if st.button("Logout"):
-                st.session_state.clear()
-                st.rerun()
-            return
-
-        st.subheader("📋 Select Your League")
-
-        # Display football seasons
-        season_options = {f"{game['season']} NFL Season": game['game_key']
-                         for game in football_games}
-
-        selected_season = st.selectbox(
-            "1. Choose a season:",
-            options=list(season_options.keys())
-        )
-
-        if selected_season:
-            game_key = season_options[selected_season]
-
-            # Auto-load leagues for selected season
-            if "current_game_key" not in st.session_state or st.session_state.current_game_key != game_key:
-                with st.spinner("Loading leagues..."):
-                    try:
-                        leagues_data = get_user_football_leagues(access_token, game_key)
-                        st.session_state.current_leagues = leagues_data
-                        st.session_state.current_game_key = game_key
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-
-            # Display leagues if loaded
-            if "current_leagues" in st.session_state:
-                leagues_data = st.session_state.current_leagues
-
-                try:
-                    leagues = leagues_data.get("fantasy_content", {}).get("users", {}).get("0", {}).get("user", [])[1].get("games", {}).get("0", {}).get("game", [])[1].get("leagues", {})
-
-                    league_list = []
-                    for key in leagues:
-                        if key == "count":
-                            continue
-                        league = leagues[key].get("league", [])[0]
-                        league_list.append({
-                            "league_key": league.get("league_key"),
-                            "name": league.get("name"),
-                            "num_teams": league.get("num_teams"),
-                            "season": league.get("season"),
-                        })
-
-                    if league_list:
-                        st.write("2. Choose your league:")
-
-                        league_names = [f"{league['name']} ({league['num_teams']} teams)" for league in league_list]
-                        selected_league_name = st.radio("", league_names, key="league_radio")
-
-                        selected_league = league_list[league_names.index(selected_league_name)]
-
-                        st.divider()
-
-                        # Show league details
-                        st.write("3. Review league details:")
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("League", selected_league['name'])
-                        with col2:
-                            st.metric("Season", selected_league['season'])
-                        with col3:
-                            st.metric("Teams", selected_league['num_teams'])
-
-                        st.info(f"📊 **Data to import:** All historical data for '{selected_league['name']}' (league key: {selected_league['league_key']})")
-
-                        st.divider()
-
-                        st.write("4. Import your league data:")
-                        st.info("This will fetch all historical data from your league and save it locally.")
-
-                        # MotherDuck configuration
-                        motherduck_token = None
-                        with st.expander("🦆 MotherDuck Configuration (Optional)"):
-                            st.write("Automatically upload your data to MotherDuck cloud database:")
-                            motherduck_token = st.text_input(
-                                "MotherDuck Token",
-                                type="password",
-                                value=os.environ.get("MOTHERDUCK_TOKEN", ""),
-                                help="Get your token from https://app.motherduck.com/ → Settings → API Keys"
-                            )
-                            if motherduck_token:
-                                st.success("✅ MotherDuck token configured")
-                                st.info(f"Database will be created as: `{selected_league['name'].lower().replace(' ', '_')}`")
-
-                        if st.button("📥 Import League Data Now", type="primary"):
-                            # Set MotherDuck token in environment if provided
-                            if motherduck_token:
-                                os.environ["MOTHERDUCK_TOKEN"] = motherduck_token
-
-                            # Store league info in session state for environment variables
-                            st.session_state.league_info = selected_league
-
-                            with st.spinner("Saving OAuth credentials..."):
-                                # Save OAuth token with league info
-                                oauth_file = save_oauth_token(
-                                    st.session_state.token_data,
-                                    selected_league
-                                )
-                                st.success(f"✅ OAuth credentials saved to: {oauth_file}")
-
-                            # Run initial import
-                            if run_initial_import():
-                                st.success("🎉 All done! Your league data has been imported.")
-
-                                # Show file locations
-                                st.write("### 📁 Files Saved:")
-                                st.write(f"**OAuth Token:** `{OAUTH_DIR / 'Oauth.json'}`")
-                                st.write(f"**League Data:** `{DATA_DIR}/`")
-                                
-                                # Show what was created
-                                if DATA_DIR.exists():
-                                    st.write("#### Data Files Created:")
-                                    parquet_files = list(DATA_DIR.glob("*.parquet"))
-                                    if parquet_files:
-                                        for pf in sorted(parquet_files):
-                                            size = pf.stat().st_size / 1024  # KB
-                                            st.write(f"- `{pf.name}` ({size:.1f} KB)")
-                                    
-                                    st.divider()
-                                    
-                                    # Download options
-                                    st.write("#### 💾 Download Your Data:")
-                                    st.info("⚠️ **Important:** On Streamlit Cloud, these files are temporary. Download them now to save locally!")
-                                    
-                                    # Download OAuth token
-                                    oauth_file_path = OAUTH_DIR / "Oauth.json"
-                                    if oauth_file_path.exists():
-                                        with open(oauth_file_path, 'r') as f:
-                                            oauth_json = f.read()
-                                        st.download_button(
-                                            "📥 Download OAuth Token (Oauth.json)",
-                                            oauth_json,
-                                            file_name="Oauth.json",
-                                            mime="application/json",
-                                            help="Save this file to your oauth/ folder to use with your scripts"
-                                        )
-                                    
-                                    # Download individual parquet files
-                                    if parquet_files:
-                                        st.write("**Download Data Files:**")
-                                        for pf in sorted(parquet_files):
-                                            with open(pf, 'rb') as f:
-                                                st.download_button(
-                                                    f"📥 {pf.name}",
-                                                    f.read(),
-                                                    file_name=pf.name,
-                                                    mime="application/octet-stream",
-                                                    help=f"Download {pf.name} to your fantasy_football_data/ folder"
-                                                )
-                                    
-                                    # Download all files as ZIP
-                                    with st.spinner("Creating ZIP archive of your data..."):
-                                        zip_buffer = io.BytesIO()
-                                        with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
-                                            # Add OAuth file
-                                            if oauth_file_path.exists():
-                                                zip_file.write(oauth_file_path, arcname="Oauth.json")
-
-                                            # Add all parquet files
-                                            for pf in sorted(parquet_files):
-                                                zip_file.write(pf, arcname=pf.name)
-
-                                        zip_buffer.seek(0)
-
-                                        st.download_button(
-                                            "📥 Download All Files as ZIP",
-                                            zip_buffer,
-                                            file_name="fantasy_football_data.zip",
-                                            mime="application/zip",
-                                            help="Download all data files as a single ZIP archive"
-                                        )
-
-                                    st.success("✅ All files ready for download above!")
-
-                    else:
-                        st.info("No leagues found for this season.")
-
-                except Exception as e:
-                    st.error(f"Error parsing leagues: {e}")
-
-        st.divider()
-
-        if st.button("Start Over"):
-            st.session_state.clear()
-            st.rerun()
-
+# Sidebar status
+with st.sidebar:
+    st.header("Status")
+    if MD_TOKEN:
+        st.success("🦆 MotherDuck detected: will write directly to your personal MD.")
     else:
-        # Show the authorization button
-        st.write("### Import Your Fantasy Football League Data")
+        st.info("No MotherDuck token configured; data will be saved locally.")
 
-        st.write("📊 This tool will fetch and save your complete league history including:")
-        st.write("- All-time schedules and matchups")
-        st.write("- Player statistics")
-        st.write("- Transaction history")
-        st.write("- Draft data")
-        st.write("- Playoff information")
+# Load any saved state on boot
+if "boot_loaded" not in st.session_state:
+    token_data, selected_league = load_saved_state()
+    if token_data:
+        st.session_state["token_data"] = token_data
+        if "token_issued_at" not in st.session_state:
+            st.session_state["token_issued_at"] = _now_utc()
+    if selected_league:
+        st.session_state["selected_league"] = selected_league
+    st.session_state["boot_loaded"] = True
 
-        st.divider()
+# Step 1: OAuth
+st.header("1) Connect Yahoo")
+if not CLIENT_ID or not CLIENT_SECRET:
+    st.error("Missing Yahoo CLIENT_ID / CLIENT_SECRET. Set env vars or st.secrets.")
+else:
+    # If we have a code param in the URL (Streamlit Cloud sometimes provides via query params)
+    qp = st.query_params
+    auth_code = qp.get("code", [None])[0] if isinstance(qp.get("code"), list) else qp.get("code", None)
 
-        st.write("**How it works:**")
-        st.write("1. Connect your Yahoo account")
-        st.write("2. Select your league")
-        st.write("3. Data is automatically imported and saved locally")
-        st.write("4. Use the data with your analysis scripts")
+    if "token_data" not in st.session_state:
+        if auth_code:
+            try:
+                tok = exchange_code_for_token(auth_code)
+                st.session_state["token_data"] = tok
+                st.session_state["token_issued_at"] = _now_utc()
+                st.success("Yahoo connected!")
+                # Clear code from URL
+                st.query_params.clear()
+            except Exception as e:
+                st.error(f"OAuth exchange failed: {e}")
+        else:
+            auth_link = build_auth_url()
+            st.markdown(
+                f"[Click here to authorize Yahoo Fantasy access]({auth_link})",
+                unsafe_allow_html=True
+            )
+    else:
+        # Ensure the token is fresh
+        try:
+            st.session_state["token_data"] = ensure_access_token(st.session_state["token_data"])
+            st.success("Yahoo connected (token valid).")
+        except Exception as e:
+            st.warning(f"Token invalid/expired: {e}")
+            st.session_state.pop("token_data", None)
+            st.rerun()
 
-        st.warning("⚠️ We only access your league data to build local files. Your Yahoo credentials are stored securely in the `oauth/` folder.")
+# Step 2: Choose League
+st.header("2) Select League")
+if "token_data" in st.session_state:
+    tok = st.session_state["token_data"]
+    access_token = tok.get("access_token")
+    try:
+        leagues = fetch_user_leagues(access_token)
+    except Exception as e:
+        st.error(f"Failed to list leagues: {e}")
+        leagues = []
 
-        auth_url = build_authorize_url()
+    if leagues:
+        # Display leagues in a selectbox by name (season)
+        display_names = [f"{lg['name']} (season {lg['season']})" for lg in leagues]
+        default_idx = 0
 
-        st.link_button("🔐 Connect Yahoo Account", auth_url, type="primary")
+        # If already selected before, pre-select
+        pre_sel = st.session_state.get("selected_league")
+        if pre_sel:
+            try:
+                default_idx = next(i for i, lg in enumerate(leagues) if lg["league_key"] == pre_sel.get("league_key"))
+            except StopIteration:
+                default_idx = 0
 
+        chosen = st.selectbox("Choose your league", display_names, index=default_idx)
+        if chosen:
+            idx = display_names.index(chosen)
+            selected_league = leagues[idx]
+            st.session_state["selected_league"] = selected_league
+            save_league_selection(selected_league)
 
-if __name__ == "__main__":
-    main()
+            st.success(f"Selected league: {selected_league['name']} ({selected_league['season']})")
+
+# Step 3: Persist OAuth + Import
+st.header("3) Save & Import")
+if "token_data" in st.session_state and "selected_league" in st.session_state:
+    selected_league = st.session_state["selected_league"]
+
+    # Compute DB name from league for MD
+    league_name_slug = _slug_db_name(selected_league["name"])
+    md_db = league_name_slug
+
+    # Configure env (no UI prompts)
+    if MD_TOKEN:
+        os.environ["MOTHERDUCK_TOKEN"] = MD_TOKEN
+        os.environ["MD_DIRECT_UPLOAD"] = "1"
+        os.environ["MD_DB"] = md_db
+    else:
+        os.environ.pop("MOTHERDUCK_TOKEN", None)
+        os.environ.pop("MD_DIRECT_UPLOAD", None)
+        os.environ.pop("MD_DB", None)
+
+    # Save token + league
+    oauth_file = save_oauth_token(st.session_state["token_data"], selected_league)
+    st.caption(f"OAuth saved to: `{oauth_file}`")
+
+    # Buttons
+    col1, col2 = st.columns([1, 1], gap="large")
+    with col1:
+        if st.button("Run Initial Import", type="primary"):
+            run_initial_import()
+    with col2:
+        if st.button("Re-run Import (Overwrite)"):
+            run_initial_import()
+
+# Optional: Helper section
+with st.expander("ℹ️ What gets imported?"):
+    st.write(
+        """
+        - Your Yahoo league data is fetched with your OAuth token.
+        - The local scripts merge/clean stats.
+        - If a MotherDuck token is configured in the environment or `st.secrets`, 
+          results are written directly to your personal MotherDuck database named after the league (slug).
+        - Otherwise, results are saved locally.
+        """
+    )
+
+# Footer
+st.write("---")
+st.caption("KMFFL Stats • Built with Streamlit")
