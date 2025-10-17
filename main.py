@@ -29,7 +29,7 @@ CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or st.secrets.get("YAHOO_C
 MOTHERDUCK_TOKEN = os.environ.get("MOTHERDUCK_TOKEN") or st.secrets.get("MOTHERDUCK_TOKEN", "")
 
 # For deployment - NO TRAILING SLASH
-REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app/")
+REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app")
 
 # OAuth 2.0 endpoints
 AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
