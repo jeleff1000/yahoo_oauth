@@ -1,6 +1,7 @@
-# python
 import os
+import streamlit as st
 import urllib.parse
+import requests
 import base64
 import json
 import subprocess
@@ -10,23 +11,9 @@ import io
 from pathlib import Path
 from datetime import datetime, timedelta
 
-# Provide clear messages if required dependencies are missing
-try:
-    import streamlit as st
-except ImportError as e:
-    raise ImportError("Missing dependency: streamlit. Install with `pip install streamlit`") from e
-
-try:
-    import requests
-except ImportError as e:
-    raise ImportError("Missing dependency: requests. Install with `pip install requests`") from e
-
 # Load your client credentials
 CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID") or st.secrets.get("YAHOO_CLIENT_ID", None)
 CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or st.secrets.get("YAHOO_CLIENT_SECRET", None)
-
-# MotherDuck token loaded from environment or Streamlit secrets (no interactive prompt)
-MOTHERDUCK_TOKEN = os.environ.get("MOTHERDUCK_TOKEN") or st.secrets.get("MOTHERDUCK_TOKEN", "")
 
 # For deployment - NO TRAILING SLASH
 REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app")
@@ -174,10 +161,6 @@ def run_initial_import():
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
 
-        # Ensure MotherDuck token is present for subprocess if configured
-        if MOTHERDUCK_TOKEN:
-            env["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
-
         # Pass league info as environment variables for MotherDuck upload
         if "league_info" in st.session_state:
             league_info = st.session_state.league_info
@@ -229,12 +212,6 @@ def main():
         st.error("❌ Credentials not configured!")
         st.info("Set YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET environment variables or in Streamlit secrets.")
         return
-
-    # Show whether MotherDuck token is configured (no interactive entry)
-    if MOTHERDUCK_TOKEN:
-        st.success("✅ MotherDuck token loaded from environment or `st.secrets`.")
-    else:
-        st.warning("⚠️ MotherDuck token not configured. Data will be saved locally only. To enable automatic upload, add `MOTHERDUCK_TOKEN` to `st.secrets` or environment variables.")
 
     # Check for errors in URL
     qp = st.query_params
@@ -370,23 +347,32 @@ def main():
                         with col3:
                             st.metric("Teams", selected_league['num_teams'])
 
-                        st.info(f"📊 `Data to import:` All historical data for `{selected_league['name']}` (league key: {selected_league['league_key']})")
+                        st.info(f"📊 **Data to import:** All historical data for '{selected_league['name']}' (league key: {selected_league['league_key']})")
 
                         st.divider()
 
                         st.write("4. Import your league data:")
-                        st.info("This will fetch all historical data from your league and save it locally (and upload to MotherDuck if configured).")
+                        st.info("This will fetch all historical data from your league and save it locally.")
 
-                        # Show MotherDuck configuration state (read-only)
-                        with st.expander("🦆 MotherDuck Configuration (Read-only)"):
-                            if MOTHERDUCK_TOKEN:
-                                st.success("✅ MotherDuck token is loaded from environment or `st.secrets`.")
-                                sanitized_db = selected_league['name'].lower().replace(' ', '_')
-                                st.info(f"Database will be created as: `{sanitized_db}`")
-                            else:
-                                st.warning("MotherDuck token not configured. Upload will be skipped; files will be saved locally.")
+                        # MotherDuck configuration
+                        motherduck_token = None
+                        with st.expander("🦆 MotherDuck Configuration (Optional)"):
+                            st.write("Automatically upload your data to MotherDuck cloud database:")
+                            motherduck_token = st.text_input(
+                                "MotherDuck Token",
+                                type="password",
+                                value=os.environ.get("MOTHERDUCK_TOKEN", ""),
+                                help="Get your token from https://app.motherduck.com/ → Settings → API Keys"
+                            )
+                            if motherduck_token:
+                                st.success("✅ MotherDuck token configured")
+                                st.info(f"Database will be created as: `{selected_league['name'].lower().replace(' ', '_')}`")
 
                         if st.button("📥 Import League Data Now", type="primary"):
+                            # Set MotherDuck token in environment if provided
+                            if motherduck_token:
+                                os.environ["MOTHERDUCK_TOKEN"] = motherduck_token
+
                             # Store league info in session state for environment variables
                             st.session_state.league_info = selected_league
 
@@ -397,10 +383,6 @@ def main():
                                     selected_league
                                 )
                                 st.success(f"✅ OAuth credentials saved to: {oauth_file}")
-
-                            # Ensure subprocess sees MOTHERDUCK_TOKEN if configured
-                            if MOTHERDUCK_TOKEN:
-                                os.environ["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
 
                             # Run initial import
                             if run_initial_import():
@@ -424,7 +406,7 @@ def main():
 
                                     # Download options
                                     st.write("#### 💾 Download Your Data:")
-                                    st.info("⚠️ `Important:` On Streamlit Cloud, these files are temporary. Download them now to save locally!")
+                                    st.info("⚠️ **Important:** On Streamlit Cloud, these files are temporary. Download them now to save locally!")
 
                                     # Download OAuth token
                                     oauth_file_path = OAUTH_DIR / "Oauth.json"
