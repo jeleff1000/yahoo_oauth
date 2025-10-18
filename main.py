@@ -155,6 +155,17 @@ def save_oauth_token(token_data: dict, league_info: dict = None):
     with open(oauth_file, 'w') as f:
         json.dump(oauth_data, f, indent=2)
 
+    # Also write a copy to the scripts' expected oauth path (some scripts look here)
+    try:
+        scripts_oauth_dir = SCRIPTS_DIR / "player_stats" / "oauth"
+        scripts_oauth_dir.mkdir(parents=True, exist_ok=True)
+        scripts_oauth_file = scripts_oauth_dir / "Oauth.json"
+        with open(scripts_oauth_file, 'w', encoding='utf-8') as sf:
+            json.dump(oauth_data, sf, indent=2)
+    except Exception:
+        # best-effort: don't fail saving oauth token if secondary write fails
+        pass
+
     return oauth_file
 
 
@@ -204,7 +215,8 @@ def run_initial_import():
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                cwd=INITIAL_IMPORT_SCRIPT.parent
             )
 
             # Stream output to UI and write to the import log file
