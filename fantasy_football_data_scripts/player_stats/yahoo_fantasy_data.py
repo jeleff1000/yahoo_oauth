@@ -339,7 +339,7 @@ def save_dst_settings_json_from_rules(
     payload = {
         "year": int(year),
         "league_key": league_key,
-        "saved_at": datetime.utcnow().isoformat() + "Z",
+        "saved_at": datetime.now(timezone.utc).isoformat(),
         "start_week": int(start_week),
         "end_week": int(end_week),
         "dst_scoring": scoring,
@@ -359,7 +359,7 @@ def save_full_scoring_json(year: int, league_key: str, rules: List[Dict[str, Any
     payload = {
         "year": int(year),
         "league_key": league_key,
-        "saved_at": datetime.utcnow().isoformat() + "Z",
+        "saved_at": datetime.now(timezone.utc).isoformat(),
         "full_scoring": rules,
     }
     with out_path.open("w", encoding="utf-8") as f:
@@ -415,7 +415,7 @@ def save_roster_json(year: int, league_key: str, roster: List[Dict[str, Any]]) -
     payload = {
         "year": int(year),
         "league_key": league_key,
-        "saved_at": datetime.utcnow().isoformat() + "Z",
+        "saved_at": datetime.now(timezone.utc).isoformat(),
         "roster_positions": roster,
     }
     with out_path.open("w", encoding="utf-8") as f:

@@ -14,7 +14,7 @@ import zipfile
 import io
 import re
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # =========================
 # Third-party deps
@@ -124,7 +124,7 @@ def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
             "consumer_secret": CLIENT_SECRET,
             "token_type": token_data.get("token_type", "bearer"),
             "expires_in": token_data.get("expires_in", 3600),
-            "token_time": datetime.utcnow().timestamp(),
+            "token_time": datetime.now(timezone.utc).timestamp(),
             "guid": token_data.get("xoauth_yahoo_guid")
         },
         "timestamp": datetime.now().isoformat()
@@ -154,6 +154,15 @@ def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
       2) any parquet under fantasy_football_data subfolders
       3) repo-wide fallback if still none
     """
+    # Also allow a runtime override path (for Streamlit Cloud or different mount points)
+    export_dir = None
+    try:
+        ed = os.environ.get("EXPORT_DATA_DIR")
+        if ed:
+            export_dir = Path(ed)
+    except Exception:
+        export_dir = None
+
     wanted_stems = {"schedule", "matchup", "transactions", "player"}
     seen = set()
     files: list[Path] = []
@@ -164,9 +173,27 @@ def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
         if p.exists() and p.is_file():
             files.append(p); seen.add(p.resolve())
 
+    # (1b) canonical at export_dir if provided
+    if export_dir:
+        for stem in ["schedule", "matchup", "transactions", "player"]:
+            p = export_dir / f"{stem}.parquet"
+            if p.exists() and p.is_file():
+                rp = p.resolve()
+                if rp not in seen:
+                    files.append(p); seen.add(rp)
+
     # (2) subfolders
     if data_dir.exists():
         for p in data_dir.rglob("*.parquet"):
+            if "import_logs" in p.parts:
+                continue
+            rp = p.resolve()
+            if rp not in seen:
+                files.append(p); seen.add(rp)
+
+    # (2b) subfolders under export_dir
+    if export_dir and export_dir.exists():
+        for p in export_dir.rglob("*.parquet"):
             if "import_logs" in p.parts:
                 continue
             rp = p.resolve()
@@ -187,6 +214,8 @@ def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
             a = 0
         elif data_dir in p.parents:
             a = 1
+        elif export_dir and (p.parent == export_dir or export_dir in p.parents):
+            a = 0
         else:
             a = 2
         b = 0 if p.stem.lower() in wanted_stems else 1
@@ -280,7 +309,7 @@ def run_initial_import() -> bool:
         # Log file
         IMPORT_LOG_DIR = DATA_DIR / "import_logs"
         IMPORT_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        import_log_path = IMPORT_LOG_DIR / f"initial_import_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log"
+        import_log_path = IMPORT_LOG_DIR / f"initial_import_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.log"
 
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
@@ -396,7 +425,7 @@ def main():
                     "xoauth_yahoo_guid": token_data.get("xoauth_yahoo_guid")
                 }
                 st.session_state.access_token = token_data.get("access_token")
-                st.session_state.token_expiry = datetime.utcnow() + timedelta(seconds=token_data.get("expires_in", 3600))
+                st.session_state.token_expiry = datetime.now(timezone.utc) + timedelta(seconds=token_data.get("expires_in", 3600))
                 st.success("✅ Successfully connected!")
                 st.query_params.clear()
                 st.rerun()
@@ -469,7 +498,8 @@ def main():
                     if league_list:
                         st.write("2. Choose your league:")
                         league_names = [f"{l['name']} ({l['num_teams']} teams)" for l in league_list]
-                        selected_league_name = st.radio("", league_names, key="league_radio")
+                        # Provide a non-empty label (hidden) to satisfy Streamlit accessibility warnings.
+                        selected_league_name = st.radio("league_selection", league_names, key="league_radio", label_visibility="collapsed")
                         selected_league = league_list[league_names.index(selected_league_name)]
 
                         st.divider()
@@ -504,6 +534,13 @@ def main():
                             if MOTHERDUCK_TOKEN:
                                 os.environ["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
 
+                            # Ensure parent process exposes EXPORT_DATA_DIR so downstream
+                            # parquet discovery can look in the same path the child used.
+                            try:
+                                os.environ["EXPORT_DATA_DIR"] = str(DATA_DIR.resolve())
+                            except Exception:
+                                os.environ["EXPORT_DATA_DIR"] = str(DATA_DIR)
+
                             if run_initial_import():
                                 st.success("🎉 All done! Your league data has been imported.")
 
@@ -513,9 +550,16 @@ def main():
 
                                 # DEBUG: show paths and files found to help diagnose missing uploads
                                 try:
-                                    st.write("**Debug: paths used for parquet discovery**")
-                                    st.write(f"repo_root: `{repo_root}`")
-                                    st.write(f"data_dir: `{DATA_DIR}`")
+                                    st.write("**Debug: paths used for parquet discovery (resolved)**")
+                                    try:
+                                        st.write(f"repo_root: `{repo_root.resolve()}`")
+                                    except Exception:
+                                        st.write(f"repo_root: `{repo_root}`")
+                                    try:
+                                        st.write(f"data_dir: `{DATA_DIR.resolve()}`")
+                                    except Exception:
+                                        st.write(f"data_dir: `{DATA_DIR}`")
+                                    st.write(f"EXPORT_DATA_DIR env: `{os.environ.get('EXPORT_DATA_DIR')}`")
                                     if files:
                                         st.write(f"Found {len(files)} parquet file(s):")
                                         for pf in files:
