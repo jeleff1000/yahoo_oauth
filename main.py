@@ -241,6 +241,16 @@ def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
         except Exception:
             pass
 
+        # Add a few container/mount fallbacks (only on POSIX containers) that Streamlit Cloud
+        # commonly exposes. We limit deeper scans below to avoid long filesystem walks.
+        extra_roots = []
+        try:
+            if os.name != "nt":
+                for p in ("/mount", "/mount/src", "/mnt", "/home/appuser", "/home/adminuser", "/tmp", "/root", "/usr/src/app", "/workspace", "/srv", "/app"):
+                    extra_roots.append(Path(p))
+        except Exception:
+            extra_roots = []
+
         # (2c) search these additional candidate dirs
         try:
             for d in candidate_dirs:
@@ -290,6 +300,42 @@ def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
                            lower.endswith(".parq"):
                             p = Path(root) / fn
                             _maybe_add(p)
+            except Exception:
+                pass
+
+        # If still nothing, perform a limited-depth scan under extra common roots
+        if not files and extra_roots:
+            MAX_FOUND = 300
+            MAX_DEPTH = 5
+            try:
+                found_count = 0
+                for root_base in extra_roots:
+                    if found_count >= MAX_FOUND:
+                        break
+                    if not root_base.exists():
+                        continue
+                    for root, dirs, fnames in os.walk(str(root_base)):
+                        # limit depth to avoid full filesystem traversal
+                        try:
+                            rel_depth = len(Path(root).relative_to(root_base).parts)
+                        except Exception:
+                            rel_depth = 0
+                        if rel_depth > MAX_DEPTH:
+                            # prune by clearing dirs so walk won't go deeper
+                            dirs.clear()
+                            continue
+                        if "import_logs" in Path(root).parts:
+                            continue
+                        for fn in fnames:
+                            lower = fn.lower()
+                            if lower.endswith(".parquet") or ".parquet." in lower or lower.endswith(".parq"):
+                                p = Path(root) / fn
+                                _maybe_add(p)
+                                found_count += 1
+                                if found_count >= MAX_FOUND:
+                                    break
+                        if found_count >= MAX_FOUND:
+                            break
             except Exception:
                 pass
 
