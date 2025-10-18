@@ -594,6 +594,48 @@ def _debug_list_parquet_locations(repo_root: Path, data_dir: Path, export_dir: P
 
     return found
 
+def _translate_remote_path(p: Path) -> Path:
+    """If p is absolute and doesn't exist locally, try to map it to a local repo-relative path.
+
+    Strategy:
+      - look for the local repo name inside the remote path string
+      - if found, take the remainder after the repo name and join with our local ROOT_DIR
+      - if that candidate exists, return it
+      - otherwise return the original Path
+    """
+    try:
+        if not p:
+            return p
+        if p.exists():
+            return p
+        p_str = str(p)
+        repo_name = ROOT_DIR.name
+        if repo_name in p_str:
+            # split on the first occurrence of repo_name and build candidate under local ROOT_DIR
+            try:
+                _, after = p_str.split(repo_name, 1)
+                cand = ROOT_DIR.joinpath(after.lstrip('/\\'))
+                if cand.exists():
+                    return cand
+            except Exception:
+                pass
+        # Try a few common container mounts that include src and then repo name
+        for prefix in ("/mount/src", "/usr/src/app", "/workspace", "/home/appuser", "/app", "/srv"):
+            if p_str.startswith(prefix):
+                # try to find repo_name in path anyway
+                if repo_name in p_str:
+                    try:
+                        _, after = p_str.split(repo_name, 1)
+                        cand = ROOT_DIR.joinpath(after.lstrip('/\\'))
+                        if cand.exists():
+                            return cand
+                    except Exception:
+                        pass
+        return p
+    except Exception:
+        return p
+
+
 def _extract_parquet_paths_from_log(log_path: Path) -> list[Path]:
     """Scan a textual import log for absolute or repo-relative parquet paths and return existing Path objects."""
     paths: list[Path] = []
@@ -611,6 +653,11 @@ def _extract_parquet_paths_from_log(log_path: Path) -> list[Path]:
                     if cand.exists():
                         paths.append(cand)
                         continue
+                # If the absolute path doesn't exist locally, try to translate common container mount
+                translated = _translate_remote_path(p)
+                if translated.exists():
+                    paths.append(translated)
+                    continue
                 if p.exists():
                     paths.append(p)
             except Exception:
@@ -619,10 +666,12 @@ def _extract_parquet_paths_from_log(log_path: Path) -> list[Path]:
         pass
     return paths
 
+
 def _extract_parquet_paths_from_text(text: str) -> list[Path]:
     """Extract candidate parquet paths from an arbitrary text blob; resolve relative to repo root if needed."""
     paths: list[Path] = []
     try:
+        import re
         regex = r"([\w\-\./\\]+\.parquet(?:\.[a-zA-Z0-9]+)?)"
         for m in re.findall(regex, text or ""):
             try:
@@ -632,6 +681,10 @@ def _extract_parquet_paths_from_text(text: str) -> list[Path]:
                     if cand.exists():
                         paths.append(cand)
                         continue
+                translated = _translate_remote_path(p)
+                if translated.exists():
+                    paths.append(translated)
+                    continue
                 if p.exists():
                     paths.append(p)
             except Exception:

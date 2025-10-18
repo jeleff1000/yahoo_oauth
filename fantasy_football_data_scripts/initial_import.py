@@ -18,6 +18,7 @@ from typing import Optional, List
 
 import pandas as pd
 import duckdb
+import json
 
 # =============================================================================
 # Paths
@@ -257,12 +258,14 @@ def main():
     # PHASE 2
     log("")
     log("=== PHASE 2: Building canonical parquet files ===")
+    created_canonicals: dict[str, str] = {}
     for kind in ["schedule", "matchup", "transactions", "player"]:
         src = locate_latest_parquet(kind)
         if not src or not src.exists():
             log(f"WARN: No {kind} source found in {SOURCE_DIRS[kind]}")
             continue
         try:
+            log(f"Using source for {kind}: {src}")
             df_src = pd.read_parquet(src)
         except Exception as e:
             log(f"WARN: Could not read {kind} source {src}: {e}")
@@ -274,6 +277,11 @@ def main():
         log(f"Processing {kind}: {src.name} ({rows_used:,} rows)")
         total_rows = upsert_parquet_via_duckdb(CANONICAL[kind], df_src, DEDUP_KEYS[kind], kind)
         log(f"✓ Updated {CANONICAL[kind].name}: {total_rows:,} total rows")
+        try:
+            canon_path = CANONICAL[kind].resolve()
+        except Exception:
+            canon_path = CANONICAL[kind]
+        created_canonicals[kind] = str(canon_path)
 
     # PHASE 3
     log("")
@@ -294,6 +302,16 @@ def main():
                 log(f"  {kind:15s}: {len(df):,} rows -> {path}")
             except Exception:
                 log(f"  {kind:15s}: -> {path}")
+
+    # Emit a machine-readable summary of canonical parquet files (parent can parse this)
+    try:
+        summary = {"canonical_files": created_canonicals}
+        print("__CANONICAL_FILES_JSON_START__")
+        print(json.dumps(summary))
+        print("__CANONICAL_FILES_JSON_END__")
+        sys.stdout.flush()
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     main()
