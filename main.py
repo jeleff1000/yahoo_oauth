@@ -147,82 +147,169 @@ def _slug(s: str, lead_prefix: str) -> str:
     return x[:63]
 
 def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
-    """
-    Recursively collect parquet files to upload and to include in the ZIP.
-    Priority:
-      1) canonical files at data_dir root
-      2) any parquet under fantasy_football_data subfolders
-      3) repo-wide fallback if still none
-    """
-    # Also allow a runtime override path (for Streamlit Cloud or different mount points)
-    export_dir = None
-    try:
-        ed = os.environ.get("EXPORT_DATA_DIR")
-        if ed:
-            export_dir = Path(ed)
-    except Exception:
+        """
+        Recursively collect parquet files to upload and to include in the ZIP.
+        Priority:
+          1) canonical files at data_dir root
+          2) any parquet under fantasy_football_data subfolders
+          3) repo-wide fallback if still none
+
+        This function also honors an environment override EXPORT_DATA_DIR and includes
+        extra fallbacks (resolved paths and os.walk) to be robust across different
+        mounts/container paths (e.g. Streamlit cloud `/mount/src/...`).
+        """
+        # Also allow a runtime override path (for Streamlit Cloud or different mount points)
         export_dir = None
+        try:
+            ed = os.environ.get("EXPORT_DATA_DIR")
+            if ed:
+                export_dir = Path(ed)
+        except Exception:
+            export_dir = None
 
-    wanted_stems = {"schedule", "matchup", "transactions", "player"}
-    seen = set()
-    files: list[Path] = []
+        wanted_stems = {"schedule", "matchup", "transactions", "player"}
+        seen = set()
+        files: list[Path] = []
 
-    # (1) canonical root
-    for stem in ["schedule", "matchup", "transactions", "player"]:
-        p = data_dir / f"{stem}.parquet"
-        if p.exists() and p.is_file():
-            files.append(p); seen.add(p.resolve())
-
-    # (1b) canonical at export_dir if provided
-    if export_dir:
-        for stem in ["schedule", "matchup", "transactions", "player"]:
-            p = export_dir / f"{stem}.parquet"
-            if p.exists() and p.is_file():
+        # Helper to add file if valid and not seen
+        def _maybe_add(p: Path):
+            try:
                 rp = p.resolve()
-                if rp not in seen:
-                    files.append(p); seen.add(rp)
+            except Exception:
+                rp = p
+            if rp in seen:
+                return
+            try:
+                if p.exists() and p.is_file():
+                    files.append(p)
+                    seen.add(rp)
+            except Exception:
+                # if we can't check exists/is_file, still try to add by path
+                files.append(p)
+                seen.add(rp)
 
-    # (2) subfolders
-    if data_dir.exists():
-        for p in data_dir.rglob("*.parquet"):
-            if "import_logs" in p.parts:
-                continue
-            rp = p.resolve()
-            if rp not in seen:
-                files.append(p); seen.add(rp)
+        # (1) canonical root (data_dir)
+        for stem in ["schedule", "matchup", "transactions", "player"]:
+            p = data_dir / f"{stem}.parquet"
+            _maybe_add(p)
 
-    # (2b) subfolders under export_dir
-    if export_dir and export_dir.exists():
-        for p in export_dir.rglob("*.parquet"):
-            if "import_logs" in p.parts:
-                continue
-            rp = p.resolve()
-            if rp not in seen:
-                files.append(p); seen.add(rp)
+        # (1b) canonical at export_dir if provided
+        if export_dir:
+            for stem in ["schedule", "matchup", "transactions", "player"]:
+                p = export_dir / f"{stem}.parquet"
+                _maybe_add(p)
 
-    # (3) repo-wide fallback
-    if not files:
-        for p in repo_root.rglob("*.parquet"):
-            if "import_logs" in p.parts:
-                continue
-            rp = p.resolve()
-            if rp not in seen:
-                files.append(p); seen.add(rp)
+        # (2) subfolders under data_dir
+        try:
+            if data_dir.exists():
+                for p in data_dir.rglob("*.parquet"):
+                    if "import_logs" in p.parts:
+                        continue
+                    _maybe_add(p)
+                # also pick up files with extra suffixes like .parquet.gz or .parquet.snappy
+                for p in data_dir.rglob("*.parquet.*"):
+                    if "import_logs" in p.parts:
+                        continue
+                    _maybe_add(p)
+        except Exception:
+            pass
 
-    def rank(p: Path) -> tuple[int, int, str]:
-        if p.parent == data_dir:
-            a = 0
-        elif data_dir in p.parents:
-            a = 1
-        elif export_dir and (p.parent == export_dir or export_dir in p.parents):
-            a = 0
-        else:
-            a = 2
-        b = 0 if p.stem.lower() in wanted_stems else 1
-        return (a, b, str(p))
+        # (2b) subfolders under export_dir
+        try:
+            if export_dir and export_dir.exists():
+                for p in export_dir.rglob("*.parquet"):
+                    if "import_logs" in p.parts:
+                        continue
+                    _maybe_add(p)
+                for p in export_dir.rglob("*.parquet.*"):
+                    if "import_logs" in p.parts:
+                        continue
+                    _maybe_add(p)
+        except Exception:
+            pass
 
-    files.sort(key=rank)
-    return files
+        # Additional common locations to check (Streamlit Cloud and local dev variations)
+        candidate_dirs = []
+        try:
+            candidate_dirs.append(repo_root / "schedule_data")
+            candidate_dirs.append(repo_root / "fantasy_football_data")
+            candidate_dirs.append(repo_root / "fantasy_football_data" / "schedule_data")
+            candidate_dirs.append(Path.cwd())
+            candidate_dirs.append(Path.home())
+            if export_dir:
+                candidate_dirs.append(export_dir)
+        except Exception:
+            pass
+
+        # (2c) search these additional candidate dirs
+        try:
+            for d in candidate_dirs:
+                if not d:
+                    continue
+                try:
+                    if d.exists():
+                        for p in d.rglob("*.parquet"):
+                            if "import_logs" in p.parts:
+                                continue
+                            _maybe_add(p)
+                        for p in d.rglob("*.parquet.*"):
+                            if "import_logs" in p.parts:
+                                continue
+                            _maybe_add(p)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # (3) repo-wide fallback
+        if not files:
+            try:
+                for p in repo_root.rglob("*.parquet"):
+                    if "import_logs" in p.parts:
+                        continue
+                    _maybe_add(p)
+                for p in repo_root.rglob("*.parquet.*"):
+                    if "import_logs" in p.parts:
+                        continue
+                    _maybe_add(p)
+            except Exception:
+                pass
+
+        # Final robust fallback: os.walk (case-insensitive extension match) in repo_root
+        # This helps when the earlier pathlib searches miss files due to mount/symlink differences.
+        if not files:
+            try:
+                for root, dirs, fnames in os.walk(str(repo_root)):
+                    # skip import_logs folders quickly
+                    if "import_logs" in Path(root).parts:
+                        continue
+                    for fn in fnames:
+                        lower = fn.lower()
+                        if lower.endswith(".parquet") or \
+                           ".parquet." in lower or \
+                           lower.endswith(".parq"):
+                            p = Path(root) / fn
+                            _maybe_add(p)
+            except Exception:
+                pass
+
+        def rank(p: Path) -> tuple[int, int, str]:
+            try:
+                if p.parent == data_dir:
+                    a = 0
+                elif data_dir in p.parents:
+                    a = 1
+                elif export_dir and (p.parent == export_dir or export_dir in p.parents):
+                    a = 0
+                else:
+                    a = 2
+            except Exception:
+                a = 2
+            b = 0 if p.stem.lower() in wanted_stems else 1
+            return (a, b, str(p))
+
+        files.sort(key=rank)
+        return files
 
 def upload_files_to_motherduck(
     files: list[Path],
@@ -374,17 +461,97 @@ def run_initial_import() -> bool:
                 status_placeholder.success("Import finished successfully.")
                 st.success("✅ Data import completed successfully!")
                 st.write(f"Import log: {import_log_path}")
+                try:
+                    st.session_state["last_import_log"] = str(import_log_path)
+                except Exception:
+                    pass
                 return True
             else:
                 status_placeholder.error(f"Import failed (exit code {process.returncode}).")
                 st.error(f"❌ Import failed with exit code {process.returncode}")
                 st.code('\n'.join(output_lines))
                 st.write(f"Import log: {import_log_path}")
+                try:
+                    st.session_state["last_import_log"] = str(import_log_path)
+                except Exception:
+                    pass
                 return False
 
     except Exception as e:
         st.error(f"❌ Error running import: {e}")
         return False
+
+# =========================
+# Debug Helpers
+# =========================
+def _debug_list_parquet_locations(repo_root: Path, data_dir: Path, export_dir: Path | None = None, max_items: int = 200) -> list[tuple[Path, int]]:
+    """Return a list of (path, size_bytes) for parquet-like files found under
+    repo_root, data_dir, and export_dir. Case-insensitive and matches .parquet, .parq,
+    and .parquet.* suffixes. Limits the returned list to max_items to avoid huge dumps.
+    """
+    found = []
+    def _scan(base: Path):
+        try:
+            for root, dirs, files in os.walk(str(base)):
+                if 'import_logs' in Path(root).parts:
+                    continue
+                for fn in files:
+                    lower = fn.lower()
+                    if lower.endswith('.parquet') or '.parquet.' in lower or lower.endswith('.parq'):
+                        p = Path(root) / fn
+                        try:
+                            size = p.stat().st_size
+                        except Exception:
+                            size = -1
+                        found.append((p, size))
+                        if len(found) >= max_items:
+                            return
+        except Exception:
+            return
+
+    # scan the most likely places first
+    for d in (data_dir, export_dir, repo_root):
+        if not d:
+            continue
+        try:
+            if d.exists():
+                _scan(d)
+        except Exception:
+            continue
+
+    # final fallback to repo_root if nothing yet
+    if not found:
+        try:
+            _scan(repo_root)
+        except Exception:
+            pass
+
+    return found
+
+def _extract_parquet_paths_from_log(log_path: Path) -> list[Path]:
+    """Scan a textual import log for absolute or repo-relative parquet paths and return existing Path objects."""
+    paths: list[Path] = []
+    try:
+        import re
+        txt = log_path.read_text(encoding='utf-8', errors='ignore')
+        # crude regex: match strings that look like paths ending with .parquet or .parquet.*
+        regex = r"([\w\-\./\\]+\.parquet(?:\.[a-zA-Z0-9]+)?)"
+        for m in re.findall(regex, txt):
+            try:
+                p = Path(m)
+                # try resolving relative to repo root as well
+                if not p.is_absolute():
+                    cand = ROOT_DIR / m
+                    if cand.exists():
+                        paths.append(cand)
+                        continue
+                if p.exists():
+                    paths.append(p)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return paths
 
 # =========================
 # Streamlit UI
@@ -547,6 +714,51 @@ def main():
                                 # --------- COLLECT FILES (for upload + downloads) ----------
                                 repo_root = ROOT_DIR
                                 files = collect_parquet_candidates(repo_root, DATA_DIR)
+
+                                # --- EXPLICIT DEBUG SCAN (os.walk-based) ---
+                                try:
+                                    ed = os.environ.get('EXPORT_DATA_DIR')
+                                    export_path = Path(ed) if ed else None
+                                    debug_found = _debug_list_parquet_locations(repo_root, DATA_DIR, export_path)
+                                    st.write("**Debug: explicit os.walk scan results**")
+                                    if debug_found:
+                                        st.write(f"Found {len(debug_found)} parquet-like file(s) via explicit scan:")
+                                        for p, size in debug_found:
+                                            try:
+                                                rel = p.relative_to(ROOT_DIR)
+                                            except Exception:
+                                                rel = p
+                                            try:
+                                                st.write(f"- `{rel}` ({size/1024:.1f} KB)")
+                                            except Exception:
+                                                st.write(f"- `{rel}`")
+                                        if not files:
+                                            st.warning("collect_parquet_candidates() returned no files but explicit scan found files — there may be a path/mount mismatch. Check file permissions and where the import process wrote data.")
+                                    else:
+                                        st.write("No parquet-like files found by explicit scan.")
+                                except Exception as e:
+                                    st.write(f"Debug scan failed: {e}")
+
+                                # If no files discovered, also try to parse the import log for paths
+                                try:
+                                    if not files and st.session_state.get("last_import_log"):
+                                        logpath = Path(st.session_state.get("last_import_log"))
+                                        if logpath.exists():
+                                            st.write("(Attempting to recover parquet paths from import log)")
+                                            log_paths = _extract_parquet_paths_from_log(logpath)
+                                            if log_paths:
+                                                st.write(f"Found {len(log_paths)} path(s) in import log:")
+                                                for lp in log_paths:
+                                                    try:
+                                                        st.write(f"- `{lp}`")
+                                                        if lp.exists():
+                                                            files.append(lp)
+                                                    except Exception:
+                                                        pass
+                                            else:
+                                                st.write("No parquet paths found in import log.")
+                                except Exception:
+                                    pass
 
                                 # DEBUG: show paths and files found to help diagnose missing uploads
                                 try:
