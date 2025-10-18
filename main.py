@@ -287,6 +287,12 @@ def run_initial_import() -> bool:
         if MOTHERDUCK_TOKEN:
             env["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
         env["AUTO_CONFIRM"] = "1"
+        # Tell the child import process where to write data. This can be overridden by
+        # setting EXPORT_DATA_DIR in the environment (useful for Streamlit Cloud).
+        try:
+            env["EXPORT_DATA_DIR"] = str(DATA_DIR.resolve())
+        except Exception:
+            env["EXPORT_DATA_DIR"] = str(DATA_DIR)
 
         if "league_info" in st.session_state:
             league_info = st.session_state.league_info
@@ -304,7 +310,8 @@ def run_initial_import() -> bool:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                cwd=str(ROOT_DIR)
             )
 
             output_lines = []
@@ -503,6 +510,28 @@ def main():
                                 # --------- COLLECT FILES (for upload + downloads) ----------
                                 repo_root = ROOT_DIR
                                 files = collect_parquet_candidates(repo_root, DATA_DIR)
+
+                                # DEBUG: show paths and files found to help diagnose missing uploads
+                                try:
+                                    st.write("**Debug: paths used for parquet discovery**")
+                                    st.write(f"repo_root: `{repo_root}`")
+                                    st.write(f"data_dir: `{DATA_DIR}`")
+                                    if files:
+                                        st.write(f"Found {len(files)} parquet file(s):")
+                                        for pf in files:
+                                            try:
+                                                rel = pf.relative_to(ROOT_DIR)
+                                            except Exception:
+                                                rel = pf
+                                            try:
+                                                size_kb = pf.stat().st_size / 1024
+                                                st.write(f"- `{rel}` ({size_kb:.1f} KB)")
+                                            except Exception:
+                                                st.write(f"- `{rel}`")
+                                    else:
+                                        st.warning("(Debug) No parquet files were discovered by collect_parquet_candidates().")
+                                except Exception:
+                                    pass
 
                                 # --- Upload to MotherDuck for EVERY season this league exists ---
                                 if MOTHERDUCK_TOKEN:

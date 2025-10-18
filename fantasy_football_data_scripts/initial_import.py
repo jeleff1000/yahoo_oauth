@@ -30,9 +30,18 @@ import duckdb
 THIS_FILE = Path(__file__).resolve()
 ROOT_DIR = THIS_FILE.parent
 REPO_DIR = ROOT_DIR.parent
-DATA_DIR = REPO_DIR / "fantasy_football_data"
 
-# Producer scripts (adjust names/paths if yours differ)
+# Allow overriding the output/data directory via environment (useful on Streamlit Cloud or when the
+# import runs in a different mount path). Priority:
+# 1) EXPORT_DATA_DIR env var
+# 2) DATA_DIR env var (legacy)
+# 3) repo-level `fantasy_football_data`
+env_data_dir = os.environ.get("EXPORT_DATA_DIR") or os.environ.get("DATA_DIR") or None
+if env_data_dir:
+    DATA_DIR = Path(env_data_dir).resolve()
+else:
+    DATA_DIR = REPO_DIR / "fantasy_football_data"
+
 SCHEDULE_SCRIPT    = ROOT_DIR / "schedule_script"     / "season_schedules.py"
 MATCHUP_SCRIPT     = ROOT_DIR / "matchup_scripts"     / "weekly_matchup_data.py"
 TRANSACTION_SCRIPT = ROOT_DIR / "transaction_scripts" / "transactions.py"
@@ -196,6 +205,11 @@ def main():
     log("INITIAL IMPORT: Building complete league history from year 0")
     log("=" * 80)
     log("")
+    # Informational: show which DATA_DIR will be used (helps debug Streamlit Cloud path issues)
+    try:
+        log(f"Using DATA_DIR: {DATA_DIR}")
+    except Exception:
+        pass
     auto_confirm = os.environ.get("AUTO_CONFIRM", "").lower() in ("1", "true", "yes")
     if not auto_confirm:
         try:
