@@ -552,36 +552,18 @@ def main():
                             selected_name = st.radio("", league_names, label_visibility="collapsed")
                             selected_league = league_list[league_names.index(selected_name)]
 
-                            # Stats display
-                            st.markdown('<div class="stats-grid">', unsafe_allow_html=True)
-                            cols = st.columns(3)
-                            with cols[0]:
-                                st.markdown(f"""
-                                <div class="stat-card">
-                                    <div class="stat-value">{selected_league['season']}</div>
-                                    <div class="stat-label">Season</div>
+                            # Prominent CTA card: the import button is the main focus; other details are secondary
+                            st.markdown(f"""
+                            <div class="cta-card" style="background: linear-gradient(135deg,#667eea,#7f5af0); padding:1.5rem; border-radius:0.75rem; color:white; text-align:center;">
+                                <h2 style="margin:0;">🚀 Start Import for {selected_league['name']}</h2>
+                                <p style="margin:0.25rem 0 0.75rem; opacity:0.95;">Season {selected_league['season']} — {selected_league['num_teams']} teams</p>
+                                <div style="margin-top:0.5rem;">
                                 </div>
-                                """, unsafe_allow_html=True)
-                            with cols[1]:
-                                st.markdown(f"""
-                                <div class="stat-card">
-                                    <div class="stat-value">{selected_league['num_teams']}</div>
-                                    <div class="stat-label">Teams</div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                            with cols[2]:
-                                st.markdown(f"""
-                                <div class="stat-card">
-                                    <div class="stat-value">📊</div>
-                                    <div class="stat-label">Ready</div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                            st.markdown('</div>', unsafe_allow_html=True)
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                            st.markdown("<br>", unsafe_allow_html=True)
-
-                            # Import button
-                            if st.button("🚀 Start Import", type="primary", use_container_width=True):
+                            # Large import button (primary action)
+                            if st.button("🚀 Start Import", key="cta_import", use_container_width=True):
                                 with st.spinner("Queuing import job..."):
                                     save_oauth_token(st.session_state.token_data, selected_league)
 
@@ -595,6 +577,14 @@ def main():
                                             st.success("✅ Import job queued!")
                                             st.balloons()
                                             st.rerun()
+
+                            # Secondary details moved into an expander
+                            with st.expander("Details & Stats", expanded=False):
+                                st.markdown(f"**Season:** {selected_league['season']}  \
+                                **Teams:** {selected_league['num_teams']}")
+                                st.markdown("\n")
+                                st.markdown("### More options")
+                                st.markdown("You can review league metadata, download tokens, or run the import immediately.")
 
                     except Exception as e:
                         st.error(f"Error: {e}")
