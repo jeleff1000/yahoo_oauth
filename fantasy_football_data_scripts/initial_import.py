@@ -5,11 +5,6 @@ INITIAL IMPORT SCRIPT (wrapper)
 
 Purpose: One-time historical data import (hitting year 0) to build complete league history.
 Run by the Streamlit app after OAuth is saved.
-
-Flow:
-    1) Run your four producers (schedule, matchup, transactions, player) with year=0/week=0
-    2) Upsert into canonical parquet files in fantasy_football_data/
-    3) Run post-processing scripts that read/write those canonical files
 """
 
 from __future__ import annotations
@@ -92,6 +87,25 @@ RUNS_POST: List[tuple[Path, str]] = [
 def log(msg: str) -> None:
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
+
+# =============================================================================
+# Early debug: show which OAUTH_PATH the child process sees (helps diagnose mount/path issues)
+# =============================================================================
+try:
+    # Local import from sibling module if available
+    from oauth_utils import _resolve_oauth_path
+    env_oauth = os.environ.get("OAUTH_PATH")
+    try:
+        resolved = _resolve_oauth_path(env_oauth)
+    except Exception:
+        resolved = Path(env_oauth or "")
+    log(f"DEBUG: ENV OAUTH_PATH={env_oauth} RESOLVED_OAUTH_PATH={resolved}")
+except Exception:
+    # best-effort; don't fail the import if debug helper isn't present
+    try:
+        log(f"DEBUG: ENV OAUTH_PATH={os.environ.get('OAUTH_PATH')}")
+    except Exception:
+        pass
 
 # =============================================================================
 # Script runners
