@@ -1,6 +1,8 @@
-requests_oauthlib
-duckdb
 streamlit
 requests
+duckdb
 pandas
+pyarrow
+yahoo-fantasy-api
 yahoo-oauth
+numpy
