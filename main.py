@@ -109,26 +109,36 @@ def extract_football_games(games_data):
 
 
 def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
+    """
+    Save OAuth token in the format expected by yahoo-oauth library.
+
+    The yahoo-oauth library expects a flat structure with all keys at the top level,
+    NOT wrapped in a "token_data" object.
+    """
     OAUTH_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     oauth_file = OAUTH_DIR / "Oauth.json"
+
+    # Flat structure for yahoo-oauth compatibility
     oauth_data = {
-        "token_data": {
-            "access_token": token_data.get("access_token"),
-            "refresh_token": token_data.get("refresh_token"),
-            "consumer_key": CLIENT_ID,
-            "consumer_secret": CLIENT_SECRET,
-            "token_type": token_data.get("token_type", "bearer"),
-            "expires_in": token_data.get("expires_in", 3600),
-            "token_time": datetime.now(timezone.utc).timestamp(),
-            "guid": token_data.get("xoauth_yahoo_guid")
-        },
-        "timestamp": datetime.now().isoformat()
+        "access_token": token_data.get("access_token"),
+        "refresh_token": token_data.get("refresh_token"),
+        "consumer_key": CLIENT_ID,
+        "consumer_secret": CLIENT_SECRET,
+        "token_type": token_data.get("token_type", "bearer"),
+        "expires_in": token_data.get("expires_in", 3600),
+        "token_time": datetime.now(timezone.utc).timestamp(),
+        "guid": token_data.get("xoauth_yahoo_guid"),
+        # Metadata (not used by yahoo-oauth, but useful for us)
+        "timestamp": datetime.now().isoformat(),
     }
+
     if league_info:
         oauth_data["league_info"] = league_info
+
     with open(oauth_file, "w", encoding="utf-8") as f:
         json.dump(oauth_data, f, indent=2)
+
     return oauth_file
 
 
