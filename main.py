@@ -12,8 +12,6 @@ import io
 import re
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-import uuid
-from typing import Optional
 
 try:
     import streamlit as st
@@ -232,111 +230,6 @@ def upload_to_motherduck(files: list[Path], db_name: str, token: str) -> list[tu
 
     con.close()
     return results
-
-
-# =========================
-# MotherDuck helpers (save token + import job creation)
-# =========================
-def save_token_to_motherduck(token_data: dict, league_info: Optional[dict] = None) -> Optional[str]:
-    """Store OAuth token JSON into MotherDuck table secrets.yahoo_oauth_tokens.
-
-    Returns: the row id (uuid) inserted or None on failure.
-    """
-    try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
-        # create table if not exists
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS secrets.yahoo_oauth_tokens (
-                id TEXT,
-                league_key TEXT,
-                token_json TEXT,
-                updated_at TIMESTAMP
-            )
-            """
-        )
-
-        row_id = str(uuid.uuid4())
-        league_key = None
-        if league_info:
-            league_key = league_info.get("league_key") or league_info.get("league_id")
-
-        token_json = json.dumps({"token_data": token_data, "league_info": league_info})
-        con.execute(
-            "INSERT INTO secrets.yahoo_oauth_tokens VALUES (?,?,?,?)",
-            [row_id, league_key, token_json, datetime.now()]
-        )
-        con.close()
-        return row_id
-    except Exception as e:
-        try:
-            st.warning(f"Could not write token to MotherDuck: {e}")
-        except Exception:
-            pass
-        return None
-
-
-def create_import_job_in_motherduck(league_info: dict) -> Optional[str]:
-    """Create a row in ops.import_status to signal a worker. Returns job_id or None."""
-    try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS ops.import_status (
-                job_id TEXT,
-                league_key TEXT,
-                league_name TEXT,
-                season TEXT,
-                status TEXT,
-                created_at TIMESTAMP,
-                updated_at TIMESTAMP
-            )
-            """
-        )
-
-        job_id = str(uuid.uuid4())
-        league_key = league_info.get("league_key")
-        league_name = league_info.get("name")
-        season = str(league_info.get("season", ""))
-        now = datetime.now()
-        con.execute(
-            "INSERT INTO ops.import_status VALUES (?,?,?,?,?,?,?)",
-            [job_id, league_key, league_name, season, "queued", now, now],
-        )
-        con.close()
-        return job_id
-    except Exception as e:
-        try:
-            st.warning(f"Could not create import job in MotherDuck: {e}")
-        except Exception:
-            pass
-        return None
-
-
-def update_import_status_in_motherduck(job_id: str, status: str, message: Optional[str] = None) -> bool:
-    """Update ops.import_status row with new status and optional message."""
-    try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
-        now = datetime.now()
-        # ensure table exists
-        con.execute(
-            "CREATE TABLE IF NOT EXISTS ops.import_status (job_id TEXT, league_key TEXT, league_name TEXT, season TEXT, status TEXT, created_at TIMESTAMP, updated_at TIMESTAMP)"
-        )
-        con.execute(
-            "UPDATE ops.import_status SET status = ?, updated_at = ? WHERE job_id = ?",
-            [status, now, job_id],
-        )
-        con.close()
-        return True
-    except Exception as e:
-        try:
-            st.warning(f"Could not update import job status in MotherDuck: {e}")
-        except Exception:
-            pass
-        return False
 
 
 # =========================
@@ -604,26 +497,9 @@ def main():
                                 oauth_file = save_oauth_token(st.session_state.token_data, selected_league)
                                 st.success(f"✅ OAuth credentials saved to: {oauth_file}")
 
-                            # If MotherDuck is available, save token there and create an import job row
-                            token_row_id = None
-                            job_id = None
-                            if MOTHERDUCK_TOKEN:
-                                with st.spinner("Saving token and creating import job in MotherDuck..."):
-                                    token_row_id = save_token_to_motherduck(st.session_state.token_data, selected_league)
-                                    job_id = create_import_job_in_motherduck(selected_league)
-                                    if job_id:
-                                        st.success(f"✅ Created import job in MotherDuck: {job_id}")
-                                    else:
-                                        st.warning("⚠️ Could not create import job in MotherDuck.")
-
-                            # Run import (local worker). We also update the MD job status if present.
-                            if job_id:
-                                update_import_status_in_motherduck(job_id, "running")
-
+                            # Run import
                             if run_initial_import():
                                 st.success("🎉 All done! Your league data has been imported.")
-                                if job_id:
-                                    update_import_status_in_motherduck(job_id, "success")
 
                                 # Provide download of import log for debugging
                                 import_log_dir = DATA_DIR / "import_logs"
