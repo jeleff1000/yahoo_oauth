@@ -322,18 +322,24 @@ def run_initial_import() -> bool:
                     lf.write(stripped + "\n")
                     lf.flush()
                     status_placeholder.info(stripped)
-                    log_placeholder.code('\n'.join(output_lines[-10:]))
+                    # Show more lines in the log window (50 instead of 10)
+                    log_placeholder.code('\n'.join(output_lines[-50:]))
 
             process.wait()
 
             if process.returncode == 0:
                 status_placeholder.success("✅ Import finished successfully.")
                 st.success("✅ Data import completed successfully!")
+
+                # Show full log in expander for debugging
+                with st.expander("📋 View Full Import Log"):
+                    st.code('\n'.join(output_lines))
+
                 return True
             else:
                 status_placeholder.error(f"❌ Import failed (exit code {process.returncode}).")
                 st.error(f"❌ Import failed with exit code {process.returncode}")
-                st.code('\n'.join(output_lines[-50:]))
+                st.code('\n'.join(output_lines[-100:]))  # Show more error context
                 return False
 
     except Exception as e:
@@ -494,6 +500,22 @@ def main():
                             # Run import
                             if run_initial_import():
                                 st.success("🎉 All done! Your league data has been imported.")
+
+                                # Provide download of import log for debugging
+                                import_log_dir = DATA_DIR / "import_logs"
+                                if import_log_dir.exists():
+                                    log_files = sorted(import_log_dir.glob("initial_import_*.log"),
+                                                       key=lambda x: x.stat().st_mtime, reverse=True)
+                                    if log_files:
+                                        latest_log = log_files[0]
+                                        with open(latest_log, 'r', encoding='utf-8') as f:
+                                            log_content = f.read()
+                                        st.download_button(
+                                            "📄 Download Full Import Log",
+                                            log_content,
+                                            file_name=latest_log.name,
+                                            mime="text/plain"
+                                        )
 
                                 # Collect files
                                 files = collect_parquet_files()
