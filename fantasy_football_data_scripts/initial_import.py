@@ -313,5 +313,13 @@ def main():
     except Exception:
         pass
 
+    # Also print the paths for regex extraction
+    try:
+        for kind, path in created_canonicals.items():
+            print(f"Canonical {kind}: {path}")
+        sys.stdout.flush()
+    except Exception:
+        pass
+
 if __name__ == "__main__":
     main()

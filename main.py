@@ -167,6 +167,14 @@ def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
         except Exception:
             export_dir = None
 
+        st.write(f"DEBUG: collect_parquet_candidates data_dir={data_dir} exists={data_dir.exists()}")
+        if data_dir.exists():
+            try:
+                items = list(data_dir.iterdir())
+                st.write(f"DEBUG: data_dir has {len(items)} items: {[str(i) for i in items[:5]]}")
+            except Exception as e:
+                st.write(f"DEBUG: error listing data_dir: {e}")
+
         wanted_stems = {"schedule", "matchup", "transactions", "player"}
         seen = set()
         files: list[Path] = []
