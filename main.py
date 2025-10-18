@@ -15,6 +15,7 @@ import io
 import re
 from pathlib import Path
 from datetime import datetime, timedelta
+import duckdb
 
 # =========================
 # Third-party deps
@@ -171,6 +172,7 @@ def _slugify_table(stem: str) -> str:
         s = f"t_{s}"
     return s[:63]
 
+# --- replace your upload_parquets_to_motherduck with this ---
 def upload_parquets_to_motherduck(
     data_dir: Path,
     db_name: str,
@@ -178,30 +180,44 @@ def upload_parquets_to_motherduck(
     token: str | None = None,
     status_cb=None
 ) -> list[tuple[str, int]]:
-    """
-    Uploads every *.parquet in data_dir into MotherDuck as CREATE OR REPLACE TABLE {schema}.{table}.
-    Returns [(table_name, rowcount), ...]
-    """
-    if token:
-        os.environ["MOTHERDUCK_TOKEN"] = token  # duckdb "md:" uses this
 
-    con = duckdb.connect(f"md:{db_name}")
-    con.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+    def slug(s: str, lead_prefix: str) -> str:
+        x = re.sub(r"[^a-zA-Z0-9]+", "_", (s or "").strip().lower()).strip("_")
+        if not x:
+            x = "db"
+        if re.match(r"^\d", x):
+            x = f"{lead_prefix}_{x}"
+        return x[:63]
+
+    if token:
+        os.environ["MOTHERDUCK_TOKEN"] = token
+
+    db = slug(db_name, "l")
+    sch = slug(schema, "s")
+
+    # 1) Attach to MotherDuck root (no db name)
+    con = duckdb.connect("md:")
+    # 2) Create DB if it's not there yet, then USE it
+    con.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
+    con.execute(f"USE {db}")
+    # 3) Ensure schema
+    con.execute(f"CREATE SCHEMA IF NOT EXISTS {sch}")
 
     results: list[tuple[str, int]] = []
-    files = sorted(data_dir.glob("*.parquet"))
+    files = sorted(Path(data_dir).glob("*.parquet"))
     for pf in files:
-        table = _slugify_table(pf.stem)
+        tbl = slug(pf.stem, "t")
         if status_cb:
-            status_cb(f"Uploading {pf.name} → {db_name}.{schema}.{table} ...")
+            status_cb(f"Uploading {pf.name} → {db}.{sch}.{tbl} ...")
         con.execute(
-            f"CREATE OR REPLACE TABLE {schema}.{table} AS SELECT * FROM read_parquet(?)",
+            f"CREATE OR REPLACE TABLE {sch}.{tbl} AS SELECT * FROM read_parquet(?)",
             [str(pf)]
         )
-        cnt = con.execute(f"SELECT COUNT(*) FROM {schema}.{table}").fetchone()[0]
-        results.append((table, int(cnt)))
+        cnt = con.execute(f"SELECT COUNT(*) FROM {sch}.{tbl}").fetchone()[0]
+        results.append((tbl, int(cnt)))
         if status_cb:
-            status_cb(f"✓ {table}: {cnt} rows")
+            status_cb(f"✓ {tbl}: {cnt} rows")
+
     return results
 
 # =========================
