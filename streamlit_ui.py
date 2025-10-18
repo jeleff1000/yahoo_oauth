@@ -11,10 +11,7 @@ import uuid
 from typing import Optional
 import subprocess
 import sys
-import zipfile
-import io
 import re
-from datetime import timedelta
 
 try:
     import streamlit as st
@@ -304,8 +301,16 @@ def extract_football_games(games_data):
     return football_games
 
 def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
+    """
+    Save OAuth token. Behavior:
+    - Always write a global token-only file at oauth/Oauth.json (no league_info) for yahoo-oauth compatibility.
+    - If `league_info` is provided, also write a per-league file named oauth/Oauth_<league_key>.json that includes league_info.
+    Returns the Path to the file written (per-league file when league_info provided, otherwise global file).
+    """
     OAUTH_DIR.mkdir(parents=True, exist_ok=True)
     oauth_file = OAUTH_DIR / "Oauth.json"
+
+    # Token data (keeps global file free of league metadata)
     oauth_data = {
         "access_token": token_data.get("access_token"),
         "refresh_token": token_data.get("refresh_token"),
@@ -317,10 +322,50 @@ def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
         "guid": token_data.get("xoauth_yahoo_guid"),
         "timestamp": datetime.now().isoformat(),
     }
+
+    # Write the global token-only file. For Streamlit Cloud behavior we want
+    # the global oauth/Oauth.json to reflect the token for the league being
+    # imported so library code reading the default path picks it up. We'll
+    # write atomically to avoid partial files.
+    def _atomic_write(path: Path, data: dict):
+        tmp = path.with_name(f".{path.name}.tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        try:
+            tmp.replace(path)
+        except Exception:
+            # best-effort fallback
+            tmp.rename(path)
+
+    try:
+        # Always ensure a global token exists (overwrite when saving per-league)
+        _atomic_write(oauth_file, oauth_data)
+    except Exception:
+        # If writing global file fails, continue — per-league file (below) may still be written
+        pass
+
+    # If league_info provided, write a per-league file so selecting a league doesn't overwrite the global token file
     if league_info:
-        oauth_data["league_info"] = league_info
-    with open(oauth_file, "w", encoding="utf-8") as f:
-        json.dump(oauth_data, f, indent=2)
+        league_key = league_info.get("league_key") or league_info.get("league_id") or "unknown"
+        # sanitize league_key for filename
+        safe_key = re.sub(r"[^a-zA-Z0-9_-]", "_", str(league_key))
+        per_file = OAUTH_DIR / f"Oauth_{safe_key}.json"
+        per_data = oauth_data.copy()
+        per_data["league_info"] = league_info
+        try:
+            # Write per-league file atomically as well
+            tmp = per_file.with_name(f".{per_file.name}.tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(per_data, f, indent=2)
+            try:
+                tmp.replace(per_file)
+            except Exception:
+                tmp.rename(per_file)
+            return per_file
+        except Exception:
+            # fallback to returning global file when per-league write fails
+            return oauth_file
+
     return oauth_file
 
 def save_token_to_motherduck(token_data: dict, league_info: Optional[dict] = None) -> Optional[str]:
@@ -551,9 +596,36 @@ def run_initial_import() -> bool:
         env["AUTO_CONFIRM"] = "1"
         env["EXPORT_DATA_DIR"] = str(DATA_DIR.resolve())
 
+        # Prefer a per-league oauth file if we have league_info in the session; fall back to global Oauth.json
         oauth_file = OAUTH_DIR / "Oauth.json"
-        if oauth_file.exists():
-            env["OAUTH_PATH"] = str(oauth_file.resolve())
+        try:
+            if "league_info" in st.session_state and st.session_state.league_info:
+                league_info = st.session_state.league_info
+                league_key = league_info.get("league_key") or league_info.get("league_id") or "unknown"
+                safe_key = re.sub(r"[^a-zA-Z0-9_-]", "_", str(league_key))
+                per_file = OAUTH_DIR / f"Oauth_{safe_key}.json"
+                if per_file.exists():
+                    env["OAUTH_PATH"] = str(per_file.resolve())
+                elif oauth_file.exists():
+                    env["OAUTH_PATH"] = str(oauth_file.resolve())
+            else:
+                if oauth_file.exists():
+                    env["OAUTH_PATH"] = str(oauth_file.resolve())
+        except Exception:
+            # If anything goes wrong, don't block the import; initial_import.py may still attempt other auth flows
+            if oauth_file.exists():
+                env["OAUTH_PATH"] = str(oauth_file.resolve())
+
+        # Surface which oauth file we'll use (helps debug which token the import picks up)
+        try:
+            used_oauth = env.get("OAUTH_PATH")
+            if used_oauth:
+                status_placeholder.info(f"Using OAuth file: {used_oauth}")
+            else:
+                status_placeholder.info("No OAuth file set; initial_import may use other auth flows or environment variables.")
+        except Exception:
+            # status_placeholder may not be available in some failure branches; ignore
+            pass
 
         if "league_info" in st.session_state:
             league_info = st.session_state.league_info
@@ -788,20 +860,22 @@ def main():
                             }
                             link_url = "?" + urllib.parse.urlencode(link_params)
 
-                            # Build a block-level clickable card (anchor is display:block) so clicking anywhere on it triggers the import
+                            # Build a block-level clickable card using onclick so Streamlit covers clicks reliably
+                            # Use JS to set window.location.href to the same link URL (query params) when the div is clicked.
+                            safe_link = link_url.replace('"', '%22')
                             card_html = f'''
-                            <a href="{link_url}" style="text-decoration:none; display:block;">
+                            <div role="button" onclick="window.location.href='{safe_link}'" style="text-decoration:none; display:block;">
                                 <div class="cta-card" style="background: linear-gradient(135deg,#667eea,#7f5af0); padding:1.5rem; border-radius:0.75rem; color:white; text-align:center; cursor:pointer;">
                                     <h2 style="margin:0;">🚀 Start Import for {selected_league['name']}</h2>
                                     <p style="margin:0.25rem 0 0.75rem; opacity:0.95;">Season {selected_league['season']} — {selected_league['num_teams']} teams</p>
                                     <p style="margin:0.2rem 0 0; font-size:0.9rem; opacity:0.95;">Click anywhere on this card to start the import.</p>
                                 </div>
-                            </a>
+                            </div>
                             '''
 
                             st.markdown(card_html, unsafe_allow_html=True)
 
-                            # Note: the card above is a clickable anchor that starts the import via query params.
+                            # Note: the card above is a clickable div that starts the import via query params.
                             # Secondary details moved into an expander (non-primary action)
                             with st.expander("Details & Stats", expanded=False):
                                 st.markdown(f"**Season:** {selected_league['season']}  \
@@ -852,34 +926,34 @@ def main():
                 st.code(f"SELECT * FROM {db_name}.public.matchup LIMIT 10;", language="sql")
 
     else:
-        # Landing page
+        # Landing page: show hero and make the Connect CTA the primary focus (large centered block)
         render_hero()
 
-        col1, col2 = st.columns([3, 2])
+        auth_url = build_authorize_url()
+        # Full-width centered CTA with max-width so it looks prominent on desktop and mobile
+        connect_html_center = f'''
+        <div style="display:flex; justify-content:center; margin: 1.25rem 0;">
+            <a href="{auth_url}" target="_blank" rel="noopener noreferrer" style="text-decoration:none; width:100%; max-width:980px;">
+                <div style="background: linear-gradient(90deg,#ff6b4a,#ff8a5a); color:white; padding:1.25rem 1.5rem; border-radius:0.75rem; text-align:center; font-weight:700; font-size:1.15rem; box-shadow:0 10px 30px rgba(0,0,0,0.08);">
+                    🔐 Connect Yahoo Account
+                </div>
+            </a>
+        </div>
+        '''
+        st.markdown(connect_html_center, unsafe_allow_html=True)
 
-        with col1:
-            st.markdown("### 🎯 Transform Your League Data")
-            st.markdown("""
-            Connect your Yahoo Fantasy Football account and unlock powerful analytics:
-            """)
+        # Put feature cards below in a compact grid so the CTA remains the main focus
+        st.markdown("<div style='max-width:980px; margin:0 auto;'>", unsafe_allow_html=True)
+        features_col1, features_col2 = st.columns(2)
+        with features_col1:
+            render_feature_card("📈", "Win Probability", "Track your playoff chances")
+            render_feature_card("🎯", "Optimal Lineups", "See your best possible scores")
+        with features_col2:
+            render_feature_card("📊", "Advanced Stats", "Deep dive into performance")
+            render_feature_card("🔮", "Predictions", "Expected vs actual records")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-            features_col1, features_col2 = st.columns(2)
-            with features_col1:
-                render_feature_card("📈", "Win Probability", "Track your playoff chances")
-                render_feature_card("🎯", "Optimal Lineups", "See your best possible scores")
-            with features_col2:
-                render_feature_card("📊", "Advanced Stats", "Deep dive into performance")
-                render_feature_card("🔮", "Predictions", "Expected vs actual records")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            auth_url = build_authorize_url()
-            st.link_button("🔐 Connect Yahoo Account", auth_url, type="primary", use_container_width=True)
-
-            st.caption("🔒 Your data is secure. We only access league statistics, never personal information.")
-
-        with col2:
-            st.markdown("### 🚀 How It Works")
-            render_timeline()
+        st.caption("🔒 Your data is secure. We only access league statistics, never personal information.")
 
     # If the page was loaded with start_import query params, run the import flow
     if "start_import" in qp and qp.get("start_import"):
@@ -896,7 +970,11 @@ def main():
 
                 # Save OAuth token locally (ensure oauth file exists for the import script)
                 if "token_data" in st.session_state:
-                    save_oauth_token(st.session_state.token_data, st.session_state.league_info)
+                    try:
+                        saved_path = save_oauth_token(st.session_state.token_data, st.session_state.league_info)
+                        st.info(f"Saved OAuth token to: {saved_path}")
+                    except Exception:
+                        st.warning("Failed to write per-league OAuth file; import will fall back to global Oauth.json if present.")
 
                 # Run the import (calls the initial_import.py script)
                 ok = run_initial_import()
