@@ -9,6 +9,12 @@ from pathlib import Path
 from datetime import datetime, timezone
 import uuid
 from typing import Optional
+import subprocess
+import sys
+import zipfile
+import io
+import re
+from datetime import timedelta
 
 try:
     import streamlit as st
@@ -382,6 +388,225 @@ def get_job_status(job_id: str) -> dict:
     except Exception:
         return {"status": "error"}
 
+# Paths used by the import runner
+DATA_DIR = ROOT_DIR / "fantasy_football_data"
+SCRIPTS_DIR = ROOT_DIR / "fantasy_football_data_scripts"
+INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import.py"
+
+# =========================
+# Simplified File Collection
+# =========================
+def collect_parquet_files() -> list[Path]:
+    """
+    Collect parquet files in priority order:
+    1. Canonical files at DATA_DIR root (schedule.parquet, matchup.parquet, etc.)
+    2. Any other parquet files in DATA_DIR subdirectories
+    """
+    files = []
+    seen = set()
+
+    # Priority 1: Canonical files at root
+    canonical_names = ["schedule.parquet", "matchup.parquet", "transactions.parquet",
+                       "player.parquet", "players_by_year.parquet"]
+
+    for name in canonical_names:
+        p = DATA_DIR / name
+        if p.exists() and p.is_file():
+            files.append(p)
+            seen.add(p.resolve())
+
+    # Priority 2: Subdirectories (schedule_data, matchup_data, etc.)
+    if DATA_DIR.exists():
+        for subdir in ["schedule_data", "matchup_data", "transaction_data", "player_data"]:
+            sub_path = DATA_DIR / subdir
+            if sub_path.exists() and sub_path.is_dir():
+                for p in sub_path.glob("*.parquet"):
+                    resolved = p.resolve()
+                    if resolved not in seen:
+                        files.append(p)
+                        seen.add(resolved)
+
+    # Priority 3: Any other parquet files in DATA_DIR (non-recursive, to avoid noise)
+    if DATA_DIR.exists():
+        for p in DATA_DIR.glob("*.parquet"):
+            resolved = p.resolve()
+            if resolved not in seen:
+                files.append(p)
+                seen.add(resolved)
+
+    return files
+
+
+# =========================
+# MotherDuck Upload
+# =========================
+def _slug(s: str, lead_prefix: str) -> str:
+    """Create a valid database/table name from a string"""
+    x = re.sub(r"[^a-zA-Z0-9]+", "_", (s or "").strip().lower()).strip("_")
+    if not x:
+        x = "db"
+    if re.match(r"^\d", x):
+        x = f"{lead_prefix}_{x}"
+    return x[:63]
+
+
+def upload_to_motherduck(files: list[Path], db_name: str, token: str) -> list[tuple[str, int]]:
+    """Upload parquet files directly to MotherDuck"""
+    if not files:
+        return []
+
+    if token:
+        os.environ["MOTHERDUCK_TOKEN"] = token
+
+    db = _slug(db_name, "l")
+
+    con = duckdb.connect("md:")
+    con.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
+    con.execute(f"USE {db}")
+    con.execute(f"CREATE SCHEMA IF NOT EXISTS public")
+
+    # Table name mapping (handle common aliases)
+    aliases = {
+        "players_by_year": "player",
+        "yahoo_player_stats_multi_year_all_weeks": "player",
+        "matchups": "matchup",
+        "schedules": "schedule",
+        "transaction": "transactions",
+    }
+
+    results = []
+    for pf in files:
+        stem = pf.stem.lower()
+        stem = aliases.get(stem, stem)
+        tbl = _slug(stem, "t")
+
+        try:
+            st.info(f"📤 Uploading {pf.name} → {db}.public.{tbl}...")
+            con.execute(f"CREATE OR REPLACE TABLE public.{tbl} AS SELECT * FROM read_parquet(?)", [str(pf)])
+            cnt = con.execute(f"SELECT COUNT(*) FROM public.{tbl}").fetchone()[0]
+            results.append((tbl, int(cnt)))
+            st.success(f"✅ {tbl}: {cnt:,} rows")
+        except Exception as e:
+            st.error(f"❌ Failed to upload {pf.name}: {e}")
+
+    con.close()
+    return results
+
+
+# =========================
+# Season Discovery
+# =========================
+def seasons_for_league_name(access_token: str, all_games: list[dict], target_league_name: str) -> list[str]:
+    """Find all seasons where this league exists"""
+    seasons = set()
+    for g in all_games:
+        game_key = g.get("game_key")
+        season = str(g.get("season", "")).strip()
+        if not game_key or not season:
+            continue
+        try:
+            leagues_data = get_user_football_leagues(access_token, game_key)
+            leagues = (
+                leagues_data.get("fantasy_content", {})
+                .get("users", {}).get("0", {}).get("user", [])[1]
+                .get("games", {}).get("0", {}).get("game", [])[1]
+                .get("leagues", {})
+            )
+            for key in leagues:
+                if key == "count":
+                    continue
+                league = leagues[key].get("league", [])[0]
+                name = league.get("name")
+                if name == target_league_name:
+                    seasons.add(season)
+                    break
+        except Exception:
+            pass
+    return sorted(seasons)
+
+
+# =========================
+# Import Runner
+# =========================
+def run_initial_import() -> bool:
+    """Run the initial data import script"""
+    if not INITIAL_IMPORT_SCRIPT.exists():
+        st.error(f"❌ Initial import script not found at: {INITIAL_IMPORT_SCRIPT}")
+        return False
+
+    try:
+        st.info("🚀 Starting initial data import... This may take several minutes.")
+
+        log_placeholder = st.empty()
+        status_placeholder = st.empty()
+
+        IMPORT_LOG_DIR = DATA_DIR / "import_logs"
+        IMPORT_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        import_log_path = IMPORT_LOG_DIR / f"initial_import_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.log"
+
+        env = dict(os.environ)
+        env["PYTHONUNBUFFERED"] = "1"
+        if MOTHERDUCK_TOKEN:
+            env["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
+        env["AUTO_CONFIRM"] = "1"
+        env["EXPORT_DATA_DIR"] = str(DATA_DIR.resolve())
+
+        oauth_file = OAUTH_DIR / "Oauth.json"
+        if oauth_file.exists():
+            env["OAUTH_PATH"] = str(oauth_file.resolve())
+
+        if "league_info" in st.session_state:
+            league_info = st.session_state.league_info
+            env["LEAGUE_NAME"] = league_info.get("name", "Unknown League")
+            env["LEAGUE_KEY"] = league_info.get("league_key", "unknown")
+            env["LEAGUE_SEASON"] = str(league_info.get("season", ""))
+            env["LEAGUE_NUM_TEAMS"] = str(league_info.get("num_teams", ""))
+
+        cmd = [sys.executable, str(INITIAL_IMPORT_SCRIPT)]
+
+        with st.spinner("Importing league data..."):
+            process = subprocess.Popen(
+                cmd,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                cwd=str(ROOT_DIR)
+            )
+
+            output_lines = []
+            with open(import_log_path, 'a', encoding='utf-8') as lf:
+                for line in process.stdout:
+                    stripped = line.rstrip('\n')
+                    output_lines.append(stripped)
+                    lf.write(stripped + "\n")
+                    lf.flush()
+                    status_placeholder.info(stripped)
+                    # Show more lines in the log window (50 instead of 10)
+                    log_placeholder.code('\n'.join(output_lines[-50:]))
+
+            process.wait()
+
+            if process.returncode == 0:
+                status_placeholder.success("✅ Import finished successfully.")
+                st.success("✅ Data import completed successfully!")
+
+                # Show full log in expander for debugging
+                with st.expander("📋 View Full Import Log"):
+                    st.code('\n'.join(output_lines))
+
+                return True
+            else:
+                status_placeholder.error(f"❌ Import failed (exit code {process.returncode}).")
+                st.error(f"❌ Import failed with exit code {process.returncode}")
+                st.code('\n'.join(output_lines[-100:]))  # Show more error context
+                return False
+
+    except Exception as e:
+        st.error(f"❌ Error running import: {e}")
+        return False
+
 # =========================
 # UI Components
 # =========================
@@ -553,32 +778,31 @@ def main():
                             selected_league = league_list[league_names.index(selected_name)]
 
                             # Prominent CTA card: the import button is the main focus; other details are secondary
-                            st.markdown(f"""
-                            <div class="cta-card" style="background: linear-gradient(135deg,#667eea,#7f5af0); padding:1.5rem; border-radius:0.75rem; color:white; text-align:center;">
-                                <h2 style="margin:0;">🚀 Start Import for {selected_league['name']}</h2>
-                                <p style="margin:0.25rem 0 0.75rem; opacity:0.95;">Season {selected_league['season']} — {selected_league['num_teams']} teams</p>
-                                <div style="margin-top:0.5rem;">
+                            # We'll make the whole card clickable by wrapping it in a link that sets query params.
+                            # Clicking the card will reload the app with the parameters and the import will run server-side.
+                            link_params = {
+                                "start_import": "1",
+                                "league_key": selected_league.get("league_key", ""),
+                                "league_name": selected_league.get("name", ""),
+                                "league_season": str(selected_league.get("season", "")),
+                            }
+                            link_url = "?" + urllib.parse.urlencode(link_params)
+
+                            # Build a block-level clickable card (anchor is display:block) so clicking anywhere on it triggers the import
+                            card_html = f'''
+                            <a href="{link_url}" style="text-decoration:none; display:block;">
+                                <div class="cta-card" style="background: linear-gradient(135deg,#667eea,#7f5af0); padding:1.5rem; border-radius:0.75rem; color:white; text-align:center; cursor:pointer;">
+                                    <h2 style="margin:0;">🚀 Start Import for {selected_league['name']}</h2>
+                                    <p style="margin:0.25rem 0 0.75rem; opacity:0.95;">Season {selected_league['season']} — {selected_league['num_teams']} teams</p>
+                                    <p style="margin:0.2rem 0 0; font-size:0.9rem; opacity:0.95;">Click anywhere on this card to start the import.</p>
                                 </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            </a>
+                            '''
 
-                            # Large import button (primary action)
-                            if st.button("🚀 Start Import", key="cta_import", use_container_width=True):
-                                with st.spinner("Queuing import job..."):
-                                    save_oauth_token(st.session_state.token_data, selected_league)
+                            st.markdown(card_html, unsafe_allow_html=True)
 
-                                    if MOTHERDUCK_TOKEN:
-                                        save_token_to_motherduck(st.session_state.token_data, selected_league)
-                                        job_id = create_import_job_in_motherduck(selected_league)
-
-                                        if job_id:
-                                            st.session_state.job_id = job_id
-                                            st.session_state.job_league_name = selected_league['name']
-                                            st.success("✅ Import job queued!")
-                                            st.balloons()
-                                            st.rerun()
-
-                            # Secondary details moved into an expander
+                            # Note: the card above is a clickable anchor that starts the import via query params.
+                            # Secondary details moved into an expander (non-primary action)
                             with st.expander("Details & Stats", expanded=False):
                                 st.markdown(f"**Season:** {selected_league['season']}  \
                                 **Teams:** {selected_league['num_teams']}")
@@ -656,6 +880,71 @@ def main():
         with col2:
             st.markdown("### 🚀 How It Works")
             render_timeline()
+
+    # If the page was loaded with start_import query params, run the import flow
+    if "start_import" in qp and qp.get("start_import"):
+        try:
+            # Extract params (Streamlit returns lists for qp values)
+            lkey = qp.get("league_key", [None])[0]
+            lname = qp.get("league_name", [None])[0]
+            lseason = qp.get("league_season", [None])[0]
+
+            if lkey and lname:
+                st.info(f"📥 Starting import for {lname} ({lseason})")
+                # Restore league info into session_state for downstream use
+                st.session_state.league_info = {"league_key": lkey, "name": lname, "season": lseason}
+
+                # Save OAuth token locally (ensure oauth file exists for the import script)
+                if "token_data" in st.session_state:
+                    save_oauth_token(st.session_state.token_data, st.session_state.league_info)
+
+                # Run the import (calls the initial_import.py script)
+                ok = run_initial_import()
+
+                if ok:
+                    st.success("🎉 Import finished — collecting files and uploading (if configured)...")
+
+                    files = collect_parquet_files()
+                    if not files:
+                        st.warning("⚠️ No parquet files found after import. Check the import logs.")
+                    else:
+                        st.success(f"✅ Found {len(files)} parquet file(s)")
+                        # Upload to MotherDuck if token available
+                        if MOTHERDUCK_TOKEN:
+                            league_name = st.session_state.league_info.get("name", "league")
+                            all_games = extract_football_games(st.session_state.get("games_data", {}))
+                            season_list = seasons_for_league_name(st.session_state.access_token, all_games, league_name)
+                            selected_season = str(st.session_state.league_info.get("season", "")).strip()
+                            if selected_season and selected_season not in season_list:
+                                season_list.append(selected_season)
+
+                            dbs = [f"{league_name}_{season}" for season in sorted(set(s for s in season_list if s))]
+                            if not dbs:
+                                dbs = [league_name]
+
+                            overall_summary = []
+                            for db_name in dbs:
+                                st.write(f"**Database:** `{db_name}`")
+                                uploaded = upload_to_motherduck(files, db_name, MOTHERDUCK_TOKEN)
+                                if uploaded:
+                                    overall_summary.append((db_name, uploaded))
+
+                            if overall_summary:
+                                st.success("✅ Upload complete!")
+                                with st.expander("📊 Upload Summary"):
+                                    for db_name, items in overall_summary:
+                                        st.write(f"**{db_name}**")
+                                        for tbl, cnt in items:
+                                            st.write(f"- `public.{tbl}` → {cnt:,} rows")
+
+                # Clear the query params and rerun to reset UI state
+                st.experimental_set_query_params()
+                st.button("Continue")
+                st.rerun()
+        except Exception as e:
+            st.error(f"Error starting import: {e}")
+            st.experimental_set_query_params()
+            st.rerun()
 
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
