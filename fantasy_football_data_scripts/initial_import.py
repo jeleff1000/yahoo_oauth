@@ -1,22 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-INITIAL IMPORT SCRIPT
+INITIAL IMPORT SCRIPT (wrapper)
 
 Purpose: One-time historical data import (hitting year 0) to build complete league history.
-Run this ONCE when setting up a new league or migrating to this system.
+Run by the Streamlit app after OAuth is saved.
 
-Usage:
-    python initial_import.py
-
-What it does:
-    1. Fetches ALL historical schedule data (all years)
-    2. Fetches ALL historical matchup data (all years, all weeks)
-    3. Fetches ALL historical transaction data (all years)
-    4. Fetches ALL historical player stats (all years, all weeks)
-    5. Upserts everything into canonical parquet files
-    6. Runs post-processing scripts
-    7. Uploads to MotherDuck
+Flow:
+    1) Run your four producers (schedule, matchup, transactions, player) with year=0/week=0
+    2) Upsert into canonical parquet files in fantasy_football_data/
+    3) Run post-processing scripts that read/write those canonical files
 """
 
 from __future__ import annotations
@@ -26,7 +19,7 @@ import sys
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import pandas as pd
 import duckdb
@@ -39,49 +32,49 @@ ROOT_DIR = THIS_FILE.parent
 REPO_DIR = ROOT_DIR.parent
 DATA_DIR = REPO_DIR / "fantasy_football_data"
 
-# Producer scripts
-SCHEDULE_SCRIPT = ROOT_DIR / "schedule_script" / "season_schedules.py"
-MATCHUP_SCRIPT = ROOT_DIR / "matchup_scripts" / "weekly_matchup_data.py"
+# Producer scripts (adjust names/paths if yours differ)
+SCHEDULE_SCRIPT    = ROOT_DIR / "schedule_script"     / "season_schedules.py"
+MATCHUP_SCRIPT     = ROOT_DIR / "matchup_scripts"     / "weekly_matchup_data.py"
 TRANSACTION_SCRIPT = ROOT_DIR / "transaction_scripts" / "transactions.py"
-MERGE_SCRIPT = ROOT_DIR / "player_stats" / "yahoo_nfl_merge.py"
+MERGE_SCRIPT       = ROOT_DIR / "player_stats"        / "yahoo_nfl_merge.py"
 
 # Canonical targets
 CANONICAL = {
-    "schedule": DATA_DIR / "schedule.parquet",
-    "matchup": DATA_DIR / "matchup.parquet",
+    "schedule":     DATA_DIR / "schedule.parquet",
+    "matchup":      DATA_DIR / "matchup.parquet",
     "transactions": DATA_DIR / "transactions.parquet",
-    "player": DATA_DIR / "player.parquet",
+    "player":       DATA_DIR / "player.parquet",
 }
 
-# Source directories
+# Source directories (where producers drop their outputs)
 SOURCE_DIRS = {
-    "schedule": DATA_DIR / "schedule_data",
-    "matchup": DATA_DIR / "matchup_data",
+    "schedule":     DATA_DIR / "schedule_data",
+    "matchup":      DATA_DIR / "matchup_data",
     "transactions": DATA_DIR / "transaction_data",
-    "player": DATA_DIR / "player_data",
+    "player":       DATA_DIR / "player_data",
 }
 
-# Dedup keys
+# Dedup keys (tweak to match your model)
 DEDUP_KEYS = {
-    "schedule": ["year", "week", "manager", "opponent"],
-    "matchup": ["manager", "opponent", "year", "week"],
+    "schedule":     ["year", "week", "manager", "opponent"],
+    "matchup":      ["manager", "opponent", "year", "week"],
     "transactions": ["transaction_key", "year", "week"],
-    "player": ["yahoo_player_id", "nfl_player_id", "year", "week"],
+    "player":       ["yahoo_player_id", "nfl_player_id", "year", "week"],
 }
 
 # Post-processing scripts (run AFTER canonical tables are built)
-RUNS_POST = [
-    (ROOT_DIR / "matchup_scripts" / "cumulative_stats.py", "Matchup cumulative stats"),
-    (ROOT_DIR / "player_stats" / "cumulative_player_stats.py", "Player cumulative stats"),
-    (ROOT_DIR / "matchup_scripts" / "expected_record_import.py", "Expected record calculation"),
-    (ROOT_DIR / "matchup_scripts" / "opponent_expected_record.py", "Opponent expected record"),
-    (ROOT_DIR / "matchup_scripts" / "playoff_odds_import.py", "Playoff odds calculation"),
-    (ROOT_DIR / "player_stats" / "keeper_import.py", "Keeper analysis"),
-    (ROOT_DIR / "player_stats" / "matchup_stats_import.py", "Matchup stats import"),
-    (ROOT_DIR / "matchup_scripts" / "add_optimal.py", "Add optimal lineup"),
-    (ROOT_DIR / "player_stats" / "aggregate_on_season.py", "Season aggregation"),
-    (ROOT_DIR / "draft_scripts" / "ppg_draft_join.py", "Draft PPG join"),
-    (DATA_DIR / "motherduck_upload.py", "MotherDuck upload"),
+RUNS_POST: List[tuple[Path, str]] = [
+    (ROOT_DIR / "matchup_scripts" / "cumulative_stats.py",           "Matchup cumulative stats"),
+    (ROOT_DIR / "player_stats"  / "cumulative_player_stats.py",      "Player cumulative stats"),
+    (ROOT_DIR / "matchup_scripts" / "expected_record_import.py",     "Expected record calculation"),
+    (ROOT_DIR / "matchup_scripts" / "opponent_expected_record.py",   "Opponent expected record"),
+    (ROOT_DIR / "matchup_scripts" / "playoff_odds_import.py",        "Playoff odds calculation"),
+    (ROOT_DIR / "player_stats"  / "keeper_import.py",                "Keeper analysis"),
+    (ROOT_DIR / "player_stats"  / "matchup_stats_import.py",         "Matchup stats import"),
+    (ROOT_DIR / "matchup_scripts" / "add_optimal.py",                "Add optimal lineup"),
+    (ROOT_DIR / "player_stats"  / "aggregate_on_season.py",          "Season aggregation"),
+    (ROOT_DIR / "draft_scripts" / "ppg_draft_join.py",               "Draft PPG join"),
+    # NOTE: We do NOT call MotherDuck here; the Streamlit app uploads right after this script finishes.
 ]
 
 # =============================================================================
@@ -109,14 +102,13 @@ def run_script(script: Path, label: str, year: int = 0, week: int = 0) -> None:
     log(f"RUN: {label} -> {script.name} --year {year} --week {week}")
 
     try:
-        rc = subprocess.call(cmd, cwd=script.parent, env=env)
+        rc = subprocess.call(cmd, cwd=str(script.parent), env=env)
         if rc != 0:
             log(f"WARN: {label} exited with code {rc}")
         else:
             log(f"✓ Completed: {label}")
     except Exception as e:
         log(f"ERROR running {label}: {e}")
-
 
 def run_post_script(script: Path, label: str) -> None:
     """Run post-processing script (no args, processes canonical files)"""
@@ -127,12 +119,11 @@ def run_post_script(script: Path, label: str) -> None:
     env = dict(os.environ)
     env["PYTHONUNBUFFERED"] = "1"
 
-    # Most post-processing scripts don't take CLI args
     cmd = [sys.executable, str(script)]
     log(f"RUN POST: {label} -> {script.name}")
 
     try:
-        rc = subprocess.call(cmd, cwd=script.parent, env=env)
+        rc = subprocess.call(cmd, cwd=str(script.parent), env=env)
         if rc != 0:
             log(f"WARN: {label} exited with code {rc}")
         else:
@@ -144,17 +135,17 @@ def run_post_script(script: Path, label: str) -> None:
 # Parquet discovery
 # =============================================================================
 def locate_latest_parquet(kind: str) -> Optional[Path]:
-    """Find the most recent parquet file for a given kind"""
+    """Find a relevant parquet file for a given kind"""
     base = SOURCE_DIRS[kind]
     if not base.exists():
         return None
 
-    # Preferred filenames
+    # Preferred filenames (adjust to your producers)
     preferred = {
-        "schedule": ["schedule_data_all_years.parquet", "schedule.parquet"],
-        "matchup": ["matchup.parquet"],
+        "schedule":     ["schedule_data_all_years.parquet", "schedule.parquet"],
+        "matchup":      ["matchup.parquet"],
         "transactions": ["transactions.parquet"],
-        "player": ["yahoo_player_stats_multi_year_all_weeks.parquet", "player.parquet"],
+        "player":       ["yahoo_player_stats_multi_year_all_weeks.parquet", "player.parquet"],
     }.get(kind, [])
 
     for name in preferred:
@@ -162,11 +153,10 @@ def locate_latest_parquet(kind: str) -> Optional[Path]:
         if p.exists():
             return p
 
-    # Fallback: find any parquet file
+    # Fallback: latest modified .parquet
     parquets = list(base.glob("*.parquet"))
     if parquets:
         return max(parquets, key=lambda p: p.stat().st_mtime)
-
     return None
 
 # =============================================================================
@@ -189,12 +179,10 @@ def upsert_parquet_via_duckdb(out_path: Path, new_df: pd.DataFrame, keys: list[s
     if out_path.exists():
         con.execute(f"CREATE TEMP TABLE _old AS SELECT * FROM read_parquet('{out_str}')")
 
-        # Get all columns
         cols_new = [r[1] for r in con.execute("PRAGMA table_info('_new')").fetchall()]
         cols_old = [r[1] for r in con.execute("PRAGMA table_info('_old')").fetchall()]
         all_cols = list(dict.fromkeys(cols_old + cols_new))
 
-        # Build select statements
         sel_old = ", ".join([f'"{c}"' if c in cols_old else f'NULL AS "{c}"' for c in all_cols])
         sel_new = ", ".join([f'"{c}"' if c in cols_new else f'NULL AS "{c}"' for c in all_cols])
 
@@ -202,7 +190,6 @@ def upsert_parquet_via_duckdb(out_path: Path, new_df: pd.DataFrame, keys: list[s
         partition_cols = [c for c in keys if c in all_cols]
         if not partition_cols:
             partition_cols = ["year", "week"] if "year" in all_cols and "week" in all_cols else all_cols[:1]
-
         partition_by = ", ".join([f'"{c}"' for c in partition_cols])
 
         # Merge with deduplication (new rows win)
@@ -238,17 +225,14 @@ def main():
     log("INITIAL IMPORT: Building complete league history from year 0")
     log("=" * 80)
     log("")
-    log("WARNING: This will fetch ALL historical data for your league.")
-    log("This may take 30-60 minutes depending on league history.")
-    log("")
 
-    # Auto-confirm when running non-interactively or when AUTO_CONFIRM env var is set.
+    # Auto-confirm for non-interactive runs
     auto_confirm = os.environ.get("AUTO_CONFIRM", "").lower() in ("1", "true", "yes")
     if not auto_confirm:
         try:
             if sys.stdin and sys.stdin.isatty():
                 response = input("Continue? (yes/no): ").strip().lower()
-                if response not in ('y', 'yes'):
+                if response not in ("y", "yes"):
                     log("Aborted by user")
                     return
             else:
@@ -301,7 +285,6 @@ def main():
         rows_used = len(df_src)
         log(f"Processing {kind}: {src.name} ({rows_used:,} rows)")
 
-        # Upsert
         total_rows = upsert_parquet_via_duckdb(CANONICAL[kind], df_src, DEDUP_KEYS[kind], kind)
         log(f"✓ Updated {CANONICAL[kind].name}: {total_rows:,} total rows")
 
@@ -309,7 +292,7 @@ def main():
     # PHASE 3: Run post-processing scripts
     # ========================================================================
     log("")
-    log("=== PHASE 3: Post-processing and upload ===")
+    log("=== PHASE 3: Post-processing ===")
 
     for script, label in RUNS_POST:
         run_post_script(script, label)
@@ -322,14 +305,11 @@ def main():
     log("Your canonical files are ready:")
     for kind, path in CANONICAL.items():
         if path.exists():
-            df = pd.read_parquet(path)
-            log(f"  {kind:15s}: {len(df):,} rows -> {path}")
-    log("")
-    log("Next steps:")
-    log("  1. Review data in canonical parquet files")
-    log("  2. Run preseason_import.py after each draft")
-    log("  3. Schedule weekly_import.py for Tuesday mornings")
-
+            try:
+                df = pd.read_parquet(path)
+                log(f"  {kind:15s}: {len(df):,} rows -> {path}")
+            except Exception:
+                log(f"  {kind:15s}: -> {path}")
 
 if __name__ == "__main__":
     main()
