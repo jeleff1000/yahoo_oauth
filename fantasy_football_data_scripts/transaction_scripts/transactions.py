@@ -16,11 +16,11 @@ import nfl_data_py as nfl
 # Add parent directory to path for oauth_utils import
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 try:
-    from oauth_utils import find_oauth_file, create_oauth2
+    from oauth_utils import ensure_oauth_path, create_oauth2
 except Exception:
     # fallback if running from a different CWD
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from oauth_utils import find_oauth_file, create_oauth2
+    from oauth_utils import ensure_oauth_path, create_oauth2
 
 # =========================
 # Name cleaning & mapping
@@ -72,26 +72,14 @@ PARQUET_PATH = os.path.join(OUTPUT_DIR, 'transactions.parquet')
 # =========================
 # OAuth - Supports both Format 1 and Format 2
 # =========================
-# OAuth discovery: prefer OAUTH_PATH env, otherwise search. Export env var for subprocesses.
-oauth_candidate = os.environ.get('OAUTH_PATH')
-if oauth_candidate:
-    oauth_candidate = os.path.abspath(oauth_candidate)
-else:
-    oauth_candidate = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'oauth', 'Oauth.json'))
-
-if not os.path.exists(oauth_candidate):
-    found = find_oauth_file()
-    if found:
-        oauth_candidate = str(found)
-
-if oauth_candidate and os.path.exists(oauth_candidate):
-    os.environ['OAUTH_PATH'] = str(oauth_candidate)
-    try:
-        oauth = create_oauth2(oauth_candidate)
-    except Exception as e:
-        raise SystemExit(f"OAuth initialization failed: {e}")
-else:
-    raise SystemExit("OAuth.json not found. Set OAUTH_PATH or place Oauth.json in the repo oauth/ directory.")
+# Use centralized discovery that sets OAUTH_PATH and returns the resolved path
+try:
+    oauth_path = ensure_oauth_path()
+    oauth = create_oauth2(oauth_path)
+except SystemExit as e:
+    raise SystemExit(str(e))
+except Exception as e:
+    raise SystemExit(f"OAuth initialization failed: {e}")
 
 gm = yfa.Game(oauth, 'nfl')
 

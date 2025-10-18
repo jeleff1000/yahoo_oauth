@@ -74,21 +74,57 @@ def discover_league_key(oauth: OAuth2, year: int, league_key_arg: Optional[str])
 def fetch_league_settings(oauth: OAuth2, league_key: str) -> ET.Element:
     """Fetch the league settings XML for a given league key and return the
     parsed XML root.  Raises an exception on any HTTP or parsing error.
+
+    Implements a small retry/backoff loop to handle transient 5xx failures
+    (e.g. 503 Service Unavailable).
     """
     import requests  # imported here to limit scope
     url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{league_key}/settings"
-    # Perform a single request; callers can wrap in retry logic if desired
-    r = oauth.session.get(url, timeout=30)
-    r.raise_for_status()
-    text = (r.text or "").strip()
-    if not text:
-        raise RuntimeError(f"Empty response when fetching settings for {league_key}")
-    # Strip the default XML namespace if present
-    if text.startswith("<?xml"):
-        # remove first occurrence of default xmlns attribute
-        import re
-        text = re.sub(r' xmlns="[^"]+"', "", text, count=1)
-    return ET.fromstring(text)
+
+    last_exc = None
+    for attempt in range(1, 4):
+        try:
+            r = oauth.session.get(url, timeout=30)
+            # Raise for status will raise HTTPError for 4xx/5xx
+            r.raise_for_status()
+            text = (r.text or "").strip()
+            if not text:
+                raise RuntimeError(f"Empty response when fetching settings for {league_key}")
+            # Strip the default XML namespace if present
+            if text.startswith("<?xml"):
+                # remove first occurrence of default xmlns attribute
+                import re
+                text = re.sub(r' xmlns="[^"]+"', "", text, count=1)
+            return ET.fromstring(text)
+        except Exception as e:
+            last_exc = e
+            # For server-side errors (5xx) we retry with backoff; for client errors, break.
+            status = getattr(e, 'response', None)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    code = e.response.status_code
+                except Exception:
+                    code = None
+            else:
+                # If it's requests.HTTPError, it may have response attached; otherwise treat as retryable
+                code = getattr(getattr(e, 'response', None), 'status_code', None)
+
+            # If it's a 5xx, retry; otherwise don't retry.
+            if code and 500 <= code < 600 and attempt < 3:
+                wait = 2 ** (attempt - 1)
+                print(f"Warning: Received {code} fetching settings (attempt {attempt}/3). Retrying in {wait}s...")
+                time.sleep(wait)
+                continue
+            # If network-level error (ConnectionError, Timeout), also retry a couple times
+            if isinstance(e, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)) and attempt < 3:
+                wait = 2 ** (attempt - 1)
+                print(f"Warning: Network error fetching settings (attempt {attempt}/3): {e}. Retrying in {wait}s...")
+                time.sleep(wait)
+                continue
+            # Otherwise raise the most recent exception
+            raise
+    # If we exit loop without returning, raise last exception
+    raise last_exc
 
 
 def parse_scoring_rules(settings_root: ET.Element) -> List[Dict[str, object]]:
@@ -201,24 +237,23 @@ def main(argv: List[str]) -> int:
 
     # Ensure OAuth is available and load/create oauth session
     repo_root = Path(__file__).resolve().parents[2]
-    oauth_candidate = os.environ.get('OAUTH_PATH')
-    if oauth_candidate:
-        oauth_candidate = str(Path(oauth_candidate))
-    else:
-        oauth_candidate = str(repo_root / 'oauth' / 'Oauth.json')
+    # Use centralized discovery helper
+    try:
+        from oauth_utils import ensure_oauth_path, create_oauth2
+    except Exception:
+        # ensure path for local import
+        repo_root = Path(__file__).resolve().parents[2]
+        sys.path.insert(0, str(repo_root / 'fantasy_football_data_scripts'))
+        from oauth_utils import ensure_oauth_path, create_oauth2
 
-    if not Path(oauth_candidate).exists():
-        found = find_oauth_file()
-        if found:
-            oauth_candidate = str(found)
-
-    if not oauth_candidate or not Path(oauth_candidate).exists():
-        print(f"Error: OAuth credentials not found. Tried: {oauth_candidate}", file=sys.stderr)
+    try:
+        oauth_path = ensure_oauth_path()
+    except SystemExit as e:
+        print(f"Error: {e}", file=sys.stderr)
         return 1
 
-    os.environ['OAUTH_PATH'] = str(oauth_candidate)
     try:
-        oauth = create_oauth2(oauth_candidate)
+        oauth = create_oauth2(oauth_path)
     except Exception as e:
         print(f"Error initializing OAuth: {e}", file=sys.stderr)
         return 1

@@ -26,11 +26,11 @@ REPO_DIR = ROOT_DIR.parent
 
 # OAuth utilities (safe import, fall back to adding script dir to sys.path)
 try:
-    from oauth_utils import find_oauth_file, create_oauth2
+    from oauth_utils import find_oauth_file, create_oauth2, ensure_oauth_path
 except Exception:
     # If importing directly fails (running from different CWD), add script dir to path
     sys.path.insert(0, str(ROOT_DIR))
-    from oauth_utils import find_oauth_file, create_oauth2
+    from oauth_utils import find_oauth_file, create_oauth2, ensure_oauth_path
 
 # Use EXPORT_DATA_DIR if set, otherwise default
 env_data_dir = os.environ.get("EXPORT_DATA_DIR") or os.environ.get("DATA_DIR")
@@ -297,40 +297,28 @@ def main():
     except NameError:
         BASE_DIR = os.getcwd()
 
-    # Preferred: OAUTH_PATH environment variable
-    oauth_candidate = None
-    if os.environ.get("OAUTH_PATH"):
-        oauth_candidate = Path(os.environ.get("OAUTH_PATH")).resolve()
-        log(f"Using OAUTH_PATH from environment: {oauth_candidate}")
-    else:
-        # Default relative location in repo
-        oauth_candidate = (REPO_DIR / "oauth" / "Oauth.json").resolve()
-        log(f"Using default candidate OAUTH_PATH: {oauth_candidate}")
-
-    # If candidate doesn't exist, try searching via oauth_utils.find_oauth_file()
-    if not oauth_candidate.exists():
-        found = find_oauth_file()
-        if found:
-            oauth_candidate = found
-            log(f"Found OAuth file by search: {oauth_candidate}")
-        else:
-            log("⚠️  OAuth.json not found in default locations; some operations may fail if authentication is required.")
-
-    # Export to environment so child scripts pick it up when we spawn subprocesses
+    # Use centralized helper (non-fatal)
     try:
-        if oauth_candidate and oauth_candidate.exists():
+        oauth_candidate_path = None
+        try:
+            # Try the centralized helper but don't exit if it's missing
+            oauth_candidate_path = ensure_oauth_path(exit_on_missing=False)
+        except FileNotFoundError:
+            oauth_candidate_path = None
+
+        if oauth_candidate_path is not None and oauth_candidate_path.exists():
+            oauth_candidate = oauth_candidate_path
+            log(f"Using OAuth file discovered: {oauth_candidate}")
             os.environ["OAUTH_PATH"] = str(oauth_candidate)
-            log(f"Exported OAUTH_PATH -> {os.environ.get('OAUTH_PATH')}")
-            # Attempt to validate by creating an oauth session (non-fatal)
             try:
                 create_oauth2(oauth_candidate)
                 log("✅ OAuth.json appears valid (create_oauth2 succeeded)")
             except Exception as e:
                 log(f"⚠️  create_oauth2 validation failed: {e}")
         else:
-            log("⚠️  No OAuth.json available to export to environment.")
+            log("⚠️  OAuth.json not found in default locations; some operations may fail if authentication is required.")
     except Exception as e:
-        log(f"⚠️  Error setting OAUTH_PATH: {e}")
+        log(f"⚠️  Error detecting OAuth.json: {e}")
 
     log("")
 
@@ -509,3 +497,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

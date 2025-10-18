@@ -37,31 +37,37 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SETTINGS_DIR = OUTPUT_DIR / "yahoo_league_settings"
 SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
 
+# OAuth discovery: use centralized helper if available. If not found, keep oauth_candidate None.
 OAUTH_PATH = REPO_ROOT / "oauth" / "Oauth.json"
 
 # OAuth discovery (env-aware) - prefer OAUTH_PATH env var, then repo default, then search
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 try:
-    from oauth_utils import find_oauth_file, create_oauth2
+    from oauth_utils import find_oauth_file, create_oauth2, ensure_oauth_path
 except Exception:
     sys.path.insert(0, str(SCRIPT_DIR.parent))
-    from oauth_utils import find_oauth_file, create_oauth2
+    from oauth_utils import find_oauth_file, create_oauth2, ensure_oauth_path
 
-oauth_candidate = os.environ.get('OAUTH_PATH')
-if oauth_candidate:
-    oauth_candidate = str(Path(oauth_candidate))
+oauth_candidate = None
+# Prefer explicit env var first
+env_o = os.environ.get('OAUTH_PATH')
+if env_o:
+    p = Path(env_o).resolve()
+    if p.exists():
+        oauth_candidate = str(p)
+        os.environ['OAUTH_PATH'] = oauth_candidate
 else:
-    oauth_candidate = str(OAUTH_PATH)
-
-if not Path(oauth_candidate).exists():
-    found = find_oauth_file()
-    if found:
-        oauth_candidate = str(found)
-
-if oauth_candidate and Path(oauth_candidate).exists():
-    os.environ['OAUTH_PATH'] = str(oauth_candidate)
-else:
-    oauth_candidate = None
+    # Try centralized helper without exiting
+    try:
+        p = ensure_oauth_path(exit_on_missing=False)
+        oauth_candidate = str(p)
+    except FileNotFoundError:
+        # fall back to repo default if present
+        if OAUTH_PATH.exists():
+            oauth_candidate = str(OAUTH_PATH)
+            os.environ['OAUTH_PATH'] = oauth_candidate
+        else:
+            oauth_candidate = None
 
 YAHOO_SCRIPT = SCRIPT_DIR / "yahoo_fantasy_data.py"
 NFL_COMBINE_SCRIPT = SCRIPT_DIR / "combine_dst_to_nfl.py"

@@ -12,12 +12,15 @@ from typing import Optional
 
 def find_oauth_file() -> Optional[Path]:
     """
-    Find OAuth.json file in priority order:
+    Find OAuth.json file in priority order (case-insensitive to common variants):
     1. OAUTH_PATH environment variable (absolute path)
-    2. oauth/Oauth.json relative to current working directory
-    3. ../../oauth/Oauth.json relative to this script
-    4. Search up the directory tree for oauth/Oauth.json
+    2. oauth/Oauth.json or oauth/OAuth.json or oauth/oauth.json relative to current working directory
+    3. ../../oauth/... relative to this script
+    4. Search up the directory tree for oauth/<variant>
     """
+    # Common filename variants to check (preserve original preference order)
+    filename_variants = ["Oauth.json", "OAuth.json", "oauth.json"]
+
     # Priority 1: Environment variable (set by main.py)
     env_path = os.environ.get("OAUTH_PATH")
     if env_path:
@@ -27,26 +30,29 @@ def find_oauth_file() -> Optional[Path]:
         print(f"Warning: OAUTH_PATH set but file not found: {p}")
 
     # Priority 2: CWD relative
-    cwd_oauth = Path.cwd() / "oauth" / "Oauth.json"
-    if cwd_oauth.exists():
-        return cwd_oauth
+    for fname in filename_variants:
+        cwd_oauth = Path.cwd() / "oauth" / fname
+        if cwd_oauth.exists():
+            return cwd_oauth
 
     # Priority 3: Script relative (for backward compatibility)
     try:
         script_dir = Path(__file__).resolve().parent
-        script_oauth = script_dir / ".." / ".." / "oauth" / "Oauth.json"
-        script_oauth = script_oauth.resolve()
-        if script_oauth.exists():
-            return script_oauth
+        for fname in filename_variants:
+            script_oauth = script_dir / ".." / ".." / "oauth" / fname
+            script_oauth = script_oauth.resolve()
+            if script_oauth.exists():
+                return script_oauth
     except NameError:
         pass
 
     # Priority 4: Search up the tree
     current = Path.cwd()
     for _ in range(5):  # Search up to 5 levels
-        candidate = current / "oauth" / "Oauth.json"
-        if candidate.exists():
-            return candidate
+        for fname in filename_variants:
+            candidate = current / "oauth" / fname
+            if candidate.exists():
+                return candidate
         parent = current.parent
         if parent == current:  # Reached root
             break
@@ -85,10 +91,10 @@ def create_oauth2(oauth_path: Optional[str | Path] = None):
             searched = []
             if os.environ.get("OAUTH_PATH"):
                 searched.append(f"  - OAUTH_PATH env: {os.environ.get('OAUTH_PATH')}")
-            searched.append(f"  - CWD: {Path.cwd() / 'oauth' / 'Oauth.json'}")
+            searched.append(f"  - CWD variants: oauth/<Oauth.json|OAuth.json|oauth.json> in {Path.cwd()}")
             try:
                 script_dir = Path(__file__).resolve().parent
-                searched.append(f"  - Script relative: {script_dir / '..' / '..' / 'oauth' / 'Oauth.json'}")
+                searched.append(f"  - Script relative variants: {script_dir / '..' / '..' / 'oauth'}")
             except NameError:
                 pass
 
@@ -137,3 +143,37 @@ def create_oauth2(oauth_path: Optional[str | Path] = None):
             return False
 
     return ManualOAuth2(oauth_data)
+
+
+def ensure_oauth_path(exit_on_missing: bool = True) -> Path:
+    """Ensure an OAuth.json file exists and set OAUTH_PATH.
+
+    Returns the resolved Path to the oauth file. If not found, either raises
+    SystemExit (default) with a consistent message or raises FileNotFoundError
+    if exit_on_missing is False.
+    """
+    # 1) honor explicit env var
+    env_path = os.environ.get('OAUTH_PATH')
+    if env_path:
+        p = Path(env_path).resolve()
+        if p.exists():
+            os.environ['OAUTH_PATH'] = str(p)
+            return p
+        # fall through to search
+    # 2) search using find_oauth_file
+    found = find_oauth_file()
+    if found:
+        os.environ['OAUTH_PATH'] = str(found)
+        return found
+
+    # Not found -> consistent message
+    msg = (
+        "OAuth.json not found. Set OAUTH_PATH or place one of:\n"
+        "  oauth/Oauth.json\n"
+        "  oauth/OAuth.json\n"
+        "  oauth/oauth.json\n"
+        "in the repository's oauth/ directory."
+    )
+    if exit_on_missing:
+        raise SystemExit(msg)
+    raise FileNotFoundError(msg)
