@@ -73,8 +73,8 @@ RUNS_POST: List[tuple[Path, str]] = [
     (ROOT_DIR / "player_stats"  / "matchup_stats_import.py",         "Matchup stats import"),
     (ROOT_DIR / "matchup_scripts" / "add_optimal.py",                "Add optimal lineup"),
     (ROOT_DIR / "player_stats"  / "aggregate_on_season.py",          "Season aggregation"),
-    (ROOT_DIR / "draft_scripts" / "ppg_draft_join.py",               "Draft PPG join"),
-    # NOTE: no MotherDuck upload here; the Streamlit app handles upload post-import.
+    # DRAFT STEP REMOVED FOR NOW:
+    # (ROOT_DIR / "draft_scripts" / "ppg_draft_join.py",               "Draft PPG join"),
 ]
 
 # =============================================================================
@@ -88,19 +88,15 @@ def log(msg: str) -> None:
 # Script runners
 # =============================================================================
 def run_script(script: Path, label: str, year: int = 0, week: int = 0) -> None:
-    """Run a producer script with year=0, week=0 for full historical import"""
     if not script.exists():
         log(f"SKIP (missing): {script}")
         return
-
     env = dict(os.environ)
     env["KMFFL_YEAR"] = str(year)
     env["KMFFL_WEEK"] = str(week)
     env["PYTHONUNBUFFERED"] = "1"
-
     cmd = [sys.executable, str(script), "--year", str(year), "--week", str(week)]
     log(f"RUN: {label} -> {script.name} --year {year} --week {week}")
-
     try:
         rc = subprocess.call(cmd, cwd=str(script.parent), env=env)
         if rc != 0:
@@ -111,17 +107,13 @@ def run_script(script: Path, label: str, year: int = 0, week: int = 0) -> None:
         log(f"ERROR running {label}: {e}")
 
 def run_post_script(script: Path, label: str) -> None:
-    """Run post-processing script (no args, processes canonical files)"""
     if not script.exists():
         log(f"SKIP (missing): {label} -> {script}")
         return
-
     env = dict(os.environ)
     env["PYTHONUNBUFFERED"] = "1"
-
     cmd = [sys.executable, str(script)]
     log(f"RUN POST: {label} -> {script.name}")
-
     try:
         rc = subprocess.call(cmd, cwd=str(script.parent), env=env)
         if rc != 0:
@@ -135,23 +127,19 @@ def run_post_script(script: Path, label: str) -> None:
 # Parquet discovery
 # =============================================================================
 def locate_latest_parquet(kind: str) -> Optional[Path]:
-    """Find a relevant parquet file for a given kind"""
     base = SOURCE_DIRS[kind]
     if not base.exists():
         return None
-
     preferred = {
         "schedule":     ["schedule_data_all_years.parquet", "schedule.parquet"],
         "matchup":      ["matchup.parquet"],
         "transactions": ["transactions.parquet"],
         "player":       ["yahoo_player_stats_multi_year_all_weeks.parquet", "player.parquet"],
     }.get(kind, [])
-
     for name in preferred:
         p = base / name
         if p.exists():
             return p
-
     parquets = list(base.glob("*.parquet"))
     if parquets:
         return max(parquets, key=lambda p: p.stat().st_mtime)
@@ -161,33 +149,24 @@ def locate_latest_parquet(kind: str) -> Optional[Path]:
 # DuckDB upsert
 # =============================================================================
 def upsert_parquet_via_duckdb(out_path: Path, new_df: pd.DataFrame, keys: list[str], kind: str) -> int:
-    """Upsert new data into canonical parquet file using DuckDB"""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
-
     new_df = new_df.copy()
     new_df.columns = [str(c).strip() for c in new_df.columns]
-
     con.register("new_df", new_df)
     con.execute("CREATE TEMP TABLE _new AS SELECT * FROM new_df")
-
     out_str = str(out_path).replace("\\", "/")
-
     if out_path.exists():
         con.execute(f"CREATE TEMP TABLE _old AS SELECT * FROM read_parquet('{out_str}')")
-
         cols_new = [r[1] for r in con.execute("PRAGMA table_info('_new')").fetchall()]
         cols_old = [r[1] for r in con.execute("PRAGMA table_info('_old')").fetchall()]
         all_cols = list(dict.fromkeys(cols_old + cols_new))
-
         sel_old = ", ".join([f'"{c}"' if c in cols_old else f'NULL AS "{c}"' for c in all_cols])
         sel_new = ", ".join([f'"{c}"' if c in cols_new else f'NULL AS "{c}"' for c in all_cols])
-
         partition_cols = [c for c in keys if c in all_cols]
         if not partition_cols:
             partition_cols = ["year", "week"] if "year" in all_cols and "week" in all_cols else all_cols[:1]
         partition_by = ", ".join([f'"{c}"' for c in partition_cols])
-
         con.execute(f"""
             CREATE TEMP TABLE _merged AS
             SELECT *
@@ -200,13 +179,11 @@ def upsert_parquet_via_duckdb(out_path: Path, new_df: pd.DataFrame, keys: list[s
         """)
     else:
         con.execute("CREATE TEMP TABLE _merged AS SELECT *, 1 AS is_new FROM _new")
-
     con.execute(f"""
         COPY (SELECT * EXCLUDE(is_new) FROM _merged)
         TO '{out_str}'
         (FORMAT PARQUET, COMPRESSION 'ZSTD');
     """)
-
     total = con.execute("SELECT COUNT(*) FROM _merged").fetchone()[0]
     con.close()
     return int(total)
@@ -219,7 +196,6 @@ def main():
     log("INITIAL IMPORT: Building complete league history from year 0")
     log("=" * 80)
     log("")
-
     auto_confirm = os.environ.get("AUTO_CONFIRM", "").lower() in ("1", "true", "yes")
     if not auto_confirm:
         try:

@@ -61,20 +61,17 @@ INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import.py"
 # Yahoo OAuth Helpers
 # =========================
 def get_auth_header() -> str:
-    """Create Basic Auth header as per Yahoo's requirements"""
     credentials = f"{CLIENT_ID}:{CLIENT_SECRET}"
     encoded = base64.b64encode(credentials.encode()).decode()
     return f"Basic {encoded}"
 
 def build_authorize_url(state: str | None = None) -> str:
-    """Build the Yahoo OAuth authorization URL"""
     params = {"client_id": CLIENT_ID, "redirect_uri": REDIRECT_URI, "response_type": "code"}
     if state:
         params["state"] = state
     return AUTH_URL + "?" + urllib.parse.urlencode(params)
 
 def exchange_code_for_tokens(code: str) -> dict:
-    """Exchange authorization code for access token"""
     headers = {"Authorization": get_auth_header(), "Content-Type": "application/x-www-form-urlencoded"}
     data = {"grant_type": "authorization_code", "redirect_uri": REDIRECT_URI, "code": code}
     resp = requests.post(TOKEN_URL, headers=headers, data=data)
@@ -82,7 +79,6 @@ def exchange_code_for_tokens(code: str) -> dict:
     return resp.json()
 
 def yahoo_api_call(access_token: str, endpoint: str):
-    """Make a call to Yahoo Fantasy API"""
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"https://fantasysports.yahooapis.com/fantasy/v2/{endpoint}"
     resp = requests.get(url, headers=headers)
@@ -90,15 +86,12 @@ def yahoo_api_call(access_token: str, endpoint: str):
     return resp.json()
 
 def get_user_games(access_token: str):
-    """Get all games the user has participated in"""
     return yahoo_api_call(access_token, "users;use_login=1/games?format=json")
 
 def get_user_football_leagues(access_token: str, game_key: str):
-    """Get user's leagues for a specific football game"""
     return yahoo_api_call(access_token, f"users;use_login=1/games;game_keys={game_key}/leagues?format=json")
 
 def extract_football_games(games_data):
-    """Extract football games from the games data"""
     football_games = []
     try:
         games = games_data.get("fantasy_content", {}).get("users", {}).get("0", {}).get("user", [])[1].get("games", {})
@@ -120,11 +113,9 @@ def extract_football_games(games_data):
     return football_games
 
 def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
-    """Save OAuth token in the format expected by downstream scripts"""
     OAUTH_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     oauth_file = OAUTH_DIR / "Oauth.json"
-
     oauth_data = {
         "token_data": {
             "access_token": token_data.get("access_token"),
@@ -140,7 +131,6 @@ def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
     }
     if league_info:
         oauth_data["league_info"] = league_info
-
     with open(oauth_file, "w", encoding="utf-8") as f:
         json.dump(oauth_data, f, indent=2)
     return oauth_file
@@ -158,9 +148,9 @@ def _slug(s: str, lead_prefix: str) -> str:
 
 def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
     """
-    Recursively collect parquet files to upload and to show for download.
+    Recursively collect parquet files to upload and to include in the ZIP.
     Priority:
-      1) canonical files at data_dir root (schedule.parquet, matchup.parquet, transactions.parquet, player.parquet)
+      1) canonical files at data_dir root
       2) any parquet under fantasy_football_data subfolders
       3) repo-wide fallback if still none
     """
@@ -192,16 +182,13 @@ def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
             if rp not in seen:
                 files.append(p); seen.add(rp)
 
-    # rank: canonical first, then subfolder, then repo fallback; prefer wanted stems
     def rank(p: Path) -> tuple[int, int, str]:
-        # first key: exact canonical = 0, data_dir subfolder = 1, elsewhere = 2
         if p.parent == data_dir:
             a = 0
         elif data_dir in p.parents:
             a = 1
         else:
             a = 2
-        # second key: wanted stem gets higher priority
         b = 0 if p.stem.lower() in wanted_stems else 1
         return (a, b, str(p))
 
@@ -215,11 +202,6 @@ def upload_files_to_motherduck(
     token: str | None = None,
     status_cb=None
 ) -> list[tuple[str, int]]:
-    """
-    Upload explicit parquet files to MotherDuck.
-    - Connect to md:, CREATE DATABASE IF NOT EXISTS <db>, USE <db>, ensure schema
-    - CREATE OR REPLACE TABLE <schema>.<table> AS SELECT * FROM read_parquet(?)
-    """
     if token:
         os.environ["MOTHERDUCK_TOKEN"] = token
 
@@ -231,7 +213,6 @@ def upload_files_to_motherduck(
     con.execute(f"USE {db}")
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {sch}")
 
-    # Normalize common stems to nicer table names
     aliases = {
         "players_by_year": "player",
         "yahoo_player_stats_multi_year_all_weeks": "player",
@@ -252,13 +233,9 @@ def upload_files_to_motherduck(
         results.append((tbl, int(cnt)))
         if status_cb:
             status_cb(f"✓ {tbl}: {cnt} rows")
-
     return results
 
 def seasons_for_league_name(access_token: str, all_games: list[dict], target_league_name: str) -> list[str]:
-    """
-    Return all season strings where a league with the given name exists for the user.
-    """
     seasons: set[str] = set()
     for g in all_games:
         game_key = g.get("game_key")
@@ -289,7 +266,6 @@ def seasons_for_league_name(access_token: str, all_games: list[dict], target_lea
 # Import runner (subprocess)
 # =========================
 def run_initial_import() -> bool:
-    """Run the initial_import.py script to fetch all league data"""
     if not INITIAL_IMPORT_SCRIPT.exists():
         st.error(f"❌ Initial import script not found at: {INITIAL_IMPORT_SCRIPT}")
         return False
@@ -297,27 +273,21 @@ def run_initial_import() -> bool:
     try:
         st.info("🚀 Starting initial data import... This may take several minutes.")
 
-        # Create placeholders for progress
+        # UI placeholders
         log_placeholder = st.empty()
         status_placeholder = st.empty()
 
-        # Create a timestamped log file for the import subprocess
+        # Log file
         IMPORT_LOG_DIR = DATA_DIR / "import_logs"
         IMPORT_LOG_DIR.mkdir(parents=True, exist_ok=True)
         import_log_path = IMPORT_LOG_DIR / f"initial_import_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log"
 
-        # Run the script
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
-
-        # Ensure MotherDuck token is present for subprocess if configured
         if MOTHERDUCK_TOKEN:
             env["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
-
-        # Ensure non-interactive auto-confirm so initial_import doesn't prompt
         env["AUTO_CONFIRM"] = "1"
 
-        # Pass league info as environment variables for downstream scripts (if they read them)
         if "league_info" in st.session_state:
             league_info = st.session_state.league_info
             env["LEAGUE_NAME"] = league_info.get("name", "Unknown League")
@@ -337,24 +307,20 @@ def run_initial_import() -> bool:
                 bufsize=1
             )
 
-            # Stream output to UI and write to the import log file
             output_lines = []
             try:
                 with open(import_log_path, 'a', encoding='utf-8') as lf:
                     for line in process.stdout:
                         stripped = line.rstrip('\n')
                         output_lines.append(stripped)
-
                         try:
                             lf.write(stripped + "\n"); lf.flush()
                         except Exception:
                             pass
-
                         try:
                             status_placeholder.info(stripped)
                         except Exception:
                             status_placeholder.text(stripped)
-
                         log_placeholder.code('\n'.join(output_lines[-10:]))
             except Exception:
                 try:
@@ -390,19 +356,16 @@ def run_initial_import() -> bool:
 def main():
     st.title("🏈 Yahoo Fantasy Football League History")
 
-    # Check credentials
     if not CLIENT_ID or not CLIENT_SECRET:
         st.error("❌ Credentials not configured!")
         st.info("Set YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET in environment or Streamlit secrets.")
         return
 
-    # Show MD token presence
     if MOTHERDUCK_TOKEN:
         st.success("✅ MotherDuck token loaded.")
     else:
         st.warning("⚠️ MotherDuck token not configured. Data will be saved locally only.")
 
-    # Handle OAuth errors
     qp = st.query_params
     if "error" in qp:
         st.error(f"❌ OAuth Error: {qp.get('error')}")
@@ -413,7 +376,6 @@ def main():
             st.rerun()
         return
 
-    # OAuth callback
     if "code" in qp:
         code = qp["code"]
         with st.spinner("Connecting to Yahoo..."):
@@ -435,12 +397,10 @@ def main():
                 st.error(f"❌ Error: {e}")
         return
 
-    # Main flow (token present)
     if "access_token" in st.session_state:
         access_token = st.session_state.access_token
         st.success("🔐 Connected to Yahoo Fantasy!")
 
-        # Load seasons
         if "games_data" not in st.session_state:
             with st.spinner("Loading your fantasy seasons..."):
                 try:
@@ -469,7 +429,6 @@ def main():
         if selected_season:
             game_key = season_options[selected_season]
 
-            # Load leagues for season
             if "current_game_key" not in st.session_state or st.session_state.current_game_key != game_key:
                 with st.spinner("Loading leagues..."):
                     try:
@@ -479,7 +438,6 @@ def main():
                     except Exception as e:
                         st.error(f"Error: {e}")
 
-            # Show leagues
             if "current_leagues" in st.session_state:
                 leagues_data = st.session_state.current_leagues
                 try:
@@ -530,7 +488,6 @@ def main():
                                 st.warning("No MotherDuck token; upload will be skipped.")
 
                         if st.button("📥 Import League Data Now", type="primary"):
-                            # Persist league info
                             st.session_state.league_info = selected_league
 
                             with st.spinner("Saving OAuth credentials..."):
@@ -540,7 +497,6 @@ def main():
                             if MOTHERDUCK_TOKEN:
                                 os.environ["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
 
-                            # Run the import
                             if run_initial_import():
                                 st.success("🎉 All done! Your league data has been imported.")
 
@@ -557,15 +513,11 @@ def main():
                                     access_token = st.session_state.get("access_token")
                                     all_games    = extract_football_games(st.session_state.get("games_data", {}))
 
-                                    # discover all seasons where this league name appears for the user
                                     season_list = seasons_for_league_name(access_token, all_games, league_name)
-
-                                    # fallback: at least use the selected season
                                     selected_season = str(league_info.get("season", "")).strip()
                                     if selected_season and selected_season not in season_list:
                                         season_list.append(selected_season)
 
-                                    # de-dupe and upload to each <league_name>_<season> database
                                     dbs = []
                                     for season in sorted({s for s in season_list if s}):
                                         dbs.append(f"{league_name}_{season}")
@@ -627,7 +579,7 @@ def main():
 
                                 st.divider()
                                 st.write("#### 💾 Download Your Data")
-                                st.info("⚠️ On Streamlit Cloud, these files are temporary. Download them now!")
+                                st.info("⚠️ On your host, these files may be temporary. Download them now!")
 
                                 oauth_file_path = OAUTH_DIR / "Oauth.json"
                                 if oauth_file_path.exists():
@@ -645,8 +597,9 @@ def main():
                                     for pf in parquet_files:
                                         try:
                                             with open(pf, "rb") as f:
+                                                label = pf.relative_to(ROOT_DIR) if pf.is_relative_to(ROOT_DIR) else pf.name
                                                 st.download_button(
-                                                    f"📥 {pf.relative_to(ROOT_DIR)}",
+                                                    f"📥 {label}",
                                                     f.read(),
                                                     file_name=pf.name,
                                                     mime="application/octet-stream"
@@ -687,7 +640,6 @@ def main():
             st.rerun()
 
     else:
-        # Landing state — connect button
         st.write("### Import Your Fantasy Football League Data")
         st.write("- All-time schedules and matchups")
         st.write("- Player statistics")
