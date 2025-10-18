@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Optional
 import duckdb
 import re
+from datetime import datetime
 
 # =============================================================================
 # Configuration
@@ -40,12 +41,23 @@ if not MOTHERDUCK_TOKEN:
     except:
         pass
 
+# Prepare a local log file for upload runs
+LOG_DIR = ROOT_DIR / "upload_logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / f"motherduck_upload_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log"
+
 
 def log(msg: str) -> None:
-    """Simple logging with timestamp"""
-    from datetime import datetime
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}] {msg}", flush=True)
+    """Simple logging with timestamp (prints and appends to a log file)"""
+    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    line = f"[{ts}] {msg}"
+    print(line, flush=True)
+    try:
+        with open(LOG_FILE, 'a', encoding='utf-8') as lf:
+            lf.write(line + "\n")
+    except Exception:
+        # Best-effort logging; don't fail the upload because of log write issues
+        pass
 
 
 def sanitize_db_name(name: str) -> str:
@@ -92,8 +104,9 @@ def get_league_info() -> tuple[str, str]:
     league_name = os.environ.get("LEAGUE_NAME")
     league_key = os.environ.get("LEAGUE_KEY")
 
-    if league_name and league_key:
-        return league_name, league_key
+    # If a league name is provided in the environment, prefer it even if LEAGUE_KEY is missing
+    if league_name:
+        return league_name, league_key or "unknown"
 
     # Fallback: try to read from OAuth file
     oauth_file = OAUTH_DIR / "Oauth.json"
@@ -117,6 +130,31 @@ def get_league_info() -> tuple[str, str]:
 
 def upload_to_motherduck():
     """Upload all parquet files to MotherDuck"""
+
+    log(f"Looking for parquet files under: {DATA_DIR} (and subdirectories)")
+
+    # Search recursively for parquet files inside DATA_DIR
+    parquet_files = list(DATA_DIR.rglob("*.parquet"))
+
+    # If none found in DATA_DIR, also attempt to search one level up (repo root) and the entire repo as a last resort
+    if not parquet_files:
+        repo_root = ROOT_DIR.parent
+        log(f"No parquet files found in {DATA_DIR}. Searching repo root: {repo_root} (recursive)")
+        parquet_files = list(repo_root.rglob("*.parquet"))
+
+    if not parquet_files:
+        log("No parquet files found in repository. Nothing to upload.")
+        if not MOTHERDUCK_TOKEN:
+            log("ERROR: MOTHERDUCK_TOKEN not set. Cannot upload to MotherDuck.")
+            log("Set MOTHERDUCK_TOKEN environment variable or add to Streamlit secrets.")
+            return False
+        else:
+            # Nothing to upload but token is set — return True to indicate upload step didn't fail, but nothing happened
+            return True
+
+    log(f"Found {len(parquet_files)} parquet file(s) to consider for upload:")
+    for p in parquet_files:
+        log(f"  - {p}")
 
     if not MOTHERDUCK_TOKEN:
         log("ERROR: MOTHERDUCK_TOKEN not set. Cannot upload to MotherDuck.")
@@ -146,14 +184,7 @@ def upload_to_motherduck():
         con.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
         con.execute(f"USE {db_name}")
 
-        # Find all parquet files in data directory
-        parquet_files = list(DATA_DIR.glob("*.parquet"))
-
-        if not parquet_files:
-            log("Warning: No parquet files found to upload")
-            return True
-
-        log(f"Found {len(parquet_files)} parquet files to upload")
+        log(f"Preparing to upload {len(parquet_files)} file(s)")
         log("")
 
         # Upload each parquet file as a table
@@ -215,4 +246,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

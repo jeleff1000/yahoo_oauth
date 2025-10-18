@@ -112,8 +112,11 @@ def run_script(script: Path, label: str, year: int = 0, week: int = 0) -> None:
         rc = subprocess.call(cmd, cwd=script.parent, env=env)
         if rc != 0:
             log(f"WARN: {label} exited with code {rc}")
+        else:
+            log(f"✓ Completed: {label}")
     except Exception as e:
         log(f"ERROR running {label}: {e}")
+
 
 def run_post_script(script: Path, label: str) -> None:
     """Run post-processing script (no args, processes canonical files)"""
@@ -132,6 +135,8 @@ def run_post_script(script: Path, label: str) -> None:
         rc = subprocess.call(cmd, cwd=script.parent, env=env)
         if rc != 0:
             log(f"WARN: {label} exited with code {rc}")
+        else:
+            log(f"✓ Completed POST: {label}")
     except Exception as e:
         log(f"ERROR running {label}: {e}")
 
@@ -237,10 +242,21 @@ def main():
     log("This may take 30-60 minutes depending on league history.")
     log("")
 
-    response = input("Continue? (yes/no): ").strip().lower()
-    if response not in ('y', 'yes'):
-        log("Aborted by user")
-        return
+    # Auto-confirm when running non-interactively or when AUTO_CONFIRM env var is set.
+    auto_confirm = os.environ.get("AUTO_CONFIRM", "").lower() in ("1", "true", "yes")
+    if not auto_confirm:
+        try:
+            if sys.stdin and sys.stdin.isatty():
+                response = input("Continue? (yes/no): ").strip().lower()
+                if response not in ('y', 'yes'):
+                    log("Aborted by user")
+                    return
+            else:
+                log("Non-interactive environment detected — auto-confirming import.")
+        except Exception:
+            log("Auto-confirming import due to non-interactive environment.")
+    else:
+        log("AUTO_CONFIRM set — proceeding without interactive prompt.")
 
     # ========================================================================
     # PHASE 1: Run the four base producers with year=0, week=0
@@ -314,6 +330,6 @@ def main():
     log("  2. Run preseason_import.py after each draft")
     log("  3. Schedule weekly_import.py for Tuesday mornings")
 
+
 if __name__ == "__main__":
     main()
-

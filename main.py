@@ -169,6 +169,12 @@ def run_initial_import():
 
         # Create placeholders for progress
         log_placeholder = st.empty()
+        status_placeholder = st.empty()
+
+        # Create a timestamped log file for the import subprocess
+        IMPORT_LOG_DIR = DATA_DIR / "import_logs"
+        IMPORT_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        import_log_path = IMPORT_LOG_DIR / f"initial_import_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log"
 
         # Run the script
         env = dict(os.environ)
@@ -177,6 +183,9 @@ def run_initial_import():
         # Ensure MotherDuck token is present for subprocess if configured
         if MOTHERDUCK_TOKEN:
             env["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
+
+        # Ensure non-interactive auto-confirm so initial_import doesn't prompt
+        env["AUTO_CONFIRM"] = "1"
 
         # Pass league info as environment variables for MotherDuck upload
         if "league_info" in st.session_state:
@@ -198,22 +207,54 @@ def run_initial_import():
                 bufsize=1
             )
 
-            # Stream output to UI
+            # Stream output to UI and write to the import log file
             output_lines = []
-            for line in process.stdout:
-                output_lines.append(line.strip())
-                # Show last 10 lines of output
-                log_placeholder.code('\n'.join(output_lines[-10:]))
+            try:
+                with open(import_log_path, 'a', encoding='utf-8') as lf:
+                    for line in process.stdout:
+                        stripped = line.rstrip('\n')
+                        output_lines.append(stripped)
+
+                        # write to log file
+                        try:
+                            lf.write(stripped + "\n")
+                            lf.flush()
+                        except Exception:
+                            pass
+
+                        # Update a small status message with the latest line so users see immediate progress
+                        try:
+                            status_placeholder.info(stripped)
+                        except Exception:
+                            status_placeholder.text(stripped)
+
+                        # Show last 10 lines of output
+                        log_placeholder.code('\n'.join(output_lines[-10:]))
+            except Exception as e:
+                # If streaming iteration fails, capture remaining output via communicate
+                try:
+                    remaining, _ = process.communicate(timeout=1)
+                    if remaining:
+                        output_lines.extend(remaining.splitlines())
+                        with open(import_log_path, 'a', encoding='utf-8') as lf:
+                            lf.write(remaining)
+                except Exception:
+                    pass
 
             process.wait()
 
+            # Clear the status placeholder after completion/failure
             if process.returncode == 0:
+                status_placeholder.success("Import finished successfully.")
                 st.success("✅ Data import completed successfully!")
                 st.balloons()
+                st.write(f"Import log: {import_log_path}")
                 return True
             else:
+                status_placeholder.error(f"Import failed (exit code {process.returncode}).")
                 st.error(f"❌ Import failed with exit code {process.returncode}")
                 st.code('\n'.join(output_lines))
+                st.write(f"Import log: {import_log_path}")
                 return False
 
     except Exception as e:
