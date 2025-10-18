@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-# =========================
-# Standard libs
-# =========================
 import os
 import urllib.parse
 import base64
@@ -16,9 +13,6 @@ import re
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-# =========================
-# Third-party deps
-# =========================
 try:
     import streamlit as st
 except ImportError as e:
@@ -39,23 +33,18 @@ except ImportError as e:
 # =========================
 CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID") or st.secrets.get("YAHOO_CLIENT_ID", None)
 CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or st.secrets.get("YAHOO_CLIENT_SECRET", None)
-
-# MotherDuck token loaded from environment or Streamlit secrets (no interactive prompt)
 MOTHERDUCK_TOKEN = os.environ.get("MOTHERDUCK_TOKEN") or st.secrets.get("MOTHERDUCK_TOKEN", "")
-
-# For deployment - NO TRAILING SLASH
 REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app")
 
-# OAuth 2.0 endpoints
 AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
 TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
 
-# Paths
 ROOT_DIR = Path(__file__).parent
 OAUTH_DIR = ROOT_DIR / "oauth"
 DATA_DIR = ROOT_DIR / "fantasy_football_data"
 SCRIPTS_DIR = ROOT_DIR / "fantasy_football_data_scripts"
 INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import.py"
+
 
 # =========================
 # Yahoo OAuth Helpers
@@ -65,11 +54,13 @@ def get_auth_header() -> str:
     encoded = base64.b64encode(credentials.encode()).decode()
     return f"Basic {encoded}"
 
+
 def build_authorize_url(state: str | None = None) -> str:
     params = {"client_id": CLIENT_ID, "redirect_uri": REDIRECT_URI, "response_type": "code"}
     if state:
         params["state"] = state
     return AUTH_URL + "?" + urllib.parse.urlencode(params)
+
 
 def exchange_code_for_tokens(code: str) -> dict:
     headers = {"Authorization": get_auth_header(), "Content-Type": "application/x-www-form-urlencoded"}
@@ -78,6 +69,7 @@ def exchange_code_for_tokens(code: str) -> dict:
     resp.raise_for_status()
     return resp.json()
 
+
 def yahoo_api_call(access_token: str, endpoint: str):
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"https://fantasysports.yahooapis.com/fantasy/v2/{endpoint}"
@@ -85,11 +77,14 @@ def yahoo_api_call(access_token: str, endpoint: str):
     resp.raise_for_status()
     return resp.json()
 
+
 def get_user_games(access_token: str):
     return yahoo_api_call(access_token, "users;use_login=1/games?format=json")
 
+
 def get_user_football_leagues(access_token: str, game_key: str):
     return yahoo_api_call(access_token, f"users;use_login=1/games;game_keys={game_key}/leagues?format=json")
+
 
 def extract_football_games(games_data):
     football_games = []
@@ -111,6 +106,7 @@ def extract_football_games(games_data):
     except Exception as e:
         st.error(f"Error parsing games: {e}")
     return football_games
+
 
 def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
     OAUTH_DIR.mkdir(parents=True, exist_ok=True)
@@ -135,10 +131,56 @@ def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
         json.dump(oauth_data, f, indent=2)
     return oauth_file
 
+
 # =========================
-# Slug + Collector + Uploader
+# Simplified File Collection
+# =========================
+def collect_parquet_files() -> list[Path]:
+    """
+    Collect parquet files in priority order:
+    1. Canonical files at DATA_DIR root (schedule.parquet, matchup.parquet, etc.)
+    2. Any other parquet files in DATA_DIR subdirectories
+    """
+    files = []
+    seen = set()
+
+    # Priority 1: Canonical files at root
+    canonical_names = ["schedule.parquet", "matchup.parquet", "transactions.parquet",
+                       "player.parquet", "players_by_year.parquet"]
+
+    for name in canonical_names:
+        p = DATA_DIR / name
+        if p.exists() and p.is_file():
+            files.append(p)
+            seen.add(p.resolve())
+
+    # Priority 2: Subdirectories (schedule_data, matchup_data, etc.)
+    if DATA_DIR.exists():
+        for subdir in ["schedule_data", "matchup_data", "transaction_data", "player_data"]:
+            sub_path = DATA_DIR / subdir
+            if sub_path.exists() and sub_path.is_dir():
+                for p in sub_path.glob("*.parquet"):
+                    resolved = p.resolve()
+                    if resolved not in seen:
+                        files.append(p)
+                        seen.add(resolved)
+
+    # Priority 3: Any other parquet files in DATA_DIR (non-recursive, to avoid noise)
+    if DATA_DIR.exists():
+        for p in DATA_DIR.glob("*.parquet"):
+            resolved = p.resolve()
+            if resolved not in seen:
+                files.append(p)
+                seen.add(resolved)
+
+    return files
+
+
+# =========================
+# MotherDuck Upload
 # =========================
 def _slug(s: str, lead_prefix: str) -> str:
+    """Create a valid database/table name from a string"""
     x = re.sub(r"[^a-zA-Z0-9]+", "_", (s or "").strip().lower()).strip("_")
     if not x:
         x = "db"
@@ -146,243 +188,23 @@ def _slug(s: str, lead_prefix: str) -> str:
         x = f"{lead_prefix}_{x}"
     return x[:63]
 
-def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
-        """
-        Recursively collect parquet files to upload and to include in the ZIP.
-        Priority:
-          1) canonical files at data_dir root
-          2) any parquet under fantasy_football_data subfolders
-          3) repo-wide fallback if still none
 
-        This function also honors an environment override EXPORT_DATA_DIR and includes
-        extra fallbacks (resolved paths and os.walk) to be robust across different
-        mounts/container paths (e.g. Streamlit cloud `/mount/src/...`).
-        """
-        # Also allow a runtime override path (for Streamlit Cloud or different mount points)
-        export_dir = None
-        try:
-            ed = os.environ.get("EXPORT_DATA_DIR")
-            if ed:
-                export_dir = Path(ed)
-        except Exception:
-            export_dir = None
+def upload_to_motherduck(files: list[Path], db_name: str, token: str) -> list[tuple[str, int]]:
+    """Upload parquet files directly to MotherDuck"""
+    if not files:
+        return []
 
-        st.write(f"DEBUG: collect_parquet_candidates data_dir={data_dir} exists={data_dir.exists()}")
-        if data_dir.exists():
-            try:
-                items = list(data_dir.iterdir())
-                st.write(f"DEBUG: data_dir has {len(items)} items: {[str(i) for i in items[:5]]}")
-            except Exception as e:
-                st.write(f"DEBUG: error listing data_dir: {e}")
-
-        wanted_stems = {"schedule", "matchup", "transactions", "player"}
-        seen = set()
-        files: list[Path] = []
-
-        # Helper to add file if valid and not seen
-        def _maybe_add(p: Path):
-            try:
-                rp = p.resolve()
-            except Exception:
-                rp = p
-            if rp in seen:
-                return
-            try:
-                if p.exists() and p.is_file():
-                    files.append(p)
-                    seen.add(rp)
-            except Exception:
-                # if we can't check exists/is_file, still try to add by path
-                files.append(p)
-                seen.add(rp)
-
-        # (1) canonical root (data_dir)
-        for stem in ["schedule", "matchup", "transactions", "player"]:
-            p = data_dir / f"{stem}.parquet"
-            _maybe_add(p)
-
-        # (1b) canonical at export_dir if provided
-        if export_dir:
-            for stem in ["schedule", "matchup", "transactions", "player"]:
-                p = export_dir / f"{stem}.parquet"
-                _maybe_add(p)
-
-        # (2) subfolders under data_dir
-        try:
-            if data_dir.exists():
-                for p in data_dir.rglob("*.parquet"):
-                    if "import_logs" in p.parts:
-                        continue
-                    _maybe_add(p)
-                # also pick up files with extra suffixes like .parquet.gz or .parquet.snappy
-                for p in data_dir.rglob("*.parquet.*"):
-                    if "import_logs" in p.parts:
-                        continue
-                    _maybe_add(p)
-        except Exception:
-            pass
-
-        # (2b) subfolders under export_dir
-        try:
-            if export_dir and export_dir.exists():
-                for p in export_dir.rglob("*.parquet"):
-                    if "import_logs" in p.parts:
-                        continue
-                    _maybe_add(p)
-                for p in export_dir.rglob("*.parquet.*"):
-                    if "import_logs" in p.parts:
-                        continue
-                    _maybe_add(p)
-        except Exception:
-            pass
-
-        # Additional common locations to check (Streamlit Cloud and local dev variations)
-        candidate_dirs = []
-        try:
-            candidate_dirs.append(repo_root / "schedule_data")
-            candidate_dirs.append(repo_root / "fantasy_football_data")
-            candidate_dirs.append(repo_root / "fantasy_football_data" / "schedule_data")
-            candidate_dirs.append(Path.cwd())
-            candidate_dirs.append(Path.home())
-            if export_dir:
-                candidate_dirs.append(export_dir)
-        except Exception:
-            pass
-
-        # Add a few container/mount fallbacks (only on POSIX containers) that Streamlit Cloud
-        # commonly exposes. We limit deeper scans below to avoid long filesystem walks.
-        extra_roots = []
-        try:
-            if os.name != "nt":
-                for p in ("/mount", "/mount/src", "/mnt", "/home/appuser", "/home/adminuser", "/tmp", "/root", "/usr/src/app", "/workspace", "/srv", "/app"):
-                    extra_roots.append(Path(p))
-        except Exception:
-            extra_roots = []
-
-        # (2c) search these additional candidate dirs
-        try:
-            for d in candidate_dirs:
-                if not d:
-                    continue
-                try:
-                    if d.exists():
-                        for p in d.rglob("*.parquet"):
-                            if "import_logs" in p.parts:
-                                continue
-                            _maybe_add(p)
-                        for p in d.rglob("*.parquet.*"):
-                            if "import_logs" in p.parts:
-                                continue
-                            _maybe_add(p)
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        # (3) repo-wide fallback
-        if not files:
-            try:
-                for p in repo_root.rglob("*.parquet"):
-                    if "import_logs" in p.parts:
-                        continue
-                    _maybe_add(p)
-                for p in repo_root.rglob("*.parquet.*"):
-                    if "import_logs" in p.parts:
-                        continue
-                    _maybe_add(p)
-            except Exception:
-                pass
-
-        # Final robust fallback: os.walk (case-insensitive extension match) in repo_root
-        # This helps when the earlier pathlib searches miss files due to mount/symlink differences.
-        if not files:
-            try:
-                for root, dirs, fnames in os.walk(str(repo_root)):
-                    # skip import_logs folders quickly
-                    if "import_logs" in Path(root).parts:
-                        continue
-                    for fn in fnames:
-                        lower = fn.lower()
-                        if lower.endswith(".parquet") or \
-                           ".parquet." in lower or \
-                           lower.endswith(".parq"):
-                            p = Path(root) / fn
-                            _maybe_add(p)
-            except Exception:
-                pass
-
-        # If still nothing, perform a limited-depth scan under extra common roots
-        if not files and extra_roots:
-            MAX_FOUND = 300
-            MAX_DEPTH = 5
-            try:
-                found_count = 0
-                for root_base in extra_roots:
-                    if found_count >= MAX_FOUND:
-                        break
-                    if not root_base.exists():
-                        continue
-                    for root, dirs, fnames in os.walk(str(root_base)):
-                        # limit depth to avoid full filesystem traversal
-                        try:
-                            rel_depth = len(Path(root).relative_to(root_base).parts)
-                        except Exception:
-                            rel_depth = 0
-                        if rel_depth > MAX_DEPTH:
-                            # prune by clearing dirs so walk won't go deeper
-                            dirs.clear()
-                            continue
-                        if "import_logs" in Path(root).parts:
-                            continue
-                        for fn in fnames:
-                            lower = fn.lower()
-                            if lower.endswith(".parquet") or ".parquet." in lower or lower.endswith(".parq"):
-                                p = Path(root) / fn
-                                _maybe_add(p)
-                                found_count += 1
-                                if found_count >= MAX_FOUND:
-                                    break
-                        if found_count >= MAX_FOUND:
-                            break
-            except Exception:
-                pass
-
-        def rank(p: Path) -> tuple[int, int, str]:
-            try:
-                if p.parent == data_dir:
-                    a = 0
-                elif data_dir in p.parents:
-                    a = 1
-                elif export_dir and (p.parent == export_dir or export_dir in p.parents):
-                    a = 0
-                else:
-                    a = 2
-            except Exception:
-                a = 2
-            b = 0 if p.stem.lower() in wanted_stems else 1
-            return (a, b, str(p))
-
-        files.sort(key=rank)
-        return files
-
-def upload_files_to_motherduck(
-    files: list[Path],
-    db_name: str,
-    schema: str = "public",
-    token: str | None = None,
-    status_cb=None
-) -> list[tuple[str, int]]:
     if token:
         os.environ["MOTHERDUCK_TOKEN"] = token
 
     db = _slug(db_name, "l")
-    sch = _slug(schema, "s")
 
     con = duckdb.connect("md:")
     con.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
     con.execute(f"USE {db}")
-    con.execute(f"CREATE SCHEMA IF NOT EXISTS {sch}")
+    con.execute(f"CREATE SCHEMA IF NOT EXISTS public")
 
+    # Table name mapping (handle common aliases)
     aliases = {
         "players_by_year": "player",
         "yahoo_player_stats_multi_year_all_weeks": "player",
@@ -391,25 +213,34 @@ def upload_files_to_motherduck(
         "transaction": "transactions",
     }
 
-    results: list[tuple[str, int]] = []
+    results = []
     for pf in files:
         stem = pf.stem.lower()
         stem = aliases.get(stem, stem)
         tbl = _slug(stem, "t")
-        if status_cb:
-            status_cb(f"Uploading {pf.name} → {db}.{sch}.{tbl} ...")
-        con.execute(f"CREATE OR REPLACE TABLE {sch}.{tbl} AS SELECT * FROM read_parquet(?)", [str(pf)])
-        cnt = con.execute(f"SELECT COUNT(*) FROM {sch}.{tbl}").fetchone()[0]
-        results.append((tbl, int(cnt)))
-        if status_cb:
-            status_cb(f"✓ {tbl}: {cnt} rows")
+
+        try:
+            st.info(f"📤 Uploading {pf.name} → {db}.public.{tbl}...")
+            con.execute(f"CREATE OR REPLACE TABLE public.{tbl} AS SELECT * FROM read_parquet(?)", [str(pf)])
+            cnt = con.execute(f"SELECT COUNT(*) FROM public.{tbl}").fetchone()[0]
+            results.append((tbl, int(cnt)))
+            st.success(f"✅ {tbl}: {cnt:,} rows")
+        except Exception as e:
+            st.error(f"❌ Failed to upload {pf.name}: {e}")
+
+    con.close()
     return results
 
+
+# =========================
+# Season Discovery
+# =========================
 def seasons_for_league_name(access_token: str, all_games: list[dict], target_league_name: str) -> list[str]:
-    seasons: set[str] = set()
+    """Find all seasons where this league exists"""
+    seasons = set()
     for g in all_games:
         game_key = g.get("game_key")
-        season   = str(g.get("season", "")).strip()
+        season = str(g.get("season", "")).strip()
         if not game_key or not season:
             continue
         try:
@@ -432,10 +263,12 @@ def seasons_for_league_name(access_token: str, all_games: list[dict], target_lea
             pass
     return sorted(seasons)
 
+
 # =========================
-# Import runner (subprocess)
+# Import Runner
 # =========================
 def run_initial_import() -> bool:
+    """Run the initial data import script"""
     if not INITIAL_IMPORT_SCRIPT.exists():
         st.error(f"❌ Initial import script not found at: {INITIAL_IMPORT_SCRIPT}")
         return False
@@ -443,11 +276,9 @@ def run_initial_import() -> bool:
     try:
         st.info("🚀 Starting initial data import... This may take several minutes.")
 
-        # UI placeholders
         log_placeholder = st.empty()
         status_placeholder = st.empty()
 
-        # Log file
         IMPORT_LOG_DIR = DATA_DIR / "import_logs"
         IMPORT_LOG_DIR.mkdir(parents=True, exist_ok=True)
         import_log_path = IMPORT_LOG_DIR / f"initial_import_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.log"
@@ -457,24 +288,11 @@ def run_initial_import() -> bool:
         if MOTHERDUCK_TOKEN:
             env["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
         env["AUTO_CONFIRM"] = "1"
-        # Tell the child import process where to write data. This can be overridden by
-        # setting EXPORT_DATA_DIR in the environment (useful for Streamlit Cloud).
-        try:
-            env["EXPORT_DATA_DIR"] = str(DATA_DIR.resolve())
-        except Exception:
-            env["EXPORT_DATA_DIR"] = str(DATA_DIR)
+        env["EXPORT_DATA_DIR"] = str(DATA_DIR.resolve())
 
-        # Export the path to the OAuth file into the child environment so producer
-        # scripts can find it even if the child runs with a different cwd or mount.
-        try:
-            oauth_file = OAUTH_DIR / "Oauth.json"
-            # Prefer resolved absolute path when available
-            if oauth_file.exists():
-                env["OAUTH_PATH"] = str(oauth_file.resolve())
-            else:
-                env["OAUTH_PATH"] = str(oauth_file)
-        except Exception:
-            pass
+        oauth_file = OAUTH_DIR / "Oauth.json"
+        if oauth_file.exists():
+            env["OAUTH_PATH"] = str(oauth_file.resolve())
 
         if "league_info" in st.session_state:
             league_info = st.session_state.league_info
@@ -497,209 +315,31 @@ def run_initial_import() -> bool:
             )
 
             output_lines = []
-            try:
-                with open(import_log_path, 'a', encoding='utf-8') as lf:
-                    for line in process.stdout:
-                        stripped = line.rstrip('\n')
-                        output_lines.append(stripped)
-                        try:
-                            lf.write(stripped + "\n"); lf.flush()
-                        except Exception:
-                            pass
-                        try:
-                            status_placeholder.info(stripped)
-                        except Exception:
-                            status_placeholder.text(stripped)
-                        log_placeholder.code('\n'.join(output_lines[-10:]))
-            except Exception:
-                try:
-                    remaining, _ = process.communicate(timeout=1)
-                    if remaining:
-                        output_lines.extend(remaining.splitlines())
-                        with open(import_log_path, 'a', encoding='utf-8') as lf:
-                            lf.write(remaining)
-                except Exception:
-                    pass
+            with open(import_log_path, 'a', encoding='utf-8') as lf:
+                for line in process.stdout:
+                    stripped = line.rstrip('\n')
+                    output_lines.append(stripped)
+                    lf.write(stripped + "\n")
+                    lf.flush()
+                    status_placeholder.info(stripped)
+                    log_placeholder.code('\n'.join(output_lines[-10:]))
 
             process.wait()
 
-            # Persist last stdout into session so the parent can parse paths even if
-            # the import log file isn't readable directly from this environment.
-            try:
-                st.session_state["last_import_stdout"] = "\n".join(output_lines)
-            except Exception:
-                pass
-
             if process.returncode == 0:
-                status_placeholder.success("Import finished successfully.")
+                status_placeholder.success("✅ Import finished successfully.")
                 st.success("✅ Data import completed successfully!")
-                st.write(f"Import log: {import_log_path}")
-                try:
-                    st.session_state["last_import_log"] = str(import_log_path)
-                except Exception:
-                    pass
                 return True
-
             else:
-                status_placeholder.error(f"Import failed (exit code {process.returncode}).")
+                status_placeholder.error(f"❌ Import failed (exit code {process.returncode}).")
                 st.error(f"❌ Import failed with exit code {process.returncode}")
-                st.code('\n'.join(output_lines))
-                st.write(f"Import log: {import_log_path}")
-                try:
-                    st.session_state["last_import_log"] = str(import_log_path)
-                except Exception:
-                    pass
+                st.code('\n'.join(output_lines[-50:]))
                 return False
 
     except Exception as e:
         st.error(f"❌ Error running import: {e}")
         return False
 
-# =========================
-# Debug Helpers
-# =========================
-def _debug_list_parquet_locations(repo_root: Path, data_dir: Path, export_dir: Path | None = None, max_items: int = 200) -> list[tuple[Path, int]]:
-    """Return a list of (path, size_bytes) for parquet-like files found under
-    repo_root, data_dir, and export_dir. Case-insensitive and matches .parquet, .parq,
-    and .parquet.* suffixes. Limits the returned list to max_items to avoid huge dumps.
-    """
-    found = []
-    def _scan(base: Path):
-        try:
-            for root, dirs, files in os.walk(str(base)):
-                if 'import_logs' in Path(root).parts:
-                    continue
-                for fn in files:
-                    lower = fn.lower()
-                    if lower.endswith('.parquet') or '.parquet.' in lower or lower.endswith('.parq'):
-                        p = Path(root) / fn
-                        try:
-                            size = p.stat().st_size
-                        except Exception:
-                            size = -1
-                        found.append((p, size))
-                        if len(found) >= max_items:
-                            return
-        except Exception:
-            return
-
-    # scan the most likely places first
-    for d in (data_dir, export_dir, repo_root):
-        if not d:
-            continue
-        try:
-            if d.exists():
-                _scan(d)
-        except Exception:
-            continue
-
-    # final fallback to repo_root if nothing yet
-    if not found:
-        try:
-            _scan(repo_root)
-        except Exception:
-            pass
-
-    return found
-
-def _translate_remote_path(p: Path) -> Path:
-    """If p is absolute and doesn't exist locally, try to map it to a local repo-relative path.
-
-    Strategy:
-      - look for the local repo name inside the remote path string
-      - if found, take the remainder after the repo name and join with our local ROOT_DIR
-      - if that candidate exists, return it
-      - otherwise return the original Path
-    """
-    try:
-        if not p:
-            return p
-        if p.exists():
-            return p
-        p_str = str(p)
-        repo_name = ROOT_DIR.name
-        if repo_name in p_str:
-            # split on the first occurrence of repo_name and build candidate under local ROOT_DIR
-            try:
-                _, after = p_str.split(repo_name, 1)
-                cand = ROOT_DIR.joinpath(after.lstrip('/\\'))
-                if cand.exists():
-                    return cand
-            except Exception:
-                pass
-        # Try a few common container mounts that include src and then repo name
-        for prefix in ("/mount/src", "/usr/src/app", "/workspace", "/home/appuser", "/app", "/srv"):
-            if p_str.startswith(prefix):
-                # try to find repo_name in path anyway
-                if repo_name in p_str:
-                    try:
-                        _, after = p_str.split(repo_name, 1)
-                        cand = ROOT_DIR.joinpath(after.lstrip('/\\'))
-                        if cand.exists():
-                            return cand
-                    except Exception:
-                        pass
-        return p
-    except Exception:
-        return p
-
-
-def _extract_parquet_paths_from_log(log_path: Path) -> list[Path]:
-    """Scan a textual import log for absolute or repo-relative parquet paths and return existing Path objects."""
-    paths: list[Path] = []
-    try:
-        import re
-        txt = log_path.read_text(encoding='utf-8', errors='ignore')
-        # crude regex: match strings that look like paths ending with .parquet or .parquet.*
-        regex = r"([\w\-\./\\]+\.parquet(?:\.[a-zA-Z0-9]+)?)"
-        for m in re.findall(regex, txt):
-            try:
-                p = Path(m)
-                # try resolving relative to repo root as well
-                if not p.is_absolute():
-                    cand = ROOT_DIR / m
-                    if cand.exists():
-                        paths.append(cand)
-                        continue
-                # If the absolute path doesn't exist locally, try to translate common container mount
-                translated = _translate_remote_path(p)
-                if translated.exists():
-                    paths.append(translated)
-                    continue
-                if p.exists():
-                    paths.append(p)
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return paths
-
-
-def _extract_parquet_paths_from_text(text: str) -> list[Path]:
-    """Extract candidate parquet paths from an arbitrary text blob; resolve relative to repo root if needed."""
-    paths: list[Path] = []
-    try:
-        import re
-        regex = r"([\w\-\./\\]+\.parquet(?:\.[a-zA-Z0-9]+)?)"
-        for m in re.findall(regex, text or ""):
-            try:
-                p = Path(m)
-                if not p.is_absolute():
-                    cand = ROOT_DIR / m
-                    if cand.exists():
-                        paths.append(cand)
-                        continue
-                translated = _translate_remote_path(p)
-                if translated.exists():
-                    paths.append(translated)
-                    continue
-                if p.exists():
-                    paths.append(p)
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return paths
 
 # =========================
 # Streamlit UI
@@ -718,6 +358,8 @@ def main():
         st.warning("⚠️ MotherDuck token not configured. Data will be saved locally only.")
 
     qp = st.query_params
+
+    # Handle OAuth errors
     if "error" in qp:
         st.error(f"❌ OAuth Error: {qp.get('error')}")
         if "error_description" in qp:
@@ -727,6 +369,7 @@ def main():
             st.rerun()
         return
 
+    # Handle OAuth callback
     if "code" in qp:
         code = qp["code"]
         with st.spinner("Connecting to Yahoo..."):
@@ -740,7 +383,8 @@ def main():
                     "xoauth_yahoo_guid": token_data.get("xoauth_yahoo_guid")
                 }
                 st.session_state.access_token = token_data.get("access_token")
-                st.session_state.token_expiry = datetime.now(timezone.utc) + timedelta(seconds=token_data.get("expires_in", 3600))
+                st.session_state.token_expiry = datetime.now(timezone.utc) + timedelta(
+                    seconds=token_data.get("expires_in", 3600))
                 st.success("✅ Successfully connected!")
                 st.query_params.clear()
                 st.rerun()
@@ -748,10 +392,12 @@ def main():
                 st.error(f"❌ Error: {e}")
         return
 
+    # Main application flow
     if "access_token" in st.session_state:
         access_token = st.session_state.access_token
         st.success("🔐 Connected to Yahoo Fantasy!")
 
+        # Load games data
         if "games_data" not in st.session_state:
             with st.spinner("Loading your fantasy seasons..."):
                 try:
@@ -774,12 +420,14 @@ def main():
 
         st.subheader("📋 Select Your League")
 
+        # Season selection
         season_options = {f"{game['season']} NFL Season": game['game_key'] for game in football_games}
         selected_season = st.selectbox("1. Choose a season:", options=list(season_options.keys()))
 
         if selected_season:
             game_key = season_options[selected_season]
 
+            # Load leagues for selected season
             if "current_game_key" not in st.session_state or st.session_state.current_game_key != game_key:
                 with st.spinner("Loading leagues..."):
                     try:
@@ -813,296 +461,137 @@ def main():
                     if league_list:
                         st.write("2. Choose your league:")
                         league_names = [f"{l['name']} ({l['num_teams']} teams)" for l in league_list]
-                        # Provide a non-empty label (hidden) to satisfy Streamlit accessibility warnings.
-                        selected_league_name = st.radio("league_selection", league_names, key="league_radio", label_visibility="collapsed")
+                        selected_league_name = st.radio("league_selection", league_names, key="league_radio",
+                                                        label_visibility="collapsed")
                         selected_league = league_list[league_names.index(selected_league_name)]
 
                         st.divider()
                         st.write("3. Review league details:")
                         col1, col2, col3 = st.columns(3)
-                        with col1: st.metric("League", selected_league['name'])
-                        with col2: st.metric("Season", selected_league['season'])
-                        with col3: st.metric("Teams", selected_league['num_teams'])
+                        with col1:
+                            st.metric("League", selected_league['name'])
+                        with col2:
+                            st.metric("Season", selected_league['season'])
+                        with col3:
+                            st.metric("Teams", selected_league['num_teams'])
 
                         st.info(f"📊 Data to import: All historical data for `{selected_league['name']}` "
                                 f"(league key: {selected_league['league_key']})")
 
                         st.divider()
                         st.write("4. Import your league data:")
-                        st.info("This fetches all historical data and saves it locally (and uploads to MotherDuck if configured).")
-
-                        with st.expander("🦆 MotherDuck Configuration (Read-only)"):
-                            if MOTHERDUCK_TOKEN:
-                                st.success("✅ MotherDuck token is loaded.")
-                                sanitized_db = selected_league['name'].lower().replace(' ', '_')
-                                st.info(f"Database(s) will be created as: `{sanitized_db}_<season>` (for every season this league exists)")
-                            else:
-                                st.warning("No MotherDuck token; upload will be skipped.")
+                        st.info(
+                            "This fetches all historical data and saves it locally (and uploads to MotherDuck if configured).")
 
                         if st.button("📥 Import League Data Now", type="primary"):
                             st.session_state.league_info = selected_league
 
+                            # Save OAuth
                             with st.spinner("Saving OAuth credentials..."):
                                 oauth_file = save_oauth_token(st.session_state.token_data, selected_league)
                                 st.success(f"✅ OAuth credentials saved to: {oauth_file}")
 
-                            if MOTHERDUCK_TOKEN:
-                                os.environ["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
-
-                            # Ensure parent process exposes EXPORT_DATA_DIR so downstream
-                            # parquet discovery can look in the same path the child used.
-                            try:
-                                os.environ["EXPORT_DATA_DIR"] = str(DATA_DIR.resolve())
-                            except Exception:
-                                os.environ["EXPORT_DATA_DIR"] = str(DATA_DIR)
-
+                            # Run import
                             if run_initial_import():
                                 st.success("🎉 All done! Your league data has been imported.")
 
-                                # --------- COLLECT FILES (for upload + downloads) ----------
-                                repo_root = ROOT_DIR
-                                files = collect_parquet_candidates(repo_root, DATA_DIR)
+                                # Collect files
+                                files = collect_parquet_files()
 
-                                # --- EXPLICIT DEBUG SCAN (os.walk-based) ---
-                                try:
-                                    ed = os.environ.get('EXPORT_DATA_DIR')
-                                    export_path = Path(ed) if ed else None
-                                    debug_found = _debug_list_parquet_locations(repo_root, DATA_DIR, export_path)
-                                    st.write("**Debug: explicit os.walk scan results**")
-                                    if debug_found:
-                                        st.write(f"Found {len(debug_found)} parquet-like file(s) via explicit scan:")
-                                        for p, size in debug_found:
-                                            try:
-                                                rel = p.relative_to(ROOT_DIR)
-                                            except Exception:
-                                                rel = p
-                                            try:
-                                                st.write(f"- `{rel}` ({size/1024:.1f} KB)")
-                                            except Exception:
-                                                st.write(f"- `{rel}`")
-                                        if not files:
-                                            st.warning("collect_parquet_candidates() returned no files but explicit scan found files — there may be a path/mount mismatch. Check file permissions and where the import process wrote data.")
-                                    else:
-                                        st.write("No parquet-like files found by explicit scan.")
-                                except Exception as e:
-                                    st.write(f"Debug scan failed: {e}")
+                                if not files:
+                                    st.warning("⚠️ No parquet files found. Check if the import completed successfully.")
+                                    st.write(f"**Expected location:** {DATA_DIR}")
+                                    if DATA_DIR.exists():
+                                        st.write("**Contents:**")
+                                        for item in DATA_DIR.iterdir():
+                                            st.write(f"- {item.name}")
+                                else:
+                                    st.success(f"✅ Found {len(files)} parquet file(s)")
 
-                                # If no files discovered, also try to parse the import log for paths
-                                try:
-                                    if not files and st.session_state.get("last_import_log"):
-                                        logpath = Path(st.session_state.get("last_import_log"))
-                                        if logpath.exists():
-                                            st.write("(Attempting to recover parquet paths from import log)")
-                                            log_paths = _extract_parquet_paths_from_log(logpath)
-                                            if log_paths:
-                                                st.write(f"Found {len(log_paths)} path(s) in import log:")
-                                                for lp in log_paths:
-                                                    try:
-                                                        st.write(f"- `{lp}`")
-                                                        if lp.exists():
-                                                            files.append(lp)
-                                                    except Exception:
-                                                        pass
-                                            else:
-                                                st.write("No parquet paths found in import log.")
-                                except Exception:
-                                    pass
-
-                                # Also try scanning stdout captured from the import process
-                                try:
-                                    if not files and st.session_state.get("last_import_stdout"):
-                                        st.write("(Attempting to recover parquet paths from import stdout)")
-                                        txt = st.session_state.get("last_import_stdout", "")
-                                        txt_paths = _extract_parquet_paths_from_text(txt)
-                                        if txt_paths:
-                                            st.write(f"Found {len(txt_paths)} path(s) in import stdout:")
-                                            for tp in txt_paths:
-                                                try:
-                                                    st.write(f"- `{tp}`")
-                                                    if tp.exists():
-                                                        files.append(tp)
-                                                except Exception:
-                                                    pass
-                                        else:
-                                            st.write("No parquet paths found in import stdout.")
-                                except Exception:
-                                    pass
-
-                                # DEBUG: show paths and files found to help diagnose missing uploads
-                                try:
-                                    st.write("**Debug: paths used for parquet discovery (resolved)**")
-                                    try:
-                                        st.write(f"repo_root: `{repo_root.resolve()}`")
-                                    except Exception:
-                                        st.write(f"repo_root: `{repo_root}`")
-                                    try:
-                                        st.write(f"data_dir: `{DATA_DIR.resolve()}`")
-                                    except Exception:
-                                        st.write(f"data_dir: `{DATA_DIR}`")
-                                    st.write(f"EXPORT_DATA_DIR env: `{os.environ.get('EXPORT_DATA_DIR')}`")
-                                    if files:
-                                        st.write(f"Found {len(files)} parquet file(s):")
+                                    # Show files
+                                    with st.expander("📁 Files discovered"):
                                         for pf in files:
                                             try:
-                                                rel = pf.relative_to(ROOT_DIR)
+                                                size = pf.stat().st_size / 1024
+                                                st.write(f"- `{pf.name}` ({size:.1f} KB)")
                                             except Exception:
-                                                rel = pf
-                                            try:
-                                                size_kb = pf.stat().st_size / 1024
-                                                st.write(f"- `{rel}` ({size_kb:.1f} KB)")
-                                            except Exception:
-                                                st.write(f"- `{rel}`")
-                                    else:
-                                        st.warning("(Debug) No parquet files were discovered by collect_parquet_candidates().")
+                                                st.write(f"- `{pf.name}`")
 
-                                    # Small helper UI to dump raw import stdout/log so the user can copy exact lines
-                                    try:
-                                        if st.button("Show raw import output (stdout + log)"):
-                                            st.write("--- BEGIN: import stdout (last run) ---")
-                                            stdout_txt = st.session_state.get("last_import_stdout", "(none)")
-                                            # cap to reasonable size
-                                            if len(stdout_txt) > 20000:
-                                                st.code(stdout_txt[:20000] + "\n... (truncated) ...")
-                                            else:
-                                                st.code(stdout_txt or "(none)")
+                                    # Upload to MotherDuck
+                                    if MOTHERDUCK_TOKEN:
+                                        st.divider()
+                                        st.write("### 🦆 Uploading to MotherDuck")
 
-                                            st.write("--- BEGIN: import log file (if readable) ---")
-                                            logpath_str = st.session_state.get("last_import_log")
-                                            if logpath_str:
-                                                logpath = Path(logpath_str)
-                                                try:
-                                                    if logpath.exists():
-                                                        txt = logpath.read_text(encoding='utf-8', errors='ignore')
-                                                        if len(txt) > 20000:
-                                                            st.code(txt[:20000] + "\n... (truncated) ...")
-                                                        else:
-                                                            st.code(txt)
-                                                    else:
-                                                        st.write(f"Import log file not found at: {logpath}")
-                                                except Exception as e:
-                                                    st.write(f"Could not read import log: {e}")
-                                            else:
-                                                st.write("No import log path recorded in session.")
-                                    except Exception:
-                                        pass
+                                        league_info = st.session_state.get("league_info", {})
+                                        league_name = league_info.get("name", "league")
+                                        all_games = extract_football_games(st.session_state.get("games_data", {}))
 
-                                except Exception:
-                                    pass
+                                        # Get all seasons for this league
+                                        season_list = seasons_for_league_name(access_token, all_games, league_name)
+                                        selected_season = str(league_info.get("season", "")).strip()
+                                        if selected_season and selected_season not in season_list:
+                                            season_list.append(selected_season)
 
-                                # --- Upload to MotherDuck for EVERY season this league exists ---
-                                if MOTHERDUCK_TOKEN:
-                                    st.info("🦆 Uploading data to MotherDuck (all seasons for this league)...")
+                                        # Create DB per season
+                                        dbs = [f"{league_name}_{season}" for season in
+                                               sorted(set(s for s in season_list if s))]
+                                        if not dbs:
+                                            dbs = [league_name]
 
-                                    league_info  = st.session_state.get("league_info", {})
-                                    league_name  = league_info.get("name", "league")
-                                    access_token = st.session_state.get("access_token")
-                                    all_games    = extract_football_games(st.session_state.get("games_data", {}))
-
-                                    season_list = seasons_for_league_name(access_token, all_games, league_name)
-                                    selected_season = str(league_info.get("season", "")).strip()
-                                    if selected_season and selected_season not in season_list:
-                                        season_list.append(selected_season)
-
-                                    dbs = []
-                                    for season in sorted({s for s in season_list if s}):
-                                        dbs.append(f"{league_name}_{season}")
-                                    if not dbs:
-                                        dbs = [league_name]
-
-                                    if not files:
-                                        st.error("❌ No parquet files found to upload. Check producer outputs or paths.")
-                                    else:
-                                        st.caption(f"Found {len(files)} parquet file(s) to upload.")
                                         overall_summary = []
                                         for db_name in dbs:
-                                            progress = st.empty()
-                                            def _status(msg: str):
-                                                try: progress.info(msg)
-                                                except Exception: progress.text(msg)
-                                            st.write(f"**Uploading to DB:** `{db_name}`")
-                                            try:
-                                                uploaded = upload_files_to_motherduck(
-                                                    files,
-                                                    db_name=db_name,
-                                                    schema="public",
-                                                    token=MOTHERDUCK_TOKEN,
-                                                    status_cb=_status
-                                                )
-                                                if uploaded:
-                                                    st.success(f"✅ `{db_name}`: uploaded {len(uploaded)} tables.")
-                                                    overall_summary.append((db_name, uploaded))
-                                                else:
-                                                    st.warning(f"⚠️ `{db_name}`: nothing to upload.")
-                                            except Exception as e:
-                                                st.error(f"❌ `{db_name}` upload failed: {e}")
+                                            st.write(f"**Database:** `{db_name}`")
+                                            uploaded = upload_to_motherduck(files, db_name, MOTHERDUCK_TOKEN)
+                                            if uploaded:
+                                                overall_summary.append((db_name, uploaded))
 
                                         if overall_summary:
-                                            with st.expander("View upload summaries"):
+                                            st.success("✅ Upload complete!")
+                                            with st.expander("📊 Upload Summary"):
                                                 for db_name, items in overall_summary:
                                                     st.write(f"**{db_name}**")
-                                                    for t, n in items:
-                                                        st.write(f"- `public.{t}` → {n} rows")
-                                        else:
-                                            st.warning("No successful uploads recorded.")
-                                else:
-                                    st.warning("⚠️ MotherDuck token not configured—skipping cloud upload.")
+                                                    for tbl, cnt in items:
+                                                        st.write(f"- `public.{tbl}` → {cnt:,} rows")
 
-                                # -------------------- DOWNLOADS --------------------
-                                st.write("### 📁 Files Saved / Ready to Download")
-                                st.write(f"**OAuth Token:** `{OAUTH_DIR / 'Oauth.json'}`")
-                                st.write(f"**Data Root:** `{DATA_DIR}/`")
+                                    # Downloads
+                                    st.divider()
+                                    st.write("### 💾 Download Your Data")
+                                    st.info("⚠️ Files may be temporary on cloud hosts. Download if needed.")
 
-                                parquet_files = files  # use collected set
-                                if parquet_files:
-                                    st.write("#### Data Files Discovered:")
-                                    for pf in parquet_files:
-                                        try:
-                                            size = pf.stat().st_size / 1024
-                                            st.write(f"- `{pf.relative_to(ROOT_DIR)}` ({size:.1f} KB)")
-                                        except Exception:
-                                            st.write(f"- `{pf}`")
+                                    oauth_file_path = OAUTH_DIR / "Oauth.json"
+                                    if oauth_file_path.exists():
+                                        with open(oauth_file_path, "r", encoding="utf-8") as f:
+                                            oauth_json = f.read()
+                                        st.download_button(
+                                            "📥 Download OAuth Token (Oauth.json)",
+                                            oauth_json,
+                                            file_name="Oauth.json",
+                                            mime="application/json"
+                                        )
 
-                                st.divider()
-                                st.write("#### 💾 Download Your Data")
-                                st.info("⚠️ On your host, these files may be temporary. Download them now!")
-
-                                oauth_file_path = OAUTH_DIR / "Oauth.json"
-                                if oauth_file_path.exists():
-                                    with open(oauth_file_path, "r", encoding="utf-8") as f:
-                                        oauth_json = f.read()
-                                    st.download_button(
-                                        "📥 Download OAuth Token (Oauth.json)",
-                                        oauth_json,
-                                        file_name="Oauth.json",
-                                        mime="application/json"
-                                    )
-
-                                if parquet_files:
-                                    st.write("**Download Individual Parquet Files:**")
-                                    for pf in parquet_files:
+                                    # Individual files
+                                    st.write("**Individual Parquet Files:**")
+                                    for pf in files:
                                         try:
                                             with open(pf, "rb") as f:
-                                                label = pf.relative_to(ROOT_DIR) if pf.is_relative_to(ROOT_DIR) else pf.name
                                                 st.download_button(
-                                                    f"📥 {label}",
+                                                    f"📥 {pf.name}",
                                                     f.read(),
                                                     file_name=pf.name,
-                                                    mime="application/octet-stream"
+                                                    mime="application/octet-stream",
+                                                    key=f"download_{pf.name}"
                                                 )
                                         except Exception:
                                             pass
 
-                                    with st.spinner("Creating ZIP archive of your data..."):
+                                    # ZIP download
+                                    with st.spinner("Creating ZIP archive..."):
                                         zip_buffer = io.BytesIO()
                                         with zipfile.ZipFile(zip_buffer, "w") as zip_file:
                                             if oauth_file_path.exists():
                                                 zip_file.write(oauth_file_path, arcname="Oauth.json")
-                                            for pf in parquet_files:
-                                                try:
-                                                    arc = pf.relative_to(ROOT_DIR)
-                                                except Exception:
-                                                    arc = pf.name
-                                                zip_file.write(pf, arcname=str(arc))
+                                            for pf in files:
+                                                zip_file.write(pf, arcname=pf.name)
                                         zip_buffer.seek(0)
                                         st.download_button(
                                             "📥 Download All (OAuth + Parquets) as ZIP",
@@ -1110,9 +599,6 @@ def main():
                                             file_name="fantasy_football_data.zip",
                                             mime="application/zip"
                                         )
-                                    st.success("✅ All files ready for download above!")
-                                else:
-                                    st.warning("No parquet files discovered to download.")
 
                     else:
                         st.info("No leagues found for this season.")
@@ -1125,6 +611,7 @@ def main():
             st.rerun()
 
     else:
+        # Landing page
         st.write("### Import Your Fantasy Football League Data")
         st.write("- All-time schedules and matchups")
         st.write("- Player statistics")
@@ -1133,8 +620,9 @@ def main():
         st.write("- Playoff information")
         st.divider()
         st.write("**How it works:**")
-        st.write("1) Connect your Yahoo account → 2) Select your league → 3) Import runs → 4) Parquets saved (and uploaded)")
-        st.warning("We only access your league data to build local files. Your Yahoo credentials are stored in `oauth/`.")
+        st.write(
+            "1) Connect your Yahoo account → 2) Select your league → 3) Import runs → 4) Data uploaded to MotherDuck")
+        st.warning("We only access your league data. Your Yahoo credentials are stored locally in `oauth/`.")
         auth_url = build_authorize_url()
         st.link_button("🔐 Connect Yahoo Account", auth_url, type="primary")
 

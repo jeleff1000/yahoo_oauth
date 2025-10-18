@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-INITIAL IMPORT SCRIPT (wrapper)
+INITIAL IMPORT SCRIPT - Simplified for reliability
 
-Purpose: One-time historical data import (hitting year 0) to build complete league history.
-Run by the Streamlit app after OAuth is saved.
+Fetches all historical data and consolidates into canonical parquet files.
 """
 
 from __future__ import annotations
@@ -14,11 +13,9 @@ import sys
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
 
 import pandas as pd
 import duckdb
-import json
 
 # =============================================================================
 # Paths
@@ -27,60 +24,56 @@ THIS_FILE = Path(__file__).resolve()
 ROOT_DIR = THIS_FILE.parent
 REPO_DIR = ROOT_DIR.parent
 
-# Allow overriding the output/data directory via environment (useful on Streamlit Cloud or when the
-# import runs in a different mount path). Priority:
-# 1) EXPORT_DATA_DIR env var
-# 2) DATA_DIR env var (legacy)
-# 3) repo-level `fantasy_football_data`
-env_data_dir = os.environ.get("EXPORT_DATA_DIR") or os.environ.get("DATA_DIR") or None
+# Use EXPORT_DATA_DIR if set, otherwise default
+env_data_dir = os.environ.get("EXPORT_DATA_DIR") or os.environ.get("DATA_DIR")
 if env_data_dir:
     DATA_DIR = Path(env_data_dir).resolve()
 else:
     DATA_DIR = REPO_DIR / "fantasy_football_data"
 
-SCHEDULE_SCRIPT    = ROOT_DIR / "schedule_script"     / "season_schedules.py"
-MATCHUP_SCRIPT     = ROOT_DIR / "matchup_scripts"     / "weekly_matchup_data.py"
+# Producer scripts
+SCHEDULE_SCRIPT = ROOT_DIR / "schedule_script" / "season_schedules.py"
+MATCHUP_SCRIPT = ROOT_DIR / "matchup_scripts" / "weekly_matchup_data.py"
 TRANSACTION_SCRIPT = ROOT_DIR / "transaction_scripts" / "transactions.py"
-MERGE_SCRIPT       = ROOT_DIR / "player_stats"        / "yahoo_nfl_merge.py"
+MERGE_SCRIPT = ROOT_DIR / "player_stats" / "yahoo_nfl_merge.py"
 
-# Canonical targets
+# Canonical output files
 CANONICAL = {
-    "schedule":     DATA_DIR / "schedule.parquet",
-    "matchup":      DATA_DIR / "matchup.parquet",
+    "schedule": DATA_DIR / "schedule.parquet",
+    "matchup": DATA_DIR / "matchup.parquet",
     "transactions": DATA_DIR / "transactions.parquet",
-    "player":       DATA_DIR / "player.parquet",
+    "player": DATA_DIR / "player.parquet",
 }
 
-# Source directories (where producers drop their outputs)
+# Source directories (where producers write their outputs)
 SOURCE_DIRS = {
-    "schedule":     DATA_DIR / "schedule_data",
-    "matchup":      DATA_DIR / "matchup_data",
+    "schedule": DATA_DIR / "schedule_data",
+    "matchup": DATA_DIR / "matchup_data",
     "transactions": DATA_DIR / "transaction_data",
-    "player":       DATA_DIR / "player_data",
+    "player": DATA_DIR / "player_data",
 }
 
-# Dedup keys (tweak to match your model)
+# Deduplication keys
 DEDUP_KEYS = {
-    "schedule":     ["year", "week", "manager", "opponent"],
-    "matchup":      ["manager", "opponent", "year", "week"],
+    "schedule": ["year", "week", "manager", "opponent"],
+    "matchup": ["manager", "opponent", "year", "week"],
     "transactions": ["transaction_key", "year", "week"],
-    "player":       ["yahoo_player_id", "nfl_player_id", "year", "week"],
+    "player": ["yahoo_player_id", "nfl_player_id", "year", "week"],
 }
 
 # Post-processing scripts (run AFTER canonical tables are built)
-RUNS_POST: List[tuple[Path, str]] = [
-    (ROOT_DIR / "matchup_scripts" / "cumulative_stats.py",           "Matchup cumulative stats"),
-    (ROOT_DIR / "player_stats"  / "cumulative_player_stats.py",      "Player cumulative stats"),
-    (ROOT_DIR / "matchup_scripts" / "expected_record_import.py",     "Expected record calculation"),
-    (ROOT_DIR / "matchup_scripts" / "opponent_expected_record.py",   "Opponent expected record"),
-    (ROOT_DIR / "matchup_scripts" / "playoff_odds_import.py",        "Playoff odds calculation"),
-    (ROOT_DIR / "player_stats"  / "keeper_import.py",                "Keeper analysis"),
-    (ROOT_DIR / "player_stats"  / "matchup_stats_import.py",         "Matchup stats import"),
-    (ROOT_DIR / "matchup_scripts" / "add_optimal.py",                "Add optimal lineup"),
-    (ROOT_DIR / "player_stats"  / "aggregate_on_season.py",          "Season aggregation"),
-    # DRAFT STEP REMOVED FOR NOW:
-    # (ROOT_DIR / "draft_scripts" / "ppg_draft_join.py",               "Draft PPG join"),
+POST_SCRIPTS = [
+    (ROOT_DIR / "matchup_scripts" / "cumulative_stats.py", "Matchup cumulative stats"),
+    (ROOT_DIR / "player_stats" / "cumulative_player_stats.py", "Player cumulative stats"),
+    (ROOT_DIR / "matchup_scripts" / "expected_record_import.py", "Expected record calculation"),
+    (ROOT_DIR / "matchup_scripts" / "opponent_expected_record.py", "Opponent expected record"),
+    (ROOT_DIR / "matchup_scripts" / "playoff_odds_import.py", "Playoff odds calculation"),
+    (ROOT_DIR / "player_stats" / "keeper_import.py", "Keeper analysis"),
+    (ROOT_DIR / "player_stats" / "matchup_stats_import.py", "Matchup stats import"),
+    (ROOT_DIR / "matchup_scripts" / "add_optimal.py", "Add optimal lineup"),
+    (ROOT_DIR / "player_stats" / "aggregate_on_season.py", "Season aggregation"),
 ]
+
 
 # =============================================================================
 # Logging
@@ -89,108 +82,139 @@ def log(msg: str) -> None:
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
 
-# =============================================================================
-# Early debug: show which OAUTH_PATH the child process sees (helps diagnose mount/path issues)
-# =============================================================================
-try:
-    # Local import from sibling module if available
-    from oauth_utils import _resolve_oauth_path
-    env_oauth = os.environ.get("OAUTH_PATH")
-    try:
-        resolved = _resolve_oauth_path(env_oauth)
-    except Exception:
-        resolved = Path(env_oauth or "")
-    log(f"DEBUG: ENV OAUTH_PATH={env_oauth} RESOLVED_OAUTH_PATH={resolved}")
-except Exception:
-    # best-effort; don't fail the import if debug helper isn't present
-    try:
-        log(f"DEBUG: ENV OAUTH_PATH={os.environ.get('OAUTH_PATH')}")
-    except Exception:
-        pass
 
 # =============================================================================
 # Script runners
 # =============================================================================
-def run_script(script: Path, label: str, year: int = 0, week: int = 0) -> None:
+def run_script(script: Path, label: str, year: int = 0, week: int = 0) -> bool:
+    """Run a producer script and return success status"""
     if not script.exists():
-        log(f"SKIP (missing): {script}")
-        return
+        log(f"⚠️  SKIP (missing): {script}")
+        return False
+
     env = dict(os.environ)
     env["KMFFL_YEAR"] = str(year)
     env["KMFFL_WEEK"] = str(week)
     env["PYTHONUNBUFFERED"] = "1"
+
     cmd = [sys.executable, str(script), "--year", str(year), "--week", str(week)]
-    log(f"RUN: {label} -> {script.name} --year {year} --week {week}")
+    log(f"▶️  RUN: {label} -> {script.name} --year {year} --week {week}")
+
     try:
         rc = subprocess.call(cmd, cwd=str(script.parent), env=env)
         if rc != 0:
-            log(f"WARN: {label} exited with code {rc}")
+            log(f"⚠️  {label} exited with code {rc}")
+            return False
         else:
-            log(f"✓ Completed: {label}")
+            log(f"✅ Completed: {label}")
+            return True
     except Exception as e:
-        log(f"ERROR running {label}: {e}")
+        log(f"❌ ERROR running {label}: {e}")
+        return False
 
-def run_post_script(script: Path, label: str) -> None:
+
+def run_post_script(script: Path, label: str) -> bool:
+    """Run a post-processing script and return success status"""
     if not script.exists():
-        log(f"SKIP (missing): {label} -> {script}")
-        return
+        log(f"⚠️  SKIP (missing): {label} -> {script}")
+        return False
+
     env = dict(os.environ)
     env["PYTHONUNBUFFERED"] = "1"
     cmd = [sys.executable, str(script)]
-    log(f"RUN POST: {label} -> {script.name}")
+    log(f"▶️  RUN POST: {label} -> {script.name}")
+
     try:
         rc = subprocess.call(cmd, cwd=str(script.parent), env=env)
         if rc != 0:
-            log(f"WARN: {label} exited with code {rc}")
+            log(f"⚠️  {label} exited with code {rc}")
+            return False
         else:
-            log(f"✓ Completed POST: {label}")
+            log(f"✅ Completed POST: {label}")
+            return True
     except Exception as e:
-        log(f"ERROR running {label}: {e}")
+        log(f"❌ ERROR running {label}: {e}")
+        return False
+
 
 # =============================================================================
 # Parquet discovery
 # =============================================================================
-def locate_latest_parquet(kind: str) -> Optional[Path]:
+def find_latest_parquet(kind: str) -> Path | None:
+    """Find the most recent parquet file for a given data type"""
     base = SOURCE_DIRS[kind]
     if not base.exists():
+        log(f"⚠️  Source directory doesn't exist: {base}")
         return None
+
+    # Preferred filenames (in priority order)
     preferred = {
-        "schedule":     ["schedule_data_all_years.parquet", "schedule.parquet"],
-        "matchup":      ["matchup.parquet"],
-        "transactions": ["transactions.parquet"],
-        "player":       ["yahoo_player_stats_multi_year_all_weeks.parquet", "player.parquet"],
+        "schedule": ["schedule_data_all_years.parquet", "schedule.parquet"],
+        "matchup": ["matchup.parquet", "matchup_data_week_all_year_0.parquet"],
+        "transactions": ["transactions.parquet", "transaction.parquet"],
+        "player": ["yahoo_player_stats_multi_year_all_weeks.parquet",
+                   "player.parquet", "players_by_year.parquet"],
     }.get(kind, [])
+
+    # Try preferred names first
     for name in preferred:
         p = base / name
         if p.exists():
+            log(f"✅ Found preferred file for {kind}: {p.name}")
             return p
+
+    # Fallback: find most recent parquet file
     parquets = list(base.glob("*.parquet"))
     if parquets:
-        return max(parquets, key=lambda p: p.stat().st_mtime)
+        latest = max(parquets, key=lambda p: p.stat().st_mtime)
+        log(f"✅ Found latest file for {kind}: {latest.name}")
+        return latest
+
+    log(f"❌ No parquet files found for {kind} in {base}")
     return None
 
+
 # =============================================================================
-# DuckDB upsert
+# DuckDB upsert (consolidation logic)
 # =============================================================================
-def upsert_parquet_via_duckdb(out_path: Path, new_df: pd.DataFrame, keys: list[str], kind: str) -> int:
+def consolidate_to_canonical(out_path: Path, new_df: pd.DataFrame, keys: list[str]) -> int:
+    """
+    Merge new data into canonical parquet file using DuckDB.
+    Returns: total row count after merge
+    """
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
     con = duckdb.connect()
     new_df = new_df.copy()
     new_df.columns = [str(c).strip() for c in new_df.columns]
+
     con.register("new_df", new_df)
     con.execute("CREATE TEMP TABLE _new AS SELECT * FROM new_df")
+
     out_str = str(out_path).replace("\\", "/")
+
     if out_path.exists():
+        # Merge with existing data
+        log(f"  📊 Merging with existing {out_path.name}...")
         con.execute(f"CREATE TEMP TABLE _old AS SELECT * FROM read_parquet('{out_str}')")
+
+        # Get columns from both tables
         cols_new = [r[1] for r in con.execute("PRAGMA table_info('_new')").fetchall()]
         cols_old = [r[1] for r in con.execute("PRAGMA table_info('_old')").fetchall()]
         all_cols = list(dict.fromkeys(cols_old + cols_new))
+
+        # Build SELECT statements with NULL padding for missing columns
         sel_old = ", ".join([f'"{c}"' if c in cols_old else f'NULL AS "{c}"' for c in all_cols])
         sel_new = ", ".join([f'"{c}"' if c in cols_new else f'NULL AS "{c}"' for c in all_cols])
+
+        # Determine partition columns for deduplication
         partition_cols = [c for c in keys if c in all_cols]
         if not partition_cols:
             partition_cols = ["year", "week"] if "year" in all_cols and "week" in all_cols else all_cols[:1]
+
         partition_by = ", ".join([f'"{c}"' for c in partition_cols])
+
+        # Merge: prefer new data over old
         con.execute(f"""
             CREATE TEMP TABLE _merged AS
             SELECT *
@@ -202,15 +226,22 @@ def upsert_parquet_via_duckdb(out_path: Path, new_df: pd.DataFrame, keys: list[s
             QUALIFY ROW_NUMBER() OVER (PARTITION BY {partition_by} ORDER BY is_new DESC) = 1
         """)
     else:
+        # No existing file, just use new data
+        log(f"  📝 Creating new {out_path.name}...")
         con.execute("CREATE TEMP TABLE _merged AS SELECT *, 1 AS is_new FROM _new")
+
+    # Write to parquet
     con.execute(f"""
         COPY (SELECT * EXCLUDE(is_new) FROM _merged)
         TO '{out_str}'
         (FORMAT PARQUET, COMPRESSION 'ZSTD');
     """)
+
     total = con.execute("SELECT COUNT(*) FROM _merged").fetchone()[0]
     con.close()
+
     return int(total)
+
 
 # =============================================================================
 # MAIN
@@ -219,12 +250,10 @@ def main():
     log("=" * 80)
     log("INITIAL IMPORT: Building complete league history from year 0")
     log("=" * 80)
+    log(f"Data directory: {DATA_DIR}")
     log("")
-    # Informational: show which DATA_DIR will be used (helps debug Streamlit Cloud path issues)
-    try:
-        log(f"Using DATA_DIR: {DATA_DIR}")
-    except Exception:
-        pass
+
+    # Auto-confirm check
     auto_confirm = os.environ.get("AUTO_CONFIRM", "").lower() in ("1", "true", "yes")
     if not auto_confirm:
         try:
@@ -234,92 +263,152 @@ def main():
                     log("Aborted by user")
                     return
             else:
-                log("Non-interactive environment detected — auto-confirming import.")
+                log("Non-interactive environment detected – auto-confirming import.")
         except Exception:
             log("Auto-confirming import due to non-interactive environment.")
     else:
-        log("AUTO_CONFIRM set — proceeding without interactive prompt.")
+        log("AUTO_CONFIRM set – proceeding without interactive prompt.")
 
-    # PHASE 1
+    # =============================================================================
+    # PHASE 1: Historical data collection (year=0, week=0)
+    # =============================================================================
     log("")
-    log("=== PHASE 1: Historical data collection (year=0) ===")
-    log("Fetching ALL schedule data (all years)...")
-    run_script(SCHEDULE_SCRIPT, "Season schedules", year=0, week=0)
+    log("=" * 80)
+    log("PHASE 1: Historical data collection (year=0, week=0)")
+    log("=" * 80)
 
-    log("Fetching ALL matchup data (all years, all weeks)...")
-    run_script(MATCHUP_SCRIPT, "Weekly matchup data", year=0, week=0)
+    results = {}
 
-    log("Fetching ALL transaction data (all years)...")
-    run_script(TRANSACTION_SCRIPT, "Transactions", year=0, week=0)
+    log("\n📅 Fetching ALL schedule data (all years)...")
+    results['schedule'] = run_script(SCHEDULE_SCRIPT, "Season schedules", year=0, week=0)
 
-    log("Fetching ALL player stats (all years, all weeks)...")
-    run_script(MERGE_SCRIPT, "Yahoo/NFL merge", year=0, week=0)
+    log("\n🏈 Fetching ALL matchup data (all years, all weeks)...")
+    results['matchup'] = run_script(MATCHUP_SCRIPT, "Weekly matchup data", year=0, week=0)
 
-    # PHASE 2
+    log("\n💰 Fetching ALL transaction data (all years)...")
+    results['transactions'] = run_script(TRANSACTION_SCRIPT, "Transactions", year=0, week=0)
+
+    log("\n👤 Fetching ALL player stats (all years, all weeks)...")
+    results['player'] = run_script(MERGE_SCRIPT, "Yahoo/NFL merge", year=0, week=0)
+
+    # Summary
     log("")
-    log("=== PHASE 2: Building canonical parquet files ===")
-    created_canonicals: dict[str, str] = {}
+    log("📊 Phase 1 Summary:")
+    for kind, success in results.items():
+        status = "✅" if success else "⚠️"
+        log(f"  {status} {kind}: {'success' if success else 'completed with warnings'}")
+
+    # =============================================================================
+    # PHASE 2: Building canonical parquet files
+    # =============================================================================
+    log("")
+    log("=" * 80)
+    log("PHASE 2: Building canonical parquet files")
+    log("=" * 80)
+
+    created_canonicals = {}
+
     for kind in ["schedule", "matchup", "transactions", "player"]:
-        src = locate_latest_parquet(kind)
+        log(f"\n--- Processing {kind.upper()} ---")
+
+        # Find source file
+        src = find_latest_parquet(kind)
+
         if not src or not src.exists():
-            log(f"WARN: No {kind} source found in {SOURCE_DIRS[kind]}")
+            log(f"⚠️  Skipping {kind} - no source file found")
             continue
+
+        # Verify file is readable
         try:
-            log(f"Using source for {kind}: {src}")
-            df_src = pd.read_parquet(src)
+            file_size = src.stat().st_size
+            log(f"  📁 Source: {src.name} ({file_size / 1024:.1f} KB)")
         except Exception as e:
-            log(f"WARN: Could not read {kind} source {src}: {e}")
+            log(f"❌ Can't access file: {e}")
             continue
-        if df_src.empty:
-            log(f"WARN: {kind} source is empty: {src.name}")
-            continue
-        rows_used = len(df_src)
-        log(f"Processing {kind}: {src.name} ({rows_used:,} rows)")
-        total_rows = upsert_parquet_via_duckdb(CANONICAL[kind], df_src, DEDUP_KEYS[kind], kind)
-        log(f"✓ Updated {CANONICAL[kind].name}: {total_rows:,} total rows")
+
+        # Read parquet
         try:
-            canon_path = CANONICAL[kind].resolve()
-        except Exception:
-            canon_path = CANONICAL[kind]
-        created_canonicals[kind] = str(canon_path)
+            log(f"  📖 Reading parquet...")
+            df_src = pd.read_parquet(src)
+            log(f"  ✅ Read {len(df_src):,} rows, {len(df_src.columns)} columns")
+        except Exception as e:
+            log(f"❌ Failed to read {src.name}: {e}")
+            continue
 
-    # PHASE 3
+        if df_src.empty:
+            log(f"⚠️  Source dataframe is empty, skipping")
+            continue
+
+        # Consolidate to canonical file
+        try:
+            log(f"  💾 Writing to canonical: {CANONICAL[kind].name}")
+            total_rows = consolidate_to_canonical(CANONICAL[kind], df_src, DEDUP_KEYS[kind])
+            log(f"✅ Created {CANONICAL[kind].name}: {total_rows:,} total rows")
+
+            # Verify file was written
+            if CANONICAL[kind].exists():
+                actual_size = CANONICAL[kind].stat().st_size
+                log(f"  ✓ Verified on disk: {actual_size / 1024:.1f} KB")
+                created_canonicals[kind] = str(CANONICAL[kind].resolve())
+            else:
+                log(f"⚠️  WARNING: File doesn't exist after write: {CANONICAL[kind]}")
+
+        except Exception as e:
+            log(f"❌ Failed to create canonical {kind} file: {e}")
+            import traceback
+            log(traceback.format_exc())
+            continue
+
+    log(f"\n✅ Phase 2 complete. Created {len(created_canonicals)}/{len(CANONICAL)} canonical files.")
+
+    # =============================================================================
+    # PHASE 3: Post-processing
+    # =============================================================================
     log("")
-    log("=== PHASE 3: Post-processing ===")
-    for script, label in RUNS_POST:
-        run_post_script(script, label)
+    log("=" * 80)
+    log("PHASE 3: Post-processing")
+    log("=" * 80)
 
+    post_results = []
+    for script, label in POST_SCRIPTS:
+        success = run_post_script(script, label)
+        post_results.append((label, success))
+
+    # Summary
+    log("")
+    log("📊 Phase 3 Summary:")
+    for label, success in post_results:
+        status = "✅" if success else "⚠️"
+        log(f"  {status} {label}")
+
+    # =============================================================================
+    # FINAL SUMMARY
+    # =============================================================================
     log("")
     log("=" * 80)
     log("INITIAL IMPORT COMPLETED!")
     log("=" * 80)
     log("")
-    log("Your canonical files are ready:")
-    for kind, path in CANONICAL.items():
+    log("Your canonical files:")
+
+    for kind, path_str in CANONICAL.items():
+        path = Path(path_str)
         if path.exists():
             try:
                 df = pd.read_parquet(path)
-                log(f"  {kind:15s}: {len(df):,} rows -> {path}")
+                size = path.stat().st_size / 1024
+                log(f"  ✅ {kind:15s}: {len(df):,} rows, {size:.1f} KB -> {path}")
             except Exception:
-                log(f"  {kind:15s}: -> {path}")
+                log(f"  ⚠️  {kind:15s}: exists but couldn't read -> {path}")
+        else:
+            log(f"  ❌ {kind:15s}: NOT CREATED")
 
-    # Emit a machine-readable summary of canonical parquet files (parent can parse this)
-    try:
-        summary = {"canonical_files": created_canonicals}
-        print("__CANONICAL_FILES_JSON_START__")
-        print(json.dumps(summary))
-        print("__CANONICAL_FILES_JSON_END__")
-        sys.stdout.flush()
-    except Exception:
-        pass
+    # Output canonical paths for parent process to parse
+    log("")
+    log("Canonical file paths:")
+    for kind, path in created_canonicals.items():
+        log(f"  {kind}: {path}")
 
-    # Also print the paths for regex extraction
-    try:
-        for kind, path in created_canonicals.items():
-            print(f"Canonical {kind}: {path}")
-        sys.stdout.flush()
-    except Exception:
-        pass
 
 if __name__ == "__main__":
     main()
