@@ -9,6 +9,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 import json
 import re
+import os
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional, Any
 
@@ -37,6 +38,30 @@ SETTINGS_DIR = OUTPUT_DIR / "yahoo_league_settings"
 SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
 
 OAUTH_PATH = REPO_ROOT / "oauth" / "Oauth.json"
+
+# OAuth discovery (env-aware) - prefer OAUTH_PATH env var, then repo default, then search
+sys.path.insert(0, str(SCRIPT_DIR.parent))
+try:
+    from oauth_utils import find_oauth_file, create_oauth2
+except Exception:
+    sys.path.insert(0, str(SCRIPT_DIR.parent))
+    from oauth_utils import find_oauth_file, create_oauth2
+
+oauth_candidate = os.environ.get('OAUTH_PATH')
+if oauth_candidate:
+    oauth_candidate = str(Path(oauth_candidate))
+else:
+    oauth_candidate = str(OAUTH_PATH)
+
+if not Path(oauth_candidate).exists():
+    found = find_oauth_file()
+    if found:
+        oauth_candidate = str(found)
+
+if oauth_candidate and Path(oauth_candidate).exists():
+    os.environ['OAUTH_PATH'] = str(oauth_candidate)
+else:
+    oauth_candidate = None
 
 YAHOO_SCRIPT = SCRIPT_DIR / "yahoo_fantasy_data.py"
 NFL_COMBINE_SCRIPT = SCRIPT_DIR / "combine_dst_to_nfl.py"
@@ -86,11 +111,12 @@ def _discover_league_key(oauth: OAuth2, year: int, league_key_arg: Optional[str]
     return None
 
 def fetch_yahoo_dst_scoring(year: int, league_key_arg: Optional[str]) -> Optional[Dict[str, float]]:
-    if OAuth2 is None or not OAUTH_PATH.exists():
+    if oauth_candidate is None:
         return None
-    oauth = OAuth2(None, None, from_file=str(OAUTH_PATH))
-    if not oauth.token_is_valid():
-        oauth.refresh_access_token()
+    try:
+        oauth = create_oauth2(oauth_candidate)
+    except Exception:
+        return None
     league_key = _discover_league_key(oauth, year, league_key_arg)
     if not league_key:
         return None

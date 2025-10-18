@@ -20,7 +20,11 @@ import requests
 
 # Add parent directory to path for oauth_utils import
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from oauth_utils import create_oauth2
+try:
+    from oauth_utils import find_oauth_file, create_oauth2
+except Exception:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from oauth_utils import find_oauth_file, create_oauth2
 
 # Your utils module provides yfa (yahoo_fantasy_api), clean_name, etc.
 from imports_and_utils import yfa, clean_name  # type: ignore
@@ -67,7 +71,6 @@ def _sleep_with_jitter(base: float) -> None:
 # ----------------------------
 THIS_FILE = Path(__file__).resolve()
 REPO_ROOT = THIS_FILE.parents[2]  # ...\fantasy_football_data_downloads
-OAUTH_PATH = REPO_ROOT / "oauth" / "Oauth.json"
 OUTPUT_DIR = REPO_ROOT / "fantasy_football_data" / "player_data"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

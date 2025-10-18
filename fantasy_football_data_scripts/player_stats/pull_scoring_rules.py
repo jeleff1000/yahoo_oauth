@@ -28,21 +28,27 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Reuse OAuth and yfa helpers from the existing codebase.  These imports will
-# succeed when run within the fantasy_football_data_downloads repository.  If
-# they fail, we fall back to a simpler discovery method which will simply
-# print an error message.
 try:
     from imports_and_utils import OAuth2, yfa  # type: ignore
 except Exception:
     OAuth2 = None  # type: ignore
     yfa = None  # type: ignore
+
+try:
+    # oauth_utils provides robust search & create helpers
+    from oauth_utils import find_oauth_file, create_oauth2
+except Exception:
+    # ensure path for local import
+    repo_root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo_root / 'fantasy_football_data_scripts'))
+    from oauth_utils import find_oauth_file, create_oauth2
 
 
 def discover_league_key(oauth: OAuth2, year: int, league_key_arg: Optional[str]) -> Optional[str]:
@@ -193,20 +199,29 @@ def main(argv: List[str]) -> int:
         print("Error: A valid year must be specified.", file=sys.stderr)
         return 1
 
-    # Ensure OAuth is available
-    if OAuth2 is None:
-        print("Error: OAuth2 module not found.  Please run this script within the fantasy_football_data_downloads repository.", file=sys.stderr)
+    # Ensure OAuth is available and load/create oauth session
+    repo_root = Path(__file__).resolve().parents[2]
+    oauth_candidate = os.environ.get('OAUTH_PATH')
+    if oauth_candidate:
+        oauth_candidate = str(Path(oauth_candidate))
+    else:
+        oauth_candidate = str(repo_root / 'oauth' / 'Oauth.json')
+
+    if not Path(oauth_candidate).exists():
+        found = find_oauth_file()
+        if found:
+            oauth_candidate = str(found)
+
+    if not oauth_candidate or not Path(oauth_candidate).exists():
+        print(f"Error: OAuth credentials not found. Tried: {oauth_candidate}", file=sys.stderr)
         return 1
 
-    # Load OAuth credentials
-    repo_root = Path(__file__).resolve().parents[2]
-    oauth_path = repo_root / "oauth" / "Oauth.json"
-    if not oauth_path.exists():
-        print(f"Error: OAuth credentials not found at {oauth_path}", file=sys.stderr)
+    os.environ['OAUTH_PATH'] = str(oauth_candidate)
+    try:
+        oauth = create_oauth2(oauth_candidate)
+    except Exception as e:
+        print(f"Error initializing OAuth: {e}", file=sys.stderr)
         return 1
-    oauth = OAuth2(None, None, from_file=str(oauth_path))
-    if not oauth.token_is_valid():
-        oauth.refresh_access_token()
 
     # Determine the league key
     league_key = discover_league_key(oauth, year, args.league_key)

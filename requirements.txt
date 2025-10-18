@@ -1,8 +1,19 @@
-streamlit
-requests
-duckdb
-pandas
-pyarrow
-yahoo-fantasy-api
-yahoo-oauth
-numpy
+# Core dependencies
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.31.0
+
+# Yahoo Fantasy API
+yahoo-fantasy-api>=2.6.0
+yahoo-oauth>=1.0.0
+
+# Database
+duckdb>=0.9.0
+pyarrow>=14.0.0
+
+# NFL Data (required by transactions.py)
+nfl-data-py>=0.3.0
+
+# Optional but recommended
+fastparquet>=2023.10.0
