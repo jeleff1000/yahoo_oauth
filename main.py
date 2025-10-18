@@ -456,6 +456,18 @@ def run_initial_import() -> bool:
         except Exception:
             env["EXPORT_DATA_DIR"] = str(DATA_DIR)
 
+        # Export the path to the OAuth file into the child environment so producer
+        # scripts can find it even if the child runs with a different cwd or mount.
+        try:
+            oauth_file = OAUTH_DIR / "Oauth.json"
+            # Prefer resolved absolute path when available
+            if oauth_file.exists():
+                env["OAUTH_PATH"] = str(oauth_file.resolve())
+            else:
+                env["OAUTH_PATH"] = str(oauth_file)
+        except Exception:
+            pass
+
         if "league_info" in st.session_state:
             league_info = st.session_state.league_info
             env["LEAGUE_NAME"] = league_info.get("name", "Unknown League")
@@ -519,6 +531,7 @@ def run_initial_import() -> bool:
                 except Exception:
                     pass
                 return True
+
             else:
                 status_placeholder.error(f"Import failed (exit code {process.returncode}).")
                 st.error(f"❌ Import failed with exit code {process.returncode}")

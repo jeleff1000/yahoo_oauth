@@ -11,9 +11,41 @@ This module provides a unified interface for all scripts to access OAuth credent
 
 from __future__ import annotations
 import json
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 from yahoo_oauth import OAuth2
+
+
+def _resolve_oauth_path(candidate: str | Path | None) -> Path:
+    """
+    Resolve an oauth path robustly:
+      1) If candidate provided and exists, use it
+      2) If OAUTH_PATH env var set and exists, use it
+      3) If repo-local oauth/Oauth.json exists (two levels up), use that
+      4) Otherwise return the candidate Path (may not exist)
+    """
+    # Normalize
+    if candidate:
+        p = Path(candidate)
+        if p.exists():
+            return p.resolve()
+    # Env override
+    env_p = os.environ.get("OAUTH_PATH")
+    if env_p:
+        p = Path(env_p)
+        if p.exists():
+            return p.resolve()
+    # Repo-local fallback (this file lives in fantasy_football_data_scripts)
+    try:
+        repo_root = Path(__file__).resolve().parents[1]
+        repo_oauth = repo_root / "oauth" / "Oauth.json"
+        if repo_oauth.exists():
+            return repo_oauth.resolve()
+    except Exception:
+        pass
+    # Last resort: return Path(candidate or '')
+    return Path(candidate or '')
 
 
 def load_oauth_json(oauth_path: str | Path) -> Dict[str, Any]:
@@ -57,9 +89,9 @@ def load_oauth_json(oauth_path: str | Path) -> Dict[str, Any]:
     Returns:
         Dict with Format 1 structure (flat) for compatibility with OAuth2
     """
-    oauth_path = Path(oauth_path)
+    oauth_path = _resolve_oauth_path(oauth_path)
 
-    if not oauth_path.exists():
+    if not oauth_path or not oauth_path.exists():
         raise FileNotFoundError(f"OAuth file not found: {oauth_path}")
 
     with open(oauth_path, 'r', encoding='utf-8') as f:
@@ -92,9 +124,9 @@ def get_league_info(oauth_path: str | Path) -> Optional[Dict[str, Any]]:
     Returns:
         Dict with league_info or None if not present
     """
-    oauth_path = Path(oauth_path)
+    oauth_path = _resolve_oauth_path(oauth_path)
 
-    if not oauth_path.exists():
+    if not oauth_path or not oauth_path.exists():
         return None
 
     with open(oauth_path, 'r', encoding='utf-8') as f:
@@ -113,8 +145,12 @@ def create_oauth2(oauth_path: str | Path) -> OAuth2:
     Returns:
         Configured OAuth2 instance
     """
-    oauth_data = load_oauth_json(oauth_path)
-    oauth = OAuth2(None, None, from_file=str(oauth_path))
+    oauth_path_resolved = _resolve_oauth_path(oauth_path)
+    if not oauth_path_resolved or not oauth_path_resolved.exists():
+        raise FileNotFoundError(f"OAuth file not found (after fallback attempts): {oauth_path_resolved}")
+
+    oauth_data = load_oauth_json(oauth_path_resolved)
+    oauth = OAuth2(None, None, from_file=str(oauth_path_resolved))
 
     # Refresh token if needed
     if not oauth.token_is_valid():
@@ -142,7 +178,8 @@ def save_oauth_format2(
 
     oauth_path = Path(oauth_path)
 
-    data = {
+    from typing import Dict
+    data: Dict[str, Any] = {
         "token_data": token_data
     }
 
@@ -181,4 +218,3 @@ def migrate_format1_to_format2(
         league_info=league_info,
         timestamp=datetime.now().isoformat()
     )
-
