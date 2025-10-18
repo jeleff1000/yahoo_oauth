@@ -68,26 +68,15 @@ def get_auth_header() -> str:
 
 def build_authorize_url(state: str | None = None) -> str:
     """Build the Yahoo OAuth authorization URL"""
-    params = {
-        "client_id": CLIENT_ID,
-        "redirect_uri": REDIRECT_URI,
-        "response_type": "code",
-    }
+    params = {"client_id": CLIENT_ID, "redirect_uri": REDIRECT_URI, "response_type": "code"}
     if state:
         params["state"] = state
     return AUTH_URL + "?" + urllib.parse.urlencode(params)
 
 def exchange_code_for_tokens(code: str) -> dict:
     """Exchange authorization code for access token"""
-    headers = {
-        "Authorization": get_auth_header(),
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    data = {
-        "grant_type": "authorization_code",
-        "redirect_uri": REDIRECT_URI,
-        "code": code,
-    }
+    headers = {"Authorization": get_auth_header(), "Content-Type": "application/x-www-form-urlencoded"}
+    data = {"grant_type": "authorization_code", "redirect_uri": REDIRECT_URI, "code": code}
     resp = requests.post(TOKEN_URL, headers=headers, data=data)
     resp.raise_for_status()
     return resp.json()
@@ -157,7 +146,7 @@ def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
     return oauth_file
 
 # =========================
-# MotherDuck upload helpers
+# Slug + Collector + Uploader
 # =========================
 def _slug(s: str, lead_prefix: str) -> str:
     x = re.sub(r"[^a-zA-Z0-9]+", "_", (s or "").strip().lower()).strip("_")
@@ -167,18 +156,68 @@ def _slug(s: str, lead_prefix: str) -> str:
         x = f"{lead_prefix}_{x}"
     return x[:63]
 
-def upload_parquets_to_motherduck(
-    data_dir: Path,
+def collect_parquet_candidates(repo_root: Path, data_dir: Path) -> list[Path]:
+    """
+    Recursively collect parquet files to upload and to show for download.
+    Priority:
+      1) canonical files at data_dir root (schedule.parquet, matchup.parquet, transactions.parquet, player.parquet)
+      2) any parquet under fantasy_football_data subfolders
+      3) repo-wide fallback if still none
+    """
+    wanted_stems = {"schedule", "matchup", "transactions", "player"}
+    seen = set()
+    files: list[Path] = []
+
+    # (1) canonical root
+    for stem in ["schedule", "matchup", "transactions", "player"]:
+        p = data_dir / f"{stem}.parquet"
+        if p.exists() and p.is_file():
+            files.append(p); seen.add(p.resolve())
+
+    # (2) subfolders
+    if data_dir.exists():
+        for p in data_dir.rglob("*.parquet"):
+            if "import_logs" in p.parts:
+                continue
+            rp = p.resolve()
+            if rp not in seen:
+                files.append(p); seen.add(rp)
+
+    # (3) repo-wide fallback
+    if not files:
+        for p in repo_root.rglob("*.parquet"):
+            if "import_logs" in p.parts:
+                continue
+            rp = p.resolve()
+            if rp not in seen:
+                files.append(p); seen.add(rp)
+
+    # rank: canonical first, then subfolder, then repo fallback; prefer wanted stems
+    def rank(p: Path) -> tuple[int, int, str]:
+        # first key: exact canonical = 0, data_dir subfolder = 1, elsewhere = 2
+        if p.parent == data_dir:
+            a = 0
+        elif data_dir in p.parents:
+            a = 1
+        else:
+            a = 2
+        # second key: wanted stem gets higher priority
+        b = 0 if p.stem.lower() in wanted_stems else 1
+        return (a, b, str(p))
+
+    files.sort(key=rank)
+    return files
+
+def upload_files_to_motherduck(
+    files: list[Path],
     db_name: str,
     schema: str = "public",
     token: str | None = None,
     status_cb=None
 ) -> list[tuple[str, int]]:
     """
-    Upload every *.parquet in data_dir to MotherDuck.
-    - Connect to md: (no db name)
-    - CREATE DATABASE IF NOT EXISTS <db>, USE <db>
-    - CREATE SCHEMA IF NOT EXISTS <schema>
+    Upload explicit parquet files to MotherDuck.
+    - Connect to md:, CREATE DATABASE IF NOT EXISTS <db>, USE <db>, ensure schema
     - CREATE OR REPLACE TABLE <schema>.<table> AS SELECT * FROM read_parquet(?)
     """
     if token:
@@ -192,26 +231,33 @@ def upload_parquets_to_motherduck(
     con.execute(f"USE {db}")
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {sch}")
 
+    # Normalize common stems to nicer table names
+    aliases = {
+        "players_by_year": "player",
+        "yahoo_player_stats_multi_year_all_weeks": "player",
+        "matchups": "matchup",
+        "schedules": "schedule",
+        "transaction": "transactions",
+    }
+
     results: list[tuple[str, int]] = []
-    files = sorted(Path(data_dir).glob("*.parquet"))
     for pf in files:
-        tbl = _slug(pf.stem, "t")
+        stem = pf.stem.lower()
+        stem = aliases.get(stem, stem)
+        tbl = _slug(stem, "t")
         if status_cb:
             status_cb(f"Uploading {pf.name} → {db}.{sch}.{tbl} ...")
-        con.execute(
-            f"CREATE OR REPLACE TABLE {sch}.{tbl} AS SELECT * FROM read_parquet(?)",
-            [str(pf)]
-        )
+        con.execute(f"CREATE OR REPLACE TABLE {sch}.{tbl} AS SELECT * FROM read_parquet(?)", [str(pf)])
         cnt = con.execute(f"SELECT COUNT(*) FROM {sch}.{tbl}").fetchone()[0]
         results.append((tbl, int(cnt)))
         if status_cb:
             status_cb(f"✓ {tbl}: {cnt} rows")
+
     return results
 
 def seasons_for_league_name(access_token: str, all_games: list[dict], target_league_name: str) -> list[str]:
     """
-    For each football game (season), fetch leagues and return season strings in which
-    the user's leagues include `target_league_name` (exact match on name).
+    Return all season strings where a league with the given name exists for the user.
     """
     seasons: set[str] = set()
     for g in all_games:
@@ -236,7 +282,6 @@ def seasons_for_league_name(access_token: str, all_games: list[dict], target_lea
                     seasons.add(season)
                     break
         except Exception:
-            # Continue best-effort
             pass
     return sorted(seasons)
 
@@ -301,8 +346,7 @@ def run_initial_import() -> bool:
                         output_lines.append(stripped)
 
                         try:
-                            lf.write(stripped + "\n")
-                            lf.flush()
+                            lf.write(stripped + "\n"); lf.flush()
                         except Exception:
                             pass
 
@@ -500,6 +544,10 @@ def main():
                             if run_initial_import():
                                 st.success("🎉 All done! Your league data has been imported.")
 
+                                # --------- COLLECT FILES (for upload + downloads) ----------
+                                repo_root = ROOT_DIR
+                                files = collect_parquet_candidates(repo_root, DATA_DIR)
+
                                 # --- Upload to MotherDuck for EVERY season this league exists ---
                                 if MOTHERDUCK_TOKEN:
                                     st.info("🦆 Uploading data to MotherDuck (all seasons for this league)...")
@@ -521,99 +569,112 @@ def main():
                                     dbs = []
                                     for season in sorted({s for s in season_list if s}):
                                         dbs.append(f"{league_name}_{season}")
-
                                     if not dbs:
                                         dbs = [league_name]
 
-                                    overall_summary = []
-                                    for db_name in dbs:
-                                        progress = st.empty()
-                                        def _status(msg: str):
-                                            try: progress.info(msg)
-                                            except Exception: progress.text(msg)
-
-                                        st.write(f"**Uploading to DB:** `{db_name}`")
-                                        try:
-                                            uploaded = upload_parquets_to_motherduck(
-                                                DATA_DIR,
-                                                db_name=db_name,
-                                                schema="public",
-                                                token=MOTHERDUCK_TOKEN,
-                                                status_cb=_status
-                                            )
-                                            if uploaded:
-                                                st.success(f"✅ `{db_name}`: uploaded {len(uploaded)} tables.")
-                                                overall_summary.append((db_name, uploaded))
-                                            else:
-                                                st.warning(f"⚠️ `{db_name}`: no parquet files found to upload.")
-                                        except Exception as e:
-                                            st.error(f"❌ `{db_name}` upload failed: {e}")
-
-                                    if overall_summary:
-                                        with st.expander("View upload summaries"):
-                                            for db_name, items in overall_summary:
-                                                st.write(f"**{db_name}**")
-                                                for t, n in items:
-                                                    st.write(f"- `public.{t}` → {n} rows")
+                                    if not files:
+                                        st.error("❌ No parquet files found to upload. Check producer outputs or paths.")
                                     else:
-                                        st.warning("No successful uploads recorded.")
+                                        st.caption(f"Found {len(files)} parquet file(s) to upload.")
+                                        overall_summary = []
+                                        for db_name in dbs:
+                                            progress = st.empty()
+                                            def _status(msg: str):
+                                                try: progress.info(msg)
+                                                except Exception: progress.text(msg)
+                                            st.write(f"**Uploading to DB:** `{db_name}`")
+                                            try:
+                                                uploaded = upload_files_to_motherduck(
+                                                    files,
+                                                    db_name=db_name,
+                                                    schema="public",
+                                                    token=MOTHERDUCK_TOKEN,
+                                                    status_cb=_status
+                                                )
+                                                if uploaded:
+                                                    st.success(f"✅ `{db_name}`: uploaded {len(uploaded)} tables.")
+                                                    overall_summary.append((db_name, uploaded))
+                                                else:
+                                                    st.warning(f"⚠️ `{db_name}`: nothing to upload.")
+                                            except Exception as e:
+                                                st.error(f"❌ `{db_name}` upload failed: {e}")
+
+                                        if overall_summary:
+                                            with st.expander("View upload summaries"):
+                                                for db_name, items in overall_summary:
+                                                    st.write(f"**{db_name}**")
+                                                    for t, n in items:
+                                                        st.write(f"- `public.{t}` → {n} rows")
+                                        else:
+                                            st.warning("No successful uploads recorded.")
                                 else:
                                     st.warning("⚠️ MotherDuck token not configured—skipping cloud upload.")
 
-                                # Post-import: show files / downloads
-                                st.write("### 📁 Files Saved:")
+                                # -------------------- DOWNLOADS --------------------
+                                st.write("### 📁 Files Saved / Ready to Download")
                                 st.write(f"**OAuth Token:** `{OAUTH_DIR / 'Oauth.json'}`")
-                                st.write(f"**League Data:** `{DATA_DIR}/`")
+                                st.write(f"**Data Root:** `{DATA_DIR}/`")
 
-                                if DATA_DIR.exists():
-                                    st.write("#### Data Files Created:")
-                                    parquet_files = list(DATA_DIR.glob("*.parquet"))
-                                    if parquet_files:
-                                        for pf in sorted(parquet_files):
+                                parquet_files = files  # use collected set
+                                if parquet_files:
+                                    st.write("#### Data Files Discovered:")
+                                    for pf in parquet_files:
+                                        try:
                                             size = pf.stat().st_size / 1024
-                                            st.write(f"- `{pf.name}` ({size:.1f} KB)")
+                                            st.write(f"- `{pf.relative_to(ROOT_DIR)}` ({size:.1f} KB)")
+                                        except Exception:
+                                            st.write(f"- `{pf}`")
 
-                                    st.divider()
-                                    st.write("#### 💾 Download Your Data:")
-                                    st.info("⚠️ On Streamlit Cloud, these files are temporary. Download them now!")
+                                st.divider()
+                                st.write("#### 💾 Download Your Data")
+                                st.info("⚠️ On Streamlit Cloud, these files are temporary. Download them now!")
 
-                                    oauth_file_path = OAUTH_DIR / "Oauth.json"
-                                    if oauth_file_path.exists():
-                                        with open(oauth_file_path, "r", encoding="utf-8") as f:
-                                            oauth_json = f.read()
-                                        st.download_button(
-                                            "📥 Download OAuth Token (Oauth.json)",
-                                            oauth_json,
-                                            file_name="Oauth.json",
-                                            mime="application/json"
-                                        )
+                                oauth_file_path = OAUTH_DIR / "Oauth.json"
+                                if oauth_file_path.exists():
+                                    with open(oauth_file_path, "r", encoding="utf-8") as f:
+                                        oauth_json = f.read()
+                                    st.download_button(
+                                        "📥 Download OAuth Token (Oauth.json)",
+                                        oauth_json,
+                                        file_name="Oauth.json",
+                                        mime="application/json"
+                                    )
 
-                                    if parquet_files:
-                                        st.write("**Download Data Files:**")
-                                        for pf in sorted(parquet_files):
+                                if parquet_files:
+                                    st.write("**Download Individual Parquet Files:**")
+                                    for pf in parquet_files:
+                                        try:
                                             with open(pf, "rb") as f:
                                                 st.download_button(
-                                                    f"📥 {pf.name}",
+                                                    f"📥 {pf.relative_to(ROOT_DIR)}",
                                                     f.read(),
                                                     file_name=pf.name,
                                                     mime="application/octet-stream"
                                                 )
+                                        except Exception:
+                                            pass
 
                                     with st.spinner("Creating ZIP archive of your data..."):
                                         zip_buffer = io.BytesIO()
                                         with zipfile.ZipFile(zip_buffer, "w") as zip_file:
                                             if oauth_file_path.exists():
                                                 zip_file.write(oauth_file_path, arcname="Oauth.json")
-                                            for pf in sorted(parquet_files):
-                                                zip_file.write(pf, arcname=pf.name)
+                                            for pf in parquet_files:
+                                                try:
+                                                    arc = pf.relative_to(ROOT_DIR)
+                                                except Exception:
+                                                    arc = pf.name
+                                                zip_file.write(pf, arcname=str(arc))
                                         zip_buffer.seek(0)
                                         st.download_button(
-                                            "📥 Download All Files as ZIP",
+                                            "📥 Download All (OAuth + Parquets) as ZIP",
                                             zip_buffer,
                                             file_name="fantasy_football_data.zip",
                                             mime="application/zip"
                                         )
                                     st.success("✅ All files ready for download above!")
+                                else:
+                                    st.warning("No parquet files discovered to download.")
 
                     else:
                         st.info("No leagues found for this season.")

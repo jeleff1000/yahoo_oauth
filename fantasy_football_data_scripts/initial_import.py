@@ -74,7 +74,7 @@ RUNS_POST: List[tuple[Path, str]] = [
     (ROOT_DIR / "matchup_scripts" / "add_optimal.py",                "Add optimal lineup"),
     (ROOT_DIR / "player_stats"  / "aggregate_on_season.py",          "Season aggregation"),
     (ROOT_DIR / "draft_scripts" / "ppg_draft_join.py",               "Draft PPG join"),
-    # NOTE: We do NOT call MotherDuck here; the Streamlit app uploads right after this script finishes.
+    # NOTE: no MotherDuck upload here; the Streamlit app handles upload post-import.
 ]
 
 # =============================================================================
@@ -140,7 +140,6 @@ def locate_latest_parquet(kind: str) -> Optional[Path]:
     if not base.exists():
         return None
 
-    # Preferred filenames (adjust to your producers)
     preferred = {
         "schedule":     ["schedule_data_all_years.parquet", "schedule.parquet"],
         "matchup":      ["matchup.parquet"],
@@ -153,7 +152,6 @@ def locate_latest_parquet(kind: str) -> Optional[Path]:
         if p.exists():
             return p
 
-    # Fallback: latest modified .parquet
     parquets = list(base.glob("*.parquet"))
     if parquets:
         return max(parquets, key=lambda p: p.stat().st_mtime)
@@ -167,7 +165,6 @@ def upsert_parquet_via_duckdb(out_path: Path, new_df: pd.DataFrame, keys: list[s
     out_path.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
 
-    # Sanitize column names
     new_df = new_df.copy()
     new_df.columns = [str(c).strip() for c in new_df.columns]
 
@@ -186,13 +183,11 @@ def upsert_parquet_via_duckdb(out_path: Path, new_df: pd.DataFrame, keys: list[s
         sel_old = ", ".join([f'"{c}"' if c in cols_old else f'NULL AS "{c}"' for c in all_cols])
         sel_new = ", ".join([f'"{c}"' if c in cols_new else f'NULL AS "{c}"' for c in all_cols])
 
-        # Partition clause for deduplication
         partition_cols = [c for c in keys if c in all_cols]
         if not partition_cols:
             partition_cols = ["year", "week"] if "year" in all_cols and "week" in all_cols else all_cols[:1]
         partition_by = ", ".join([f'"{c}"' for c in partition_cols])
 
-        # Merge with deduplication (new rows win)
         con.execute(f"""
             CREATE TEMP TABLE _merged AS
             SELECT *
@@ -206,7 +201,6 @@ def upsert_parquet_via_duckdb(out_path: Path, new_df: pd.DataFrame, keys: list[s
     else:
         con.execute("CREATE TEMP TABLE _merged AS SELECT *, 1 AS is_new FROM _new")
 
-    # Write to parquet
     con.execute(f"""
         COPY (SELECT * EXCLUDE(is_new) FROM _merged)
         TO '{out_str}'
@@ -226,7 +220,6 @@ def main():
     log("=" * 80)
     log("")
 
-    # Auto-confirm for non-interactive runs
     auto_confirm = os.environ.get("AUTO_CONFIRM", "").lower() in ("1", "true", "yes")
     if not auto_confirm:
         try:
@@ -242,12 +235,9 @@ def main():
     else:
         log("AUTO_CONFIRM set — proceeding without interactive prompt.")
 
-    # ========================================================================
-    # PHASE 1: Run the four base producers with year=0, week=0
-    # ========================================================================
+    # PHASE 1
     log("")
     log("=== PHASE 1: Historical data collection (year=0) ===")
-
     log("Fetching ALL schedule data (all years)...")
     run_script(SCHEDULE_SCRIPT, "Season schedules", year=0, week=0)
 
@@ -260,40 +250,30 @@ def main():
     log("Fetching ALL player stats (all years, all weeks)...")
     run_script(MERGE_SCRIPT, "Yahoo/NFL merge", year=0, week=0)
 
-    # ========================================================================
-    # PHASE 2: Upsert into canonical tables
-    # ========================================================================
+    # PHASE 2
     log("")
     log("=== PHASE 2: Building canonical parquet files ===")
-
     for kind in ["schedule", "matchup", "transactions", "player"]:
         src = locate_latest_parquet(kind)
         if not src or not src.exists():
             log(f"WARN: No {kind} source found in {SOURCE_DIRS[kind]}")
             continue
-
         try:
             df_src = pd.read_parquet(src)
         except Exception as e:
             log(f"WARN: Could not read {kind} source {src}: {e}")
             continue
-
         if df_src.empty:
             log(f"WARN: {kind} source is empty: {src.name}")
             continue
-
         rows_used = len(df_src)
         log(f"Processing {kind}: {src.name} ({rows_used:,} rows)")
-
         total_rows = upsert_parquet_via_duckdb(CANONICAL[kind], df_src, DEDUP_KEYS[kind], kind)
         log(f"✓ Updated {CANONICAL[kind].name}: {total_rows:,} total rows")
 
-    # ========================================================================
-    # PHASE 3: Run post-processing scripts
-    # ========================================================================
+    # PHASE 3
     log("")
     log("=== PHASE 3: Post-processing ===")
-
     for script, label in RUNS_POST:
         run_post_script(script, label)
 
