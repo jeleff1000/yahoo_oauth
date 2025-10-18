@@ -503,6 +503,13 @@ def run_initial_import() -> bool:
 
             process.wait()
 
+            # Persist last stdout into session so the parent can parse paths even if
+            # the import log file isn't readable directly from this environment.
+            try:
+                st.session_state["last_import_stdout"] = "\n".join(output_lines)
+            except Exception:
+                pass
+
             if process.returncode == 0:
                 status_placeholder.success("Import finished successfully.")
                 st.success("✅ Data import completed successfully!")
@@ -586,6 +593,27 @@ def _extract_parquet_paths_from_log(log_path: Path) -> list[Path]:
             try:
                 p = Path(m)
                 # try resolving relative to repo root as well
+                if not p.is_absolute():
+                    cand = ROOT_DIR / m
+                    if cand.exists():
+                        paths.append(cand)
+                        continue
+                if p.exists():
+                    paths.append(p)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return paths
+
+def _extract_parquet_paths_from_text(text: str) -> list[Path]:
+    """Extract candidate parquet paths from an arbitrary text blob; resolve relative to repo root if needed."""
+    paths: list[Path] = []
+    try:
+        regex = r"([\w\-\./\\]+\.parquet(?:\.[a-zA-Z0-9]+)?)"
+        for m in re.findall(regex, text or ""):
+            try:
+                p = Path(m)
                 if not p.is_absolute():
                     cand = ROOT_DIR / m
                     if cand.exists():
@@ -806,6 +834,26 @@ def main():
                                 except Exception:
                                     pass
 
+                                # Also try scanning stdout captured from the import process
+                                try:
+                                    if not files and st.session_state.get("last_import_stdout"):
+                                        st.write("(Attempting to recover parquet paths from import stdout)")
+                                        txt = st.session_state.get("last_import_stdout", "")
+                                        txt_paths = _extract_parquet_paths_from_text(txt)
+                                        if txt_paths:
+                                            st.write(f"Found {len(txt_paths)} path(s) in import stdout:")
+                                            for tp in txt_paths:
+                                                try:
+                                                    st.write(f"- `{tp}`")
+                                                    if tp.exists():
+                                                        files.append(tp)
+                                                except Exception:
+                                                    pass
+                                        else:
+                                            st.write("No parquet paths found in import stdout.")
+                                except Exception:
+                                    pass
+
                                 # DEBUG: show paths and files found to help diagnose missing uploads
                                 try:
                                     st.write("**Debug: paths used for parquet discovery (resolved)**")
@@ -832,6 +880,38 @@ def main():
                                                 st.write(f"- `{rel}`")
                                     else:
                                         st.warning("(Debug) No parquet files were discovered by collect_parquet_candidates().")
+
+                                    # Small helper UI to dump raw import stdout/log so the user can copy exact lines
+                                    try:
+                                        if st.button("Show raw import output (stdout + log)"):
+                                            st.write("--- BEGIN: import stdout (last run) ---")
+                                            stdout_txt = st.session_state.get("last_import_stdout", "(none)")
+                                            # cap to reasonable size
+                                            if len(stdout_txt) > 20000:
+                                                st.code(stdout_txt[:20000] + "\n... (truncated) ...")
+                                            else:
+                                                st.code(stdout_txt or "(none)")
+
+                                            st.write("--- BEGIN: import log file (if readable) ---")
+                                            logpath_str = st.session_state.get("last_import_log")
+                                            if logpath_str:
+                                                logpath = Path(logpath_str)
+                                                try:
+                                                    if logpath.exists():
+                                                        txt = logpath.read_text(encoding='utf-8', errors='ignore')
+                                                        if len(txt) > 20000:
+                                                            st.code(txt[:20000] + "\n... (truncated) ...")
+                                                        else:
+                                                            st.code(txt)
+                                                    else:
+                                                        st.write(f"Import log file not found at: {logpath}")
+                                                except Exception as e:
+                                                    st.write(f"Could not read import log: {e}")
+                                            else:
+                                                st.write("No import log path recorded in session.")
+                                    except Exception:
+                                        pass
+
                                 except Exception:
                                     pass
 
