@@ -15,7 +15,6 @@ import io
 import re
 from pathlib import Path
 from datetime import datetime, timedelta
-import duckdb
 
 # =========================
 # Third-party deps
@@ -160,19 +159,14 @@ def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
 # =========================
 # MotherDuck upload helpers
 # =========================
-def _slugify_db(name: str) -> str:
-    s = re.sub(r"[^a-zA-Z0-9]+", "_", name.strip().lower()).strip("_")
-    if re.match(r"^\d", s):
-        s = f"l_{s}"
-    return s[:63]
+def _slug(s: str, lead_prefix: str) -> str:
+    x = re.sub(r"[^a-zA-Z0-9]+", "_", (s or "").strip().lower()).strip("_")
+    if not x:
+        x = "db"
+    if re.match(r"^\d", x):
+        x = f"{lead_prefix}_{x}"
+    return x[:63]
 
-def _slugify_table(stem: str) -> str:
-    s = re.sub(r"[^a-zA-Z0-9]+", "_", stem.strip().lower()).strip("_")
-    if re.match(r"^\d", s):
-        s = f"t_{s}"
-    return s[:63]
-
-# --- replace your upload_parquets_to_motherduck with this ---
 def upload_parquets_to_motherduck(
     data_dir: Path,
     db_name: str,
@@ -180,33 +174,28 @@ def upload_parquets_to_motherduck(
     token: str | None = None,
     status_cb=None
 ) -> list[tuple[str, int]]:
-
-    def slug(s: str, lead_prefix: str) -> str:
-        x = re.sub(r"[^a-zA-Z0-9]+", "_", (s or "").strip().lower()).strip("_")
-        if not x:
-            x = "db"
-        if re.match(r"^\d", x):
-            x = f"{lead_prefix}_{x}"
-        return x[:63]
-
+    """
+    Upload every *.parquet in data_dir to MotherDuck.
+    - Connect to md: (no db name)
+    - CREATE DATABASE IF NOT EXISTS <db>, USE <db>
+    - CREATE SCHEMA IF NOT EXISTS <schema>
+    - CREATE OR REPLACE TABLE <schema>.<table> AS SELECT * FROM read_parquet(?)
+    """
     if token:
         os.environ["MOTHERDUCK_TOKEN"] = token
 
-    db = slug(db_name, "l")
-    sch = slug(schema, "s")
+    db = _slug(db_name, "l")
+    sch = _slug(schema, "s")
 
-    # 1) Attach to MotherDuck root (no db name)
     con = duckdb.connect("md:")
-    # 2) Create DB if it's not there yet, then USE it
     con.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
     con.execute(f"USE {db}")
-    # 3) Ensure schema
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {sch}")
 
     results: list[tuple[str, int]] = []
     files = sorted(Path(data_dir).glob("*.parquet"))
     for pf in files:
-        tbl = slug(pf.stem, "t")
+        tbl = _slug(pf.stem, "t")
         if status_cb:
             status_cb(f"Uploading {pf.name} → {db}.{sch}.{tbl} ...")
         con.execute(
@@ -217,8 +206,39 @@ def upload_parquets_to_motherduck(
         results.append((tbl, int(cnt)))
         if status_cb:
             status_cb(f"✓ {tbl}: {cnt} rows")
-
     return results
+
+def seasons_for_league_name(access_token: str, all_games: list[dict], target_league_name: str) -> list[str]:
+    """
+    For each football game (season), fetch leagues and return season strings in which
+    the user's leagues include `target_league_name` (exact match on name).
+    """
+    seasons: set[str] = set()
+    for g in all_games:
+        game_key = g.get("game_key")
+        season   = str(g.get("season", "")).strip()
+        if not game_key or not season:
+            continue
+        try:
+            leagues_data = get_user_football_leagues(access_token, game_key)
+            leagues = (
+                leagues_data.get("fantasy_content", {})
+                .get("users", {}).get("0", {}).get("user", [])[1]
+                .get("games", {}).get("0", {}).get("game", [])[1]
+                .get("leagues", {})
+            )
+            for key in leagues:
+                if key == "count":
+                    continue
+                league = leagues[key].get("league", [])[0]
+                name = league.get("name")
+                if name == target_league_name:
+                    seasons.add(season)
+                    break
+        except Exception:
+            # Continue best-effort
+            pass
+    return sorted(seasons)
 
 # =========================
 # Import runner (subprocess)
@@ -280,20 +300,17 @@ def run_initial_import() -> bool:
                         stripped = line.rstrip('\n')
                         output_lines.append(stripped)
 
-                        # write to log file
                         try:
                             lf.write(stripped + "\n")
                             lf.flush()
                         except Exception:
                             pass
 
-                        # Update a small status message with the latest line so users see immediate progress
                         try:
                             status_placeholder.info(stripped)
                         except Exception:
                             status_placeholder.text(stripped)
 
-                        # Show last 10 lines of output
                         log_placeholder.code('\n'.join(output_lines[-10:]))
             except Exception:
                 try:
@@ -464,7 +481,7 @@ def main():
                             if MOTHERDUCK_TOKEN:
                                 st.success("✅ MotherDuck token is loaded.")
                                 sanitized_db = selected_league['name'].lower().replace(' ', '_')
-                                st.info(f"Database will be created as: `{sanitized_db}`")
+                                st.info(f"Database(s) will be created as: `{sanitized_db}_<season>` (for every season this league exists)")
                             else:
                                 st.warning("No MotherDuck token; upload will be skipped.")
 
@@ -483,39 +500,63 @@ def main():
                             if run_initial_import():
                                 st.success("🎉 All done! Your league data has been imported.")
 
-                                # --- Auto-upload to MotherDuck (if token present) ---
+                                # --- Upload to MotherDuck for EVERY season this league exists ---
                                 if MOTHERDUCK_TOKEN:
-                                    st.info("🦆 Uploading data to MotherDuck...")
-                                    league_info = st.session_state.get("league_info", {})
-                                    league_name = league_info.get("name", "league")
-                                    season = str(league_info.get("season", "")).strip()
-                                    db_name = _slugify_db(f"{league_name}_{season}" if season else league_name)
+                                    st.info("🦆 Uploading data to MotherDuck (all seasons for this league)...")
 
-                                    progress = st.empty()
-                                    def _status(msg: str):
+                                    league_info  = st.session_state.get("league_info", {})
+                                    league_name  = league_info.get("name", "league")
+                                    access_token = st.session_state.get("access_token")
+                                    all_games    = extract_football_games(st.session_state.get("games_data", {}))
+
+                                    # discover all seasons where this league name appears for the user
+                                    season_list = seasons_for_league_name(access_token, all_games, league_name)
+
+                                    # fallback: at least use the selected season
+                                    selected_season = str(league_info.get("season", "")).strip()
+                                    if selected_season and selected_season not in season_list:
+                                        season_list.append(selected_season)
+
+                                    # de-dupe and upload to each <league_name>_<season> database
+                                    dbs = []
+                                    for season in sorted({s for s in season_list if s}):
+                                        dbs.append(f"{league_name}_{season}")
+
+                                    if not dbs:
+                                        dbs = [league_name]
+
+                                    overall_summary = []
+                                    for db_name in dbs:
+                                        progress = st.empty()
+                                        def _status(msg: str):
+                                            try: progress.info(msg)
+                                            except Exception: progress.text(msg)
+
+                                        st.write(f"**Uploading to DB:** `{db_name}`")
                                         try:
-                                            progress.info(msg)
-                                        except Exception:
-                                            progress.text(msg)
+                                            uploaded = upload_parquets_to_motherduck(
+                                                DATA_DIR,
+                                                db_name=db_name,
+                                                schema="public",
+                                                token=MOTHERDUCK_TOKEN,
+                                                status_cb=_status
+                                            )
+                                            if uploaded:
+                                                st.success(f"✅ `{db_name}`: uploaded {len(uploaded)} tables.")
+                                                overall_summary.append((db_name, uploaded))
+                                            else:
+                                                st.warning(f"⚠️ `{db_name}`: no parquet files found to upload.")
+                                        except Exception as e:
+                                            st.error(f"❌ `{db_name}` upload failed: {e}")
 
-                                    try:
-                                        uploaded = upload_parquets_to_motherduck(
-                                            DATA_DIR,
-                                            db_name=db_name,
-                                            schema="public",
-                                            token=MOTHERDUCK_TOKEN,
-                                            status_cb=_status
-                                        )
-                                        if uploaded:
-                                            st.success(f"✅ Uploaded {len(uploaded)} tables to MotherDuck DB `{db_name}`.")
-                                            with st.expander("View upload summary"):
-                                                for t, n in uploaded:
-                                                    st.write(f"- `{db_name}.public.{t}` → {n} rows")
-                                            st.caption("Tip: In MotherDuck or DuckDB, run `SELECT * FROM public.player LIMIT 5;`")
-                                        else:
-                                            st.warning("No parquet files found to upload.")
-                                    except Exception as e:
-                                        st.error(f"❌ MotherDuck upload failed: {e}")
+                                    if overall_summary:
+                                        with st.expander("View upload summaries"):
+                                            for db_name, items in overall_summary:
+                                                st.write(f"**{db_name}**")
+                                                for t, n in items:
+                                                    st.write(f"- `public.{t}` → {n} rows")
+                                    else:
+                                        st.warning("No successful uploads recorded.")
                                 else:
                                     st.warning("⚠️ MotherDuck token not configured—skipping cloud upload.")
 
