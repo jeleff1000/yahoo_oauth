@@ -1,0 +1,28 @@
+name: Import to MotherDuck
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'Optional import job id created by Streamlit (ops.import_status.job_id)'
+        required: false
+
+jobs:
+  run-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Run worker
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          JOB_ID: ${{ github.event.inputs.job_id }}
+        run: |
+          python scripts/run_worker.py

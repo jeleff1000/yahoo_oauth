@@ -6,6 +6,7 @@ import numpy as np
 from collections import defaultdict
 import random
 from pathlib import Path
+from md.md_utils import df_from_md_or_parquet
 
 # =========================
 # Config
@@ -175,7 +176,8 @@ def current_regular_week(df_season):
 def process_expected_records():
     print(f"Loading data from: {MATCHUP_PATH}")
 
-    raw_all = pd.read_parquet(MATCHUP_PATH)
+    # Load from MotherDuck if available, otherwise fall back to local parquet
+    raw_all = df_from_md_or_parquet("matchup", MATCHUP_PATH)
     print(f"Loaded {len(raw_all)} records")
 
     # Regular season only for simulations

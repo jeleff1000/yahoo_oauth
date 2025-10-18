@@ -6,6 +6,8 @@ from pathlib import Path
 import sys
 import pandas as pd
 import numpy as np
+import os
+from md.md_utils import df_from_md_or_parquet
 
 # --------------------------------------------------------------------------------------
 # Paths (all relative to this file's location)
@@ -44,6 +46,13 @@ def load_parquet(path: Path, name: str) -> pd.DataFrame:
     """
     Load a parquet file or exit with a readable error.
     """
+    # If MotherDuck is configured, prefer loading from MD (table name inferred from path stem)
+    if os.getenv("MOTHERDUCK_TOKEN"):
+        try:
+            return df_from_md_or_parquet(path.stem, path)
+        except Exception:
+            pass
+
     if not path.exists():
         print(f"[ERROR] {name} parquet not found: {path}", file=sys.stderr)
         sys.exit(1)

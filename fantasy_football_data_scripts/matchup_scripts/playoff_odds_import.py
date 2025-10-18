@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from md.md_utils import df_from_md_or_parquet
 
 # =========================================================
 # KMFFL Odds Engine – Parquet version
@@ -890,8 +891,8 @@ def process_parquet_files():
     print(f"Loading data from: {DATA_DIR}")
 
     # Load parquet files
-    df_matches = pd.read_parquet(MATCHUP_PATH)
-    df_sched = pd.read_parquet(SCHEDULE_PATH)
+    df_matches = df_from_md_or_parquet("matchup", MATCHUP_PATH)
+    df_sched = df_from_md_or_parquet("schedule", SCHEDULE_PATH)
 
     print(f"Loaded {len(df_matches)} matchup records")
     print(f"Loaded {len(df_sched)} schedule records")

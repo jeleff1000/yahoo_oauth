@@ -7,6 +7,7 @@ import math
 import pandas as pd
 import numpy as np
 import re
+from md.md_utils import df_from_md_or_parquet
 
 # ------------------------------------------------------------
 # Paths
@@ -106,9 +107,7 @@ def _mgr_token(name: str) -> str:
 # ------------------------------------------------------------
 # Load
 # ------------------------------------------------------------
-if not PARQUET_PATH.exists():
-    raise FileNotFoundError(f"Parquet not found: {PARQUET_PATH}")
-df = pd.read_parquet(PARQUET_PATH)
+df = df_from_md_or_parquet("matchup", PARQUET_PATH)
 
 # ------------------------------------------------------------
 # Preserve original win/loss from source (don’t recalc)

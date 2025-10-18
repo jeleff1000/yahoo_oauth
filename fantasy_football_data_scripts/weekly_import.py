@@ -31,6 +31,7 @@ from typing import Optional, Tuple
 
 import pandas as pd
 import duckdb
+from md.md_utils import df_from_md_or_parquet
 
 # =============================================================================
 # Paths
@@ -285,7 +286,7 @@ def locate_latest_parquet(kind: str, year: int, week: int) -> Optional[Path]:
 
     for p in base.glob("*.parquet"):
         try:
-            df = pd.read_parquet(p)
+            df = df_from_md_or_parquet(p.stem, p)
         except:
             continue
 
@@ -411,7 +412,7 @@ def main():
             continue
 
         try:
-            df_src = pd.read_parquet(src)
+            df_src = df_from_md_or_parquet(src.stem, src)
         except Exception as e:
             log(f"WARN: Could not read {kind} source {src}: {e}")
             continue
@@ -458,4 +459,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
