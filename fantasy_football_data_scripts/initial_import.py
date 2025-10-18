@@ -101,13 +101,34 @@ def run_script(script: Path, label: str, year: int = 0, week: int = 0) -> bool:
     log(f"▶️  RUN: {label} -> {script.name} --year {year} --week {week}")
 
     try:
-        rc = subprocess.call(cmd, cwd=str(script.parent), env=env)
-        if rc != 0:
-            log(f"⚠️  {label} exited with code {rc}")
+        # Capture both stdout and stderr
+        result = subprocess.run(
+            cmd,
+            cwd=str(script.parent),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+
+        # Log output
+        if result.stdout:
+            for line in result.stdout.strip().split('\n')[-10:]:  # Last 10 lines
+                log(f"     {line}")
+
+        if result.returncode != 0:
+            log(f"⚠️  {label} exited with code {result.returncode}")
+            if result.stderr:
+                log(f"  ❌ ERROR OUTPUT:")
+                for line in result.stderr.strip().split('\n')[-20:]:  # Last 20 error lines
+                    log(f"     {line}")
             return False
         else:
             log(f"✅ Completed: {label}")
             return True
+    except subprocess.TimeoutExpired:
+        log(f"❌ TIMEOUT running {label} (exceeded 5 minutes)")
+        return False
     except Exception as e:
         log(f"❌ ERROR running {label}: {e}")
         return False
@@ -251,6 +272,20 @@ def main():
     log("INITIAL IMPORT: Building complete league history from year 0")
     log("=" * 80)
     log(f"Data directory: {DATA_DIR}")
+
+    # Create all necessary directories
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    for subdir in SOURCE_DIRS.values():
+        subdir.mkdir(parents=True, exist_ok=True)
+        log(f"  📁 Created/verified: {subdir}")
+
+    # Debug: Check OAuth file
+    oauth_path = REPO_DIR / "oauth" / "Oauth.json"
+    log(f"OAuth path: {oauth_path}")
+    log(f"OAuth exists: {oauth_path.exists()}")
+    if os.environ.get("OAUTH_PATH"):
+        log(f"OAUTH_PATH env: {os.environ.get('OAUTH_PATH')}")
+
     log("")
 
     # Auto-confirm check
@@ -310,6 +345,22 @@ def main():
 
     for kind in ["schedule", "matchup", "transactions", "player"]:
         log(f"\n--- Processing {kind.upper()} ---")
+
+        # Debug: Check if source directory exists and what's in it
+        src_dir = SOURCE_DIRS[kind]
+        log(f"  🔍 Checking source directory: {src_dir}")
+        if src_dir.exists():
+            try:
+                items = list(src_dir.iterdir())
+                log(f"  📂 Directory exists with {len(items)} items:")
+                for item in items[:5]:
+                    log(f"     - {item.name}")
+                if len(items) > 5:
+                    log(f"     ... and {len(items) - 5} more")
+            except Exception as e:
+                log(f"  ❌ Error listing directory: {e}")
+        else:
+            log(f"  ❌ Source directory doesn't exist!")
 
         # Find source file
         src = find_latest_parquet(kind)
