@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import os
 import json
+import base64
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -69,17 +71,75 @@ def create_oauth2(oauth_path: Optional[str | Path] = None):
     - yahoo-oauth library (Format 1: with consumer_key/consumer_secret)
     - Manual token management (Format 2: generic OAuth2)
 
-    Args:
-        oauth_path: Optional path to OAuth.json. If None, will search for it.
-
-    Returns:
-        OAuth2 session object compatible with yahoo-fantasy-api
-
-    Raises:
-        FileNotFoundError: If OAuth.json cannot be found
-        ValueError: If OAuth.json is invalid
+    This function will also accept token JSON supplied via the environment
+    variables `OAUTH_JSON` (raw JSON string) or `OAUTH_JSON_B64` (base64-encoded
+    JSON). This is useful for deployed environments where writing a file is
+    inconvenient.
     """
-    # Find OAuth file
+    # Priority: environment-supplied JSON
+    env_json = os.environ.get('OAUTH_JSON')
+    env_json_b64 = os.environ.get('OAUTH_JSON_B64')
+    oauth_data = None
+
+    if env_json_b64 and not env_json:
+        try:
+            decoded = base64.b64decode(env_json_b64)
+            oauth_data = json.loads(decoded)
+        except Exception:
+            oauth_data = None
+
+    if env_json and oauth_data is None:
+        try:
+            oauth_data = json.loads(env_json)
+        except Exception:
+            oauth_data = None
+
+    # If oauth_data supplied via env, use it directly (no file required)
+    if oauth_data is not None:
+        # Try yahoo-oauth only if file-backed constructor isn't strictly required
+        if 'consumer_key' in oauth_data or 'consumer_secret' in oauth_data:
+            try:
+                # If yahoo_oauth supports loading from dict, use it; otherwise create a temp file
+                from yahoo_oauth import OAuth2
+                # Create a temp file to satisfy yahoo_oauth.from_file path requirement
+                with tempfile.NamedTemporaryFile('w', delete=False, suffix='.json') as tf:
+                    json.dump(oauth_data, tf)
+                    tf.flush()
+                    tf_path = tf.name
+                try:
+                    oauth = OAuth2(None, None, from_file=str(tf_path))
+                    return oauth
+                finally:
+                    try:
+                        Path(tf_path).unlink()
+                    except Exception:
+                        pass
+            except Exception:
+                # Fall back to manual session construction below
+                pass
+
+        # Manual OAuth2-like object using provided token data
+        class ManualOAuth2:
+            def __init__(self, token_data):
+                self.access_token = token_data.get('access_token')
+                self.refresh_token = token_data.get('refresh_token')
+                self.token_time = token_data.get('token_time', 0)
+                self.token_type = token_data.get('token_type', 'bearer')
+
+                if not self.access_token:
+                    raise ValueError("No access_token found in OAUTH_JSON")
+
+                import requests
+                self.session = requests.Session()
+                self.session.headers.update({'Authorization': f"Bearer {self.access_token}"})
+
+            def refresh_access_token(self):
+                print("Warning: Token refresh not implemented for manual OAuth (env-provided)")
+                return False
+
+        return ManualOAuth2(oauth_data)
+
+    # No env-provided token, proceed with file-based discovery
     if oauth_path:
         oauth_file = Path(oauth_path).resolve()
         if not oauth_file.exists():
@@ -100,12 +160,12 @@ def create_oauth2(oauth_path: Optional[str | Path] = None):
 
             raise FileNotFoundError(
                 "OAuth.json not found. Searched locations:\n" + "\n".join(searched) +
-                "\n\nPlease ensure you've authenticated and the OAuth.json file exists."
+                "\n\nYou can also provide credentials via the OAUTH_JSON or OAUTH_JSON_B64 environment variables."
             )
 
     print(f"Using OAuth file: {oauth_file}")
 
-    # Load OAuth data
+    # Load OAuth data from file
     with open(oauth_file, 'r') as f:
         oauth_data = json.load(f)
 
@@ -119,7 +179,6 @@ def create_oauth2(oauth_path: Optional[str | Path] = None):
             print(f"Warning: yahoo-oauth library failed: {e}")
 
     # Fall back to manual token management (Format 2)
-    # Create a minimal OAuth2-compatible object
     class ManualOAuth2:
         def __init__(self, token_data):
             self.access_token = token_data.get('access_token')
@@ -130,7 +189,6 @@ def create_oauth2(oauth_path: Optional[str | Path] = None):
             if not self.access_token:
                 raise ValueError("No access_token found in OAuth.json")
 
-            # Create a session-like object
             import requests
             self.session = requests.Session()
             self.session.headers.update({
@@ -138,7 +196,6 @@ def create_oauth2(oauth_path: Optional[str | Path] = None):
             })
 
         def refresh_access_token(self):
-            """Placeholder - refresh logic would go here"""
             print("Warning: Token refresh not implemented for manual OAuth")
             return False
 
@@ -172,7 +229,8 @@ def ensure_oauth_path(exit_on_missing: bool = True) -> Path:
         "  oauth/Oauth.json\n"
         "  oauth/OAuth.json\n"
         "  oauth/oauth.json\n"
-        "in the repository's oauth/ directory."
+        "in the repository's oauth/ directory.\n"
+        "Alternatively, set OAUTH_JSON (raw JSON) or OAUTH_JSON_B64 (base64-encoded JSON) in the environment."
     )
     if exit_on_missing:
         raise SystemExit(msg)

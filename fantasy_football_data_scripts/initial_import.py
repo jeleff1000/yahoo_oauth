@@ -310,11 +310,32 @@ def main():
             oauth_candidate = oauth_candidate_path
             log(f"Using OAuth file discovered: {oauth_candidate}")
             os.environ["OAUTH_PATH"] = str(oauth_candidate)
+            # Export to environment so child scripts pick it up when we spawn subprocesses
             try:
-                create_oauth2(oauth_candidate)
-                log("✅ OAuth.json appears valid (create_oauth2 succeeded)")
-            except Exception as e:
-                log(f"⚠️  create_oauth2 validation failed: {e}")
+                if oauth_candidate and oauth_candidate.exists():
+                    os.environ["OAUTH_PATH"] = str(oauth_candidate)
+                    log(f"Exported OAUTH_PATH -> {os.environ.get('OAUTH_PATH')}")
+                    # Attempt to validate by creating an oauth session (non-fatal)
+                    try:
+                        create_oauth2(oauth_candidate)
+                        log("✅ OAuth.json appears valid (create_oauth2 succeeded)")
+                    except Exception as e:
+                        log(f"⚠️  create_oauth2 validation failed: {e}")
+                else:
+                    log("⚠️  No OAuth.json available to export to environment.")
+
+                    # Fallback: if the repo contains oauth/Oauth.json, export its content as OAUTH_JSON
+                    try:
+                        repo_oauth = REPO_DIR / 'oauth' / 'Oauth.json'
+                        if repo_oauth.exists():
+                            try:
+                                content = repo_oauth.read_text(encoding='utf-8')
+                                os.environ['OAUTH_JSON'] = content
+                                log('📦 Exported OAUTH_JSON from repo oauth/Oauth.json for child processes')
+                            except Exception as ee:
+                                log(f"⚠️  Failed to export OAUTH_JSON from {repo_oauth}: {ee}")
+                    except Exception:
+                        pass
         else:
             log("⚠️  OAuth.json not found in default locations; some operations may fail if authentication is required.")
     except Exception as e:
@@ -497,4 +518,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
