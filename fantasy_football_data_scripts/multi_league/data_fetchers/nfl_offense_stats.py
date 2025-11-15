@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""
+Fetch NFL player offense stats from NFLverse for fantasy football.
+
+This script downloads player-level offensive statistics from NFLverse with caching and chunked downloads.
+
+Source: https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{year}.parquet
+"""
+import argparse
+import sys
+import time
+import tempfile
+from pathlib import Path
+import pandas as pd
+import requests
+
+# Make tqdm optional
+try:
+    from tqdm import tqdm
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
+    tqdm = None
+
+# Add parent directories to path for imports
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
+sys.path.insert(0, str(SCRIPT_DIR.parent))
+
+# Try to import LeagueContext for multi-league support
+try:
+    from core.league_context import LeagueContext
+    LEAGUE_CONTEXT_AVAILABLE = True
+except ImportError:
+    try:
+        from multi_league.core.league_context import LeagueContext
+        LEAGUE_CONTEXT_AVAILABLE = True
+    except ImportError:
+        LEAGUE_CONTEXT_AVAILABLE = False
+        LeagueContext = None
+
+# Default output directory
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "fantasy_football_data" / "player_data"
+DEFAULT_CACHE_DIR = REPO_ROOT / "fantasy_football_data" / "cache" / "nflverse"
+
+# Cache settings
+CACHE_MAX_AGE_HOURS = 168  # 1 week
+
+
+def retry_with_backoff(func, max_retries=3, initial_delay=1.0, backoff_factor=2.0):
+    """
+    Retry a function with exponential backoff for transient failures.
+
+    Args:
+        func: Function to retry (should take no arguments)
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay in seconds
+        backoff_factor: Multiplier for delay after each retry
+
+    Returns:
+        Result of successful function call
+
+    Raises:
+        Last exception if all retries fail
+    """
+    delay = initial_delay
+    last_exception = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except Exception as e:
+            last_exception = e
+
+            if attempt < max_retries:
+                error_str = str(e).lower()
+
+                # Check if error is retryable
+                is_retryable = (
+                    'rate limit' in error_str or
+                    '429' in error_str or
+                    ('5' in error_str[:3] if len(error_str) >= 3 else False) or
+                    'timeout' in error_str or
+                    'connection' in error_str
+                )
+
+                if is_retryable:
+                    print(f"  [RETRY] Attempt {attempt + 1}/{max_retries} failed: {e}")
+                    print(f"  Waiting {delay:.1f}s before retry...")
+                    time.sleep(delay)
+                    delay *= backoff_factor
+                    continue
+
+            # Non-retryable error or final attempt, re-raise
+            raise
+
+    # Should never reach here, but just in case
+    raise last_exception
+
+
+def fetch_nflverse_player_stats(year: int, cache_dir: Path = None, use_cache: bool = True) -> pd.DataFrame:
+    """
+    Fetch player offensive stats from NFLverse for a given year with caching and chunked downloads.
+
+    Args:
+        year: NFL season year (e.g., 2014)
+        cache_dir: Directory for cached files (default: DEFAULT_CACHE_DIR)
+        use_cache: Whether to use cached data if available
+
+    Returns:
+        DataFrame with player offensive stats
+    """
+    if cache_dir is None:
+        cache_dir = DEFAULT_CACHE_DIR
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / f"nflverse_player_stats_{year}.parquet"
+
+    # Check cache first
+    if use_cache and cache_file.exists():
+        age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
+        if age_hours < CACHE_MAX_AGE_HOURS:
+            print(f"[NFL] Using cached data for {year} (age: {age_hours:.1f} hours)")
+            try:
+                df = pd.read_parquet(cache_file)
+                print(f"[NFL] Loaded {len(df):,} rows from cache")
+                return df
+            except Exception as e:
+                print(f"[NFL] Warning: Cache read failed ({e}), re-downloading...")
+                cache_file.unlink(missing_ok=True)
+
+    url = f"https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{year}.parquet"
+
+    print(f"[NFL] Downloading {year} player stats from NFLverse...")
+    print(f"[NFL] URL: {url}")
+
+    def download_with_retry():
+        """Download function wrapped for retry logic."""
+        tmp_path = None
+        try:
+            # Stream download with progress bar to avoid memory issues
+            with requests.get(url, stream=True, timeout=60) as r:
+                r.raise_for_status()
+                total_size = int(r.headers.get('content-length', 0))
+
+                # Create temporary file for chunked download
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.parquet') as tmp:
+                    tmp_path = Path(tmp.name)
+
+                    # Download with progress bar (if available)
+                    print(f"[NFL] Downloading {total_size / (1024*1024):.1f} MB...")
+
+                    if TQDM_AVAILABLE:
+                        # Use progress bar if tqdm is available
+                        with tqdm(total=total_size, unit='iB', unit_scale=True, unit_divisor=1024) as pbar:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                if chunk:  # Filter out keep-alive chunks
+                                    tmp.write(chunk)
+                                    pbar.update(len(chunk))
+                    else:
+                        # Download without progress bar
+                        downloaded = 0
+                        for chunk in r.iter_content(chunk_size=8192):
+                            if chunk:  # Filter out keep-alive chunks
+                                tmp.write(chunk)
+                                downloaded += len(chunk)
+                                # Print progress every 10MB
+                                if downloaded % (10 * 1024 * 1024) < 8192:
+                                    print(f"[NFL] Downloaded {downloaded / (1024*1024):.1f} MB / {total_size / (1024*1024):.1f} MB")
+
+            # Read the downloaded file
+            print(f"[NFL] Reading parquet file...")
+            df = pd.read_parquet(tmp_path)
+
+            # Normalize team abbreviations (NFLverse uses "LA" which is ambiguous)
+            # Standardize to: LAR (Rams), LAC (Chargers) to match defense_stats.py
+            if 'team' in df.columns:
+                print(f"[NFL] Normalizing team abbreviations (LA -> LAR)...")
+                df['team'] = df['team'].replace({'LA': 'LAR'})
+
+            # Save to cache
+            print(f"[NFL] Caching data to {cache_file}...")
+            df.to_parquet(cache_file)
+
+            # Clean up temp file
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
+
+            print(f"[NFL] Downloaded {len(df):,} rows of player stats for {year}")
+            return df
+
+        except Exception as e:
+            # Clean up temp file on error
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
+            raise
+
+    # Use retry logic for the download
+    return retry_with_backoff(download_with_retry)
+
+
+def process_one_year(year: int, week: int = None, cache_dir: Path = None, use_cache: bool = True) -> pd.DataFrame:
+    """
+    Process offensive stats for a single year (used by combine_dst_to_nfl.py).
+
+    Args:
+        year: NFL season year (e.g., 2014)
+        week: Optional week number (0 or None = all weeks)
+        cache_dir: Directory for cached files
+        use_cache: Whether to use cached data if available
+
+    Returns:
+        DataFrame with player offensive stats
+    """
+    print(f"[NFL] Processing year {year}, week {week if week else 'all'}")
+
+    # Fetch player stats from NFLverse with caching
+    df = fetch_nflverse_player_stats(year, cache_dir=cache_dir, use_cache=use_cache)
+
+    # Filter by week if specified
+    if week and week > 0:
+        df = df[df['week'] == week]
+        print(f"[NFL] Filtered to week {week}: {len(df):,} rows")
+
+    # Standardize column names to match defense_stats.py convention
+    # This prevents duplicate columns in combine_dst_to_nfl.py
+    rename_map = {
+        'season': 'year',
+        'team': 'nfl_team',
+        'opponent_team': 'opponent_nfl_team',
+        'player_id': 'NFL_player_id'
+    }
+    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
+    return df
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Fetch NFL player offensive stats from NFLverse")
+    parser.add_argument("--year", type=int, required=True, help="Season year (e.g., 2014)")
+    parser.add_argument("--week", type=int, default=0, help="Week number (0 = all weeks)")
+    parser.add_argument("--context", type=str, default=None, help="Path to league_context.json")
+    parser.add_argument("--no-cache", action="store_true", help="Skip cache and force re-download")
+    parser.add_argument("--cache-dir", type=str, default=None, help="Custom cache directory")
+    args = parser.parse_args()
+
+    # Load context if provided
+    output_dir = DEFAULT_OUTPUT_DIR
+    cache_dir = Path(args.cache_dir) if args.cache_dir else DEFAULT_CACHE_DIR
+
+    if args.context and LEAGUE_CONTEXT_AVAILABLE:
+        try:
+            ctx = LeagueContext.load(args.context)
+            output_dir = Path(ctx.player_data_directory)
+            print(f"[NFL] Using league: {ctx.league_name}")
+            print(f"[NFL] Output: {output_dir}")
+        except Exception as e:
+            print(f"[NFL] Warning: Could not load context: {e}")
+            print(f"[NFL] Falling back to default output: {output_dir}")
+    else:
+        print(f"[NFL] Using default output: {output_dir}")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Fetch player stats from NFLverse with caching
+    df = fetch_nflverse_player_stats(args.year, cache_dir=cache_dir, use_cache=not args.no_cache)
+
+    # Filter by week if specified
+    if args.week > 0:
+        df = df[df['week'] == args.week]
+        print(f"[NFL] Filtered to week {args.week}: {len(df):,} rows")
+
+    # Standardize column names to match defense_stats.py convention
+    # This prevents duplicate columns in combine_dst_to_nfl.py
+    rename_map = {
+        'season': 'year',
+        'team': 'nfl_team',
+        'opponent_team': 'opponent_nfl_team',
+        'player_id': 'NFL_player_id'
+    }
+    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+    print(f"[NFL] Standardized column names: {list(rename_map.values())}")
+
+    # Save output
+    week_suffix = f"week_{args.week}" if args.week > 0 else "all_weeks"
+    csv_path = output_dir / f"nfl_offense_stats_{args.year}_{week_suffix}.csv"
+    parquet_path = output_dir / f"nfl_offense_stats_{args.year}_{week_suffix}.parquet"
+
+    df.to_csv(csv_path, index=False)
+    df.to_parquet(parquet_path, index=False)
+
+    print(f"\n[NFL] Saved CSV: {csv_path}")
+    print(f"[NFL] Saved Parquet: {parquet_path}")
+    print(f"[NFL] Rows: {len(df):,}")
+    print(f"[NFL] Columns: {len(df.columns)}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

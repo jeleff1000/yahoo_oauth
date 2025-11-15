@@ -1,0 +1,17 @@
+{
+    "league_id": "449.l.198278",
+    "league_name": "KMFFL",
+    "oauth_file_path": "C:\\Users\\joeye\\OneDrive\\Desktop\\KMFFLApp\\secrets.json",
+    "game_code": "nfl",
+    "start_year": 2014,
+    "end_year": 2024,
+    "num_teams": 10,
+    "playoff_teams": 6,
+    "regular_season_weeks": 14,
+    "data_directory": "C:\\Users\\joeye\\OneDrive\\Desktop\\fantasy_football_data_downloads\\data\\kmffl",
+    "max_workers": 3,
+    "enable_caching": true,
+    "rate_limit_per_sec": 4.0,
+    "manager_name_overrides": {}
+}
+
