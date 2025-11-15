@@ -115,23 +115,27 @@ jobs:
           python - <<'PYEOF'
           import json
           from pathlib import Path
+          import os
 
           # Load the league data
           with open("league_data_input.json") as f:
               league_data = json.load(f)
 
+          # Get absolute path to OAuth file (script runs from fantasy_football_data_scripts subdirectory)
+          oauth_file = Path("oauth/Oauth.json").resolve()
+
           # Create league context file for initial_import_v2.py
           context = {
               "league_id": league_data.get('league_id'),
               "league_name": league_data.get('league_name'),
-              "oauth_file_path": "oauth/Oauth.json",
+              "oauth_file_path": str(oauth_file),  # Use absolute path
               "game_code": league_data.get('game_code', 'nfl'),
               "start_year": league_data.get('start_year', 2014),
               "end_year": league_data.get('season', league_data.get('end_year', 2024)),
               "num_teams": league_data.get('num_teams', 10),
               "playoff_teams": league_data.get('playoff_teams', 6),
               "regular_season_weeks": league_data.get('regular_season_weeks', 14),
-              "data_directory": "fantasy_football_data",
+              "data_directory": str(Path("fantasy_football_data").resolve()),  # Absolute path
               "max_workers": 5,
               "enable_caching": True,
               "rate_limit_per_sec": 4.0,
@@ -373,19 +377,5 @@ jobs:
             echo "Check the logs for details" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Notify on failure
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const userId = '${{ steps.parse.outputs.user_id }}';
-            const leagueName = '${{ steps.parse.outputs.league_name }}';
-            const season = '${{ steps.parse.outputs.season }}';
-
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `League Import Failed: ${leagueName} (${season})`,
-              body: `Import failed for user \`${userId}\`\n\n**League**: ${leagueName}\n**Season**: ${season}\n\n[View workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
-              labels: ['import-failure', 'automated', 'user-import']
-            });
+      # Note: Issue creation removed due to permission requirements
+      # Failures are logged in workflow summary and artifacts instead
