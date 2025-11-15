@@ -449,7 +449,7 @@ def get_job_status(job_id: str) -> dict:
 # Paths used by the import runner
 DATA_DIR = ROOT_DIR / "fantasy_football_data"
 SCRIPTS_DIR = ROOT_DIR / "fantasy_football_data_scripts"
-INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import.py"
+INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import_v2.py"
 
 
 # =========================
@@ -1073,12 +1073,12 @@ def main():
                                             st.write(f"- `public.{tbl}` → {cnt:,} rows")
 
                 # Clear the query params and rerun to reset UI state
-                st.experimental_set_query_params()
+                st.query_params.clear()
                 st.button("Continue")
                 st.rerun()
         except Exception as e:
             st.error(f"Error starting import: {e}")
-            st.experimental_set_query_params()
+            st.query_params.clear()
             st.rerun()
 
     # Footer
@@ -1143,13 +1143,13 @@ def perform_import_flow(league_info: dict):
                                     st.write(f"- `public.{tbl}` → {cnt:,} rows")
 
         # Reset UI state (clear query params) and rerun so UI refreshes
-        st.experimental_set_query_params()
+        st.query_params.clear()
         st.button("Continue")
         st.rerun()
 
     except Exception as e:
         st.error(f"Error starting import: {e}")
-        st.experimental_set_query_params()
+        st.query_params.clear()
         st.rerun()
 
 
