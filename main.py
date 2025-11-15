@@ -918,16 +918,14 @@ def main():
                                 st.write("Oauth files:", files)
 
                                 st.write(
-                                    "If clicking the card does nothing, use the button below to start the import server-side.")
-                                if st.button("🚀 Start Import (Server)", key=f"start_import_btn_{safe_key_dbg}",
-                                             use_container_width=True):
-                                    with st.spinner("Starting import (server)..."):
-                                        perform_import_flow(selected_league)
+                                    "If clicking the card does nothing, use the button below to start the import.")
+                                if st.button("🚀 Start Import (GitHub Actions - 60-120 min)", key=f"start_import_btn_{safe_key_dbg}",
+                                             use_container_width=True, type="primary"):
+                                    perform_import_flow(selected_league)
 
                             # Explicit Start Import button: fallback to ensure import can be triggered reliably
-                            if st.button("🔄 Start Import", use_container_width=True):
-                                with st.spinner("Starting import..."):
-                                    perform_import_flow(selected_league)
+                            if st.button("☁️ Start Import via GitHub Actions", use_container_width=True, type="primary"):
+                                perform_import_flow(selected_league)
 
                             # Note: the card above is a clickable div that starts the import via query params.
                             # Secondary details moved into an expander (non-primary action)
@@ -1088,21 +1086,98 @@ def main():
 
 
 def perform_import_flow(league_info: dict):
-    """Run the same import flow used for query-param driven imports.
-    This lets us trigger the import server-side (via a Streamlit button) as
-    a reliable fallback to the clickable card link.
+    """Trigger GitHub Actions workflow to run the import in the cloud.
+    This avoids Streamlit Cloud's timeout and resource limits.
     """
     try:
         st.session_state.league_info = league_info
 
-        # Save OAuth token locally (ensure oauth file exists for the import script)
+        # Check if we have the GitHub token to trigger the workflow
+        github_token = os.getenv("GITHUB_WORKFLOW_TOKEN")
+
+        if not github_token:
+            st.error("⚠️ GitHub workflow token not configured. The import cannot run on Streamlit Cloud due to timeout limits.")
+            st.info("**Option 1**: Add `GITHUB_WORKFLOW_TOKEN` to Streamlit secrets")
+            st.info("**Option 2**: Run the import locally using the button below (not recommended)")
+
+            if st.button("🏠 Run Import Locally (May Timeout)", type="secondary"):
+                run_local_import_fallback(league_info)
+            return
+
+        # Prepare league data for GitHub Actions
+        league_data = {
+            "league_id": league_info.get("league_key") or league_info.get("league_id"),
+            "league_name": league_info.get("name", "Unknown League"),
+            "season": league_info.get("season", 2024),
+            "start_year": league_info.get("start_year", league_info.get("season", 2024)),
+            "oauth_token": st.session_state.get("token_data", {}),
+            "num_teams": league_info.get("num_teams", 10),
+            "playoff_teams": 6,
+            "regular_season_weeks": 14
+        }
+
+        st.info("🚀 Starting import via GitHub Actions...")
+        st.caption("This runs in GitHub's cloud to avoid Streamlit timeouts. Takes 60-120 minutes.")
+
+        # Import the trigger function
+        try:
+            from streamlit_helpers.trigger_import_workflow import trigger_import_workflow
+
+            result = trigger_import_workflow(
+                league_data=league_data,
+                github_token=github_token
+            )
+
+            if result['success']:
+                st.success("✅ Import Started Successfully!")
+                st.session_state.import_job_id = result['user_id']
+
+                st.markdown(f"""
+                ### 📊 Import Job Details
+                - **Job ID**: `{result['user_id']}`
+                - **League**: {league_data['league_name']} ({league_data['season']})
+                - **Estimated Time**: {result.get('estimated_time', '60-120 minutes')}
+                - **Track Progress**: [View Workflow]({result['workflow_run_url']})
+
+                The workflow will:
+                1. ✅ Fetch all fantasy data from Yahoo
+                2. ✅ Merge with NFL stats
+                3. ✅ Create parquet files
+                4. ✅ Upload to MotherDuck
+                5. ✅ Prepare your custom analytics site
+
+                You'll be notified when complete (check back in 1-2 hours).
+                """)
+
+                return
+            else:
+                st.error(f"❌ Failed to start import: {result.get('error', 'Unknown error')}")
+                if 'details' in result:
+                    with st.expander("Error Details"):
+                        st.code(result['details'])
+
+        except ImportError:
+            st.error("❌ Workflow trigger helper not found. Please ensure streamlit_helpers/trigger_import_workflow.py exists.")
+
+    except Exception as e:
+        st.error(f"Error starting workflow: {e}")
+        import traceback
+        with st.expander("Full Error"):
+            st.code(traceback.format_exc())
+
+
+def run_local_import_fallback(league_info: dict):
+    """Fallback: run import directly in Streamlit (not recommended, will likely timeout)"""
+    try:
+        st.session_state.league_info = league_info
+
+        # Save OAuth token locally
         if "token_data" in st.session_state:
             try:
                 saved_path = save_oauth_token(st.session_state.token_data, st.session_state.league_info)
                 st.info(f"Saved OAuth token to: {saved_path}")
             except Exception:
-                st.warning(
-                    "Failed to write per-league OAuth file; import will fall back to global Oauth.json if present.")
+                st.warning("Failed to write per-league OAuth file")
 
         ok = run_initial_import()
 
