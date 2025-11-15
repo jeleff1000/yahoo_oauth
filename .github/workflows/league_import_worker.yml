@@ -1,0 +1,391 @@
+name: League Import Worker
+
+# This workflow is triggered on-demand from Streamlit when a user requests
+# to create their own fantasy football analytics site
+
+on:
+  workflow_dispatch:
+    inputs:
+      league_data:
+        description: 'JSON with league configuration (league_id, name, oauth, season, etc.)'
+        required: true
+        type: string
+      user_id:
+        description: 'Unique identifier for this user/import job'
+        required: true
+        type: string
+
+  repository_dispatch:
+    types: [league_import]
+
+jobs:
+  import-league-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # Allow up to 2 hours for full import
+
+    env:
+      PYTHONUNBUFFERED: 1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Parse league data
+        id: parse
+        run: |
+          python - <<'PYEOF'
+          import json
+          import os
+          import sys
+
+          # Get input data
+          league_data_str = '''${{ github.event.inputs.league_data || github.event.client_payload.league_data }}'''
+          user_id = '''${{ github.event.inputs.user_id || github.event.client_payload.user_id }}'''
+
+          try:
+              league_data = json.loads(league_data_str)
+          except Exception as e:
+              print(f"ERROR: Failed to parse league data: {e}")
+              sys.exit(1)
+
+          # Extract league configuration
+          league_id = league_data.get('league_id', '')
+          league_name = league_data.get('league_name', 'Unknown League')
+          season = league_data.get('season', league_data.get('end_year', 2024))
+          start_year = league_data.get('start_year', season)
+          oauth_data = league_data.get('oauth_token', {})
+
+          # Create sanitized database name
+          db_name = f"{league_name}_{season}".lower().replace(' ', '_').replace('-', '_')
+          db_name = ''.join(c if c.isalnum() or c == '_' else '' for c in db_name)
+
+          # Set outputs for next steps
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"user_id={user_id}\n")
+              f.write(f"league_id={league_id}\n")
+              f.write(f"league_name={league_name}\n")
+              f.write(f"season={season}\n")
+              f.write(f"start_year={start_year}\n")
+              f.write(f"database_name={db_name}\n")
+
+          # Save OAuth token to file
+          os.makedirs("oauth", exist_ok=True)
+          with open("oauth/Oauth.json", 'w') as f:
+              json.dump(oauth_data, f, indent=2)
+
+          # Save full league data for context creation
+          with open("league_data_input.json", 'w') as f:
+              json.dump(league_data, f, indent=2)
+
+          print(f"✅ Parsed league: {league_name} ({season})")
+          print(f"   League ID: {league_id}")
+          print(f"   Database: {db_name}")
+          print(f"   User ID: {user_id}")
+          PYEOF
+
+      - name: Update job status - Starting
+        run: |
+          mkdir -p job_status
+          cat > job_status/${{ steps.parse.outputs.user_id }}.json <<EOF
+          {
+            "user_id": "${{ steps.parse.outputs.user_id }}",
+            "league_name": "${{ steps.parse.outputs.league_name }}",
+            "season": "${{ steps.parse.outputs.season }}",
+            "database_name": "${{ steps.parse.outputs.database_name }}",
+            "status": "running",
+            "phase": "starting",
+            "message": "Initializing import...",
+            "started_at": "$(date -Iseconds)"
+          }
+          EOF
+
+      - name: Create league context
+        run: |
+          python - <<'PYEOF'
+          import json
+          from pathlib import Path
+
+          # Load the league data
+          with open("league_data_input.json") as f:
+              league_data = json.load(f)
+
+          # Create league context file for initial_import_v2.py
+          context = {
+              "league_id": league_data.get('league_id'),
+              "league_name": league_data.get('league_name'),
+              "oauth_file_path": "oauth/Oauth.json",
+              "game_code": league_data.get('game_code', 'nfl'),
+              "start_year": league_data.get('start_year', 2014),
+              "end_year": league_data.get('season', league_data.get('end_year', 2024)),
+              "num_teams": league_data.get('num_teams', 10),
+              "playoff_teams": league_data.get('playoff_teams', 6),
+              "regular_season_weeks": league_data.get('regular_season_weeks', 14),
+              "data_directory": "fantasy_football_data",
+              "max_workers": 5,
+              "enable_caching": True,
+              "rate_limit_per_sec": 4.0,
+              "manager_name_overrides": league_data.get('manager_name_overrides', {})
+          }
+
+          # Write context file
+          with open("league_context.json", 'w') as f:
+              json.dump(context, f, indent=2)
+
+          print("✅ League context created")
+          print(json.dumps(context, indent=2))
+          PYEOF
+
+      - name: Create data directory
+        run: |
+          mkdir -p fantasy_football_data
+          echo "✅ Data directory ready"
+
+      - name: Run initial import
+        id: import
+        env:
+          AUTO_CONFIRM: "1"
+        working-directory: fantasy_football_data_scripts
+        run: |
+          echo "========================================"
+          echo "Starting import for ${{ steps.parse.outputs.league_name }}"
+          echo "Season: ${{ steps.parse.outputs.season }}"
+          echo "User ID: ${{ steps.parse.outputs.user_id }}"
+          echo "========================================"
+
+          # Update status
+          cat > ../job_status/${{ steps.parse.outputs.user_id }}.json <<EOF
+          {
+            "user_id": "${{ steps.parse.outputs.user_id }}",
+            "status": "running",
+            "phase": "importing",
+            "message": "Running initial_import_v2.py...",
+            "updated_at": "$(date -Iseconds)"
+          }
+          EOF
+
+          # Run the import
+          python initial_import_v2.py --context ../league_context.json 2>&1 | tee ../import.log
+
+          # Capture exit code
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "exit_code=${EXIT_CODE}" >> $GITHUB_OUTPUT
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ Import completed successfully"
+          else
+            echo "❌ Import failed with exit code ${EXIT_CODE}"
+            echo "Last 100 lines of log:"
+            tail -100 ../import.log
+            exit $EXIT_CODE
+          fi
+
+      - name: Verify parquet files created
+        if: steps.import.outputs.exit_code == '0'
+        id: verify
+        run: |
+          echo "Verifying parquet files..."
+
+          if [ ! -d "fantasy_football_data" ]; then
+            echo "❌ ERROR: Data directory not found!"
+            exit 1
+          fi
+
+          PARQUET_FILES=$(find fantasy_football_data -name "*.parquet" -type f)
+          PARQUET_COUNT=$(echo "$PARQUET_FILES" | grep -c ".parquet" || echo "0")
+
+          if [ "$PARQUET_COUNT" -eq 0 ]; then
+            echo "❌ ERROR: No parquet files were created!"
+            exit 1
+          fi
+
+          echo "✅ Found ${PARQUET_COUNT} parquet files:"
+          ls -lh fantasy_football_data/*.parquet
+
+          # Save file list
+          echo "$PARQUET_FILES" > parquet_files.txt
+          echo "file_count=${PARQUET_COUNT}" >> $GITHUB_OUTPUT
+
+      - name: Upload to MotherDuck
+        if: steps.import.outputs.exit_code == '0'
+        id: motherduck
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          DATABASE_NAME: ${{ steps.parse.outputs.database_name }}
+          LEAGUE_NAME: ${{ steps.parse.outputs.league_name }}
+          SEASON: ${{ steps.parse.outputs.season }}
+        run: |
+          # Update status
+          cat > job_status/${{ steps.parse.outputs.user_id }}.json <<EOF
+          {
+            "user_id": "${{ steps.parse.outputs.user_id }}",
+            "status": "running",
+            "phase": "uploading",
+            "message": "Uploading to MotherDuck...",
+            "updated_at": "$(date -Iseconds)"
+          }
+          EOF
+
+          if [ -z "$MOTHERDUCK_TOKEN" ]; then
+            echo "⚠️  WARNING: MOTHERDUCK_TOKEN not set!"
+            echo "Cannot upload to MotherDuck. Please add MOTHERDUCK_TOKEN as a GitHub secret."
+            exit 1
+          fi
+
+          echo "========================================"
+          echo "Uploading to MotherDuck"
+          echo "Database: ${DATABASE_NAME}"
+          echo "========================================"
+
+          # Use the motherduck_upload.py script
+          cd fantasy_football_data
+          python motherduck_upload.py "${DATABASE_NAME}" . 2>&1 | tee ../motherduck.log
+
+          UPLOAD_EXIT=$?
+
+          if [ $UPLOAD_EXIT -eq 0 ]; then
+            echo "✅ MotherDuck upload complete!"
+            echo "📊 Database: ${DATABASE_NAME}"
+            echo "🔗 Access at: https://app.motherduck.com/"
+            echo "upload_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ MotherDuck upload failed!"
+            tail -50 ../motherduck.log
+            echo "upload_success=false" >> $GITHUB_OUTPUT
+            exit $UPLOAD_EXIT
+          fi
+
+      - name: Create deployment manifest
+        if: steps.motherduck.outputs.upload_success == 'true'
+        run: |
+          python - <<'PYEOF'
+          import json
+          from pathlib import Path
+          import os
+
+          # Create a deployment manifest with all the info needed to create the user's site
+          manifest = {
+              "user_id": "${{ steps.parse.outputs.user_id }}",
+              "league_name": "${{ steps.parse.outputs.league_name }}",
+              "league_id": "${{ steps.parse.outputs.league_id }}",
+              "season": "${{ steps.parse.outputs.season }}",
+              "motherduck_database": "${{ steps.parse.outputs.database_name }}",
+              "parquet_file_count": ${{ steps.verify.outputs.file_count }},
+              "created_at": os.popen('date -Iseconds').read().strip(),
+              "workflow_run_id": "${{ github.run_id }}",
+              "status": "ready",
+              "next_steps": [
+                  "Create KMFFLApp-based UI repository",
+                  "Configure MotherDuck connection",
+                  "Deploy Streamlit site"
+              ]
+          }
+
+          with open("deployment_manifest.json", 'w') as f:
+              json.dump(manifest, f, indent=2)
+
+          print("✅ Deployment manifest created")
+          print(json.dumps(manifest, indent=2))
+          PYEOF
+
+      - name: Update job status - Complete
+        if: always()
+        run: |
+          if [ "${{ steps.import.outputs.exit_code }}" == "0" ] && [ "${{ steps.motherduck.outputs.upload_success }}" == "true" ]; then
+            STATUS="complete"
+            MESSAGE="Import successful! Data uploaded to MotherDuck database: ${{ steps.parse.outputs.database_name }}"
+          elif [ "${{ steps.import.outputs.exit_code }}" != "0" ]; then
+            STATUS="failed"
+            MESSAGE="Import failed during data collection phase"
+          else
+            STATUS="failed"
+            MESSAGE="Import succeeded but MotherDuck upload failed"
+          fi
+
+          cat > job_status/${{ steps.parse.outputs.user_id }}.json <<EOF
+          {
+            "user_id": "${{ steps.parse.outputs.user_id }}",
+            "league_name": "${{ steps.parse.outputs.league_name }}",
+            "season": "${{ steps.parse.outputs.season }}",
+            "database_name": "${{ steps.parse.outputs.database_name }}",
+            "status": "${STATUS}",
+            "message": "${MESSAGE}",
+            "parquet_files": ${{ steps.verify.outputs.file_count || 0 }},
+            "motherduck_url": "https://app.motherduck.com/",
+            "completed_at": "$(date -Iseconds)"
+          }
+          EOF
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: league-import-${{ steps.parse.outputs.user_id }}
+          path: |
+            import.log
+            motherduck.log
+            job_status/
+            deployment_manifest.json
+            fantasy_football_data/*.parquet
+            league_context.json
+          retention-days: 30
+
+      - name: Create workflow summary
+        if: always()
+        run: |
+          echo "# League Import Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## League Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **League**: ${{ steps.parse.outputs.league_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Season**: ${{ steps.parse.outputs.season }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **User ID**: ${{ steps.parse.outputs.user_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **MotherDuck Database**: \`${{ steps.parse.outputs.database_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.import.outputs.exit_code }}" == "0" ]; then
+            echo "## ✅ Import Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Parquet files created: ${{ steps.verify.outputs.file_count }}" >> $GITHUB_STEP_SUMMARY
+            echo "- MotherDuck upload: ${{ steps.motherduck.outputs.upload_success == 'true' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Files Created" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            ls -lh fantasy_football_data/*.parquet 2>/dev/null || echo "No files found"
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+            echo "1. Data is now available in MotherDuck" >> $GITHUB_STEP_SUMMARY
+            echo "2. Create custom analytics site based on KMFFLApp" >> $GITHUB_STEP_SUMMARY
+            echo "3. Configure site to use database: \`${{ steps.parse.outputs.database_name }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Import Status: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the logs for details" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const userId = '${{ steps.parse.outputs.user_id }}';
+            const leagueName = '${{ steps.parse.outputs.league_name }}';
+            const season = '${{ steps.parse.outputs.season }}';
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `League Import Failed: ${leagueName} (${season})`,
+              body: `Import failed for user \`${userId}\`\n\n**League**: ${leagueName}\n**Season**: ${season}\n\n[View workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              labels: ['import-failure', 'automated', 'user-import']
+            });
