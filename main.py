@@ -1093,11 +1093,11 @@ def perform_import_flow(league_info: dict):
         st.session_state.league_info = league_info
 
         # Check if we have the GitHub token to trigger the workflow
-        github_token = os.getenv("GITHUB_WORKFLOW_TOKEN")
+        github_token = os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_WORKFLOW_TOKEN")
 
         if not github_token:
-            st.error("⚠️ GitHub workflow token not configured. The import cannot run on Streamlit Cloud due to timeout limits.")
-            st.info("**Option 1**: Add `GITHUB_WORKFLOW_TOKEN` to Streamlit secrets")
+            st.error("⚠️ GitHub token not configured. The import cannot run on Streamlit Cloud due to timeout limits.")
+            st.info("**Option 1**: Add `GITHUB_TOKEN` to Streamlit secrets")
             st.info("**Option 2**: Run the import locally using the button below (not recommended)")
 
             if st.button("🏠 Run Import Locally (May Timeout)", type="secondary"):
