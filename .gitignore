@@ -14,3 +14,6 @@ venv/
 # IDE
 .idea/
 .claude/
+
+# Windows reserved names (can't be deleted on Windows)
+nul
