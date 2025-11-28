@@ -58,6 +58,11 @@ sys.path.insert(0, str(_scripts_dir))  # Allows: from multi_league.core.XXX
 sys.path.insert(0, str(_multi_league_dir))  # Allows: from core.XXX
 
 from core.league_context import LeagueContext
+# Add transformations/modules to path for shared utilities
+_modules_dir = _multi_league_dir / "transformations" / "modules"
+sys.path.insert(0, str(_modules_dir))
+
+from type_utils import safe_merge, ensure_canonical_types
 
 
 # =========================================================
@@ -76,18 +81,21 @@ def get_player_performance_metrics(
     yahoo_player_id: str,
     trans_week: int,
     year: int,
-    player_df: pd.DataFrame
+    player_df: pd.DataFrame,
+    manager: str = None
 ) -> Dict:
     """
     Calculate player performance metrics relative to transaction week.
 
     Focuses on FUTURE performance (rest of season after transaction).
+    ONLY counts weeks where the player was on the SPECIFIC MANAGER'S roster.
 
     Args:
         yahoo_player_id: Yahoo player ID
         trans_week: Transaction cumulative week
         year: Season year
         player_df: Full player DataFrame
+        manager: Manager who added the player (filters ROS to roster tenure)
 
     Returns:
         Dict of performance metrics
@@ -118,7 +126,26 @@ def get_player_performance_metrics(
         (player_data['cumulative_week'] > trans_week) &
         (player_data['cumulative_week'] <= trans_week + 4)
     ]
-    rest_of_season = player_data[player_data['cumulative_week'] > trans_week]
+
+    # REST OF SEASON - DUAL METRICS:
+    # 1. MANAGED: Only weeks on THIS manager's roster (what YOU got)
+    # 2. TOTAL: All future weeks regardless of roster changes (what they COULD have provided)
+
+    # ROS Managed: Only count weeks where player was on THIS MANAGER'S roster
+    # This automatically stops at drops/trades where manager changes
+    if manager and 'manager' in player_data.columns:
+        rest_of_season_managed = player_data[
+            (player_data['cumulative_week'] > trans_week) &
+            (player_data['manager'] == manager) &
+            (player_data['is_rostered'] == 1)  # Only rostered weeks
+        ]
+    else:
+        # Fallback: if no manager specified, use all future weeks
+        rest_of_season_managed = player_data[player_data['cumulative_week'] > trans_week]
+
+    # ROS Total: All future weeks regardless of who rostered them
+    # This shows full player value for evaluating drops/trades
+    rest_of_season_total = player_data[player_data['cumulative_week'] > trans_week]
 
     metrics = {}
 
@@ -126,7 +153,14 @@ def get_player_performance_metrics(
     if not at_trans.empty:
         metrics['position'] = position
         metrics['nfl_team'] = at_trans['nfl_team'].iloc[0] if 'nfl_team' in at_trans.columns else None
+        metrics['headshot_url'] = at_trans['headshot_url'].iloc[0] if 'headshot_url' in at_trans.columns else None
         metrics['points_at_transaction'] = at_trans['fantasy_points'].iloc[0] if 'fantasy_points' in at_trans.columns else None
+
+    # Fallback: get headshot from any player record if not found at transaction week
+    if metrics.get('headshot_url') is None and 'headshot_url' in player_data.columns:
+        headshots = player_data['headshot_url'].dropna()
+        if not headshots.empty:
+            metrics['headshot_url'] = headshots.iloc[0]
 
     # Before transaction (sunk cost - less important)
     if not before_4wks.empty and 'fantasy_points' in before_4wks.columns:
@@ -139,11 +173,67 @@ def get_player_performance_metrics(
         metrics['total_points_after_4wks'] = round(after_4wks['fantasy_points'].sum(), 2)
         metrics['weeks_after'] = len(after_4wks)
 
-    # Rest of season (total value acquired/lost)
-    if not rest_of_season.empty and 'fantasy_points' in rest_of_season.columns:
-        metrics['total_points_rest_of_season'] = round(rest_of_season['fantasy_points'].sum(), 2)
-        metrics['ppg_rest_of_season'] = round(rest_of_season['fantasy_points'].mean(), 2)
-        metrics['weeks_rest_of_season'] = len(rest_of_season)
+    # ===== ROS MANAGED: What the manager actually got =====
+    if not rest_of_season_managed.empty and 'fantasy_points' in rest_of_season_managed.columns:
+        weeks_managed = len(rest_of_season_managed)
+        metrics['total_points_ros_managed'] = round(rest_of_season_managed['fantasy_points'].sum(), 2)
+        metrics['ppg_ros_managed'] = round(rest_of_season_managed['fantasy_points'].mean(), 2)
+        metrics['weeks_ros_managed'] = weeks_managed
+
+        # SPAR from player table (managed window)
+        if 'player_spar' in rest_of_season_managed.columns:
+            metrics['player_spar_ros_managed'] = round(rest_of_season_managed['player_spar'].sum(), 2)
+        if 'manager_spar' in rest_of_season_managed.columns:
+            spar_sum = rest_of_season_managed['manager_spar'].sum()
+            metrics['manager_spar_ros_managed'] = round(spar_sum, 2)
+            # Per-game SPAR (managed)
+            metrics['manager_spar_per_game_managed'] = round(spar_sum / weeks_managed, 2) if weeks_managed > 0 else 0.0
+        if 'replacement_ppg' in rest_of_season_managed.columns:
+            metrics['replacement_ppg_ros_managed'] = round(rest_of_season_managed['replacement_ppg'].mean(), 2)
+    else:
+        # Player never on manager's roster after transaction
+        metrics['total_points_ros_managed'] = 0.0
+        metrics['ppg_ros_managed'] = 0.0
+        metrics['weeks_ros_managed'] = 0
+        metrics['player_spar_ros_managed'] = 0.0
+        metrics['manager_spar_ros_managed'] = 0.0
+        metrics['manager_spar_per_game_managed'] = 0.0
+        metrics['replacement_ppg_ros_managed'] = 0.0
+
+    # ===== ROS TOTAL: What the player did regardless of roster =====
+    if not rest_of_season_total.empty and 'fantasy_points' in rest_of_season_total.columns:
+        weeks_total = len(rest_of_season_total)
+        metrics['total_points_ros_total'] = round(rest_of_season_total['fantasy_points'].sum(), 2)
+        metrics['ppg_ros_total'] = round(rest_of_season_total['fantasy_points'].mean(), 2)
+        metrics['weeks_ros_total'] = weeks_total
+
+        # SPAR from player table (total window)
+        if 'player_spar' in rest_of_season_total.columns:
+            player_spar_sum = rest_of_season_total['player_spar'].sum()
+            metrics['player_spar_ros_total'] = round(player_spar_sum, 2)
+            # Per-game SPAR (total)
+            metrics['player_spar_per_game_total'] = round(player_spar_sum / weeks_total, 2) if weeks_total > 0 else 0.0
+        if 'manager_spar' in rest_of_season_total.columns:
+            metrics['manager_spar_ros_total'] = round(rest_of_season_total['manager_spar'].sum(), 2)
+        if 'replacement_ppg' in rest_of_season_total.columns:
+            metrics['replacement_ppg_ros_total'] = round(rest_of_season_total['replacement_ppg'].mean(), 2)
+
+        # Legacy columns for backward compatibility (use total)
+        metrics['total_points_rest_of_season'] = metrics['total_points_ros_total']
+        metrics['ppg_rest_of_season'] = metrics['ppg_ros_total']
+        metrics['weeks_rest_of_season'] = metrics['weeks_ros_total']
+        metrics['player_spar_ros'] = metrics['player_spar_ros_total']
+        metrics['manager_spar_ros'] = metrics['manager_spar_ros_total']
+        metrics['replacement_ppg_ros'] = metrics['replacement_ppg_ros_total']
+    else:
+        # No ROS data
+        metrics['total_points_ros_total'] = 0.0
+        metrics['ppg_ros_total'] = 0.0
+        metrics['weeks_ros_total'] = 0
+        metrics['player_spar_ros_total'] = 0.0
+        metrics['player_spar_per_game_total'] = 0.0
+        metrics['manager_spar_ros_total'] = 0.0
+        metrics['replacement_ppg_ros_total'] = 0.0
 
     # Position rank at transaction (weekly rank based on that week's points)
     if position and not at_trans.empty:
@@ -182,7 +272,7 @@ def get_player_performance_metrics(
                 metrics['position_rank_before_transaction'] = int(player_idx[0] + 1)
 
     # Position rank AFTER transaction (based on rest of season performance)
-    if position and not rest_of_season.empty:
+    if position and not rest_of_season_total.empty:
         # Get all players at same position for rest of season
         season_after = player_df[
             (player_df['cumulative_week'] > trans_week) &
@@ -240,7 +330,7 @@ def left_join_transactions_player(left: pd.DataFrame, right: pd.DataFrame, impor
         """Normalize merge keys to string via Int64 to handle type mismatches"""
         for key in keys:
             if key in df.columns and key != 'league_id':  # Skip league_id (already string)
-                df[key] = pd.to_numeric(df[key], errors='coerce').astype('Int64').astype(str)
+                df[key] = pd.to_numeric(df[key], errors='coerce').astype('Int64')
         return df
 
     # Attempt 1: join on (league_id, yahoo_player_id, year, cumulative_week) - multi-league safe
@@ -396,6 +486,7 @@ def enrich_transactions_with_player_data(
         player_id = trans_row['yahoo_player_id']
         week = trans_row['cumulative_week']
         year = trans_row['year']
+        manager = trans_row.get('manager')  # Get manager for ROS filtering
 
         # Skip if missing required data
         if pd.isna(player_id) or pd.isna(week) or pd.isna(year):
@@ -406,7 +497,8 @@ def enrich_transactions_with_player_data(
             yahoo_player_id=player_id,
             trans_week=int(week),
             year=int(year),
-            player_df=player
+            player_df=player,
+            manager=manager  # Pass manager to filter ROS by roster tenure
         )
 
         enrichment_data.append(metrics)
@@ -419,6 +511,50 @@ def enrich_transactions_with_player_data(
     # Add enrichment columns to transactions
     for col in enrichment_df.columns:
         transactions[col] = enrichment_df[col]
+
+    # Add kept_next_year from draft table (if available)
+    # This requires draft enrichment to have run first (creates kept_next_year in draft.parquet)
+    print(f"\nJoining keeper data from draft table...")
+    try:
+        # Draft file is in same directory as player file
+        draft_path = player_path.parent / 'draft.parquet'
+
+        if draft_path.exists():
+            draft_df = pd.read_parquet(draft_path)
+
+            # Normalize yahoo_player_id and year in draft for consistent join
+            if 'yahoo_player_id' in draft_df.columns:
+                draft_df['yahoo_player_id'] = pd.to_numeric(draft_df['yahoo_player_id'], errors='coerce').astype('Int64')
+            if 'year' in draft_df.columns:
+                draft_df['year'] = pd.to_numeric(draft_df['year'], errors='coerce').astype('Int64')
+
+            # Select only needed column for join
+            if 'kept_next_year' in draft_df.columns:
+                draft_keeper = draft_df[['yahoo_player_id', 'year', 'kept_next_year']].copy()
+
+                # Drop duplicates (in case same player drafted multiple times in a year via trades)
+                # Keep first occurrence
+                draft_keeper = draft_keeper.drop_duplicates(subset=['yahoo_player_id', 'year'], keep='first')
+
+                # Left join to preserve all transactions
+                transactions = transactions.merge(
+                    draft_keeper,
+                    on=['yahoo_player_id', 'year'],
+                    how='left',
+                    suffixes=('', '_draft')
+                )
+
+                # Fill NaN with 0 (player not kept next year)
+                if 'kept_next_year' in transactions.columns:
+                    transactions['kept_next_year'] = transactions['kept_next_year'].fillna(0).astype('Int64')
+                    kept_count = (transactions['kept_next_year'] == 1).sum()
+                    print(f"  Added kept_next_year: {kept_count:,} transactions involve players kept next year")
+            else:
+                print(f"  WARNING: kept_next_year not found in draft.parquet - skipping keeper join")
+        else:
+            print(f"  WARNING: draft.parquet not found at {draft_path} - skipping keeper join")
+    except Exception as e:
+        print(f"  WARNING: Could not join keeper data from draft: {e}")
 
     # Calculate additional derived metrics
     print(f"\nCalculating derived metrics...")
@@ -495,9 +631,22 @@ def enrich_transactions_with_player_data(
         bpath = backup_file(transactions_path)
         print(f"\n[Backup Created] {bpath}")
 
-    # Write back to transactions.parquet
+    # Write back to transactions.parquet and CSV
+    # Ensure all join keys have correct types before saving
+
+    transactions = ensure_canonical_types(transactions, verbose=False)
+
     transactions.to_parquet(transactions_path, index=False)
     print(f"\n[SAVED] Updated transaction data written to: {transactions_path}")
+
+    # Also save CSV version (with error handling for locked files)
+    csv_path = transactions_path.with_suffix('.csv')
+    try:
+        transactions.to_csv(csv_path, index=False)
+        print(f"[SAVED] CSV version written to: {csv_path}")
+    except PermissionError:
+        print(f"[WARN]  Could not save CSV (file may be open in Excel): {csv_path}")
+        print(f"[INFO]  Parquet file saved successfully - CSV can be regenerated later")
 
     return stats
 

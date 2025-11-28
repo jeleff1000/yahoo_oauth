@@ -6,10 +6,11 @@ Fetches weekly matchup data from Yahoo Fantasy Football API including:
 - Manager scores and opponents
 - Win/loss records
 - Projection accuracy
-- Head-to-head records vs all managers
-- Schedule-adjusted records
-- Playoff/consolation flags
 - Team metadata (FAAB, moves, trades, grades, etc.)
+
+NOTE: Head-to-head records (w_vs_X, l_vs_X) and playoff flags are NOT calculated here.
+They are added by the transformation pipeline (cumulative_stats_v2.py) to maintain
+separation of concerns between data fetching and transformation.
 
 Key improvements over V1:
 - Multi-league support via LeagueContext
@@ -751,18 +752,20 @@ def weekly_matchup_data(
         if logger:
             logger.complete_step()
 
-        # Add head-to-head records
-        if logger:
-            logger.start_step("add_head_to_head_records")
-
-        df = add_head_to_head_records(df)
-
-        if logger:
-            logger.complete_step()
+        # REMOVED: Head-to-head records calculation
+        # This is now handled by cumulative_stats_v2.py (using head_to_head.py module)
+        # to avoid duplication and ensure transformations are separated from fetching
+        # if logger:
+        #     logger.start_step("add_head_to_head_records")
+        # df = add_head_to_head_records(df)
+        # if logger:
+        #     logger.complete_step()
 
         # Column ordering
         # NOTE: is_playoffs and is_consolation are NOT included here
         # They will be added by transformation pipeline (cumulative_stats_v2.py)
+        # NOTE: w_vs_X and l_vs_X head-to-head columns are also NOT included here
+        # They will be added by cumulative_stats_v2.py (using head_to_head.py module)
         KEEP = [
             'week', 'year', 'manager', 'team_name',
             'team_points', 'team_projected_points', 'opponent', 'opponent_points',
@@ -782,11 +785,12 @@ def weekly_matchup_data(
             'felo_score', 'felo_tier'
         ]
 
-        # Add W/L columns in sorted order
-        KEEP.extend(sorted([c for c in df.columns if c.startswith("w_vs_") and not c.endswith("_sched")]))
-        KEEP.extend(sorted([c for c in df.columns if c.startswith("l_vs_") and not c.endswith("_sched")]))
-        KEEP.extend(sorted([c for c in df.columns if c.startswith("w_vs_") and c.endswith("_sched")]))
-        KEEP.extend(sorted([c for c in df.columns if c.startswith("l_vs_") and c.endswith("_sched")]))
+        # REMOVED: W/L vs each manager columns (w_vs_X, l_vs_X, w_vs_X_sched, l_vs_X_sched)
+        # These are now calculated by cumulative_stats_v2.py to avoid duplication
+        # KEEP.extend(sorted([c for c in df.columns if c.startswith("w_vs_") and not c.endswith("_sched")]))
+        # KEEP.extend(sorted([c for c in df.columns if c.startswith("l_vs_") and not c.endswith("_sched")]))
+        # KEEP.extend(sorted([c for c in df.columns if c.startswith("w_vs_") and c.endswith("_sched")]))
+        # KEEP.extend(sorted([c for c in df.columns if c.startswith("l_vs_") and c.endswith("_sched")]))
 
         # Ensure all columns exist
         for col in KEEP:

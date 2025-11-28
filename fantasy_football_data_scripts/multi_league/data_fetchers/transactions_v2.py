@@ -833,6 +833,13 @@ def fetch_transactions(
         print(f"  Using cached data from {cache_path}")
         try:
             df = pd.read_parquet(cache_path)
+
+            # Apply manager name overrides even when loading from cache
+            if ctx.manager_name_overrides and 'manager' in df.columns:
+                override_count = len(ctx.manager_name_overrides)
+                print(f"  Applying {override_count} manager name override(s)")
+                df['manager'] = df['manager'].replace(ctx.manager_name_overrides)
+
             print(f"=== Completed (from cache): {len(df)} transaction records ===\n")
 
             # Still create output files if save_output=True (even when loading from cache)
@@ -889,6 +896,12 @@ def fetch_transactions(
 
     # Add league_id for multi-league isolation
     df["league_id"] = ctx.league_id
+
+    # Apply manager name overrides from context (e.g., "--hidden--" -> "Ilan")
+    if ctx.manager_name_overrides and 'manager' in df.columns:
+        override_count = len(ctx.manager_name_overrides)
+        print(f"  Applying {override_count} manager name override(s)")
+        df['manager'] = df['manager'].replace(ctx.manager_name_overrides)
 
     print(f"=== Completed: {len(df)} transaction records ===\n")
 

@@ -80,6 +80,11 @@ import pandas as pd
 import numpy as np
 
 from core.league_context import LeagueContext
+# Add transformations/modules to path for shared utilities
+_modules_dir = _multi_league_dir / "transformations" / "modules"
+sys.path.insert(0, str(_modules_dir))
+
+from type_utils import safe_merge, ensure_canonical_types
 
 
 # =========================================================
@@ -263,6 +268,8 @@ def merge_transactions_to_player(
         how='left',
         suffixes=('', '_trans')
     )
+    matched = player_with_trans['max_faab_bid_to_date'].notna().sum() if 'max_faab_bid_to_date' in player_with_trans.columns else 0
+    print(f"  [JOIN] Merged cumulative FAAB: {matched:,}/{len(player_with_trans):,} rows matched")
 
     # Also merge individual transaction faab_bid (only for exact week match)
     if 'faab_bid' in transactions_df.columns:
@@ -279,6 +286,8 @@ def merge_transactions_to_player(
             how='left',
             suffixes=('_old', '')
         )
+        matched_faab = player_with_trans['faab_bid'].notna().sum() if 'faab_bid' in player_with_trans.columns else 0
+        print(f"  [JOIN] Merged weekly FAAB: {matched_faab:,}/{len(player_with_trans):,} rows matched")
 
         # Fill NaN faab_bid with 0
         if 'faab_bid' in player_with_trans.columns:
@@ -440,7 +449,7 @@ def import_transactions_to_player(
         for key in merge_keys:
             if key in player_base.columns:
                 # Same normalization as enrichment: numeric -> int -> string
-                player_base[key] = pd.to_numeric(player_base[key], errors='coerce').astype('Int64').astype(str)
+                player_base[key] = pd.to_numeric(player_base[key], errors='coerce').astype('Int64')
 
         # Select only new columns from enriched data
         enriched_subset = player_enriched[merge_keys + list(new_cols)].copy()
@@ -448,7 +457,7 @@ def import_transactions_to_player(
         # CRITICAL: Also normalize enriched_subset merge keys to ensure type consistency
         for key in merge_keys:
             if key in enriched_subset.columns:
-                enriched_subset[key] = pd.to_numeric(enriched_subset[key], errors='coerce').astype('Int64').astype(str)
+                enriched_subset[key] = pd.to_numeric(enriched_subset[key], errors='coerce').astype('Int64')
 
         # Merge: keep all original rows, update with enriched values where they exist
         player_updated = player_base.merge(

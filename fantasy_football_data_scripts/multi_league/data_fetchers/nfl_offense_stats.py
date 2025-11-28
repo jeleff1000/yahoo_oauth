@@ -102,6 +102,9 @@ def fetch_nflverse_player_stats(year: int, cache_dir: Path = None, use_cache: bo
     """
     Fetch player offensive stats from NFLverse for a given year with caching and chunked downloads.
 
+    IMPORTANT: For the CURRENT year, cache expires more frequently (24 hours) to ensure
+    we get updated data as games complete each week. For past years, cache lasts 7 days.
+
     Args:
         year: NFL season year (e.g., 2014)
         cache_dir: Directory for cached files (default: DEFAULT_CACHE_DIR)
@@ -118,9 +121,16 @@ def fetch_nflverse_player_stats(year: int, cache_dir: Path = None, use_cache: bo
 
     # Check cache first
     if use_cache and cache_file.exists():
+        from datetime import datetime
+        current_year = datetime.now().year
+
+        # For current year: use shorter cache expiry (24 hours) to get fresh data as games complete
+        # For past years: use longer cache expiry (168 hours = 7 days)
+        max_cache_age = 24 if year == current_year else CACHE_MAX_AGE_HOURS
+
         age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
-        if age_hours < CACHE_MAX_AGE_HOURS:
-            print(f"[NFL] Using cached data for {year} (age: {age_hours:.1f} hours)")
+        if age_hours < max_cache_age:
+            print(f"[NFL] Using cached data for {year} (age: {age_hours:.1f} hours, max: {max_cache_age}h)")
             try:
                 df = pd.read_parquet(cache_file)
                 print(f"[NFL] Loaded {len(df):,} rows from cache")
@@ -128,6 +138,8 @@ def fetch_nflverse_player_stats(year: int, cache_dir: Path = None, use_cache: bo
             except Exception as e:
                 print(f"[NFL] Warning: Cache read failed ({e}), re-downloading...")
                 cache_file.unlink(missing_ok=True)
+        else:
+            print(f"[NFL] Cache expired for {year} (age: {age_hours:.1f}h > max: {max_cache_age}h), re-downloading...")
 
     url = f"https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{year}.parquet"
 
@@ -199,7 +211,70 @@ def fetch_nflverse_player_stats(year: int, cache_dir: Path = None, use_cache: bo
     return retry_with_backoff(download_with_retry)
 
 
-def process_one_year(year: int, week: int = None, cache_dir: Path = None, use_cache: bool = True) -> pd.DataFrame:
+def get_max_week_from_matchup_data(data_directory: Path, year: int) -> int | None:
+    """
+    Get the maximum week from matchup data files.
+
+    This allows NFLverse player data to align with matchup data (only fetch weeks with actual matchups).
+
+    Args:
+        data_directory: League data directory (e.g., .../fantasy_football_data/KMFFL)
+        year: Year to check
+
+    Returns:
+        Maximum week number found in matchup data, or None if no matchup data exists
+    """
+    try:
+        matchup_dir = data_directory / "matchup_data"
+
+        if not matchup_dir.exists():
+            print(f"[matchup_max_week] Matchup directory not found: {matchup_dir}")
+            return None
+
+        # Try to find matchup file for this year
+        # Prefer all-weeks file, fallback to individual week files
+        all_weeks_file = matchup_dir / f"matchup_data_week_all_year_{year}.parquet"
+
+        if all_weeks_file.exists():
+            try:
+                df = pd.read_parquet(all_weeks_file)
+                if not df.empty and 'week' in df.columns:
+                    max_week = int(df['week'].max())
+                    print(f"[matchup_max_week] Found max week {max_week} from {all_weeks_file.name}")
+                    return max_week
+            except Exception as e:
+                print(f"[matchup_max_week] Error reading {all_weeks_file.name}: {e}")
+
+        # Fallback: check individual week files
+        week_files = list(matchup_dir.glob(f"matchup_data_week_*_year_{year}.parquet"))
+        if week_files:
+            # Extract week numbers from filenames
+            week_numbers = []
+            for wf in week_files:
+                try:
+                    # Parse filename: matchup_data_week_05_year_2024.parquet
+                    parts = wf.stem.split('_')
+                    if len(parts) >= 5:
+                        week_str = parts[3]  # "05"
+                        if week_str != "all":
+                            week_numbers.append(int(week_str))
+                except (ValueError, IndexError):
+                    continue
+
+            if week_numbers:
+                max_week = max(week_numbers)
+                print(f"[matchup_max_week] Found max week {max_week} from {len(week_files)} individual week files")
+                return max_week
+
+        print(f"[matchup_max_week] No matchup data found for year {year}")
+        return None
+
+    except Exception as e:
+        print(f"[matchup_max_week] Error getting max week from matchup data: {e}")
+        return None
+
+
+def process_one_year(year: int, week: int = None, cache_dir: Path = None, use_cache: bool = True, data_directory: Path = None) -> pd.DataFrame:
     """
     Process offensive stats for a single year (used by combine_dst_to_nfl.py).
 
@@ -208,6 +283,7 @@ def process_one_year(year: int, week: int = None, cache_dir: Path = None, use_ca
         week: Optional week number (0 or None = all weeks)
         cache_dir: Directory for cached files
         use_cache: Whether to use cached data if available
+        data_directory: League data directory for matchup window context (optional)
 
     Returns:
         DataFrame with player offensive stats
@@ -217,10 +293,32 @@ def process_one_year(year: int, week: int = None, cache_dir: Path = None, use_ca
     # Fetch player stats from NFLverse with caching
     df = fetch_nflverse_player_stats(year, cache_dir=cache_dir, use_cache=use_cache)
 
-    # Filter by week if specified
+    # Week filtering logic:
+    # - CURRENT YEAR (week=0/None): Limit to max week from matchup data to avoid incomplete weeks
+    # - PAST YEARS (week=0/None): Pull ALL weeks (no matchup window limitation)
+    # - ANY YEAR (specific week): Filter to that specific week only
+    from datetime import datetime
+    current_year = datetime.now().year
+
+    # Filter by specific week if requested (applies to any year)
     if week and week > 0:
         df = df[df['week'] == week]
         print(f"[NFL] Filtered to week {week}: {len(df):,} rows")
+    # For current year ONLY: limit to weeks with matchup data
+    elif year == current_year and data_directory:
+        max_week_from_matchups = get_max_week_from_matchup_data(data_directory, year)
+
+        if max_week_from_matchups:
+            print(f"[NFL] Current year {year}: filtering to max week from matchup data: {max_week_from_matchups}")
+            df = df[df['week'] <= max_week_from_matchups]
+            print(f"[NFL] Filtered to weeks 1-{max_week_from_matchups}: {len(df):,} rows")
+        else:
+            print(f"[NFL] WARNING: No matchup data found for current year {year}")
+            print(f"[NFL] Using all available NFLverse data (may include incomplete weeks)")
+    # For past years: use all available weeks (no filtering)
+    else:
+        if year < current_year:
+            print(f"[NFL] Past year {year}: using all available weeks (no matchup window limitation)")
 
     # Standardize column names to match defense_stats.py convention
     # This prevents duplicate columns in combine_dst_to_nfl.py

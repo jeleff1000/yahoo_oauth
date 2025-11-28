@@ -268,19 +268,10 @@ def apply_cumulative_fixes(df: pd.DataFrame, data_directory: Optional[str] = Non
                 print(f"[WARN] fallback playoff inference failed -> {str(fallback_e).encode('ascii', errors='replace').decode('ascii')}")
 
     # ---- Continue with rest of transformations ----
-    # 1) Rename weekly mean/median and create aliases
-    df.rename(columns={
-        'weekly_mean': 'manager_season_mean',
-        'weekly_median': 'manager_season_median'
-    }, inplace=True)
+    # NOTE: Rename weekly_mean → manager_season_mean happens AFTER manager_ppg creates these columns
+    # (see transform_cumulative_stats function after Step 4)
 
-    # Create aliases for backwards compatibility
-    if 'manager_season_mean' in df.columns:
-        df['personal_season_mean'] = df['manager_season_mean']
-    if 'manager_season_median' in df.columns:
-        df['personal_season_median'] = df['manager_season_median']
-
-    # 2) Weekly one-vs-all columns based on same-week points
+    # 1) Weekly one-vs-all columns based on same-week points
     pts_col = next((c for c in ['team_points','points_for','pf'] if c in df.columns), None)
     if pts_col is not None:
         try:
@@ -368,6 +359,11 @@ def apply_cumulative_fixes(df: pd.DataFrame, data_directory: Optional[str] = Non
               .reset_index()
         )
 
+        # Drop old season summary columns if they exist (prevents _x/_y suffix conflicts during merge)
+        reg_cols = ['final_regular_wins', 'final_regular_losses', 'season_mean', 'season_median']
+        full_cols = ['final_wins', 'final_losses']
+        df = df.drop(columns=[c for c in reg_cols + full_cols if c in df.columns])
+
         # Merge aggregates back onto df
         df = df.merge(reg, on=['year','manager_year','manager'], how='left')
         df = df.merge(full, on=['year','manager_year','manager'], how='left')
@@ -412,6 +408,11 @@ def apply_cumulative_fixes(df: pd.DataFrame, data_directory: Optional[str] = Non
     denom = (all_time['manager_all_time_wins'] + all_time['manager_all_time_losses']).replace(0, pd.NA)
     all_time['manager_all_time_win_pct'] = (all_time['manager_all_time_wins'] / denom).fillna(0.0)
 
+    # Drop old all_time columns if they exist (prevents _x/_y suffix conflicts during merge)
+    all_time_cols = ['manager_all_time_gp', 'manager_all_time_wins', 'manager_all_time_losses',
+                     'manager_all_time_ties', 'manager_all_time_win_pct']
+    df = df.drop(columns=[c for c in all_time_cols if c in df.columns])
+
     # Merge aggregates back onto main df
     df = df.merge(all_time, on='manager', how='left')
 
@@ -419,32 +420,8 @@ def apply_cumulative_fixes(df: pd.DataFrame, data_directory: Optional[str] = Non
     if df['manager'].isna().any():
         df['manager'] = df['manager'].fillna(_manager_snapshot)
 
-    # 5) Per-week manager_all_time_ranking + percentile
-    pts_col2 = next((c for c in ['team_points','points_for','pf'] if c in df.columns), None)
-    if pts_col2 is not None:
-        # Rank within each manager's entire history: 1 = best ever performance
-        # Use method='min' so ties get the same best rank
-        ranks = (df.groupby('manager')[pts_col2]
-                   .rank(method='min', ascending=False)
-                   .astype('Int64'))
-        df['manager_all_time_ranking'] = ranks
-        # Number of non-null historical records per manager
-        counts = df.groupby('manager')[pts_col2].transform('count').astype(float)
-        # Percentile: higher is better. If only one record, set percentile to 100.0
-        pct = ((counts - ranks.astype(float)) / (counts - 1.0)).where(counts > 1, 1.0) * 100.0
-        df['manager_all_time_percentile'] = pct.round(2)
-
-    # --- Weekly, intra-season ranking: best weekly score = 1 per manager/year ---
-    pts_col = next((c for c in ["team_points","points_for","pf"] if c in df.columns), None)
-    if pts_col is not None:
-        df[pts_col] = pd.to_numeric(df[pts_col], errors="coerce")
-        df["manager_season_ranking"] = (
-            df.groupby(["manager","year"])[pts_col]
-              .rank(method="dense", ascending=False)
-              .astype("Int64")
-        )
-    else:
-        df["manager_season_ranking"] = pd.NA
+    # NOTE: Manager rankings are now calculated in the main pipeline (Step 9.5)
+    # See matchup_rankings module for implementation
 
     # 6) Quick assertions (recommended)
     # No row should have both flags set (mutual exclusivity)
@@ -465,72 +442,20 @@ def apply_cumulative_fixes(df: pd.DataFrame, data_directory: Optional[str] = Non
             raise AssertionError(f"Sacko flagged outside consolation on {_bads.sum()} rows")
 
     # --- Champion & Sacko detection ---
+    # NOTE: Champion and Sacko detection is now handled by playoff_bracket.simulate_playoff_brackets()
+    # This provides more accurate detection based on actual bracket results and placement games.
+    # The code below is kept ONLY as a fallback in case playoff_bracket module fails.
+
     for col in ["champion","sacko"]:
         if col not in df.columns:
             df[col] = 0
 
-    # Use normalized flags for logic
-    df["win"]  = pd.to_numeric(df.get("win", 0), errors="coerce").fillna(0).astype(int)
-    df["loss"] = pd.to_numeric(df.get("loss", 0), errors="coerce").fillna(0).astype(int)
-
-    years = sorted(df["year"].dropna().unique().astype(int))
-
-    for yr in years:
-        ymask = df["year"] == yr
-
-        # -------- Champion --------
-        po = df[ymask & (df["is_playoffs"] == 1)]
-        if not po.empty and "playoff_round" in df.columns:
-            # Last playoff week with a 'championship' label
-            last_po_wk = po.loc[po["playoff_round"].astype(str).str.lower().eq("championship"), "week"]
-            if not last_po_wk.empty:
-                wk = int(last_po_wk.min())
-                champ_mask = ymask & (df["week"] == wk) & (df["is_playoffs"] == 1) & (df["win"] == 1)
-                df.loc[champ_mask, "champion"] = 1
-
-        # -------- Sacko (toilet loser) --------
-        cons = df[ymask & (df["is_consolation"] == 1)]
-        if not cons.empty:
-            # Pick the *last* consolation week that has head-to-head rows
-            last_cons_wk = int(cons["week"].max())
-            # Mark Sacko = loser of the last consolation week (loss == 1)
-            sacko_mask = ymask & (df["week"] == last_cons_wk) & (df["is_consolation"] == 1) & (df["loss"] == 1)
-            df.loc[sacko_mask, "sacko"] = 1
-
     # ----------------------------------------------------------------------
-    # SACKO: loses EVERY consolation game they play that postseason
+    # SACKO DETECTION: Now handled by playoff_bracket.simulate_playoff_brackets()
+    # The sacko is the LOSER of the WORST placement game (highest placement_rank)
+    # in the championship week. This is more accurate than the old "lost all games" logic.
     # ----------------------------------------------------------------------
-    if "sacko" not in df.columns:
-        df["sacko"] = 0
-
-    # ensure ints - use Int64 dtype to allow NaN values during intermediate operations
-    for c in ("is_consolation", "is_playoffs", "win", "loss", "year", "week"):
-        if c not in df.columns:
-            df[c] = 0
-        # First ensure numeric, then fillna, then handle any remaining non-finite values
-        df[c] = pd.to_numeric(df[c], errors="coerce")
-        df[c] = df[c].replace([np.inf, -np.inf], np.nan).fillna(0).astype(int)
-
-    # compute Sacko per (manager, year)
-    for (mgr, yr), g in df.groupby(["manager", "year"]):
-        cons = g[g["is_consolation"] == 1].sort_values("week")
-        if cons.empty:
-            continue
-
-        # total consolation games for this manager this season
-        games = len(cons)
-        losses = int((cons["loss"] == 1).sum())
-        wins   = int((cons["win"]  == 1).sum())
-        # Sacko only if they lost *every* consolation game (no wins, no ties)
-        if games > 0 and losses == games and wins == 0:
-            last_wk = int(cons["week"].max())
-            mask = (
-                (df["manager"] == mgr) &
-                (df["year"] == yr) &
-                (df["week"] == last_wk) &
-                (df["is_consolation"] == 1)
-            )
-            df.loc[mask, "sacko"] = 1
+    # Old logic removed - see playoff_bracket/consolation_bracket.py for new implementation
 
     return df
 
@@ -563,11 +488,13 @@ import playoff_flags
 import cumulative_records
 import weekly_metrics
 import season_rankings
+import matchup_rankings
 import matchup_keys
 import head_to_head
 import manager_ppg
 import comparative_schedule
 import all_play_extended
+import playoff_scenarios
 
 
 # =============================================================================
@@ -602,15 +529,15 @@ def transform_cumulative_stats(
     _safe_print("="*80)
 
     # Step 1: Add matchup keys (for joins)
-    _safe_print("\n[1/7] Adding matchup keys...")
+    _safe_print("\n[1/11] Adding matchup keys...")
     df = matchup_keys.add_matchup_keys(df)
 
     # Step 2: Calculate cumulative records FIRST (needed for final_playoff_seed)
-    _safe_print("[2/7] Calculating cumulative win/loss records...")
+    _safe_print("[2/11] Calculating cumulative win/loss records...")
     df = cumulative_records.calculate_cumulative_records(df, data_directory=data_directory)
 
     # Step 3: Normalize playoff flags AFTER we have final_playoff_seed (CRITICAL: is_consolation=1 → is_playoffs=0)
-    _safe_print("[3/7] Normalizing playoff/consolation flags...")
+    _safe_print("[3/11] Normalizing playoff/consolation flags...")
 
     # Import playoff_flags module first (before using it in except block)
     playoff_flags_module = None
@@ -656,6 +583,14 @@ def transform_cumulative_stats(
                 except UnicodeEncodeError:
                     print(f"[ERROR] Fallback also failed: {str(fallback_error).encode('ascii', errors='replace').decode('ascii')}. Skipping playoff normalization.")
 
+    # Step 3b: Add season_result column (AFTER playoff bracket simulation)
+    _safe_print("[3b/11] Adding season_result column...")
+    try:
+        if playoff_flags_module:
+            df = playoff_flags_module.add_season_result(df)
+    except Exception as e:
+        _safe_print(f"[WARN] Failed to add season_result: {e}. Skipping this step.")
+
     # Create aliases for streak columns (backwards compatibility)
     if 'win_streak' in df.columns:
         df['winning_streak'] = df['win_streak']
@@ -663,52 +598,87 @@ def transform_cumulative_stats(
         df['losing_streak'] = df['loss_streak']
 
     # Step 4: Calculate manager PPG metrics (RECALCULATE WEEKLY)
-    _safe_print("[4/10] Calculating manager PPG (weekly_mean, weekly_median)...")
+    _safe_print("[4/11] Calculating manager PPG (weekly_mean, weekly_median)...")
     try:
         df = manager_ppg.calculate_manager_ppg(df)
     except Exception as e:
         _safe_print(f"[WARN] Failed to calculate manager PPG: {e}. Skipping this step.")
 
+    # Step 4b: Rename weekly mean/median and create aliases (MUST be after manager_ppg creates them!)
+    # Drop old target columns if they exist (prevents conflicts during rename)
+    for old_col in ['manager_season_mean', 'manager_season_median']:
+        if old_col in df.columns and old_col != 'weekly_mean' and old_col != 'weekly_median':
+            df = df.drop(columns=[old_col])
+
+    df.rename(columns={
+        'weekly_mean': 'manager_season_mean',
+        'weekly_median': 'manager_season_median'
+    }, inplace=True)
+
+    # Create aliases for backwards compatibility
+    if 'manager_season_mean' in df.columns:
+        df['personal_season_mean'] = df['manager_season_mean'].values
+    if 'manager_season_median' in df.columns:
+        df['personal_season_median'] = df['manager_season_median'].values
+
+    _safe_print("  [OK] Renamed weekly_mean → manager_season_mean, weekly_median → manager_season_median")
+
     # Step 5: Calculate weekly metrics (RECALCULATE WEEKLY)
-    _safe_print("[5/10] Calculating weekly league-relative metrics...")
+    _safe_print("[5/11] Calculating weekly league-relative metrics...")
     df = weekly_metrics.calculate_weekly_metrics(df)
 
     # Step 6: Calculate opponent all-play metrics (RECALCULATE WEEKLY)
-    _safe_print("[6/10] Calculating opponent all-play metrics...")
+    _safe_print("[6/11] Calculating opponent all-play metrics...")
     try:
         df = all_play_extended.calculate_opponent_all_play(df)
     except Exception as e:
         _safe_print(f"[WARN] Failed to calculate opponent all-play: {e}. Skipping this step.")
 
     # Step 7: Calculate head-to-head records (RECALCULATE WEEKLY)
-    _safe_print("[7/10] Calculating head-to-head records...")
+    _safe_print("[7/11] Calculating head-to-head records...")
     df = head_to_head.calculate_head_to_head_records(df)
 
     # Step 8: Calculate comparative schedule (RECALCULATE WEEKLY)
-    _safe_print("[8/10] Calculating comparative schedule (w_vs_X_sched)...")
+    _safe_print("[8/11] Calculating comparative schedule (w_vs_X_sched)...")
     try:
         df = comparative_schedule.calculate_comparative_schedule(df)
     except Exception as e:
         _safe_print(f"[WARN] Failed to calculate comparative schedule: {e}. Skipping this step.")
 
     # Step 9: Calculate season rankings (SET-AND-FORGET if championship complete)
-    _safe_print("[9/10] Calculating season rankings...")
+    _safe_print("[9/11] Calculating season rankings...")
     df = season_rankings.calculate_season_rankings(
         df,
         championship_complete=championship_complete
     )
 
+    # Step 9.5: Calculate manager-specific matchup rankings (RECALCULATE WEEKLY)
+    _safe_print("[9.5/11] Calculating manager matchup rankings...")
+    try:
+        df = matchup_rankings.calculate_all_matchup_rankings(df)
+    except Exception as e:
+        _safe_print(f"[WARN] Failed to calculate matchup rankings: {e}. Skipping this step.")
+
     # Step 10: Calculate all-time rankings (RECALCULATE WEEKLY)
-    _safe_print("[10/10] Calculating all-time rankings...")
+    _safe_print("[10/11] Calculating all-time rankings...")
     try:
         df = season_rankings.calculate_alltime_rankings(df)
     except Exception as e:
         _safe_print(f"[WARN] Failed to calculate all-time rankings: {e}. Skipping this step.")
 
     # ------------------------------------------------------------
+    # Playoff Scenario Columns (magic numbers, clinch, weekly changes)
+    # ------------------------------------------------------------
+    _safe_print("[11/12] Adding playoff scenario columns...")
+    try:
+        df = playoff_scenarios.add_playoff_scenario_columns(df, data_directory=data_directory)
+    except Exception as e:
+        _safe_print(f"[WARN] Failed to add playoff scenario columns: {e}. Skipping this step.")
+
+    # ------------------------------------------------------------
     # Inflation Rate (year-over-year scoring normalization)
     # ------------------------------------------------------------
-    _safe_print("[11/11] Calculating inflation rate...")
+    _safe_print("[12/12] Calculating inflation rate...")
     if "team_points" in df.columns and "year" in df.columns:
         # Calculate average team_points per year (exclude nulls/zeros)
         year_means = df[df["team_points"].notna() & (df["team_points"] > 0)].groupby("year")["team_points"].mean()

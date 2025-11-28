@@ -134,7 +134,7 @@ def run_script(
     label: str,
     context_path: str,
     additional_args: Optional[List[str]] = None,
-    timeout: int = 900,
+    timeout: Optional[int] = 900,
     oauth_env: Optional[dict] = None
 ) -> bool:
     """
@@ -151,7 +151,7 @@ def run_script(
         label: Human-readable label for logging
         context_path: Path to league_context.json
         additional_args: Extra CLI arguments to pass
-        timeout: Timeout in seconds (default: 900)
+        timeout: Timeout in seconds (default: 900), or None for no timeout
         oauth_env: Pre-configured OAuth environment (if None, will be set up)
 
     Returns:
@@ -243,7 +243,8 @@ def run_script(
             return True, None
 
         except subprocess.TimeoutExpired:
-            log(f"[TIMEOUT] {label} timed out after {timeout}s")
+            timeout_msg = f"{timeout}s" if timeout is not None else "unlimited"
+            log(f"[TIMEOUT] {label} timed out after {timeout_msg}")
             return False, None
         except Exception as e:
             log(f"[FAIL] Error running {label}: {e}")
@@ -283,7 +284,7 @@ def run_scripts_parallel(
     scripts: List[Tuple[str, str]],
     context_path: str,
     additional_args: Optional[List[str]] = None,
-    timeout: int = 900
+    timeout: Optional[int] = 900
 ) -> dict:
     """
     Run multiple scripts in parallel (future enhancement).
@@ -294,7 +295,7 @@ def run_scripts_parallel(
         scripts: List of (script_path, label) tuples
         context_path: Path to league_context.json
         additional_args: Extra CLI arguments for all scripts
-        timeout: Timeout per script
+        timeout: Timeout per script (or None for no timeout)
 
     Returns:
         Dictionary mapping labels to success/failure status

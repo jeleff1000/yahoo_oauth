@@ -494,7 +494,16 @@ def mark_playoff_rounds(df: pd.DataFrame, data_directory: str = None) -> pd.Data
 
         # ====== DYNAMIC PLACEMENT GAME DETECTION ======
         # Track all teams through postseason to detect placement games
-        # Handles BOTH winner-advances and loser-advances paths
+        # FULLY GENERIC: Works for any bracket size (2-32 teams)
+        #
+        # Strategy:
+        # 1. Track team paths through brackets (championship vs consolation)
+        # 2. Pair teams that lost/won in same week from same bracket
+        # 3. Calculate placement rank based on:
+        #    - Their playoff seeds
+        #    - How many teams are competing for that placement
+        #    - Bracket tree structure
+
         postseason_mask = (df["year"] == yr) & ((df["is_playoffs"] == 1) | (df["is_consolation"] == 1))
         postseason_weeks = sorted(df.loc[postseason_mask, "week"].dropna().unique().astype(int))
 
@@ -503,6 +512,9 @@ def mark_playoff_rounds(df: pd.DataFrame, data_directory: str = None) -> pd.Data
 
         # Build a history of who each team has played and their results
         team_history = {}  # {manager: [(week, opponent, won, bracket_type), ...]}
+
+        # Track team seeds for placement calculations
+        team_seeds = {}  # {manager: final_playoff_seed}
 
         for week in postseason_weeks:
             week_mask = (df["year"] == yr) & (df["week"] == week)
@@ -518,24 +530,38 @@ def mark_playoff_rounds(df: pd.DataFrame, data_directory: str = None) -> pd.Data
                     team_history[mgr] = []
                 team_history[mgr].append((week, opp, won, bracket_type))
 
-        # Track winner and loser paths separately for consolation bracket
-        # This identifies which games are "winner advances" vs "loser advances"
-        consolation_winners = set()  # Teams who won their consolation games
-        consolation_losers = set()   # Teams who lost their consolation games
+                # Store team seed for later calculations
+                if mgr not in team_seeds and 'final_playoff_seed' in row.index:
+                    seed = row['final_playoff_seed']
+                    if pd.notna(seed):
+                        team_seeds[mgr] = int(seed)
+
+        # Track which teams are still alive in each bracket for dynamic placement calculation
+        # This is the KEY to making placement detection work for any bracket size
+        alive_by_week = {}  # {week: {'championship': set(), 'consolation': set()}}
 
         for week in postseason_weeks:
-            week_mask = (df["year"] == yr) & (df["week"] == week) & (df["is_consolation"] == 1)
+            week_mask = (df["year"] == yr) & (df["week"] == week)
             week_df = df[week_mask]
 
-            for _, row in week_df.iterrows():
-                if row['win'] == 1:
-                    consolation_winners.add(row['manager'])
-                else:
-                    consolation_losers.add(row['manager'])
+            # Count teams still alive in each bracket
+            champ_alive = set(week_df[week_df['is_playoffs'] == 1]['manager'].unique())
+            cons_alive = set(week_df[week_df['is_consolation'] == 1]['manager'].unique())
+
+            alive_by_week[week] = {
+                'championship': champ_alive,
+                'consolation': cons_alive
+            }
+
+        # Get total teams in league for placement calculations
+        total_teams = len(team_seeds) if team_seeds else 10  # fallback to 10
 
         # Detect placement games by finding teams with similar paths
-        # Key insight: Placement games occur when two teams who BOTH LOST (or BOTH WON)
-        # in the same previous round play each other in a subsequent week
+        # GENERIC ALGORITHM:
+        # 1. Both teams lost (or won) in same previous round from same bracket
+        # 2. Calculate placement rank based on:
+        #    - For championship dropouts: position in championship tree
+        #    - For consolation teams: how many teams are still alive
 
         for week_idx, week in enumerate(postseason_weeks):
             week_mask = (df["year"] == yr) & (df["week"] == week)
@@ -569,80 +595,89 @@ def mark_playoff_rounds(df: pd.DataFrame, data_directory: str = None) -> pd.Data
                 mgr_last_week, mgr_last_opp, mgr_won_last, mgr_last_bracket = mgr_prev[-1]
                 opp_last_week, opp_last_opp, opp_won_last, opp_last_bracket = opp_prev[-1]
 
-                # PLACEMENT GAME DETECTION:
-                # Case 1: Both teams lost in the same week → placement game
-                # Case 2: Both teams won in the same week AND now playing consolation → placement game
+                # GENERIC PLACEMENT GAME DETECTION
+                # A placement game occurs when two teams with SIMILAR PATHS meet
+                # Path similarity = same bracket + same result in same previous week
                 is_placement = False
                 placement_rank = None
                 placement_name = None
-                is_loser_path = False  # Track if this is a "loser advances" path (toward sacko)
 
-                if mgr_last_week == opp_last_week:
-                    # Same previous week - check if same result
+                if mgr_last_week == opp_last_week and mgr_last_bracket == opp_last_bracket:
+                    # Both teams played in same week from same bracket
+                    # Check if they had same result (both won OR both lost)
+
                     if not mgr_won_last and not opp_won_last:
-                        # BOTH LOST in same previous round - this is a placement game!
+                        # BOTH LOST - this is a placement game!
                         is_placement = True
-                        is_loser_path = True
 
-                        # Determine which placement based on bracket and round
-                        if row['is_playoffs'] == 1:
-                            # Championship bracket placement (3rd place game)
-                            if weeks and week == weeks[-1]:  # Final championship week
-                                placement_rank = 3
-                                placement_name = "third_place_game"
+                        # GENERIC PLACEMENT RANK CALCULATION
+                        if mgr_last_bracket == 'championship':
+                            # Championship bracket losers
+                            # Placement depends on WHICH round they lost in
 
-                        elif row['is_consolation'] == 1:
-                            # Consolation bracket - need to determine if this is winner-path or loser-path
-                            # Loser path games (toward sacko) are lower priority placements
+                            # Count championship rounds they survived
+                            if weeks:
+                                # Find which championship round they lost in
+                                try:
+                                    elim_round_idx = weeks.index(mgr_last_week)
+                                except ValueError:
+                                    elim_round_idx = 0
 
-                            # Count how many losses each team has in consolation
-                            mgr_cons_losses = sum(1 for w, o, won, bt in team_history[mgr] if bt == 'consolation' and not won and w < week)
-                            opp_cons_losses = sum(1 for w, o, won, bt in team_history[opp] if bt == 'consolation' and not won and w < week)
+                                # Calculate placement based on elimination tier
+                                # Logic: losers in final round (semifinals) = 3rd place
+                                #        losers in second-to-last round = 5th place
+                                #        losers in third-to-last round = 7th place (rare), etc.
+                                rounds_from_finals = len(weeks) - 1 - elim_round_idx
 
-                            # Calculate placement based on consolation bracket position
-                            weeks_in_cons = cons_weeks.index(week) if week in cons_weeks else 0
+                                # Each round back adds 2 to placement (3rd, 5th, 7th, etc.)
+                                placement_rank = 3 + max(0, (rounds_from_finals - 1)) * 2
+                                placement_name = {
+                                    3: "third_place_game",
+                                    5: "fifth_place_game",
+                                    7: "seventh_place_game",
+                                    9: "ninth_place_game"
+                                }.get(placement_rank, f"placement_{placement_rank}_game")
 
-                            # Loser-advances path (toward sacko)
-                            # These are teams competing for WORST place
-                            if week == cons_weeks[-1]:  # Final consolation week
-                                # Could be 5th place game (winners) or sacko bowl (losers path)
-                                if mgr_cons_losses >= 1 and opp_cons_losses >= 1:
-                                    # Both have lost before - this is lower bracket (sacko path)
-                                    placement_rank = 9  # Or calculate dynamically
-                                    placement_name = "ninth_place_game"
-                                else:
-                                    placement_rank = 5
-                                    placement_name = "fifth_place_game"
-                            elif len(cons_weeks) >= 2 and week == cons_weeks[-2]:
-                                placement_rank = 7
-                                placement_name = "seventh_place_game"
-                            elif len(cons_weeks) >= 3 and week == cons_weeks[-3]:
-                                placement_rank = 9
-                                placement_name = "ninth_place_game"
-                            else:
-                                # Generic placement for deeper brackets
-                                # Base placement on position in consolation bracket
-                                placement_rank = 5 + (2 * (total_cons - weeks_in_cons - 1))
-                                placement_name = f"placement_{placement_rank}_game"
+                        elif mgr_last_bracket == 'consolation':
+                            # Pure consolation bracket losers (competing for worst place)
+                            # Use dynamic calculation based on teams still alive
+
+                            # How many teams are playing this week?
+                            teams_this_week = len(alive_by_week.get(week, {}).get('consolation', set()))
+
+                            # Placement = total_teams - teams_this_week + 1
+                            # This gives the BEST possible finish for these teams
+                            if teams_this_week > 0:
+                                placement_rank = total_teams - teams_this_week + 1
+                                placement_name = {
+                                    3: "third_place_game",
+                                    5: "fifth_place_game",
+                                    7: "seventh_place_game",
+                                    9: "ninth_place_game",
+                                    11: "eleventh_place_game"
+                                }.get(placement_rank, f"placement_{placement_rank}_game")
 
                     elif mgr_won_last and opp_won_last:
-                        # BOTH WON in same previous round - could be playing for higher placement
-                        # This happens in consolation when winners play for better placement
-                        if row['is_consolation'] == 1:
-                            is_placement = True
-                            is_loser_path = False
+                        # BOTH WON - also a placement game (winner-advances path)
+                        is_placement = True
 
-                            # Winner-advances path (for better placement)
-                            weeks_in_cons = cons_weeks.index(week) if week in cons_weeks else 0
+                        if mgr_last_bracket == 'consolation':
+                            # Consolation winners competing for better placement
+                            # Use same dynamic calculation
 
-                            if week == cons_weeks[-1]:
-                                placement_rank = 5
-                                placement_name = "fifth_place_game"
-                            elif len(cons_weeks) >= 2 and week == cons_weeks[-2]:
-                                placement_rank = 7
-                                placement_name = "seventh_place_game"
+                            teams_this_week = len(alive_by_week.get(week, {}).get('consolation', set()))
 
-                # Mark the placement game
+                            if teams_this_week > 0:
+                                placement_rank = total_teams - teams_this_week + 1
+                                placement_name = {
+                                    3: "third_place_game",
+                                    5: "fifth_place_game",
+                                    7: "seventh_place_game",
+                                    9: "ninth_place_game",
+                                    11: "eleventh_place_game"
+                                }.get(placement_rank, f"placement_{placement_rank}_game")
+
+                # Mark the placement game if detected
                 if is_placement and placement_rank:
                     game_mask = (df["year"] == yr) & (df["week"] == week) & \
                                ((df["manager"] == mgr) | (df["manager"] == opp))
@@ -656,8 +691,10 @@ def mark_playoff_rounds(df: pd.DataFrame, data_directory: str = None) -> pd.Data
                     else:
                         df.loc[game_mask, "playoff_round"] = placement_name
 
-                    path_type = "loser-advances (toward sacko)" if is_loser_path else "winner-advances"
-                    safe_print(f"      Detected {placement_name} ({path_type}): {mgr} vs {opp} (week {week})")
+                    # Log detection with path information
+                    path_desc = "champ losers" if mgr_last_bracket == 'championship' else "cons bracket"
+                    result_desc = "both lost" if not mgr_won_last else "both won"
+                    safe_print(f"      {placement_name} (rank {placement_rank}): {mgr} vs {opp} ({path_desc}, {result_desc})")
 
     # ====== ENFORCE MUTUAL EXCLUSIVITY ======
     # CRITICAL: Ensure playoff and consolation labels are mutually exclusive
@@ -745,5 +782,127 @@ def mark_champions_and_sackos(df: pd.DataFrame, settings_dir: str = None) -> pd.
     # Note: simulate_playoff_brackets is now called by cumulative_stats_v2.py
     # after normalize_playoff_flags completes, so we don't call it here anymore
     # to avoid duplicate processing that would reset champion/sacko flags
+
+    return df
+
+
+@ensure_normalized
+def add_season_result(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add season_result column combining win/loss outcome with game type.
+
+    GENERIC & DYNAMIC: Works for any postseason structure.
+
+    season_result format: "{won|lost} {game_type}"
+
+    Examples:
+    - "won championship"
+    - "lost championship"
+    - "won third place game"
+    - "lost third place game"
+    - "won fifth place game"
+    - "lost seventh place game"
+    - "won consolation semifinal"
+    - etc.
+
+    For the championship week (last playoff week of season), this shows
+    each manager's final game outcome.
+
+    Args:
+        df: DataFrame with playoff/consolation round labels and win/loss flags
+
+    Returns:
+        DataFrame with season_result column added
+    """
+    df = df.copy()
+
+    # Initialize season_result column
+    df['season_result'] = ""
+
+    # Ensure required columns exist
+    required = ['year', 'week', 'win', 'loss']
+    for col in required:
+        if col not in df.columns:
+            safe_print(f"  [WARN] Missing column {col}, cannot create season_result")
+            return df
+
+    # Process each year to find championship week
+    years = sorted(df['year'].dropna().unique())
+
+    for year in years:
+        year = int(year)
+        year_mask = df['year'] == year
+
+        # Find championship week (last postseason week)
+        postseason_mask = year_mask & ((df.get('is_playoffs', pd.Series(0)) == 1) |
+                                       (df.get('is_consolation', pd.Series(0)) == 1))
+
+        if not postseason_mask.any():
+            continue
+
+        championship_week = df[postseason_mask]['week'].max()
+
+        # Get all games in championship week
+        champ_week_mask = year_mask & (df['week'] == championship_week)
+        champ_week_df = df[champ_week_mask]
+
+        for idx, row in champ_week_df.iterrows():
+            # Determine outcome (won or lost)
+            if row['win'] == 1:
+                outcome = "won"
+            elif row['loss'] == 1:
+                outcome = "lost"
+            else:
+                # Tie or unknown
+                outcome = "tied in"
+
+            # Determine game type
+            game_type = None
+
+            # Championship game (is_playoffs=1, championship=1)
+            if row.get('is_playoffs') == 1 and row.get('championship') == 1:
+                game_type = "championship"
+
+            # Playoff semifinal
+            elif row.get('is_playoffs') == 1 and row.get('semifinal') == 1:
+                game_type = "semifinal"
+
+            # Playoff quarterfinal
+            elif row.get('is_playoffs') == 1 and row.get('quarterfinal') == 1:
+                game_type = "quarterfinal"
+
+            # Placement games (consolation with placement_rank)
+            elif row.get('is_consolation') == 1 and row.get('placement_game') == 1:
+                # Use consolation_round label if available
+                cons_round = str(row.get('consolation_round', ''))
+                if cons_round and cons_round != '':
+                    # Remove 'game' suffix if present (to avoid "won third place game game")
+                    game_type = cons_round.replace('_game', ' game').replace('_', ' ')
+                else:
+                    # Fallback to placement_rank
+                    placement_rank = row.get('placement_rank', 0)
+                    if placement_rank > 0:
+                        rank_suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(placement_rank % 10 if placement_rank not in [11, 12, 13] else 0, 'th')
+                        game_type = f"{placement_rank}{rank_suffix} place game"
+
+            # Consolation round (not a placement game)
+            elif row.get('is_consolation') == 1:
+                cons_round = str(row.get('consolation_round', ''))
+                if 'final' in cons_round:
+                    game_type = "consolation final"
+                elif 'semifinal' in cons_round:
+                    game_type = "consolation semifinal"
+                else:
+                    game_type = "consolation round"
+
+            # Combine outcome + game type
+            if game_type:
+                df.at[idx, 'season_result'] = f"{outcome} {game_type}"
+
+    safe_print(f"  [OK] Added season_result column")
+
+    # Count how many results were created
+    non_empty = (df['season_result'] != '').sum()
+    safe_print(f"       {non_empty} season results created")
 
     return df

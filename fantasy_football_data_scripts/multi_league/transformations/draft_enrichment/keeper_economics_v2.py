@@ -1,27 +1,30 @@
 """
 Keeper Economics Transformation (Multi-League V2)
 
-Calculates keeper prices and adds keeper economics to player data.
+Calculates keeper prices using configurable rules from league_context.json.
 
-This transformation combines draft and transaction data to calculate:
-- Keeper price (based on draft cost + FAAB bids)
-- Whether player was kept next year
-- Next year cost and points (ROI analysis)
+This transformation:
+- Reads keeper rules from league context (formulas, limits, draft type handling)
+- Calculates keeper price based on acquisition type and keeper year
+- Adds keeper economics to draft data for value analysis
 
-Join Key: (yahoo_player_id, year) - Season-level aggregation
-
-Formula: keeper_price = max(draft_cost * 1.5 + 7.5, faab_bid / 2, 1)
+Key Features:
+- Fully configurable via league_context.json keeper_rules
+- Supports auction and snake draft types automatically
+- Handles FAAB acquisitions, free agents, and drafted players
+- Year-over-year keeper price escalation (year 1, year 2+, etc.)
 
 Usage:
     python keeper_economics_v2.py --context path/to/league_context.json
     python keeper_economics_v2.py --context path/to/league_context.json --dry-run
-    python keeper_economics_v2.py --context path/to/league_context.json --backup
 """
 
 import argparse
+import re
+import math
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any, Callable
 import sys
 
 import pandas as pd
@@ -31,28 +34,309 @@ import numpy as np
 # Add parent directories to path for imports
 _script_file = Path(__file__).resolve()
 
-# Auto-detect if we're in modules/ subdirectory or transformations/ directory
-if _script_file.parent.name == 'modules':
-    # We're in multi_league/transformations/modules/
-    _modules_dir = _script_file.parent
-    _transformations_dir = _modules_dir.parent
+if _script_file.parent.name == 'draft_enrichment':
+    _draft_enrichment_dir = _script_file.parent
+    _transformations_dir = _draft_enrichment_dir.parent
     _multi_league_dir = _transformations_dir.parent
 elif _script_file.parent.name == 'transformations':
-    # We're in multi_league/transformations/
     _transformations_dir = _script_file.parent
     _multi_league_dir = _transformations_dir.parent
 else:
-    # Fallback: assume we're somewhere in the tree, navigate up to find multi_league
     _current = _script_file.parent
     while _current.name != 'multi_league' and _current.parent != _current:
         _current = _current.parent
     _multi_league_dir = _current
 
-_scripts_dir = _multi_league_dir.parent  # fantasy_football_data_scripts directory
-sys.path.insert(0, str(_scripts_dir))  # Allows: from multi_league.core.XXX
-sys.path.insert(0, str(_multi_league_dir))  # Allows: from core.XXX
+_scripts_dir = _multi_league_dir.parent
+sys.path.insert(0, str(_scripts_dir))
+sys.path.insert(0, str(_multi_league_dir))
 
 from multi_league.core.league_context import LeagueContext
+
+# Import draft type detection utilities
+try:
+    from multi_league.transformations.draft_enrichment.modules.draft_type_utils import (
+        detect_draft_type_for_year
+    )
+except ImportError:
+    # Fallback if modules not available
+    def detect_draft_type_for_year(df, year, year_column='year', draft_type_column='draft_type', cost_column='cost'):
+        """Fallback draft type detection."""
+        year_df = df[df[year_column] == year]
+        if year_df.empty:
+            return 'snake'
+        if draft_type_column in year_df.columns:
+            draft_types = year_df[draft_type_column].dropna().str.lower().unique()
+            for dtype in draft_types:
+                if dtype in ['live', 'auction', 'offline']:
+                    return 'auction'
+                if dtype in ['self', 'snake', 'autopick']:
+                    return 'snake'
+        if cost_column in year_df.columns:
+            cost = pd.to_numeric(year_df[cost_column], errors='coerce')
+            nonzero_cost = cost.notna() & (cost > 0)
+            if nonzero_cost.sum() >= max(1, int(len(year_df) * 0.25)):
+                return 'auction'
+        return 'snake'
+
+
+# =========================================================
+# Formula Evaluation Engine
+# =========================================================
+
+class KeeperFormulaEvaluator:
+    """
+    Safe expression evaluator for keeper price formulas.
+
+    Supports variables:
+    - base_cost: Base acquisition cost (draft cost, FAAB, etc.)
+    - cost: Alias for base_cost
+    - faab_bid: Maximum FAAB bid on player
+    - previous_keeper_price: Last year's keeper price
+    - pick: Draft pick number (snake)
+    - round: Draft round number
+    - budget: League auction budget
+    - keeper_year: How many years player has been kept
+
+    Supports functions:
+    - max(a, b, ...), min(a, b, ...)
+    - exp(x), log(x), sqrt(x)
+    - floor(x), ceil(x), round(x)
+    """
+
+    # Safe math functions
+    SAFE_FUNCTIONS = {
+        'max': max,
+        'min': min,
+        'exp': math.exp,
+        'log': math.log,
+        'sqrt': math.sqrt,
+        'floor': math.floor,
+        'ceil': math.ceil,
+        'round': round,
+        'abs': abs,
+    }
+
+    def __init__(self, budget: int = 200):
+        self.budget = budget
+
+    def evaluate(
+        self,
+        expression: str,
+        base_cost: float = 0.0,
+        faab_bid: float = 0.0,
+        previous_keeper_price: float = 0.0,
+        pick: int = 0,
+        round_num: int = 0,
+        keeper_year: int = 1,
+    ) -> float:
+        """
+        Evaluate a keeper price formula expression.
+
+        Args:
+            expression: Formula string (e.g., "max(base_cost, faab_bid * 0.5)")
+            base_cost: Base acquisition cost
+            faab_bid: Maximum FAAB bid
+            previous_keeper_price: Previous year's keeper price
+            pick: Draft pick number
+            round_num: Draft round number
+            keeper_year: Number of years player has been kept
+
+        Returns:
+            Calculated keeper price (float)
+        """
+        # Build variable context
+        variables = {
+            'base_cost': float(base_cost) if not pd.isna(base_cost) else 0.0,
+            'cost': float(base_cost) if not pd.isna(base_cost) else 0.0,
+            'faab_bid': float(faab_bid) if not pd.isna(faab_bid) else 0.0,
+            'previous_keeper_price': float(previous_keeper_price) if not pd.isna(previous_keeper_price) else 0.0,
+            'pick': int(pick) if not pd.isna(pick) else 0,
+            'round': int(round_num) if not pd.isna(round_num) else 0,
+            'budget': self.budget,
+            'keeper_year': int(keeper_year) if not pd.isna(keeper_year) else 1,
+        }
+
+        # Create safe evaluation context
+        eval_context = {**self.SAFE_FUNCTIONS, **variables}
+
+        try:
+            # Evaluate expression safely
+            result = eval(expression, {"__builtins__": {}}, eval_context)
+            return float(result)
+        except Exception as e:
+            print(f"[WARNING] Formula evaluation failed: {expression}")
+            print(f"          Error: {e}")
+            print(f"          Variables: {variables}")
+            return 0.0
+
+
+# =========================================================
+# Keeper Price Calculator
+# =========================================================
+
+class KeeperPriceCalculator:
+    """
+    Calculates keeper prices using rules from league context.
+    """
+
+    def __init__(self, ctx: LeagueContext):
+        self.ctx = ctx
+        self.rules = ctx.keeper_rules or {}
+        self.evaluator = KeeperFormulaEvaluator(ctx.keeper_budget)
+
+        # Extract settings
+        self.enabled = self.rules.get('enabled', False)
+        self.max_keepers = self.rules.get('max_keepers', 0)
+        self.min_price = self.rules.get('min_price', 1)
+        self.max_price = self.rules.get('max_price')
+        self.round_to_integer = self.rules.get('round_to_integer', True)
+        self.formulas = self.rules.get('formulas_by_keeper_year', {})
+        self.base_cost_rules = self.rules.get('base_cost_rules', {})
+
+    def get_formula_for_keeper_year(self, keeper_year: int) -> Optional[str]:
+        """Get the formula expression for a specific keeper year."""
+        # Check exact match first
+        if str(keeper_year) in self.formulas:
+            return self.formulas[str(keeper_year)].get('expression')
+
+        # Check wildcard patterns (e.g., "2+")
+        for key, formula_dict in self.formulas.items():
+            if '+' in key:
+                base_year = int(key.replace('+', ''))
+                if keeper_year >= base_year:
+                    return formula_dict.get('expression')
+
+        return None
+
+    def calculate_base_cost(
+        self,
+        draft_type: str,
+        cost: float,
+        pick: int,
+        faab_bid: float,
+        is_drafted: bool,
+    ) -> float:
+        """
+        Calculate base cost based on acquisition type.
+
+        Args:
+            draft_type: 'auction' or 'snake'
+            cost: Draft cost (auction) or 0
+            pick: Pick number (snake) or 0
+            faab_bid: Maximum FAAB bid
+            is_drafted: Whether player was drafted (vs FA pickup)
+
+        Returns:
+            Base cost for keeper calculation
+        """
+        if is_drafted:
+            # Player was drafted
+            if draft_type == 'auction':
+                rule = self.base_cost_rules.get('auction', {})
+                source = rule.get('source', 'cost')
+                if source == 'cost':
+                    return float(cost) if not pd.isna(cost) else 0.0
+            else:
+                # Snake draft - convert pick to cost
+                rule = self.base_cost_rules.get('snake', {})
+                source = rule.get('source', 'pick_to_cost')
+                if source == 'pick_to_cost' and 'formula' in rule:
+                    formula = rule['formula']
+                    return self.evaluator.evaluate(
+                        formula,
+                        pick=pick,
+                        round_num=0,
+                    )
+                # Default: exponential decay
+                pick_val = int(pick) if not pd.isna(pick) else 1
+                return self.ctx.keeper_budget * math.exp(-0.035 * (pick_val - 1))
+
+        elif faab_bid and faab_bid > 0:
+            # FAAB acquisition
+            rule = self.base_cost_rules.get('faab_only', {})
+            multiplier = rule.get('multiplier', 0.5)
+            return float(faab_bid) * multiplier
+
+        else:
+            # Free agent
+            rule = self.base_cost_rules.get('free_agent', {})
+            return rule.get('value', 1)
+
+    def calculate_keeper_price(
+        self,
+        draft_type: str,
+        cost: float,
+        pick: int,
+        round_num: int,
+        faab_bid: float,
+        is_keeper: bool,
+        previous_keeper_price: float,
+        keeper_year: int,
+    ) -> float:
+        """
+        Calculate keeper price using configured rules.
+
+        Args:
+            draft_type: 'auction' or 'snake'
+            cost: Draft/keeper cost
+            pick: Pick number
+            round_num: Round number
+            faab_bid: Maximum FAAB bid
+            is_keeper: Whether this is a keeper (not fresh draft)
+            previous_keeper_price: Last year's keeper price (if kept before)
+            keeper_year: How many years player has been kept (1 = first time)
+
+        Returns:
+            Calculated keeper price
+        """
+        if not self.enabled:
+            # Fallback to simple calculation
+            return max(float(cost) if not pd.isna(cost) else 0, 1)
+
+        # Determine if player was drafted or acquired via FA/FAAB
+        is_drafted = (
+            (draft_type == 'auction' and cost and cost > 0) or
+            (draft_type == 'snake' and pick and pick > 0)
+        )
+
+        # Calculate base cost
+        base_cost = self.calculate_base_cost(
+            draft_type=draft_type,
+            cost=cost,
+            pick=pick,
+            faab_bid=faab_bid,
+            is_drafted=is_drafted,
+        )
+
+        # Get formula for keeper year
+        formula = self.get_formula_for_keeper_year(keeper_year)
+
+        if formula is None:
+            # No formula configured - use base cost
+            price = base_cost
+        else:
+            # Evaluate formula
+            price = self.evaluator.evaluate(
+                expression=formula,
+                base_cost=base_cost,
+                faab_bid=faab_bid,
+                previous_keeper_price=previous_keeper_price,
+                pick=pick,
+                round_num=round_num,
+                keeper_year=keeper_year,
+            )
+
+        # Apply min/max constraints
+        price = max(price, self.min_price)
+        if self.max_price is not None:
+            price = min(price, self.max_price)
+
+        # Round if configured
+        if self.round_to_integer:
+            price = int(round(price))
+
+        return price
 
 
 # =========================================================
@@ -67,400 +351,220 @@ def backup_file(path: Path) -> Path:
     return dest
 
 
-def increment_year(yahoo_player_id: str, year: int) -> str:
-    """Create next year's player_year key."""
-    return f"{yahoo_player_id}_{year + 1}"
-
-
-def calculate_keeper_price(cost: float, faab_bid: float, is_keeper: bool) -> int:
-    """
-    Calculate keeper price using league formula.
-
-    Formula:
-    - If player was a keeper: base = cost * 1.5 + 7.5
-    - Otherwise: base = cost
-    - Final = max(base, faab_bid / 2, 1)
-
-    Args:
-        cost: Draft cost (auction value or positional value)
-        faab_bid: Maximum FAAB bid spent on this player
-        is_keeper: Whether player was kept (not freshly drafted)
-
-    Returns:
-        Keeper price (integer, minimum 1)
-    """
-    cost = float(cost) if not pd.isna(cost) else 0.0
-    faab_bid = float(faab_bid) if not pd.isna(faab_bid) else 0.0
-    is_keeper = bool(is_keeper) if not pd.isna(is_keeper) else False
-
-    # Base calculation
-    if is_keeper:
-        base_price = cost * 1.5 + 7.5
-    else:
-        base_price = cost
-
-    # Consider FAAB (half of highest bid)
-    half_faab = faab_bid / 2.0
-
-    # Take maximum, minimum of 1
-    final_price = max(base_price, half_faab, 1.0)
-
-    return int(np.floor(final_price + 0.5))
-
-
 # =========================================================
 # Main Transformation Function
 # =========================================================
 
 def calculate_keeper_economics(
-    player_path: Path,
+    ctx: LeagueContext,
     draft_path: Path,
-    transactions_path: Path,
     dry_run: bool = False,
     make_backup: bool = False,
 ) -> Dict[str, int]:
     """
-    Calculate keeper economics and add to player data.
+    Calculate keeper economics using rules from league context.
 
     Args:
-        player_path: Path to player.parquet
+        ctx: LeagueContext with keeper_rules configured
         draft_path: Path to draft.parquet
-        transactions_path: Path to transactions.parquet
         dry_run: If True, don't write changes
         make_backup: If True, create backup before writing
 
     Returns:
         Dict with statistics
     """
-    print(f"Loading player data from: {player_path}")
-    player = pd.read_parquet(player_path)
-    print(f"  Loaded {len(player):,} player records")
+    print("=" * 70)
+    print("KEEPER ECONOMICS CALCULATION (V2 - Context-Driven)")
+    print("=" * 70)
 
-    # Check if player already has cost and max_faab_bid columns
-    has_cost = 'cost' in player.columns
-    has_faab = 'max_faab_bid' in player.columns
-    has_keeper_status = 'is_keeper_status' in player.columns
+    # Check if keepers are enabled
+    if not ctx.keepers_enabled:
+        print(f"\n[SKIP] Keepers not enabled for {ctx.league_name}")
+        print("       Add keeper_rules to league_context.json to enable")
+        return {"skipped": True, "reason": "keepers_not_enabled"}
 
-    if has_cost and has_faab and has_keeper_status:
-        print(f"\n[FAST PATH] Player data already has cost, max_faab_bid, and is_keeper_status")
-        print(f"  Calculating keeper_price directly from existing columns...")
+    print(f"\n[League] {ctx.league_name}")
+    print(f"[Keepers] Max: {ctx.max_keepers}, Budget: ${ctx.keeper_budget}")
 
-        # Calculate keeper_price directly from existing columns
-        player['cost'] = pd.to_numeric(player['cost'], errors='coerce').fillna(0.0)
-        player['max_faab_bid'] = pd.to_numeric(player['max_faab_bid'], errors='coerce').fillna(0.0)
-        player['is_keeper_status'] = pd.to_numeric(player['is_keeper_status'], errors='coerce').fillna(0).astype(int)
+    # Initialize calculator
+    calculator = KeeperPriceCalculator(ctx)
 
-        # Apply keeper price formula to each row
-        def calc_keeper_price_row(row):
-            cost = float(row['cost']) if not pd.isna(row['cost']) else 0.0
-            faab = float(row['max_faab_bid']) if not pd.isna(row['max_faab_bid']) else 0.0
-            is_keeper = bool(row['is_keeper_status']) if not pd.isna(row['is_keeper_status']) else False
-
-            # Base calculation
-            if is_keeper:
-                base_price = cost * 1.5 + 7.5
-            else:
-                base_price = cost
-
-            # Consider FAAB (half of highest bid)
-            half_faab = faab / 2.0
-
-            # Take maximum, minimum of 1
-            final_price = max(base_price, half_faab, 1.0)
-            return int(np.floor(final_price + 0.5))
-
-        player['keeper_price'] = player.apply(calc_keeper_price_row, axis=1)
-
-        rows_with_keeper_price = (player['keeper_price'] > 0).sum()
-        print(f"  Calculated keeper_price for {rows_with_keeper_price:,} player rows")
-
-        # Calculate statistics
-        stats = {
-            "total_player_rows": len(player),
-            "players_with_keeper_data": player['keeper_price'].notna().sum(),
-            "players_kept_next_year": 0,  # Not calculated in fast path
-        }
-
-        # Save (unless dry-run)
-        if dry_run:
-            print("\n" + "="*60)
-            print("[DRY RUN] No files were written.")
-            print("="*60)
-
-            print("\nSample keeper prices:")
-            sample_cols = ['player', 'year', 'cost', 'is_keeper_status', 'max_faab_bid', 'keeper_price']
-            sample_cols = [c for c in sample_cols if c in player.columns]
-            print(player[player['keeper_price'] > 0][sample_cols].head(20).to_string())
-
-            return stats
-
-        if make_backup and player_path.exists():
-            bpath = backup_file(player_path)
-            print(f"\n[Backup Created] {bpath}")
-
-        # Write back to player.parquet
-        player.to_parquet(player_path, index=False)
-        print(f"\n[SAVED] Updated player data written to: {player_path}")
-
-        return stats
-
-    # SLOW PATH: Load draft and transactions to build keeper economics from scratch
-    print(f"\n[SLOW PATH] Building keeper economics from draft and transactions...")
-    print(f"\nLoading draft data from: {draft_path}")
+    # Load draft data
+    print(f"\n[Loading] Draft data from: {draft_path}")
     draft = pd.read_parquet(draft_path)
-    print(f"  Loaded {len(draft):,} draft records")
+    print(f"   Loaded {len(draft):,} draft records")
 
-    print(f"\nLoading transaction data from: {transactions_path}")
-    transactions = pd.read_parquet(transactions_path)
-    print(f"  Loaded {len(transactions):,} transaction records")
+    # Get draft type per year
+    years = draft['year'].dropna().unique()
+    draft_types = {}
+    for year in sorted(years):
+        draft_types[year] = detect_draft_type_for_year(draft, year)
 
-    # Validate required columns
-    if 'yahoo_player_id' not in draft.columns or 'year' not in draft.columns:
-        raise KeyError("draft.parquet missing yahoo_player_id or year")
-    if 'yahoo_player_id' not in player.columns or 'year' not in player.columns:
-        raise KeyError("player.parquet missing yahoo_player_id or year")
+    print(f"\n[Draft Types]")
+    for year, dtype in sorted(draft_types.items()):
+        print(f"   {year}: {dtype}")
 
-    print(f"\nCalculating keeper prices...")
-
-    # =========================================================
-    # Step 1: Get draft cost and keeper status per player-year
-    # =========================================================
-
-    # Extract cost column (try multiple names)
-    cost_col = None
-    for col in ['cost', 'draft_cost', 'auction_cost']:
-        if col in draft.columns:
-            cost_col = col
-            break
-
-    if cost_col is None:
-        print("[WARNING] No cost column found in draft, using 0")
+    # Ensure required columns exist
+    if 'cost' not in draft.columns:
         draft['cost'] = 0.0
-        cost_col = 'cost'
+    if 'pick' not in draft.columns:
+        draft['pick'] = pd.NA
+    if 'round' not in draft.columns:
+        draft['round'] = pd.NA
+    if 'is_keeper_status' not in draft.columns:
+        draft['is_keeper_status'] = 0
 
-    draft_base = draft[['yahoo_player_id', 'year', cost_col, 'is_keeper_status']].copy()
-    draft_base.rename(columns={cost_col: 'cost'}, inplace=True)
-    draft_base['cost'] = pd.to_numeric(draft_base['cost'], errors='coerce').fillna(0.0)
-    draft_base['is_keeper_status'] = pd.to_numeric(draft_base['is_keeper_status'], errors='coerce').fillna(0).astype(int)
+    # Get max FAAB bid per player-year if not already present
+    if 'max_faab_bid' not in draft.columns:
+        draft['max_faab_bid'] = 0.0
 
-    # =========================================================
-    # Step 2: Get maximum FAAB bid per player-year from transactions
-    # =========================================================
+    # Calculate keeper_year (how many consecutive years kept)
+    # This requires tracking keeper history
+    print(f"\n[Calculating] Keeper years and prices...")
 
-    faab_col = 'faab_bid' if 'faab_bid' in transactions.columns else None
+    # Sort by year to process chronologically
+    draft = draft.sort_values(['yahoo_player_id', 'year']).copy()
 
-    if faab_col:
-        trans_faab = transactions[
-            transactions['yahoo_player_id'].notna() &
-            transactions['year'].notna() &
-            transactions[faab_col].notna()
-        ].copy()
+    # Track keeper history: {yahoo_player_id: {year: keeper_price}}
+    keeper_history = {}
 
-        trans_faab_agg = (
-            trans_faab.groupby(['yahoo_player_id', 'year'], as_index=False)[faab_col]
-            .max()
-            .rename(columns={faab_col: 'max_faab_bid'})
-        )
-    else:
-        print("[WARNING] No faab_bid column in transactions, using 0")
-        trans_faab_agg = pd.DataFrame(columns=['yahoo_player_id', 'year', 'max_faab_bid'])
+    # Add draft_type column based on year
+    draft['detected_draft_type'] = draft['year'].map(draft_types)
 
-    # =========================================================
-    # Step 3: Merge draft + FAAB and calculate keeper price
-    # =========================================================
+    # Initialize output columns
+    draft['keeper_price'] = pd.NA
+    draft['keeper_year'] = pd.NA
+    draft['previous_keeper_price'] = pd.NA
 
-    # Normalize yahoo_player_id to string for both dataframes to avoid merge errors
-    draft_base['yahoo_player_id'] = draft_base['yahoo_player_id'].astype(str)
-    if not trans_faab_agg.empty:
-        trans_faab_agg['yahoo_player_id'] = trans_faab_agg['yahoo_player_id'].astype(str)
+    # Process each row
+    keeper_prices_calculated = 0
 
-    keeper_base = draft_base.merge(
-        trans_faab_agg,
-        on=['yahoo_player_id', 'year'],
-        how='left'
-    )
-    keeper_base['max_faab_bid'] = keeper_base['max_faab_bid'].fillna(0.0)
+    for idx, row in draft.iterrows():
+        player_id = str(row.get('yahoo_player_id', ''))
+        year = row.get('year')
+        is_keeper = bool(row.get('is_keeper_status', 0))
 
-    # Calculate keeper price
-    keeper_base['keeper_price'] = keeper_base.apply(
-        lambda r: calculate_keeper_price(r['cost'], r['max_faab_bid'], r['is_keeper_status']),
-        axis=1
-    )
+        if pd.isna(year) or not player_id:
+            continue
 
-    print(f"  Calculated keeper prices for {len(keeper_base):,} player-years")
+        year = int(year)
+        draft_type = draft_types.get(year, 'snake')
 
-    # =========================================================
-    # Step 4: Look up next year's keeper status and performance
-    # =========================================================
+        # Initialize player history if needed
+        if player_id not in keeper_history:
+            keeper_history[player_id] = {}
 
-    # Create next year lookup key
-    keeper_base['player_year_next'] = keeper_base.apply(
-        lambda r: increment_year(r['yahoo_player_id'], r['year']),
-        axis=1
-    )
+        # Determine keeper_year (consecutive years kept)
+        # Look back to see if player was kept in previous year
+        prev_year = year - 1
+        if prev_year in keeper_history[player_id]:
+            # Player was in roster last year
+            if is_keeper:
+                # Consecutive keep
+                keeper_year = keeper_history[player_id].get(f'{prev_year}_keeper_year', 0) + 1
+            else:
+                # Not a keeper this year (fresh draft or new acquisition)
+                keeper_year = 0
+        else:
+            # First time with this owner
+            if is_keeper:
+                keeper_year = 1  # First year keeping
+            else:
+                keeper_year = 0  # Not a keeper
 
-    # Get next year's keeper status from draft
-    draft_next = draft[['yahoo_player_id', 'year', 'is_keeper_status']].copy()
-    draft_next['yahoo_player_id'] = draft_next['yahoo_player_id'].astype(str)
-    draft_next['year'] = draft_next['year'].astype(int)
-    draft_next['player_year_next'] = draft_next.apply(
-        lambda r: f"{r['yahoo_player_id']}_{r['year']}",
-        axis=1
-    )
-    draft_next = draft_next[['player_year_next', 'is_keeper_status']].rename(
-        columns={'is_keeper_status': 'kept_next_year'}
-    )
+        # Get previous keeper price
+        previous_keeper_price = keeper_history[player_id].get(prev_year, 0.0)
 
-    keeper_base = keeper_base.merge(draft_next, on='player_year_next', how='left')
-    keeper_base['kept_next_year'] = pd.to_numeric(keeper_base['kept_next_year'], errors='coerce').fillna(0).astype(int)
+        # Calculate keeper price
+        cost = float(row.get('cost', 0)) if not pd.isna(row.get('cost')) else 0.0
+        pick = row.get('pick')
+        round_num = row.get('round')
+        faab_bid = float(row.get('max_faab_bid', 0)) if not pd.isna(row.get('max_faab_bid')) else 0.0
 
-    # Get next year's total points from player data
-    # Aggregate player to season level first
-    # Use NFL_player_id to only count games where player actually played (not BN/IR weeks)
-    if 'fantasy_points' in player.columns and 'NFL_player_id' in player.columns:
-        # Filter to only rows where player actually played (has NFL_player_id)
-        # This excludes bench/IR weeks where yahoo tracks the player but they didn't play
-        player_season = (
-            player[player['NFL_player_id'].notna()]
-            .groupby(['yahoo_player_id', 'year'], as_index=False)
-            .agg({
-                'fantasy_points': ['sum', 'mean', 'count']
-            })
-        )
+        # Only calculate keeper_price for drafted players (not undrafted pool)
+        is_drafted = pd.notna(row.get('pick')) or (cost > 0)
 
-        # Flatten column names
-        player_season.columns = ['yahoo_player_id', 'year', 'season_total_points', 'avg_points_per_game', 'games_played']
+        if is_drafted:
+            keeper_price = calculator.calculate_keeper_price(
+                draft_type=draft_type,
+                cost=cost,
+                pick=int(pick) if pd.notna(pick) else 0,
+                round_num=int(round_num) if pd.notna(round_num) else 0,
+                faab_bid=faab_bid,
+                is_keeper=is_keeper,
+                previous_keeper_price=previous_keeper_price,
+                keeper_year=keeper_year if keeper_year > 0 else 1,  # Default to year 1 formula
+            )
 
-        player_season['yahoo_player_id'] = player_season['yahoo_player_id'].astype(str)
-        player_season['year'] = player_season['year'].astype(int)
-        player_season['player_year'] = player_season.apply(
-            lambda r: f"{r['yahoo_player_id']}_{r['year']}",
-            axis=1
-        )
+            # Store in history for next year's calculation
+            keeper_history[player_id][year] = keeper_price
+            keeper_history[player_id][f'{year}_keeper_year'] = keeper_year
 
-        player_season_next = player_season[['player_year', 'season_total_points', 'avg_points_per_game', 'games_played']].rename(
-            columns={
-                'season_total_points': 'total_points_next_year',
-                'avg_points_per_game': 'avg_points_next_year',
-                'games_played': 'games_played_next_year'
-            }
-        )
+            # Update dataframe
+            draft.at[idx, 'keeper_price'] = keeper_price
+            draft.at[idx, 'keeper_year'] = keeper_year if keeper_year > 0 else pd.NA
+            draft.at[idx, 'previous_keeper_price'] = previous_keeper_price if previous_keeper_price > 0 else pd.NA
 
-        keeper_base = keeper_base.merge(
-            player_season_next.rename(columns={'player_year': 'player_year_next'}),
-            on='player_year_next',
-            how='left'
-        )
-        keeper_base['total_points_next_year'] = keeper_base['total_points_next_year'].fillna(0.0)
-        keeper_base['avg_points_next_year'] = keeper_base['avg_points_next_year'].fillna(0.0)
-        keeper_base['games_played_next_year'] = keeper_base['games_played_next_year'].fillna(0).astype(int)
-    else:
-        keeper_base['total_points_next_year'] = 0.0
-        keeper_base['avg_points_next_year'] = 0.0
-        keeper_base['games_played_next_year'] = 0
+            keeper_prices_calculated += 1
 
-    # =========================================================
-    # Step 5: Merge keeper economics into player data
-    # =========================================================
-
-    print(f"\nMerging keeper economics into player data...")
-
-    keeper_cols = [
-        'yahoo_player_id',
-        'year',
-        'cost',
-        'is_keeper_status',
-        'max_faab_bid',
-        'keeper_price',
-        'kept_next_year',
-        'total_points_next_year',
-        'avg_points_next_year',
-        'games_played_next_year'
-    ]
-
-    keeper_export = keeper_base[keeper_cols].copy()
-
-    # CRITICAL: Ensure keeper_export has no duplicate keys before merge
-    # Draft should be one row per player-year (season-level data)
-    duplicates_in_keeper = keeper_export.duplicated(subset=['yahoo_player_id', 'year'], keep=False).sum()
-    if duplicates_in_keeper > 0:
-        print(f"\n  WARNING: Found {duplicates_in_keeper} duplicate player-year combinations in keeper data")
-        print(f"  Removing duplicates (keeping first occurrence)...")
-        keeper_export = keeper_export.drop_duplicates(subset=['yahoo_player_id', 'year'], keep='first')
-        print(f"  Deduplicated to {len(keeper_export):,} unique player-year combinations")
-
-    # Drop existing keeper columns from player to avoid conflicts
-    cols_to_drop = [c for c in keeper_cols if c in player.columns and c not in ['yahoo_player_id', 'year']]
-    if cols_to_drop:
-        print(f"  Dropping existing columns: {cols_to_drop}")
-        player.drop(columns=cols_to_drop, inplace=True)
-
-    # Normalize yahoo_player_id and year types to match before merge
-    if 'yahoo_player_id' in player.columns:
-        player['yahoo_player_id'] = player['yahoo_player_id'].astype(str)
-    if 'yahoo_player_id' in keeper_export.columns:
-        keeper_export['yahoo_player_id'] = keeper_export['yahoo_player_id'].astype(str)
-    if 'year' in player.columns:
-        player['year'] = pd.to_numeric(player['year'], errors='coerce').astype('Int64')
-    if 'year' in keeper_export.columns:
-        keeper_export['year'] = pd.to_numeric(keeper_export['year'], errors='coerce').astype('Int64')
-
-    # Debug: Check how many player rows should match
-    player_years = set(zip(player['yahoo_player_id'].astype(str), player['year'].astype(str)))
-    keeper_years = set(zip(keeper_export['yahoo_player_id'].astype(str), keeper_export['year'].astype(str)))
-    matching_years = player_years.intersection(keeper_years)
-    print(f"  Debug: {len(player_years)} unique player-years in player data")
-    print(f"  Debug: {len(keeper_years)} unique player-years in keeper data")
-    print(f"  Debug: {len(matching_years)} player-years that will match in merge")
-
-    # Merge
-    before_len = len(player)
-    player = player.merge(
-        keeper_export,
-        on=['yahoo_player_id', 'year'],
-        how='left',
-        validate='many_to_one'  # Player data is weekly (many), keeper is season (one)
-    )
-    after_len = len(player)
-
-    if after_len != before_len:
-        print(f"  WARNING: Row count changed from {before_len:,} to {after_len:,} after merge!")
-        print(f"  This indicates duplicate keys in keeper_export or data issue")
-
-    # Check how many rows got keeper_price
-    rows_with_keeper_price = player['keeper_price'].notna().sum()
-    print(f"  Result: {rows_with_keeper_price:,} player rows now have keeper_price")
-
-    print(f"  Merged keeper economics to {len(player):,} player records")
+    print(f"   Calculated keeper_price for {keeper_prices_calculated:,} drafted players")
 
     # Calculate statistics
+    drafted_mask = draft['keeper_price'].notna()
+    keeper_mask = draft['is_keeper_status'] == 1
+
     stats = {
-        "total_player_rows": len(player),
-        "players_with_keeper_data": player['keeper_price'].notna().sum(),
-        "players_kept_next_year": player['kept_next_year'].sum() if 'kept_next_year' in player.columns else 0,
+        "total_records": len(draft),
+        "drafted_players": drafted_mask.sum(),
+        "keepers": keeper_mask.sum(),
+        "with_keeper_price": (draft['keeper_price'].notna()).sum(),
     }
 
-    # Save (unless dry-run)
+    # Show sample output
+    print(f"\n[Sample] Keeper prices calculated:")
+    sample_cols = ['year', 'player', 'detected_draft_type', 'cost', 'pick', 'is_keeper_status',
+                   'keeper_year', 'previous_keeper_price', 'keeper_price']
+    sample_cols = [c for c in sample_cols if c in draft.columns]
+
+    sample_df = draft[draft['keeper_price'].notna()][sample_cols].head(15)
+    print(sample_df.to_string(index=False))
+
+    # Show keeper escalation examples
+    keepers = draft[(draft['is_keeper_status'] == 1) & (draft['keeper_price'].notna())]
+    if len(keepers) > 0:
+        print(f"\n[Sample] Keeper price escalation (is_keeper_status=1):")
+        print(keepers[sample_cols].head(10).to_string(index=False))
+
+    # Save results
     if dry_run:
-        print("\n" + "="*60)
+        print("\n" + "=" * 70)
         print("[DRY RUN] No files were written.")
-        print("="*60)
-
-        print("\nSample keeper economics:")
-        sample_cols = ['player', 'year', 'cost', 'is_keeper_status', 'keeper_price',
-                       'kept_next_year', 'total_points_next_year', 'avg_points_next_year', 'games_played_next_year']
-        sample_cols = [c for c in sample_cols if c in player.columns]
-        print(player[player['keeper_price'].notna()][sample_cols].head(10).to_string())
-
+        print("=" * 70)
         return stats
 
-    if make_backup and player_path.exists():
-        bpath = backup_file(player_path)
+    if make_backup and draft_path.exists():
+        bpath = backup_file(draft_path)
         print(f"\n[Backup Created] {bpath}")
 
-    # Write back to player.parquet
-    player.to_parquet(player_path, index=False)
-    print(f"\n[SAVED] Updated player data written to: {player_path}")
+    # Clean up temporary column
+    if 'detected_draft_type' in draft.columns:
+        draft = draft.drop(columns=['detected_draft_type'])
+
+    # Write back
+    draft.to_parquet(draft_path, index=False)
+    print(f"\n[SAVED] Updated draft data written to: {draft_path}")
+
+    csv_path = draft_path.with_suffix('.csv')
+    draft.to_csv(csv_path, index=False)
+    print(f"[SAVED] CSV version written to: {csv_path}")
+
+    print("\n" + "=" * 70)
+    print("KEEPER ECONOMICS COMPLETE")
+    print("=" * 70)
+    print(f"Total records:      {stats['total_records']:,}")
+    print(f"Drafted players:    {stats['drafted_players']:,}")
+    print(f"Keepers:            {stats['keepers']:,}")
+    print(f"With keeper_price:  {stats['with_keeper_price']:,}")
 
     return stats
 
@@ -471,27 +575,18 @@ def calculate_keeper_economics(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Calculate keeper economics for multi-league setup"
+        description="Calculate keeper economics using rules from league context"
     )
     parser.add_argument(
         "--context",
         type=str,
-        help="Path to league_context.json (if not provided, uses hardcoded paths)"
-    )
-    parser.add_argument(
-        "--player",
-        type=str,
-        help="Override player data path"
+        required=True,
+        help="Path to league_context.json"
     )
     parser.add_argument(
         "--draft",
         type=str,
         help="Override draft data path"
-    )
-    parser.add_argument(
-        "--transactions",
-        type=str,
-        help="Override transactions data path"
     )
     parser.add_argument(
         "--dry-run",
@@ -506,54 +601,23 @@ def main():
 
     args = parser.parse_args()
 
-    # Determine file paths
-    if args.context:
-        ctx = LeagueContext.load(args.context)
-        print(f"Loaded league context: {ctx.league_name}")
+    # Load context
+    ctx = LeagueContext.load(args.context)
+    print(f"Loaded league context: {ctx.league_name}")
 
-        player_path = Path(args.player) if args.player else ctx.canonical_player_file
-        draft_path = Path(args.draft) if args.draft else ctx.canonical_draft_file
-        transactions_path = Path(args.transactions) if args.transactions else ctx.canonical_transaction_file
-    else:
-        # Fallback to hardcoded relative paths (V1 compatibility)
-        THIS_FILE = Path(__file__).resolve()
-        SCRIPT_DIR = THIS_FILE.parent.parent.parent
-        ROOT_DIR = SCRIPT_DIR.parent
-        DATA_DIR = ROOT_DIR / "fantasy_football_data"
+    # Determine paths
+    draft_path = Path(args.draft) if args.draft else ctx.canonical_draft_file
 
-        player_path = Path(args.player) if args.player else (DATA_DIR / "player.parquet")
-        draft_path = Path(args.draft) if args.draft else (DATA_DIR / "draft.parquet")
-        transactions_path = Path(args.transactions) if args.transactions else (DATA_DIR / "transactions.parquet")
-
-    # Validate paths
-    if not player_path.exists():
-        raise FileNotFoundError(f"Player data not found: {player_path}")
     if not draft_path.exists():
         raise FileNotFoundError(f"Draft data not found: {draft_path}")
-    if not transactions_path.exists():
-        raise FileNotFoundError(f"Transaction data not found: {transactions_path}")
 
     # Run calculation
-    print("\n" + "="*60)
-    print("KEEPER ECONOMICS CALCULATION (V2)")
-    print("="*60)
-
-    stats = calculate_keeper_economics(
-        player_path=player_path,
+    calculate_keeper_economics(
+        ctx=ctx,
         draft_path=draft_path,
-        transactions_path=transactions_path,
         dry_run=args.dry_run,
         make_backup=args.backup
     )
-
-    # Print final summary
-    print("\n" + "="*60)
-    print("CALCULATION SUMMARY")
-    print("="*60)
-    print(f"Total player rows:        {stats['total_player_rows']:,}")
-    print(f"With keeper data:         {stats['players_with_keeper_data']:,}")
-    print(f"Kept next year:           {stats['players_kept_next_year']:,}")
-    print("="*60)
 
 
 if __name__ == "__main__":

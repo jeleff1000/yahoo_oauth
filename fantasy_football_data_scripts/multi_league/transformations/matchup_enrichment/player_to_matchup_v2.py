@@ -60,7 +60,12 @@ _scripts_dir = _multi_league_dir.parent  # fantasy_football_data_scripts directo
 sys.path.insert(0, str(_scripts_dir))  # Allows: from multi_league.core.XXX
 sys.path.insert(0, str(_multi_league_dir))  # Allows: from core.XXX
 
+# Add transformations/modules to path for shared utilities
+_modules_dir = _multi_league_dir / "transformations" / "modules"
+sys.path.insert(0, str(_modules_dir))
+
 from core.league_context import LeagueContext
+from type_utils import ensure_canonical_types
 
 
 # =========================================================
@@ -359,6 +364,9 @@ def aggregate_player_to_matchup(
     if make_backup and matchup_path.exists():
         bpath = backup_file(matchup_path)
         print(f"\n[Backup Created] {bpath}")
+
+    # Ensure all join keys have correct types before saving
+    matchup = ensure_canonical_types(matchup, verbose=False)
 
     # Write back
     matchup.to_parquet(matchup_path, index=False)

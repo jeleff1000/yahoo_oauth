@@ -101,12 +101,13 @@ from core.league_context import LeagueContext
 # NOTE: cumulative_week is NOT imported from matchup - it's calculated from player's own year/week columns
 CORE_OUTCOME_COLS = [
     "win", "loss", "team_points", "opponent", "opponent_points", "opponent_year", "margin",
-    "is_playoffs", "is_consolation"
+    "is_playoffs", "is_consolation", "manager_year"
 ]
 
 # Playoff achievement columns (useful for "clutch" player analysis)
 PLAYOFF_ACHIEVEMENT_COLS = [
-    "team_made_playoffs", "quarterfinal", "semifinal", "champion"
+    "team_made_playoffs", "quarterfinal", "semifinal", "championship", "champion",
+    "playoff_round", "consolation_round", "sacko"
 ]
 
 # League comparison columns (helps contextualize player performance)

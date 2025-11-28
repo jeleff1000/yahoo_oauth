@@ -258,7 +258,7 @@ def write_parquet_robust(
         # Write parquet
         df.to_parquet(file_path, index=False, engine='pyarrow')
 
-        print(f"  ✓ Wrote {len(df):,} rows of {description} to {file_path.name}")
+        print(f"  [OK] Wrote {len(df):,} rows of {description} to {file_path.name}")
 
     except Exception as e:
         print(f"  ERROR: Failed to write {description} to {file_path}: {e}")

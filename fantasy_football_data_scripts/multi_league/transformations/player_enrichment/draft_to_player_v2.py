@@ -50,7 +50,12 @@ _scripts_dir = _multi_league_dir.parent  # fantasy_football_data_scripts directo
 sys.path.insert(0, str(_scripts_dir))  # Allows: from multi_league.core.XXX
 sys.path.insert(0, str(_multi_league_dir))  # Allows: from core.XXX
 
+# Add transformations/modules to path for shared utilities
+_modules_dir = _multi_league_dir / "transformations" / "modules"
+sys.path.insert(0, str(_modules_dir))
+
 from multi_league.core.league_context import LeagueContext
+from type_utils import safe_merge, ensure_canonical_types
 
 
 # =========================================================
@@ -58,12 +63,19 @@ from multi_league.core.league_context import LeagueContext
 # =========================================================
 
 # Columns to import from draft to player (focused set for analytics)
+# These are season-level stats that get broadcast to all weeks for that player-year
 DRAFT_COLS_TO_IMPORT = [
     "round",
     "pick",
     "cost",  # Auction cost or draft value
     "is_keeper_status",
-    "kept_next_year",  # Whether player was kept in following season
+    "kept_next_year",  # Whether player was kept in following season (from draft_value_metrics_v3)
+    "spar",  # Season Points Above Replacement (from draft_value_metrics_v3)
+    "pgvor",  # Per-Game Value Over Replacement (from draft_value_metrics_v3)
+    "draft_roi",  # Return on Investment (from draft_value_metrics_v3)
+    "cost_bucket",  # Position-based value tier (from draft_value_metrics_v3)
+    "replacement_ppg",  # Position replacement baseline (from draft_value_metrics_v3)
+    "cost_norm",  # Normalized draft cost (from draft_value_metrics_v3)
     # Note: overall_pick and draft_type don't exist in draft table, removed
 ]
 
@@ -82,83 +94,65 @@ def backup_file(path: Path) -> Path:
 def left_join_draft_player(left: pd.DataFrame, right: pd.DataFrame, import_cols: list[str]) -> pd.DataFrame:
     """Left-join draft-level data (right) onto player-level data (left).
 
+    Uses type-safe merging to ensure join keys remain Int64 throughout.
+
     Strategy:
-    1. Ensure both frames have a `player_year` key if possible (yahoo_player_id + '_' + year).
-    2. Prefer joining on (yahoo_player_id, year) when that key exists in both
-       frames and is cleanly 1:1 on the right (no nulls, no duplicates).
-    3. If (yahoo_player_id, year) is not usable, fall back to joining on
-       `player_year` when it exists and is unique on the right.
-    4. As a last resort, attempt a best-effort merge on available common keys
-       containing any of ['player_year','yahoo_player_id','year'].
+    1. Try (league_id, yahoo_player_id, year) for multi-league safety
+    2. Fall back to (yahoo_player_id, year) for backward compatibility
+    3. Use safe_merge which automatically normalizes types to Int64
 
     The function returns the left dataframe with requested import_cols merged in.
     """
-    L = left.copy()
-    R = right.copy()
-
     # Filter import_cols to those present in R to avoid KeyErrors
-    available_imports = [c for c in import_cols if c in R.columns]
+    available_imports = [c for c in import_cols if c in right.columns]
     if not available_imports:
-        # Nothing to import
-        return L
-
-    # Normalize merge key data types to prevent type mismatches (float64 vs Int64, object vs int64, etc.)
-    def normalize_merge_keys(df, keys):
-        """Normalize merge keys to string via Int64 to handle type mismatches"""
-        for key in keys:
-            if key in df.columns and key != 'league_id':  # Skip league_id (already string)
-                df[key] = pd.to_numeric(df[key], errors='coerce').astype('Int64').astype(str)
-        return df
-
-    # Build player_year if missing and yahoo_player_id+year available
-    for df in (L, R):
-        if 'player_year' not in df.columns and {'yahoo_player_id', 'year'}.issubset(df.columns):
-            df['player_year'] = df['yahoo_player_id'].astype(str) + "_" + df['year'].astype(str)
+        return left
 
     # Attempt 1: join on (league_id, yahoo_player_id, year) - multi-league safe
     keys1 = ['league_id', 'yahoo_player_id', 'year']
-    if set(keys1).issubset(L.columns) and set(keys1).issubset(R.columns):
-        # Normalize types BEFORE checking nulls/duplicates
-        L_norm = normalize_merge_keys(L.copy(), keys1)
-        R_norm = normalize_merge_keys(R.copy(), keys1)
+    if set(keys1).issubset(left.columns) and set(keys1).issubset(right.columns):
+        # Only check RIGHT table for nulls/duplicates (left nulls are OK, they just won't match)
+        right_has_nulls = right[keys1].isnull().any(axis=1).any()
+        right_has_dupes = right.duplicated(subset=keys1, keep=False).any()
 
-        # Ensure no nulls in join keys and uniqueness on right side
-        left_has_nulls = L_norm[keys1].isnull().any(axis=1).any()
-        right_has_nulls = R_norm[keys1].isnull().any(axis=1).any()
-        right_has_dupes = R_norm.duplicated(subset=keys1, keep=False).any()
-
-        if not left_has_nulls and not right_has_nulls and not right_has_dupes:
-            return L_norm.merge(R_norm[keys1 + available_imports], on=keys1, how='left', suffixes=('_old', ''))
+        if not right_has_nulls and not right_has_dupes:
+            # Select only needed columns from right
+            right_subset = right[keys1 + available_imports].copy()
+            # Use safe_merge for type-safe joining
+            result = safe_merge(left, right_subset, on=keys1, how='left', suffixes=('_old', ''))
+            matched = result[available_imports[0]].notna().sum() if available_imports else 0
+            null_keys = left[keys1].isnull().any(axis=1).sum()
+            print(f"  [JOIN SUCCESS] Using keys {keys1}: {matched:,}/{len(result):,} rows matched ({null_keys:,} rows with null keys skipped)")
+            return result
+        else:
+            reasons = []
+            if right_has_nulls: reasons.append("right has nulls")
+            if right_has_dupes: reasons.append("right has duplicates")
+            print(f"  [JOIN SKIP] Keys {keys1} failed: {', '.join(reasons)}")
 
     # Fallback: Try without league_id for backward compatibility
     keys1_fallback = ['yahoo_player_id', 'year']
-    if set(keys1_fallback).issubset(L.columns) and set(keys1_fallback).issubset(R.columns):
-        # Normalize types BEFORE checking nulls/duplicates
-        L_norm = normalize_merge_keys(L.copy(), keys1_fallback)
-        R_norm = normalize_merge_keys(R.copy(), keys1_fallback)
+    if set(keys1_fallback).issubset(left.columns) and set(keys1_fallback).issubset(right.columns):
+        # Only check RIGHT table for nulls/duplicates (left nulls are OK, they just won't match)
+        right_has_nulls = right[keys1_fallback].isnull().any(axis=1).any()
+        right_has_dupes = right.duplicated(subset=keys1_fallback, keep=False).any()
 
-        left_has_nulls = L_norm[keys1_fallback].isnull().any(axis=1).any()
-        right_has_nulls = R_norm[keys1_fallback].isnull().any(axis=1).any()
-        right_has_dupes = R_norm.duplicated(subset=keys1_fallback, keep=False).any()
+        if not right_has_nulls and not right_has_dupes:
+            right_subset = right[keys1_fallback + available_imports].copy()
+            result = safe_merge(left, right_subset, on=keys1_fallback, how='left', suffixes=('_old', ''))
+            matched = result[available_imports[0]].notna().sum() if available_imports else 0
+            null_keys = left[keys1_fallback].isnull().any(axis=1).sum()
+            print(f"  [JOIN SUCCESS] Using keys {keys1_fallback}: {matched:,}/{len(result):,} rows matched ({null_keys:,} rows with null keys skipped)")
+            return result
+        else:
+            reasons = []
+            if right_has_nulls: reasons.append("right has nulls")
+            if right_has_dupes: reasons.append("right has duplicates")
+            print(f"  [JOIN SKIP] Keys {keys1_fallback} failed: {', '.join(reasons)}")
 
-        if not left_has_nulls and not right_has_nulls and not right_has_dupes:
-            return L_norm.merge(R_norm[keys1_fallback + available_imports], on=keys1_fallback, how='left', suffixes=('_old', ''))
-
-    # Attempt 2: join on player_year
-    keys2 = ['player_year']
-    if set(keys2).issubset(L.columns) and set(keys2).issubset(R.columns):
-        right_has_dupes_py = R.duplicated(subset=keys2, keep=False).any()
-        if not right_has_dupes_py:
-            return L.merge(R[keys2 + available_imports], on=keys2, how='left', suffixes=('_old', ''))
-
-    # Last-resort best-effort: try joining on whatever common keys we have
-    common_candidates = [k for k in ['player_year', 'yahoo_player_id', 'year'] if k in L.columns and k in R.columns]
-    if common_candidates:
-        on_cols = common_candidates
-        return L.merge(R[on_cols + available_imports], on=on_cols, how='left', suffixes=('_old', ''))
-
-    # If no common keys at all, return the left unchanged
-    return L
+    # If no suitable join keys found, return unchanged
+    print(f"  [JOIN FAILED] No suitable join keys found - no columns added")
+    return left
 
 # =========================================================
 # Main Import Function
@@ -242,7 +236,9 @@ def import_draft_to_player(
             player[col] = player[col].fillna(player[old_col])
             player.drop(columns=[old_col], inplace=True)
 
-    after_counts = {col: player[col].notna().sum() for col in available_cols}
+    # Only count columns that actually exist in player after the join
+    cols_actually_added = [col for col in available_cols if col in player.columns]
+    after_counts = {col: player[col].notna().sum() for col in cols_actually_added}
 
     # Calculate statistics
     stats = {
@@ -250,8 +246,8 @@ def import_draft_to_player(
         "unique_player_years": player[['yahoo_player_id', 'year']].drop_duplicates().shape[0],
     }
 
-    for col in available_cols:
-        stats[f"{col}_added"] = after_counts[col] - before_counts[col]
+    for col in cols_actually_added:
+        stats[f"{col}_added"] = after_counts[col] - before_counts.get(col, 0)
         stats[f"{col}_total"] = after_counts[col]
 
     # Calculate match rate
@@ -263,8 +259,8 @@ def import_draft_to_player(
 
     # Print summary
     print(f"\nImport Summary:")
-    for col in available_cols:
-        before = before_counts[col]
+    for col in cols_actually_added:
+        before = before_counts.get(col, 0)
         after = after_counts[col]
         added = after - before
         print(f"  {col:>20}: {before:,} -> {after:,} (+{added:,})")
@@ -297,6 +293,9 @@ def import_draft_to_player(
                     player[col] = pd.to_numeric(player[col], errors='coerce')
                 except Exception as e:
                     print(f"  Warning: Could not convert {col} to numeric: {e}")
+
+    # Ensure all join keys have correct types before saving
+    player = ensure_canonical_types(player, verbose=False)
 
     # Write back to player.parquet
     player.to_parquet(player_path, index=False)

@@ -96,6 +96,9 @@ def fetch_nflverse_team_stats(year: int, cache_dir: Path = None, use_cache: bool
     """
     Fetch team defensive stats from NFLverse for a given year.
 
+    IMPORTANT: For the CURRENT year, cache expires more frequently (24 hours) to ensure
+    we get updated data as games complete each week. For past years, cache lasts 7 days.
+
     Args:
         year: NFL season year (e.g., 2014)
         cache_dir: Directory to store cached downloads
@@ -112,12 +115,19 @@ def fetch_nflverse_team_stats(year: int, cache_dir: Path = None, use_cache: bool
 
     # Check cache first
     if use_cache and cache_file.exists():
+        from datetime import datetime
+        current_year = datetime.now().year
+
+        # For current year: use shorter cache expiry (24 hours) to get fresh data as games complete
+        # For past years: use longer cache expiry (168 hours = 7 days)
+        max_cache_age = 24 if year == current_year else CACHE_MAX_AGE_HOURS
+
         age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
-        if age_hours < CACHE_MAX_AGE_HOURS:
-            print(f"[DEF] Using cached team stats for {year} (age: {age_hours:.1f} hours)")
+        if age_hours < max_cache_age:
+            print(f"[DEF] Using cached team stats for {year} (age: {age_hours:.1f} hours, max: {max_cache_age}h)")
             return pd.read_parquet(cache_file)
         else:
-            print(f"[DEF] Cache expired for {year} (age: {age_hours:.1f} hours), re-downloading")
+            print(f"[DEF] Cache expired for {year} (age: {age_hours:.1f}h > max: {max_cache_age}h), re-downloading")
 
     # Download from NFLverse
     url = f"https://github.com/nflverse/nflverse-data/releases/download/stats_team/stats_team_week_{year}.parquet"
@@ -128,8 +138,14 @@ def fetch_nflverse_team_stats(year: int, cache_dir: Path = None, use_cache: bool
     import tempfile
 
     def download():
-        response = requests.get(url, stream=True, timeout=30)
-        response.raise_for_status()
+        try:
+            response = requests.get(url, stream=True, timeout=30)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                raise ValueError(f"NFLverse team stats not available for {year} (404 Not Found). Data may not exist for this year.")
+            else:
+                raise
 
         # Use chunked download to avoid memory spike
         with tempfile.NamedTemporaryFile(delete=False, suffix='.parquet') as tmp:
@@ -165,6 +181,9 @@ def fetch_nflverse_pbp_data(year: int, cache_dir: Path = None, use_cache: bool =
     """
     Fetch play-by-play data from NFLverse for calculating three_out and fourth_down_stop.
 
+    IMPORTANT: For the CURRENT year, cache expires more frequently (24 hours) to ensure
+    we get updated data as games complete each week. For past years, cache lasts 7 days.
+
     Args:
         year: NFL season year (e.g., 2014)
         cache_dir: Directory to store cached downloads
@@ -181,12 +200,19 @@ def fetch_nflverse_pbp_data(year: int, cache_dir: Path = None, use_cache: bool =
 
     # Check cache first
     if use_cache and cache_file.exists():
+        from datetime import datetime
+        current_year = datetime.now().year
+
+        # For current year: use shorter cache expiry (24 hours) to get fresh data as games complete
+        # For past years: use longer cache expiry (168 hours = 7 days)
+        max_cache_age = 24 if year == current_year else CACHE_MAX_AGE_HOURS
+
         age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
-        if age_hours < CACHE_MAX_AGE_HOURS:
-            print(f"[DEF] Using cached play-by-play data for {year} (age: {age_hours:.1f} hours)")
+        if age_hours < max_cache_age:
+            print(f"[DEF] Using cached play-by-play data for {year} (age: {age_hours:.1f} hours, max: {max_cache_age}h)")
             return pd.read_parquet(cache_file)
         else:
-            print(f"[DEF] Cache expired for {year} (age: {age_hours:.1f} hours), re-downloading")
+            print(f"[DEF] Cache expired for {year} (age: {age_hours:.1f}h > max: {max_cache_age}h), re-downloading")
 
     # Download from NFLverse
     url = f"https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_{year}.parquet"
@@ -466,9 +492,12 @@ def transform_to_defensive_stats(df: pd.DataFrame, three_out_stats: pd.DataFrame
     # Map team abbreviations to logo URLs (to match offense headshot_url column)
     defensive_df['headshot_url'] = normalized_defense_team.map(TEAM_LOGO_MAP)
 
-    # Check for unmapped teams
+    # Check for unmapped teams (filter out None/NaN values)
     unmapped_names = normalized_defense_team[~normalized_defense_team.isin(TEAM_NAMES)].unique()
+    unmapped_names = [str(x) for x in unmapped_names if pd.notna(x)]
+
     unmapped_logos = normalized_defense_team[~normalized_defense_team.isin(TEAM_LOGO_MAP)].unique()
+    unmapped_logos = [str(x) for x in unmapped_logos if pd.notna(x)]
 
     if len(unmapped_names) > 0:
         print(f"[DEF] Warning: Unmapped team names: {', '.join(unmapped_names)}")
@@ -583,7 +612,70 @@ def transform_to_defensive_stats(df: pd.DataFrame, three_out_stats: pd.DataFrame
     return defensive_df
 
 
-def process_one_year(year: int, week: int = None, cache_dir: Path = None, use_cache: bool = True) -> pd.DataFrame:
+def get_max_week_from_matchup_data(data_directory: Path, year: int) -> int | None:
+    """
+    Get the maximum week from matchup data files.
+
+    This allows NFLverse defense data to align with matchup data (only fetch weeks with actual matchups).
+
+    Args:
+        data_directory: League data directory (e.g., .../fantasy_football_data/KMFFL)
+        year: Year to check
+
+    Returns:
+        Maximum week number found in matchup data, or None if no matchup data exists
+    """
+    try:
+        matchup_dir = data_directory / "matchup_data"
+
+        if not matchup_dir.exists():
+            print(f"[matchup_max_week] Matchup directory not found: {matchup_dir}")
+            return None
+
+        # Try to find matchup file for this year
+        # Prefer all-weeks file, fallback to individual week files
+        all_weeks_file = matchup_dir / f"matchup_data_week_all_year_{year}.parquet"
+
+        if all_weeks_file.exists():
+            try:
+                df = pd.read_parquet(all_weeks_file)
+                if not df.empty and 'week' in df.columns:
+                    max_week = int(df['week'].max())
+                    print(f"[matchup_max_week] Found max week {max_week} from {all_weeks_file.name}")
+                    return max_week
+            except Exception as e:
+                print(f"[matchup_max_week] Error reading {all_weeks_file.name}: {e}")
+
+        # Fallback: check individual week files
+        week_files = list(matchup_dir.glob(f"matchup_data_week_*_year_{year}.parquet"))
+        if week_files:
+            # Extract week numbers from filenames
+            week_numbers = []
+            for wf in week_files:
+                try:
+                    # Parse filename: matchup_data_week_05_year_2024.parquet
+                    parts = wf.stem.split('_')
+                    if len(parts) >= 5:
+                        week_str = parts[3]  # "05"
+                        if week_str != "all":
+                            week_numbers.append(int(week_str))
+                except (ValueError, IndexError):
+                    continue
+
+            if week_numbers:
+                max_week = max(week_numbers)
+                print(f"[matchup_max_week] Found max week {max_week} from {len(week_files)} individual week files")
+                return max_week
+
+        print(f"[matchup_max_week] No matchup data found for year {year}")
+        return None
+
+    except Exception as e:
+        print(f"[matchup_max_week] Error getting max week from matchup data: {e}")
+        return None
+
+
+def process_one_year(year: int, week: int = None, cache_dir: Path = None, use_cache: bool = True, data_directory: Path = None) -> pd.DataFrame:
     """
     Process defensive stats for a single year (used by combine_dst_to_nfl.py).
 
@@ -592,6 +684,7 @@ def process_one_year(year: int, week: int = None, cache_dir: Path = None, use_ca
         week: Optional week number (0 or None = all weeks)
         cache_dir: Directory to store cached downloads
         use_cache: Whether to use cached data if available
+        data_directory: League data directory for matchup window context (optional)
 
     Returns:
         DataFrame with defensive stats including pts_allow, three_out, and fourth_down_stop
@@ -602,9 +695,27 @@ def process_one_year(year: int, week: int = None, cache_dir: Path = None, use_ca
     df = fetch_nflverse_team_stats(year, cache_dir=cache_dir, use_cache=use_cache)
 
     # Fetch play-by-play data for three-and-out and fourth down stop calculations (with caching)
-    pbp_df = fetch_nflverse_pbp_data(year, cache_dir=cache_dir, use_cache=use_cache)
-    three_out_stats = calculate_three_outs(pbp_df)
-    fourth_down_stop_stats = calculate_fourth_down_stops(pbp_df)
+    # For early years (1999-2000), play-by-play data may be incomplete or have missing columns
+    three_out_stats = None
+    fourth_down_stop_stats = None
+
+    try:
+        pbp_df = fetch_nflverse_pbp_data(year, cache_dir=cache_dir, use_cache=use_cache)
+
+        # Verify required columns exist before calculating stats
+        if 'drive_first_downs' in pbp_df.columns and 'play_type_nfl' in pbp_df.columns:
+            three_out_stats = calculate_three_outs(pbp_df)
+        else:
+            print(f"[DEF] Warning: Missing columns for three_out calculation in {year} (drive_first_downs or play_type_nfl)")
+
+        if 'down' in pbp_df.columns and 'play_type' in pbp_df.columns and 'first_down' in pbp_df.columns:
+            fourth_down_stop_stats = calculate_fourth_down_stops(pbp_df)
+        else:
+            print(f"[DEF] Warning: Missing columns for fourth_down_stop calculation in {year} (down, play_type, or first_down)")
+
+    except Exception as e:
+        print(f"[DEF] Warning: Could not fetch or process play-by-play data for {year}: {e}")
+        print(f"[DEF] Continuing without three_out and fourth_down_stop stats for {year}")
 
     # Transform to defensive format
     defensive_df = transform_to_defensive_stats(df, three_out_stats, fourth_down_stop_stats)
@@ -612,10 +723,32 @@ def process_one_year(year: int, week: int = None, cache_dir: Path = None, use_ca
     # Calculate points allowed buckets
     defensive_df = calculate_points_allowed_buckets(defensive_df)
 
-    # Filter by week if specified
+    # Week filtering logic:
+    # - CURRENT YEAR (week=0/None): Limit to max week from matchup data to avoid incomplete weeks
+    # - PAST YEARS (week=0/None): Pull ALL weeks (no matchup window limitation)
+    # - ANY YEAR (specific week): Filter to that specific week only
+    from datetime import datetime
+    current_year = datetime.now().year
+
+    # Filter by specific week if requested (applies to any year)
     if week and week > 0:
         defensive_df = defensive_df[defensive_df['week'] == week]
         print(f"[DEF] Filtered to week {week}: {len(defensive_df):,} rows")
+    # For current year ONLY: limit to weeks with matchup data
+    elif year == current_year and data_directory:
+        max_week_from_matchups = get_max_week_from_matchup_data(data_directory, year)
+
+        if max_week_from_matchups:
+            print(f"[DEF] Current year {year}: filtering to max week from matchup data: {max_week_from_matchups}")
+            defensive_df = defensive_df[defensive_df['week'] <= max_week_from_matchups]
+            print(f"[DEF] Filtered to weeks 1-{max_week_from_matchups}: {len(defensive_df):,} rows")
+        else:
+            print(f"[DEF] WARNING: No matchup data found for current year {year}")
+            print(f"[DEF] Using all available NFLverse data (may include incomplete weeks)")
+    # For past years: use all available weeks (no filtering)
+    else:
+        if year < current_year:
+            print(f"[DEF] Past year {year}: using all available weeks (no matchup window limitation)")
 
     return defensive_df
 

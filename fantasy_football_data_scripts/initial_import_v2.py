@@ -47,8 +47,7 @@ from multi_league.data_fetchers.aggregators import (
     normalize_draft_parquet,
     normalize_transactions_parquet,
     normalize_schedule_parquet,
-    ensure_fantasy_points_alias,
-    inject_espn_2013_matchups
+    ensure_fantasy_points_alias
 )
 from multi_league.core.league_context import LeagueContext
 
@@ -97,26 +96,35 @@ YAHOO_FETCHER = "multi_league/data_fetchers/yahoo_fantasy_data.py"
 # Pass 1: Base calculations (no dependencies)
 TRANSFORMATIONS_PASS_1 = [
     ("multi_league/transformations/base/cumulative_stats_v2.py", "Cumulative Stats", 600),  # FIX matchup playoff flags FIRST using seed-based detection
+    ("multi_league/transformations/base/enrich_schedule_with_playoff_flags.py", "Enrich Schedule w/ Playoff Flags", 120),  # Merge playoff flags from matchup into schedule (needed by playoff_odds_import)
 ]
 
 # Pass 2: Joins that need cumulative stats
 TRANSFORMATIONS_PASS_2 = [
     ("multi_league/transformations/player_enrichment/matchup_to_player_v2.py", "Matchup -> Player", 600),  # Join matchup columns INTO player (now with fixed playoff flags)
     ("multi_league/transformations/player_enrichment/player_stats_v2.py", "Player Stats", 900),  # MUST run before player_to_matchup (adds optimal_points to player)
+    ("multi_league/transformations/player_enrichment/replacement_level_v2.py", "Replacement Levels", 600),  # Calculate position replacement baselines for SPAR (needs fantasy_points from player_stats)
 ]
 
 # Pass 3: Everything else that depends on above
 TRANSFORMATIONS_PASS_3 = [
     ("multi_league/transformations/matchup_enrichment/player_to_matchup_v2.py", "Player -> Matchup", 600),  # Join player aggregates INTO matchup
-    ("multi_league/transformations/transaction_enrichment/player_to_transactions_v2.py", "Player <-> Transactions", 600),
-    ("multi_league/transformations/player_enrichment/transactions_to_player_v2.py", "Transactions -> Player", 600),  # Add FAAB data TO player
-    ("multi_league/transformations/draft_enrichment/draft_enrichment_v2.py", "Draft Enrichment", 600),  # Add kept_next_year TO draft - MUST run before draft_to_player
-    ("multi_league/transformations/player_enrichment/draft_to_player_v2.py", "Draft -> Player", 600),  # Add draft info TO player
-    ("multi_league/transformations/draft_enrichment/player_to_draft_v2.py", "Player -> Draft", 600),  # Add player stats TO draft
-    ("multi_league/transformations/draft_enrichment/keeper_economics_v2.py", "Keeper Economics", 600),
+    # CRITICAL ENRICHMENT ORDER: Draft enrichment MUST run BEFORE transaction enrichment
+    # This ensures transactions_to_player preserves the draft columns added by draft_to_player
+    # CRITICAL KEEPER ECONOMICS ORDER: Must run in this exact sequence for keeper columns to reach player table
+    ("multi_league/transformations/draft_enrichment/player_to_draft_v2.py", "Player -> Draft", 600),  # [1] Add player stats TO draft (needed for SPAR calculations)
+    ("multi_league/transformations/draft_enrichment/draft_value_metrics_v3.py", "Draft SPAR Metrics", 600),  # [2] Calculate SPAR + keeper economics, add TO draft (creates kept_next_year, spar, pgvor, etc.)
+    ("multi_league/transformations/player_enrichment/draft_to_player_v2.py", "Draft -> Player", 600),  # [3] Import keeper/draft columns FROM draft TO player (now they exist!)
+    # Transaction enrichment runs AFTER draft so it preserves draft columns when it writes player.parquet
+    ("multi_league/transformations/transaction_enrichment/fix_unknown_managers.py", "Fix Unknown Managers", 120),  # Fix manager="Unknown" by backfilling from most recent add - MUST run before any transaction joins
+    ("multi_league/transformations/transaction_enrichment/player_to_transactions_v2.py", "Player <-> Transactions", 600),  # Add ROS performance TO transactions - MUST run before transaction_value_metrics
+    ("multi_league/transformations/transaction_enrichment/transaction_value_metrics_v3.py", "Transaction SPAR Metrics", 600),  # SPAR-based transaction value (replaces old VOR metrics in player_to_transactions)
+    ("multi_league/transformations/player_enrichment/transactions_to_player_v2.py", "Transactions -> Player", 600),  # Add FAAB data TO player (preserves draft columns added above)
+    ("multi_league/transformations/draft_enrichment/keeper_economics_v2.py", "Keeper Economics", 600),  # Calculate keeper_price for next year planning (needs draft cost + FAAB from transactions)
     ("multi_league/transformations/matchup_enrichment/expected_record_v2.py", "Expected Record (V2)", 900),  # Needs wins_to_date and playoff_seed_to_date from cumulative_stats
-    ("multi_league/transformations/matchup_enrichment/playoff_odds_import.py", "Playoff Odds", 1800),  # Extended timeout: 30 minutes (Monte Carlo simulations)
+    ("multi_league/transformations/matchup_enrichment/playoff_odds_import.py", "Playoff Odds", None),  # No timeout - Monte Carlo simulations can take a while
     ("multi_league/transformations/aggregation/aggregate_player_season_v2.py", "Aggregate Player Season", 600),  # Create players_by_year
+    ("multi_league/transformations/finalize/normalize_canonical_types.py", "Normalize Join Key Types", 120),  # MUST BE LAST - ensures all join keys have consistent Int64 types for cross-table joins
     # ("multi_league/transformations/validation/validate_outputs.py", "Validate Outputs", 600),  # TODO: Create this script
 ]
 
@@ -320,7 +328,7 @@ def main():
             try:
                 settings = fetch_league_settings(
                     year=year,
-                    league_key=ctx.league_id,
+                    league_key=None,  # Let auto-discovery find correct league key for each year
                     settings_dir=settings_dir,
                     context=str(context_path)
                 )
@@ -402,37 +410,29 @@ def main():
                 results["fetchers"].append((label, all_ok))
 
             elif "weekly_matchup_data_v2.py" in script_path:
-                # ONLY fetch Yahoo API years (excludes ESPN CSV years like 2013)
-                # ESPN CSV years will be injected separately via inject_espn_2013_matchups()
-                yahoo_years = ctx.get_yahoo_years(end_year=ctx.end_year or datetime.now().year)
+                # Fetch matchups from Yahoo API for all years in league range
+                end_year = ctx.end_year or datetime.now().year
+                yahoo_years = list(range(ctx.start_year, end_year + 1))
 
-                if not yahoo_years:
-                    log("[SKIP] No Yahoo years to fetch (all years from ESPN CSV)")
-                    results["fetchers"].append((label, True))
-                else:
-                    log(f"[INFO] Fetching Yahoo matchups for years: {yahoo_years}")
-                    if ctx.espn_csv_years:
-                        log(f"[INFO] Skipping ESPN CSV years: {sorted(ctx.espn_csv_years)}")
+                log(f"[INFO] Fetching Yahoo matchups for years: {yahoo_years}")
 
-                    all_ok = True
-                    for y in yahoo_years:
-                        ok = run_script(
-                            script_path, f"{label} ({y})", str(context_path),
-                            additional_args=extra_args + ["--year", str(y)],
-                            timeout=1200  # 20 minutes for matchup data
-                        )
-                        all_ok = all_ok and ok
-                    results["fetchers"].append((label, all_ok))
+                all_ok = True
+                for y in yahoo_years:
+                    ok = run_script(
+                        script_path, f"{label} ({y})", str(context_path),
+                        additional_args=extra_args + ["--year", str(y)],
+                        timeout=1200  # 20 minutes for matchup data
+                    )
+                    all_ok = all_ok and ok
+                results["fetchers"].append((label, all_ok))
 
             # Handle original yahoo_fantasy_data.py (not v2)
             elif "yahoo_fantasy_data.py" in script_path and "v2" not in script_path:
                 # Fetch ALL years from Yahoo API for player roster data
                 # Yahoo API will naturally return empty results for years before the league existed
-                # ESPN CSV imports only contain matchup data, NOT player rosters, so we still need Yahoo
                 end_year = ctx.end_year or datetime.now().year
 
                 log(f"[INFO] Fetching Yahoo player data for years: {ctx.start_year}-{end_year}")
-                log(f"[INFO] Yahoo API will return data only for years where league had rosters")
 
                 ok = run_script(
                     script_path,
@@ -444,18 +444,11 @@ def main():
                 results["fetchers"].append((label, ok))
 
             elif "draft_data_v2.py" in script_path:
-                # ONLY fetch Yahoo API years (excludes ESPN CSV years)
-                # ESPN CSV years don't have draft data available
-                yahoo_years = ctx.get_yahoo_years(end_year=ctx.end_year or datetime.now().year)
-
-                if not yahoo_years:
-                    log("[SKIP] No Yahoo years to fetch draft data (all years from ESPN CSV)")
-                    results["fetchers"].append((label, True))
-                    continue
+                # Fetch draft data from Yahoo API for all years in league range
+                end_year = ctx.end_year or datetime.now().year
+                yahoo_years = list(range(ctx.start_year, end_year + 1))
 
                 log(f"[INFO] Fetching Yahoo draft data for years: {yahoo_years}")
-                if ctx.espn_csv_years:
-                    log(f"[INFO] Skipping ESPN CSV years: {sorted(ctx.espn_csv_years)} (no draft data in ESPN export)")
 
                 all_ok = True
                 for y in yahoo_years:
@@ -471,63 +464,63 @@ def main():
                 results["fetchers"].append((label, all_ok))
 
             elif "transactions_v2.py" in script_path:
-                # ONLY fetch Yahoo API years (excludes ESPN CSV years)
-                # ESPN CSV years don't have transaction data available
-                yahoo_years = ctx.get_yahoo_years(end_year=ctx.end_year or datetime.now().year)
+                # Fetch transactions from Yahoo API for all years in league range
+                log(f"[INFO] Fetching Yahoo transactions for all years: {ctx.start_year}-{ctx.end_year or datetime.now().year}")
 
-                if not yahoo_years:
-                    log("[SKIP] No Yahoo years to fetch transactions (all years from ESPN CSV)")
-                    results["fetchers"].append((label, True))
-                else:
-                    log(f"[INFO] Fetching Yahoo transactions for years: {yahoo_years}")
-                    if ctx.espn_csv_years:
-                        log(f"[INFO] Skipping ESPN CSV years: {sorted(ctx.espn_csv_years)} (no transaction data in ESPN export)")
+                ok = run_script(script_path, label, str(context_path),
+                                additional_args=extra_args + ["--all-years"],
+                                timeout=1800)  # 30 minutes for all transactions
 
-                    ok = run_script(script_path, label, str(context_path),
-                                    additional_args=extra_args + ["--all-years"],
-                                    timeout=1800)  # 30 minutes for all transactions
+                # Aggregate all individual year files into one combined transactions.parquet
+                if ok:
+                    try:
+                        trans_dir = Path(ctx.transaction_data_directory)
+                        year_files = sorted(trans_dir.glob("transactions_year_*.parquet"))
+                        if year_files:
+                            log(f"[AGGREGATE] Combining {len(year_files)} transaction year files...")
+                            trans_dfs = []
+                            for f in year_files:
+                                df = pd.read_parquet(f)
+                                trans_dfs.append(df)
+                                log(f"      [LOAD] {f.name} ({len(df):,} rows)")
 
-                    # Aggregate all individual year files into one combined transactions.parquet
-                    if ok:
-                        try:
-                            trans_dir = Path(ctx.transaction_data_directory)
-                            year_files = sorted(trans_dir.glob("transactions_year_*.parquet"))
-                            if year_files:
-                                log(f"[AGGREGATE] Combining {len(year_files)} transaction year files...")
-                                trans_dfs = []
-                                for f in year_files:
-                                    df = pd.read_parquet(f)
-                                    trans_dfs.append(df)
-                                    log(f"      [LOAD] {f.name} ({len(df):,} rows)")
+                            combined = pd.concat(trans_dfs, ignore_index=True)
 
-                                combined = pd.concat(trans_dfs, ignore_index=True)
-
-                                # Deduplicate by transaction_id
-                                if "transaction_id" in combined.columns:
-                                    initial_count = len(combined)
+                            # Deduplicate by transaction_id + player (preserves add+drop combos and trades)
+                            # A single transaction can involve multiple players (add+drop, trades)
+                            if "transaction_id" in combined.columns:
+                                initial_count = len(combined)
+                                # Try player_key first, then yahoo_player_id
+                                if "player_key" in combined.columns:
+                                    combined = combined.drop_duplicates(subset=["transaction_id", "player_key"], keep="first")
+                                    dedup_key = "transaction_id + player_key"
+                                elif "yahoo_player_id" in combined.columns:
+                                    combined = combined.drop_duplicates(subset=["transaction_id", "yahoo_player_id"], keep="first")
+                                    dedup_key = "transaction_id + yahoo_player_id"
+                                else:
+                                    # Fallback to transaction_id only if no player column exists
                                     combined = combined.drop_duplicates(subset=["transaction_id"], keep="first")
-                                    if len(combined) < initial_count:
-                                        log(f"      [DEDUP] Removed {initial_count - len(combined):,} duplicate transaction_ids")
+                                    dedup_key = "transaction_id (WARNING: may lose add/drop combos)"
 
-                                # Save to main league directory (not subdirectory)
-                                combined_path = Path(ctx.data_directory) / "transactions.parquet"
-                                combined.to_parquet(combined_path, index=False)
-                                log(f"[AGGREGATE] Wrote combined transactions file: {combined_path} ({len(combined):,} rows)")
-                            else:
-                                log("[WARN] No transaction year files found to aggregate")
-                                ok = False
-                        except Exception as e:
-                            log(f"[ERROR] Transactions aggregation failed: {e}")
+                                if len(combined) < initial_count:
+                                    log(f"      [DEDUP] Removed {initial_count - len(combined):,} duplicate records ({dedup_key})")
+
+                            # Save to main league directory (not subdirectory)
+                            combined_path = Path(ctx.data_directory) / "transactions.parquet"
+                            combined.to_parquet(combined_path, index=False)
+                            log(f"[AGGREGATE] Wrote combined transactions file: {combined_path} ({len(combined):,} rows)")
+                        else:
+                            log("[WARN] No transaction year files found to aggregate")
                             ok = False
+                    except Exception as e:
+                        log(f"[ERROR] Transactions aggregation failed: {e}")
+                        ok = False
 
-                    results["fetchers"].append((label, ok))
+                results["fetchers"].append((label, ok))
 
             elif "season_schedules.py" in script_path:
-                # Schedule should include ALL years (including ESPN CSV years)
-                # ESPN CSV matchups need schedule data for playoff odds calculations
+                # Fetch schedule for all years in league range
                 log(f"[INFO] Fetching schedule for ALL years: {ctx.start_year}-{ctx.end_year or datetime.now().year}")
-                if ctx.espn_csv_years:
-                    log(f"[INFO] Including ESPN CSV years: {sorted(ctx.espn_csv_years)}")
 
                 ok = run_script(script_path, label, str(context_path),
                                 additional_args=extra_args + ["--all-years"],
@@ -548,7 +541,7 @@ def main():
 
                             combined = pd.concat(sched_dfs, ignore_index=True)
                             # Save to main league directory (not subdirectory)
-                            combined_path = Path(ctx.data_directory) / "schedule_data_all_years.parquet"
+                            combined_path = Path(ctx.data_directory) / "schedule.parquet"
                             combined.to_parquet(combined_path, index=False)
                             log(f"[AGGREGATE] Wrote combined schedule file: {combined_path} ({len(combined):,} rows)")
                         else:
@@ -1612,31 +1605,6 @@ def main():
     log("PRE-TRANSFORMATION: Creating canonical parquet files")
     log("=" * 96)
 
-    # Inject ESPN CSV imports if configured in league context
-    if ctx.espn_csv_imports:
-        log(f"[PRE] Found {len(ctx.espn_csv_imports)} ESPN CSV import(s) in league context")
-        for import_config in ctx.espn_csv_imports:
-            try:
-                year = import_config.get("year")
-                csv_path = import_config.get("csv_path")
-                description = import_config.get("description", "ESPN import")
-
-                if not year or not csv_path:
-                    log(f"[PRE][WARN] Skipping invalid ESPN import config: {import_config}")
-                    continue
-
-                csv_file = Path(csv_path)
-                if csv_file.exists():
-                    log(f"[PRE] Injecting ESPN CSV for {year}: {description}")
-                    inject_espn_2013_matchups(str(context_path), str(csv_file), log=log)
-                    log(f"[PRE] [OK] Successfully injected ESPN data for {year}")
-                else:
-                    log(f"[PRE][WARN] ESPN CSV not found: {csv_path}")
-            except Exception as e:
-                log(f"[PRE][ERROR] ESPN injection failed for {import_config.get('year', 'unknown')}: {e}")
-    else:
-        log("[PRE] No ESPN CSV imports configured in league context")
-
     # Create matchup.parquet BEFORE transformations (they need it)
     try:
         path = merge_matchups_to_parquet(str(context_path), years=args.years if args.years else None)
@@ -1644,29 +1612,7 @@ def main():
     except Exception as e:
         log(f"[PRE][ERROR] matchups merge failed: {e}")
 
-    # Aggregate draft year files BEFORE normalization
-    try:
-        draft_dir = Path(ctx.draft_data_directory)
-        year_files = sorted(draft_dir.glob("draft_data_*.parquet"))
-        if year_files:
-            log(f"[PRE] Combining {len(year_files)} draft year files...")
-            draft_dfs = []
-            for f in year_files:
-                df = pd.read_parquet(f)
-                draft_dfs.append(df)
-                log(f"      [LOAD] {f.name} ({len(df):,} rows)")
-
-            combined = pd.concat(draft_dfs, ignore_index=True)
-            # Save to main league directory (not subdirectory)
-            combined_path = Path(ctx.data_directory) / "draft_data_all_years.parquet"
-            combined.to_parquet(combined_path, index=False)
-            log(f"[PRE] Wrote combined draft file: {combined_path} ({len(combined):,} rows)")
-        else:
-            log("[PRE][WARN] No draft year files found to aggregate")
-    except Exception as e:
-        log(f"[PRE][ERROR] Draft aggregation failed: {e}")
-
-    # Normalize draft.parquet BEFORE transformations (draft_to_player needs it)
+    # Normalize draft.parquet BEFORE transformations (combines year files and normalizes)
     try:
         path = normalize_draft_parquet(str(context_path))
         log(f"[PRE] draft.parquet ready: {path}")
@@ -1716,10 +1662,16 @@ def main():
                     extra_args.extend(["--n-sims", "10000"])
                     log(f"  [INFO] Reducing expected_record simulations to 10,000 for faster initial import")
 
-                # Use custom timeout if specified, otherwise default 1200 seconds (20 minutes)
-                timeout = custom_timeout if custom_timeout is not None else 1200
-                if custom_timeout is not None:
-                    log(f"  [INFO] Using extended timeout for {label}: {timeout} seconds ({timeout//60} minutes)")
+                # Use custom timeout - can be a specific value, None (no timeout), or default to 1200
+                # Only use default 1200 if not explicitly set in the tuple (i.e., when tuple length is 2)
+                if custom_timeout is None:
+                    log(f"  [INFO] No timeout limit for {label} - script can run indefinitely")
+                    timeout = None
+                elif custom_timeout != 900:  # 900 is the default in run_script, so only log if different
+                    log(f"  [INFO] Using extended timeout for {label}: {custom_timeout} seconds ({custom_timeout//60} minutes)")
+                    timeout = custom_timeout
+                else:
+                    timeout = custom_timeout
 
                 ok = run_script(script_path, label, str(context_path), additional_args=extra_args, timeout=timeout)
                 results.setdefault("transformations", []).append((label, ok))

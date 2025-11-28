@@ -39,8 +39,8 @@ def _load_ctx(context_path: str):
 
 # Required columns for matchup data
 REQUIRED_MATCHUP_COLS = [
-    "year", "week", "manager", "opponent", "manager_team", "opponent_team",
-    "manager_score", "opponent_score", "is_playoffs", "is_consolation",
+    "year", "week", "manager", "opponent", "team_name", "opponent_team",
+    "team_points", "opponent_points", "is_playoffs", "is_consolation",
     "manager_week"
 ]
 
@@ -86,10 +86,6 @@ def merge_matchups_to_parquet(
     """
     ctx = _load_ctx(context)
 
-    # LEAGUE-SPECIFIC: Auto-inject ESPN 2013 data for KMFFL if CSV exists
-    # This is a one-time migration quirk that doesn't affect scalability
-    inject_espn_2013_matchups(context, log=log)
-
     # Save to canonical location (data_directory/matchup.parquet)
     mdir = Path(ctx.data_directory)
     mdir.mkdir(parents=True, exist_ok=True)
@@ -105,7 +101,44 @@ def merge_matchups_to_parquet(
 
     parts: List[pd.DataFrame] = []
 
-    for season in years:
+    # MANUAL FILE DETECTION: Scan for files outside the API fetch range
+    # This allows users to manually add historical data (e.g., pre-API years)
+    all_matchup_files = list(weekly_dir.glob("*.parquet"))
+    manual_files = []
+
+    for f in all_matchup_files:
+        # Try to extract year from filename
+        year_in_filename = None
+        stem = f.stem
+
+        # Pattern 1: yahoo_matchups_YYYY_week_N.parquet
+        if stem.startswith("yahoo_matchups_") and "_week_" in stem:
+            try:
+                year_in_filename = int(stem.split("_")[2])  # yahoo_matchups_YYYY_week_N
+            except (IndexError, ValueError):
+                pass
+
+        # Pattern 2: matchup_data_week_N_year_YYYY.parquet or matchup_data_week_all_year_YYYY.parquet
+        elif "year_" in stem:
+            try:
+                year_in_filename = int(stem.split("year_")[-1])
+            except ValueError:
+                pass
+
+        # If we found a year and it's OUTSIDE the normal range, it's a manual file
+        if year_in_filename is not None and year_in_filename not in years:
+            manual_files.append((f, year_in_filename))
+            log(f"  [MANUAL] Detected manual file: {f.name} (year {year_in_filename})")
+
+    # Add manual years to processing list
+    manual_years = sorted(set(y for _, y in manual_files))
+    all_years = sorted(set(years + manual_years))
+
+    if manual_years:
+        log(f"  [MANUAL] Including {len(manual_years)} manual year(s): {manual_years}")
+        log(f"  [RANGE] Full year range: {min(all_years)} - {max(all_years)}")
+
+    for season in all_years:
         # Gather files for this season from weekly_dir
         files = list(weekly_dir.glob(f"yahoo_matchups_{season}_week_*.parquet"))
         files += list(weekly_dir.glob(f"matchup_data_week_*_year_{season}.parquet"))
@@ -163,44 +196,15 @@ def merge_matchups_to_parquet(
                 df["week"] = wk_val
             df["week"] = pd.to_numeric(df["week"], errors="coerce").astype("Int64")
 
-            # STANDARDIZE COLUMN NAMES (Yahoo vs ESPN naming differences)
-            # Yahoo fetcher creates: team_name, team_points, opponent_points
-            # Expected schema: manager_team, manager_score, opponent_score, opponent_team
-            column_renames = {}
-
-            # Rename team_name -> manager_team (if manager_team doesn't exist)
-            if "team_name" in df.columns and "manager_team" not in df.columns:
-                column_renames["team_name"] = "manager_team"
-
-            # Rename team_points -> manager_score (if manager_score doesn't exist)
-            if "team_points" in df.columns and "manager_score" not in df.columns:
-                column_renames["team_points"] = "manager_score"
-
-            # Rename opponent_points -> opponent_score (if opponent_score doesn't exist)
-            if "opponent_points" in df.columns and "opponent_score" not in df.columns:
-                column_renames["opponent_points"] = "opponent_score"
-
-            # Rename team_projected_points -> manager_proj_score (if manager_proj_score doesn't exist)
-            if "team_projected_points" in df.columns and "manager_proj_score" not in df.columns:
-                column_renames["team_projected_points"] = "manager_proj_score"
-
-            # Rename opponent_projected_points -> opponent_proj_score (if opponent_proj_score doesn't exist)
-            if "opponent_projected_points" in df.columns and "opponent_proj_score" not in df.columns:
-                column_renames["opponent_projected_points"] = "opponent_proj_score"
-
-            if column_renames:
-                df = df.rename(columns=column_renames)
-                log(f"      [RENAME] {f.name}: {list(column_renames.keys())} -> {list(column_renames.values())}")
-
-            # Add opponent_team if missing (lookup from manager -> manager_team mapping)
+            # Add opponent_team if missing (lookup from manager -> team_name mapping)
             if "opponent_team" not in df.columns or df["opponent_team"].isna().all():
-                if "opponent" in df.columns and "manager_team" in df.columns:
-                    manager_to_team = df.groupby("manager")["manager_team"].first().to_dict()
+                if "opponent" in df.columns and "team_name" in df.columns:
+                    manager_to_team = df.groupby("manager")["team_name"].first().to_dict()
                     df["opponent_team"] = df["opponent"].map(manager_to_team)
                     if df["opponent_team"].notna().any():
                         log(f"      [ADD] {f.name}: Added opponent_team mapping")
 
-            # Ensure required columns exist (only add NULL if still missing after renames)
+            # Ensure required columns exist (add NULL if missing)
             for col in REQUIRED_MATCHUP_COLS:
                 if col not in df.columns:
                     if col in OPTIONAL_MATCHUP_COLS_DEFAULTS:
@@ -218,20 +222,24 @@ def merge_matchups_to_parquet(
 
     merged = pd.concat(parts, ignore_index=True, sort=False)
 
+    # CRITICAL: Remove empty rows (common in CSV conversions with trailing empty lines)
+    # Filter out rows where manager is None/NA or year is NA
+    before_count = len(merged)
+    merged = merged[
+        merged['manager'].notna() &
+        (merged['manager'] != 'None') &
+        (merged['manager'] != '') &
+        merged['year'].notna()
+    ].copy()
+    after_count = len(merged)
+
+    if before_count > after_count:
+        log(f"  [CLEANUP] Removed {before_count - after_count:,} empty rows (manager=None or year=NA)")
+
     # Sort for deterministic output
     sort_cols = [c for c in ["year", "week", "manager"] if c in merged.columns]
     if sort_cols:
         merged = merged.sort_values(sort_cols).reset_index(drop=True)
-
-    # Add backward compatibility aliases for transformation scripts
-    # Many scripts still reference team_points/opponent_points
-    if "manager_score" in merged.columns and "team_points" not in merged.columns:
-        merged["team_points"] = merged["manager_score"]
-        log(f"[COMPAT] Added team_points as alias for manager_score")
-
-    if "opponent_score" in merged.columns and "opponent_points" not in merged.columns:
-        merged["opponent_points"] = merged["opponent_score"]
-        log(f"[COMPAT] Added opponent_points as alias for opponent_score")
 
     # Normalize numeric columns before writing (prevents string->numeric conversion errors)
     merged = normalize_numeric_columns(merged)
@@ -253,17 +261,21 @@ def normalize_draft_parquet(
     log: Callable[..., None] = print
 ) -> Path:
     """
-    Ensure draft.parquet exists at canonical location with proper normalization.
+    Combine draft year files and normalize to canonical draft.parquet.
 
-    Tries multiple candidate locations:
-    - draft_data_directory/draft.parquet
-    - draft_data_directory/drafts.parquet
-    - data_directory/draft.parquet
+    Similar to merge_matchups_to_parquet, this function:
+    - Loads individual year files from draft_data_directory
+    - Combines them into a single DataFrame
+    - Normalizes column types and names
+    - Filters out deprecated columns
+    - Writes to canonical location
 
     Normalizes:
     - yahoo_player_id -> string
     - year -> Int64
+    - is_keeper_status -> Int64
     - league_id -> added if missing
+    - Removes deprecated keeper SPAR columns
 
     Args:
         context: Path to league_context.json
@@ -273,31 +285,27 @@ def normalize_draft_parquet(
         Path to canonical draft.parquet file
 
     Raises:
-        FileNotFoundError: If draft.parquet not found
-        ValueError: If draft.parquet is empty
+        FileNotFoundError: If no draft year files found
+        ValueError: If combined draft data is empty
     """
     ctx = _load_ctx(context)
 
-    # Try likely locations (check main league directory first, then subdirectories)
-    candidates = []
-    if getattr(ctx, "data_directory", None):
-        candidates.append(Path(ctx.data_directory) / "draft.parquet")
-        candidates.append(Path(ctx.data_directory) / "drafts.parquet")
-        candidates.append(Path(ctx.data_directory) / "draft_data_all_years.parquet")
-    if getattr(ctx, "draft_data_directory", None):
-        candidates.append(Path(ctx.draft_data_directory) / "draft.parquet")
-        candidates.append(Path(ctx.draft_data_directory) / "drafts.parquet")
-        candidates.append(Path(ctx.draft_data_directory) / "draft_data_all_years.parquet")
+    # Load and combine individual year files (like matchup merge)
+    draft_dir = Path(ctx.draft_data_directory)
+    year_files = sorted(draft_dir.glob("draft_data_*.parquet"))
 
-    found = None
-    for c in candidates:
-        if c and c.exists():
-            found = c
-            break
-    if not found:
-        raise FileNotFoundError("draft.parquet not found in expected locations")
+    if not year_files:
+        raise FileNotFoundError(f"No draft year files found in {draft_dir}")
 
-    df = pd.read_parquet(found)
+    log(f"[normalize_draft] Combining {len(year_files)} draft year files...")
+    parts = []
+    for f in year_files:
+        year_df = pd.read_parquet(f)
+        parts.append(year_df)
+        log(f"   [LOAD] {f.name} ({len(year_df):,} rows)")
+
+    df = pd.concat(parts, ignore_index=True)
+    log(f"[normalize_draft] Combined {len(df):,} total draft picks")
     if df.empty:
         raise ValueError("draft.parquet is empty")
 
@@ -346,56 +354,57 @@ def normalize_draft_parquet(
     if "year" in df.columns:
         df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
 
+    # Normalize is_keeper_status: convert empty strings to 0, "1" to 1
+    if "is_keeper_status" in df.columns:
+        # Replace empty strings with 0
+        df["is_keeper_status"] = df["is_keeper_status"].replace("", "0")
+        # Convert to numeric, then to Int64
+        df["is_keeper_status"] = pd.to_numeric(df["is_keeper_status"], errors="coerce").fillna(0).astype("Int64")
+        log(f"[normalize_draft] Normalized is_keeper_status to Int64 (keepers: {(df['is_keeper_status'] == 1).sum():,})")
+
+    # Normalize is_keeper_cost similarly
+    if "is_keeper_cost" in df.columns:
+        df["is_keeper_cost"] = df["is_keeper_cost"].replace("", "0")
+        df["is_keeper_cost"] = pd.to_numeric(df["is_keeper_cost"], errors="coerce").fillna(0).astype("Int64")
+
     # Ensure league_id exists
     if "league_id" not in df.columns:
         df["league_id"] = ctx.league_id
         log(f"[normalize_draft] Added league_id: {ctx.league_id}")
 
-    # Preserve enrichment columns from existing canonical file if they exist
-    # (These are added by transformation scripts like player_to_draft_v2.py)
-    enrichment_cols = [
-        'total_fantasy_points', 'season_ppg', 'games_played', 'games_with_points',
-        'season_std', 'best_game', 'worst_game', 'weeks_rostered', 'weeks_started',
-        'season_overall_rank', 'season_position_rank', 'total_position_players',
-        'price_rank_within_position', 'pick_rank_within_position',
-        'price_rank_vs_finish_rank', 'pick_rank_vs_finish_rank',
-        'points_per_dollar', 'points_per_pick', 'value_over_replacement', 'draft_position_delta'
+    # DEPRECATED columns that should be filtered out (old keeper SPAR metrics)
+    deprecated_cols = [
+        'keeper_spar_per_dollar', 'keeper_surplus_spar', 'keeper_roi_spar',
+        'keeper_spar_per_dollar_rank', 'keeper_surplus_rank'
     ]
 
+    # Canonical output path
     out_path = ctx.canonical_draft_file
-    try:
-        if out_path.exists():
-            existing_canonical = pd.read_parquet(out_path)
-
-            # Check which enrichment columns exist and have data in canonical
-            cols_to_preserve = [c for c in enrichment_cols if c in existing_canonical.columns
-                               and existing_canonical[c].notna().sum() > 0
-                               and c not in df.columns]  # Only preserve if not already in source
-
-            if cols_to_preserve:
-                join_keys = ['yahoo_player_id', 'year']
-                enrichment_data = existing_canonical[join_keys + cols_to_preserve].copy()
-
-                df = df.merge(
-                    enrichment_data,
-                    on=join_keys,
-                    how='left',
-                    suffixes=('', '_preserved')
-                )
-
-                # Clean up duplicate columns from merge
-                for col in cols_to_preserve:
-                    if f'{col}_preserved' in df.columns:
-                        df[col] = df[f'{col}_preserved']
-                        df = df.drop(columns=[f'{col}_preserved'])
-
-                preserved_count = sum(df[c].notna().sum() for c in cols_to_preserve)
-                log(f"[normalize_draft] Preserved {len(cols_to_preserve)} enrichment columns with {preserved_count:,} values")
-    except Exception as e:
-        log(f"[normalize_draft][WARN] Failed to preserve enrichment columns: {e}")
 
     # Normalize numeric columns before writing (prevents string->numeric conversion errors)
     df = normalize_numeric_columns(df)
+
+    # KEEP ALL PLAYERS (drafted and undrafted) for SPAR calculations
+    # Undrafted players have manager=None/empty but still have avg_pick, percent_drafted, etc.
+    # This allows us to calculate SPAR for players who SHOULD have been drafted
+    initial_count = len(df)
+    drafted_count = 0
+    undrafted_count = 0
+    if 'manager' in df.columns:
+        drafted_count = df['manager'].notna().sum()
+        undrafted_count = df['manager'].isna().sum()
+        log(f"[normalize_draft] Keeping ALL draft-eligible players:")
+        log(f"  - Drafted: {drafted_count:,} players")
+        log(f"  - Undrafted (eligible): {undrafted_count:,} players")
+        log(f"  - Total: {initial_count:,} players")
+    else:
+        log(f"[normalize_draft] WARNING: No 'manager' column found")
+
+    # Final cleanup: ensure deprecated columns are not in output
+    final_deprecated = [c for c in deprecated_cols if c in df.columns]
+    if final_deprecated:
+        df = df.drop(columns=final_deprecated)
+        log(f"[normalize_draft] Removed {len(final_deprecated)} deprecated columns from output: {final_deprecated}")
 
     # Write to canonical location
     out_csv = out_path.parent / "draft.csv"
@@ -459,12 +468,18 @@ def normalize_transactions_parquet(
         df["week"] = pd.to_numeric(df["week"], errors="coerce").astype("Int64")
 
     # CRITICAL: Deduplicate source data before any merges
-    # Use transaction_id if available, otherwise use composite key
-    if "transaction_id" in df.columns:
+    # Use transaction_id + player_key to preserve multi-player transactions (add/drop combos, trades)
+    # A single transaction_id can have multiple players (e.g., trade, add+drop combo)
+    if "transaction_id" in df.columns and "player_key" in df.columns:
         initial_count = len(df)
-        df = df.drop_duplicates(subset=["transaction_id"], keep="first")
+        df = df.drop_duplicates(subset=["transaction_id", "player_key"], keep="first")
         if len(df) < initial_count:
-            log(f"[normalize_transactions] Removed {initial_count - len(df):,} duplicate transaction_ids")
+            log(f"[normalize_transactions] Removed {initial_count - len(df):,} duplicate transaction records")
+    elif "transaction_id" in df.columns and "yahoo_player_id" in df.columns:
+        initial_count = len(df)
+        df = df.drop_duplicates(subset=["transaction_id", "yahoo_player_id"], keep="first")
+        if len(df) < initial_count:
+            log(f"[normalize_transactions] Removed {initial_count - len(df):,} duplicate transaction records")
     else:
         # Fallback to composite key if transaction_id missing
         dedup_keys = [k for k in ["yahoo_player_id", "year", "cumulative_week", "timestamp"] if k in df.columns]
@@ -562,9 +577,9 @@ def normalize_schedule_parquet(
     candidates = []
     if getattr(ctx, "data_directory", None):
         candidates.append(Path(ctx.data_directory) / "schedule.parquet")
+        # Legacy support for old naming convention
         candidates.append(Path(ctx.data_directory) / "schedule_data_all_years.parquet")
     if getattr(ctx, "schedule_data_directory", None):
-        candidates.append(Path(ctx.schedule_data_directory) / "schedule_data_all_years.parquet")
         candidates.append(Path(ctx.schedule_data_directory) / "schedule.parquet")
 
     found = None
@@ -706,156 +721,3 @@ def ensure_fantasy_points_alias(
         log(f"[POST] Added fantasy_points alias from {chosen}")
 
     return pfile
-
-
-def inject_espn_2013_matchups(
-    context: str,
-    csv_path: Optional[str] = None,
-    log: Callable[..., None] = print
-) -> None:
-    """
-    Inject 2013 ESPN matchup data from CSV for KMFFL league only.
-
-    *** LEAGUE-SPECIFIC QUIRK - DOES NOT AFFECT SCALABILITY ***
-
-    This function handles a one-time migration for KMFFL (league_id "449.l.198278")
-    which started on ESPN in 2013 before moving to Yahoo. This year ONLY has:
-    - Matchup data (manually reconstructed from historical records)
-    - NO player stats, draft data, or transaction data (treated as pre-league year)
-
-    The 2013 season was an 8-team league with 4/8 playoff teams, no bye week.
-    Championship: Gavi beat Yaacov. Playoff scores (weeks 13-14) were lost to history.
-
-    This function:
-    1. Only runs for KMFFL (league_id "449.l.198278")
-    2. Automatically looks for CSV in standard location: matchup_data/matchup_data_week_all_year_2013.csv
-    3. Converts CSV to weekly parquet files that merge_matchups_to_parquet() can consume
-    4. Silently skips if league is not KMFFL or CSV is not found
-
-    This quirk does NOT affect:
-    - Other leagues (completely ignored for non-KMFFL leagues)
-    - System scalability (one-time 8-team, 14-week dataset)
-    - Data pipeline (treated as normal matchup data after injection)
-
-    Args:
-        context: Path to league_context.json
-        csv_path: Optional path to CSV file. If None, auto-detects from matchup_data_directory
-        log: Logging function (default: print)
-    """
-    ctx = _load_ctx(context)
-
-    # LEAGUE-SPECIFIC: Only run for KMFFL league
-    if ctx.league_id != "449.l.198278":
-        return  # Silently skip for all other leagues
-
-    # Auto-detect CSV path if not provided
-    if csv_path is None:
-        matchup_dir = Path(ctx.matchup_data_directory)
-        csv_path = matchup_dir / "matchup_data_week_all_year_2013.csv"
-    else:
-        csv_path = Path(csv_path)
-
-    # Silently skip if CSV doesn't exist (already processed or not needed)
-    if not csv_path.exists():
-        return
-
-    log(f"[ESPN 2013][KMFFL-SPECIFIC] Injecting 2013 ESPN matchup data from {csv_path.name}")
-    log(f"[ESPN 2013] This is a one-time migration quirk for KMFFL's pre-Yahoo season")
-
-    # Load CSV
-    df = pd.read_csv(csv_path)
-
-    # Filter out empty rows (some rows at the end have no data)
-    df = df[df["manager"].notna()].copy()
-
-    log(f"[ESPN 2013] Loaded {len(df)} matchup records from CSV")
-
-    # Column mapping from CSV to expected schema
-    # The CSV now comes from matchup_data_week_all_year_2013.csv which already has most columns
-    column_mapping = {
-        "team_name": "manager_team",
-        "team_points": "manager_score",
-        "team_projected_points": "manager_proj_score",
-        "opponent_points": "opponent_score",
-        "opponent_projected_points": "opponent_proj_score",
-    }
-
-    # Rename columns (only rename if they exist and target doesn't already exist)
-    renames_to_apply = {}
-    for old_col, new_col in column_mapping.items():
-        if old_col in df.columns and new_col not in df.columns:
-            renames_to_apply[old_col] = new_col
-
-    if renames_to_apply:
-        df = df.rename(columns=renames_to_apply)
-        log(f"[ESPN 2013] Renamed columns: {renames_to_apply}")
-
-    # Add league_id
-    df["league_id"] = ctx.league_id
-
-    # Ensure year/week are Int64
-    df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
-    df["week"] = pd.to_numeric(df["week"], errors="coerce").astype("Int64")
-
-    # Add opponent_team if not already present
-    # The cleaned CSV should already have this, but add it as fallback
-    if "opponent_team" not in df.columns or df["opponent_team"].isna().all():
-        # Create a lookup: manager -> team_name
-        manager_to_team = df.groupby("manager")["manager_team"].first().to_dict()
-        df["opponent_team"] = df["opponent"].map(manager_to_team)
-        log(f"[ESPN 2013] Added opponent_team mapping")
-
-    # Ensure required columns exist with defaults
-    for col, default in OPTIONAL_MATCHUP_COLS_DEFAULTS.items():
-        if col not in df.columns:
-            df[col] = default
-
-    # Convert is_playoffs to boolean (currently 1/0 in CSV)
-    if "is_playoffs" in df.columns:
-        df["is_playoffs"] = df["is_playoffs"].fillna(0).astype(bool)
-    if "is_consolation" in df.columns:
-        df["is_consolation"] = df["is_consolation"].fillna(0).astype(bool)
-
-    # KMFFL 2013 SPECIAL HANDLING: Playoff games (weeks 13-14) have winners/losers but NO SCORES
-    # This is BY DESIGN - playoff scores were lost to history
-    # Fill in score-based derived columns with appropriate defaults for these games
-    null_score_mask = df["manager_score"].isna() & df["opponent_score"].isna()
-
-    if null_score_mask.any():
-        log(f"[ESPN 2013] Found {null_score_mask.sum()} playoff rows with no scores (weeks 13-14)")
-        log(f"[ESPN 2013] Setting score-based metrics to null/zero for these games")
-
-        # For games with null scores, set derived score columns to appropriate values
-        df.loc[null_score_mask, "margin"] = pd.NA
-        df.loc[null_score_mask, "total_matchup_score"] = pd.NA
-        df.loc[null_score_mask, "close_margin"] = 0  # Not close if no score
-        df.loc[null_score_mask, "weekly_mean"] = pd.NA
-        df.loc[null_score_mask, "weekly_median"] = pd.NA
-        df.loc[null_score_mask, "teams_beat_this_week"] = 0  # Can't compare null scores
-        df.loc[null_score_mask, "opponent_teams_beat_this_week"] = 0
-
-        # Projection-based columns should also be null
-        for col in ["proj_score_error", "abs_proj_score_error", "above_proj_score", "below_proj_score",
-                    "expected_spread", "expected_odds", "win_vs_spread", "lose_vs_spread",
-                    "underdog_wins", "favorite_losses", "proj_wins", "proj_losses"]:
-            if col in df.columns:
-                df.loc[null_score_mask, col] = pd.NA
-
-        # CRITICAL: win/loss columns should REMAIN intact (these are known!)
-        # Don't overwrite these - they're the only data we have
-
-    # Add composite keys
-    df = add_composite_keys(df)
-
-    # Get matchup data directory from context
-    matchup_dir = Path(ctx.matchup_data_directory)
-    matchup_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save as single yearly file (matching the format of other years)
-    out_file = matchup_dir / "matchup_data_week_all_year_2013.parquet"
-    df.to_parquet(out_file, index=False)
-
-    log(f"[ESPN 2013] Created matchup file: {out_file.name}")
-    log(f"[ESPN 2013] Total matchups: {len(df)}")
-    log(f"[ESPN 2013] Weeks: {sorted(df['week'].dropna().unique())}")
-

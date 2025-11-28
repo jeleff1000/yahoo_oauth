@@ -57,11 +57,11 @@ ID_FIRST = [
 # ---------------------------------
 # Loaders (reuse your existing modules)
 # ---------------------------------
-def load_offense_year(year: int, week: int | None) -> pd.DataFrame:
-    return offense_mod.process_one_year(year, week)
+def load_offense_year(year: int, week: int | None, data_directory: Path | None = None) -> pd.DataFrame:
+    return offense_mod.process_one_year(year, week, data_directory=data_directory)
 
-def load_defense_year(year: int, week: int | None) -> pd.DataFrame:
-    return defense_mod.process_one_year(year, week)
+def load_defense_year(year: int, week: int | None, data_directory: Path | None = None) -> pd.DataFrame:
+    return defense_mod.process_one_year(year, week, data_directory=data_directory)
 
 # ---------------------------------
 # Shaping / coercion
@@ -245,25 +245,36 @@ def stack_union(offense: pd.DataFrame, defense_player_rows: pd.DataFrame) -> pd.
 # ---------------------------------
 # Driver (year/week semantics match your other scripts)
 # ---------------------------------
-def load_all(year_in: int, week_in: int) -> pd.DataFrame:
+def load_all(year_in: int, week_in: int, data_directory: Path | None = None) -> pd.DataFrame:
     offense_frames: List[pd.DataFrame] = []
     defense_frames: List[pd.DataFrame] = []
 
     if year_in == 0:
         y = datetime.now().year
-        while y >= 1900:
+        failed_years = []
+        while y >= 1999:  # NFLverse data starts at 1999
             try:
                 print(f"Loading offense {y} ...")
-                offense_frames.append(load_offense_year(y, week_in))
+                offense_frames.append(load_offense_year(y, week_in, data_directory))
                 print(f"Loading defense {y} ...")
-                defense_frames.append(load_defense_year(y, week_in))
+                defense_frames.append(load_defense_year(y, week_in, data_directory))
+                y -= 1
+            except ValueError as e:
+                # 404 or data not available - skip this year and try earlier years
+                print(f"Skipping {y}: {e}")
+                failed_years.append(y)
                 y -= 1
             except Exception as e:
+                # Other errors - stop trying earlier years
                 print(f"Stopping at {y}: could not load year ({e}).")
+                failed_years.append(y)
                 break
+
+        if failed_years:
+            print(f"\n[WARN] Failed to load {len(failed_years)} year(s): {sorted(failed_years, reverse=True)}")
     else:
-        offense_frames.append(load_offense_year(year_in, week_in))
-        defense_frames.append(load_defense_year(year_in, week_in))
+        offense_frames.append(load_offense_year(year_in, week_in, data_directory))
+        defense_frames.append(load_defense_year(year_in, week_in, data_directory))
 
     if not offense_frames:
         raise RuntimeError("No offense data loaded.")
@@ -323,6 +334,7 @@ def main():
     args = ap.parse_args()
 
     # If context provided, override DATA_ROOT for this module and its dependencies
+    data_directory = None  # For matchup window context
     if args.context:
         # Try to import LeagueContext
         try:
@@ -339,6 +351,8 @@ def main():
                 global DATA_ROOT
                 DATA_ROOT = Path(ctx.player_data_directory)
                 DATA_ROOT.mkdir(parents=True, exist_ok=True)
+                # Save data_directory for matchup window context (parent of player_data_directory)
+                data_directory = Path(ctx.data_directory)
                 # Propagate the override into the imported modules so they write into the same root
                 try:
                     defense_mod.DATA_ROOT = DATA_ROOT
@@ -352,6 +366,7 @@ def main():
                     pass
                 print(f"[context] Using league: {ctx.league_name} ({ctx.league_id})")
                 print(f"[context] Output: {DATA_ROOT}")
+                print(f"[context] Data directory for matchup context: {data_directory}")
             except Exception as e:
                 print(f"[context][warn] Failed to load context: {e}")
         else:
@@ -376,7 +391,7 @@ def main():
         week_in = args.week
 
     try:
-        merged = load_all(year_in, week_in)
+        merged = load_all(year_in, week_in, data_directory)
     except Exception as e:
         print(f"Merge failed: {e}", file=sys.stderr)
         sys.exit(2)

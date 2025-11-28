@@ -47,6 +47,11 @@ sys.path.insert(0, str(_multi_league_dir))  # Allows: from core.XXX
 
 from core.data_normalization import normalize_numeric_columns, ensure_league_id
 from core.league_context import LeagueContext
+# Add transformations/modules to path for shared utilities
+_modules_dir = _multi_league_dir / "transformations" / "modules"
+sys.path.insert(0, str(_modules_dir))
+
+from type_utils import safe_merge, ensure_canonical_types
 
 
 def ensure_normalized(func):
@@ -129,7 +134,7 @@ def calculate_season_performance_metrics(
     else:
         metrics['nfl_team'] = None
 
-    # Performance metrics (use fantasy_points if available, else points)
+    # Performance metrics - ALL weeks (player talent metric)
     points_col = 'fantasy_points' if 'fantasy_points' in player_season.columns else 'points'
     if points_col in player_season.columns:
         points = player_season[points_col].fillna(0)
@@ -139,7 +144,32 @@ def calculate_season_performance_metrics(
         metrics['games_with_points'] = (points > 0).sum()
         metrics['season_ppg'] = points.mean() if len(points) > 0 else 0.0
 
-        # Best/worst weeks
+        # Performance metrics - STARTED weeks only (manager usage metric)
+        # Filter to started weeks (fantasy_position not BN/IR)
+        if 'fantasy_position' in player_season.columns:
+            started_filter = (
+                player_season['fantasy_position'].notna() &
+                ~player_season['fantasy_position'].isin(['BN', 'IR', 'IR+'])
+            )
+            started_weeks = player_season[started_filter].copy()
+
+            if not started_weeks.empty:
+                started_points = started_weeks[points_col].fillna(0)
+                metrics['total_fantasy_points_started'] = started_points.sum()
+                metrics['games_started'] = len(started_weeks)
+                metrics['season_ppg_started'] = started_points.mean() if len(started_points) > 0 else 0.0
+            else:
+                # Player was never started
+                metrics['total_fantasy_points_started'] = 0.0
+                metrics['games_started'] = 0
+                metrics['season_ppg_started'] = 0.0
+        else:
+            # Fallback: if no fantasy_position column, assume all weeks are started
+            metrics['total_fantasy_points_started'] = metrics['total_fantasy_points']
+            metrics['games_started'] = metrics['games_played']
+            metrics['season_ppg_started'] = metrics['season_ppg']
+
+        # Best/worst weeks (overall, not started-specific)
         if len(points) > 0:
             metrics['best_week_points'] = points.max()
             points_nonzero = points[points > 0]
@@ -148,7 +178,7 @@ def calculate_season_performance_metrics(
             metrics['best_week_points'] = 0.0
             metrics['worst_week_points'] = 0.0
 
-        # Consistency (coefficient of variation)
+        # Consistency (coefficient of variation - overall)
         if metrics['season_ppg'] > 0:
             metrics['consistency_score'] = (points.std() / metrics['season_ppg']) * 100
         else:
@@ -158,6 +188,9 @@ def calculate_season_performance_metrics(
         metrics['games_played'] = 0
         metrics['games_with_points'] = 0
         metrics['season_ppg'] = 0.0
+        metrics['total_fantasy_points_started'] = 0.0
+        metrics['games_started'] = 0
+        metrics['season_ppg_started'] = 0.0
         metrics['best_week_points'] = 0.0
         metrics['worst_week_points'] = 0.0
         metrics['consistency_score'] = None
@@ -349,7 +382,7 @@ def enrich_draft_with_player_stats(
 
     # Clean up any existing enrichment columns from previous runs
     enrichment_cols = [
-        'position', 'nfl_team', 'nfl_team_x', 'nfl_team_y',
+        'position', 'nfl_team', 'nfl_team_x', 'nfl_team_y', 'headshot_url',
         'total_fantasy_points', 'games_played', 'games_with_points',
         'season_ppg', 'season_std', 'best_game', 'worst_game',
         'weeks_rostered', 'weeks_started',
@@ -367,8 +400,14 @@ def enrich_draft_with_player_stats(
     # CRITICAL: Filter player data to match draft league_id if present
     # This prevents <NA> league_ids in metrics_df from blocking the merge
     if 'league_id' in draft_df.columns and 'league_id' in player_df.columns:
+        # Ensure league_id is string dtype (not Int64)
+        if player_df['league_id'].dtype != 'string':
+            player_df['league_id'] = player_df['league_id'].astype('string')
+
         draft_league_id = draft_df['league_id'].iloc[0] if len(draft_df) > 0 else None
         if draft_league_id and pd.notna(draft_league_id):
+            # Ensure draft_league_id is a string
+            draft_league_id = str(draft_league_id)
             print(f"  Filtering player data to league: {draft_league_id}")
 
             # Keep rows that either match the league_id OR have NA league_id (historical NFL data)
@@ -379,8 +418,9 @@ def enrich_draft_with_player_stats(
                 (player_df['league_id'] == '<NA>')
             ].copy()
             # Fill NA league_ids (both actual NAs and '<NA>' strings) with the draft league_id
-            player_df.loc[player_df['league_id'].isna(), 'league_id'] = draft_league_id
-            player_df.loc[player_df['league_id'] == '<NA>', 'league_id'] = draft_league_id
+            mask_na = player_df['league_id'].isna()
+            mask_str_na = player_df['league_id'] == '<NA>'
+            player_df.loc[mask_na | mask_str_na, 'league_id'] = draft_league_id
             print(f"    Filtered to {len(player_df):,} player records")
 
     # OPTIMIZED: Pre-aggregate player stats by (yahoo_player_id, year, league_id)
@@ -405,12 +445,26 @@ def enrich_draft_with_player_stats(
     if 'nfl_team' in player_df.columns:
         agg_dict['nfl_team'] = ('nfl_team', lambda x: x.mode().iloc[0] if not x.mode().empty else None)
 
+    # Headshot URL (first non-null value - should be constant per player)
+    if 'headshot_url' in player_df.columns:
+        agg_dict['headshot_url'] = ('headshot_url', lambda x: x.dropna().iloc[0] if len(x.dropna()) > 0 else None)
+
     # Performance metrics
     if points_col in player_df.columns:
+        # Count unique weeks if week column exists, otherwise count rows with points
+        if 'week' in player_df.columns:
+            # Count unique weeks where player had a record (games actually played)
+            games_played_func = ('week', 'nunique')
+            games_with_points_func = (points_col, lambda x: (x > 0).sum())
+        else:
+            # Fallback: count rows (for non-weekly data)
+            games_played_func = (points_col, lambda x: x.notna().sum())
+            games_with_points_func = (points_col, lambda x: (x > 0).sum())
+
         agg_dict.update({
             'total_fantasy_points': (points_col, lambda x: x.fillna(0).sum()),
-            'games_played': (points_col, 'count'),
-            'games_with_points': (points_col, lambda x: (x > 0).sum()),
+            'games_played': games_played_func,
+            'games_with_points': games_with_points_func,
             'season_ppg': (points_col, lambda x: x.mean() if len(x) > 0 else 0.0),
             'season_std': (points_col, lambda x: x.std() if len(x) > 1 else 0.0),
             'best_game': (points_col, lambda x: x.max() if len(x) > 0 else 0.0),
@@ -422,6 +476,16 @@ def enrich_draft_with_player_stats(
         agg_dict['weeks_rostered'] = ('is_rostered', lambda x: x.sum())
     if 'is_started' in player_df.columns:
         agg_dict['weeks_started'] = ('is_started', lambda x: x.sum())
+
+    # SPAR metrics (season totals from weekly SPAR)
+    # JOIN from player table instead of recalculating
+    if 'player_spar' in player_df.columns:
+        agg_dict['player_spar'] = ('player_spar', lambda x: x.fillna(0).sum())
+    if 'manager_spar' in player_df.columns:
+        agg_dict['manager_spar'] = ('manager_spar', lambda x: x.fillna(0).sum())
+    if 'replacement_ppg' in player_df.columns:
+        # Replacement PPG: use season average (first non-null value)
+        agg_dict['replacement_ppg'] = ('replacement_ppg', lambda x: x.dropna().iloc[0] if len(x.dropna()) > 0 else 0.0)
 
     # Aggregate
     metrics_df = player_df.groupby(group_keys, as_index=False).agg(**agg_dict)
@@ -445,18 +509,29 @@ def enrich_draft_with_player_stats(
         if key == 'league_id':
             continue
         if key in draft_df.columns:
-            draft_df[key] = pd.to_numeric(draft_df[key], errors='coerce').astype('Int64').astype(str)
+            draft_df[key] = pd.to_numeric(draft_df[key], errors='coerce').astype('Int64')
         if key in metrics_df.columns:
-            metrics_df[key] = pd.to_numeric(metrics_df[key], errors='coerce').astype('Int64').astype(str)
+            metrics_df[key] = pd.to_numeric(metrics_df[key], errors='coerce').astype('Int64')
+
+    # CRITICAL: Drop columns from draft_df that will come from metrics_df to avoid _x/_y suffixes
+    # This makes the pipeline idempotent (can run multiple times without creating duplicates)
+    metrics_cols = set(metrics_df.columns) - set(group_keys)
+    existing_overlap = [c for c in metrics_cols if c in draft_df.columns]
+    if existing_overlap:
+        print(f"  Dropping {len(existing_overlap)} existing columns to avoid duplicates: {existing_overlap[:5]}{'...' if len(existing_overlap) > 5 else ''}")
+        draft_df = draft_df.drop(columns=existing_overlap)
 
     # Join performance metrics to draft data
-    print("  Joining performance metrics to draft data...")
+    print(f"  Joining performance metrics to draft data on keys {group_keys}...")
     enriched_df = draft_df.merge(
         metrics_df,
         on=group_keys,
         how='left',
         validate='many_to_one'  # Ensure metrics_df has unique keys (one row per player-year)
     )
+    # Check match rate by seeing if total_fantasy_points was populated
+    matched = enriched_df['total_fantasy_points'].notna().sum() if 'total_fantasy_points' in enriched_df.columns else 0
+    print(f"  [JOIN] {matched:,}/{len(enriched_df):,} draft picks matched with player stats ({100*matched/len(enriched_df) if len(enriched_df) > 0 else 0:.1f}%)")
 
     # Calculate ranking metrics
     print("Calculating ranking metrics...")
@@ -495,25 +570,15 @@ def main():
         print(f"ERROR: Failed to load league context: {e}")
         return 1
 
-    # Locate draft data (check multiple locations in priority order)
-    draft_file = None
-    candidates = [
-        ctx.canonical_draft_file,  # 1st priority: canonical draft.parquet
-        Path(ctx.data_directory) / "draft_data_all_years.parquet",  # 2nd: main directory
-        Path(ctx.draft_data_directory) / "draft_data_all_years.parquet",  # 3rd: subdirectory
-    ]
+    # Use canonical draft file (created by normalize_draft_parquet)
+    draft_file = ctx.canonical_draft_file
 
-    for candidate in candidates:
-        if candidate.exists():
-            draft_file = candidate
-            print(f"Found draft data: {draft_file}")
-            break
-
-    if not draft_file:
-        print(f"ERROR: Draft file not found in any location:")
-        for candidate in candidates:
-            print(f"  - {candidate}")
+    if not draft_file.exists():
+        print(f"ERROR: Draft file not found: {draft_file}")
+        print(f"  Make sure normalize_draft_parquet has run first")
         return 1
+
+    print(f"Using draft data: {draft_file}")
 
     # Locate player data
     player_file = ctx.canonical_player_file

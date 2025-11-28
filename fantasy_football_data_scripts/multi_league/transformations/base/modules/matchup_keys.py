@@ -88,8 +88,20 @@ def add_matchup_keys(df: pd.DataFrame) -> pd.DataFrame:
     def create_matchup_key(row):
         manager = str(row['manager']).strip()
         opponent = str(row['opponent']).strip()
-        year = int(row['year'])
-        week = int(row['week'])
+
+        # Handle NA values in year/week
+        year_val = row['year']
+        week_val = row['week']
+
+        # Convert to int, handling NA/None
+        if pd.isna(year_val):
+            return pd.NA  # Return NA for rows with missing year
+        if pd.isna(week_val):
+            return pd.NA  # Return NA for rows with missing week
+
+        year = int(year_val)
+        week = int(week_val)
+
         # Sort teams alphabetically for canonical key
         teams = sorted([manager, opponent])
         return f"{teams[0]}__vs__{teams[1]}__{year}__{week}"

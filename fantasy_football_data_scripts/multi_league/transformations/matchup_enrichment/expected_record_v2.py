@@ -50,6 +50,7 @@ from modules.schedule_simulation import (
     calculate_opponent_rank_percentile,
     lock_postseason_to_final_week,
 )
+from modules.bye_week_filler import fill_bye_weeks, validate_bye_week_coverage
 
 
 def ensure_normalized(func):
@@ -209,6 +210,21 @@ def calculate_expected_records(
             win_den = {m: max(1, sum(win_hists_perf[m])) for m in managers}
             seed_den = {m: max(1, sum(seed_hists_perf[m])) for m in managers}
 
+            # Calculate expected wins/seeds/playoffs/byes DIRECTLY from counts (no rounding)
+            expected_wins_perf = {}
+            expected_seed_perf = {}
+            expected_playoffs_perf = {}
+            expected_bye_perf = {}
+            for mgr in managers:
+                # Expected wins = sum(wins * probability) = sum(wins * count) / total_count
+                expected_wins_perf[mgr] = sum(wv * win_hists_perf[mgr][wv] for wv in range(len(win_hists_perf[mgr]))) / win_den[mgr]
+                # Expected seed = sum(seed * probability) = sum(seed * count) / total_count
+                expected_seed_perf[mgr] = sum((s + 1) * seed_hists_perf[mgr][s] for s in range(len(seed_hists_perf[mgr]))) / seed_den[mgr]
+                # Playoff odds = probability of seeds 1-6 = sum(counts for seeds 1-6) / total
+                expected_playoffs_perf[mgr] = 100.0 * sum(seed_hists_perf[mgr][s] for s in range(min(6, len(seed_hists_perf[mgr])))) / seed_den[mgr]
+                # Bye odds = probability of seeds 1-2 = sum(counts for seeds 1-2) / total
+                expected_bye_perf[mgr] = 100.0 * sum(seed_hists_perf[mgr][s] for s in range(min(2, len(seed_hists_perf[mgr])))) / seed_den[mgr]
+
             # Write performance-based results
             rows = df.index[(df['year'] == year) & (df['week'] == wk) & regular_mask]
             for idx in rows:
@@ -216,7 +232,7 @@ def calculate_expected_records(
                 if mgr not in managers:
                     continue
 
-                # Win probabilities
+                # Win probabilities (still save for display, but don't use for expected value calculation)
                 for wv in range(0, min(n_weeks, 14) + 1):
                     df.at[idx, f"shuffle_{wv}_win"] = round(
                         100.0 * win_hists_perf[mgr][wv] / win_den[mgr], 2
@@ -227,6 +243,12 @@ def calculate_expected_records(
                     df.at[idx, f"shuffle_{s}_seed"] = round(
                         100.0 * seed_hists_perf[mgr][s - 1] / seed_den[mgr], 2
                     )
+
+                # Store expected values calculated directly from counts (no rounding errors)
+                df.at[idx, "shuffle_avg_wins"] = round(expected_wins_perf[mgr], 2)
+                df.at[idx, "shuffle_avg_seed"] = round(expected_seed_perf[mgr], 2)
+                df.at[idx, "shuffle_avg_playoffs"] = round(expected_playoffs_perf[mgr], 2)
+                df.at[idx, "shuffle_avg_bye"] = round(expected_bye_perf[mgr], 2)
 
             # ===========================
             # OPPONENT DIFFICULTY SIMULATION (opponent_points)
@@ -243,13 +265,28 @@ def calculate_expected_records(
                 win_den_opp = {m: max(1, sum(win_hists_opp[m])) for m in managers}
                 seed_den_opp = {m: max(1, sum(seed_hists_opp[m])) for m in managers}
 
+                # Calculate expected wins/seeds/playoffs/byes DIRECTLY from counts (no rounding)
+                expected_wins_opp = {}
+                expected_seed_opp = {}
+                expected_playoffs_opp = {}
+                expected_bye_opp = {}
+                for mgr in managers:
+                    # Expected wins = sum(wins * probability) = sum(wins * count) / total_count
+                    expected_wins_opp[mgr] = sum(wv * win_hists_opp[mgr][wv] for wv in range(len(win_hists_opp[mgr]))) / win_den_opp[mgr]
+                    # Expected seed = sum(seed * probability) = sum(seed * count) / total_count
+                    expected_seed_opp[mgr] = sum((s + 1) * seed_hists_opp[mgr][s] for s in range(len(seed_hists_opp[mgr]))) / seed_den_opp[mgr]
+                    # Playoff odds = probability of seeds 1-6 = sum(counts for seeds 1-6) / total
+                    expected_playoffs_opp[mgr] = 100.0 * sum(seed_hists_opp[mgr][s] for s in range(min(6, len(seed_hists_opp[mgr])))) / seed_den_opp[mgr]
+                    # Bye odds = probability of seeds 1-2 = sum(counts for seeds 1-2) / total
+                    expected_bye_opp[mgr] = 100.0 * sum(seed_hists_opp[mgr][s] for s in range(min(2, len(seed_hists_opp[mgr])))) / seed_den_opp[mgr]
+
                 # Write opponent difficulty results
                 for idx in rows:
                     mgr = df.at[idx, 'manager']
                     if mgr not in managers:
                         continue
 
-                    # Win probabilities (ease-based)
+                    # Win probabilities (ease-based, still save for display)
                     for wv in range(0, min(n_weeks, 14) + 1):
                         df.at[idx, f"opp_shuffle_{wv}_win"] = round(
                             100.0 * win_hists_opp[mgr][wv] / win_den_opp[mgr], 2
@@ -261,15 +298,54 @@ def calculate_expected_records(
                             100.0 * seed_hists_opp[mgr][s - 1] / seed_den_opp[mgr], 2
                         )
 
+                    # Store expected values calculated directly from counts (no rounding errors)
+                    df.at[idx, "opp_shuffle_avg_wins"] = round(expected_wins_opp[mgr], 2)
+                    df.at[idx, "opp_shuffle_avg_seed"] = round(expected_seed_opp[mgr], 2)
+                    df.at[idx, "opp_shuffle_avg_playoffs"] = round(expected_playoffs_opp[mgr], 2)
+                    df.at[idx, "opp_shuffle_avg_bye"] = round(expected_bye_opp[mgr], 2)
+
             print(" done")
+
+    # ===========================
+    # MARK FINAL REGULAR SEASON WEEK
+    # ===========================
+    # Mark which week is the last FULL regular season week for each year
+    # This is the week where ALL managers played regular season (for end-of-season stats)
+    print("\nMarking final regular season week for each year...")
+
+    # Initialize column
+    df['is_final_regular_week'] = 0
+
+    for year in seasons:
+        df_reg_year = df[(df['year'] == year) & (df['is_playoffs'] == 0) & (df['is_consolation'] == 0)]
+        if df_reg_year.empty:
+            continue
+
+        # Find number of managers in this year
+        all_managers = sorted(df_reg_year['manager'].unique())
+        n_managers = len(all_managers)
+
+        # Find last week where ALL managers played regular season
+        last_full_week = None
+        for week in sorted(df_reg_year['week'].unique(), reverse=True):
+            week_data = df_reg_year[df_reg_year['week'] == week]
+            if len(week_data['manager'].unique()) == n_managers:
+                last_full_week = week
+                break
+
+        if last_full_week:
+            # Mark this week for all managers in this year
+            mask = (df['year'] == year) & (df['week'] == last_full_week) & (df['is_playoffs'] == 0)
+            df.loc[mask, 'is_final_regular_week'] = 1
+            print(f"  {year}: Final regular season week = {last_full_week} ({n_managers} managers)")
 
     # ===========================
     # COMPUTE SUMMARY STATISTICS
     # ===========================
-    print("\nComputing summary statistics...")
-
-    df = calculate_summary_stats(df, regular_mask, "shuffle")
-    df = calculate_summary_stats(df, regular_mask, "opp_shuffle")
+    # NOTE: avg_wins, avg_seed, avg_playoffs, avg_bye are now calculated DIRECTLY
+    # from histogram counts in the main loop above (no rounding errors).
+    # The calculate_summary_stats function is no longer needed for these values.
+    print("\nSummary statistics already calculated from raw counts (skipping recalculation)...")
 
     # Actual vs expected deltas (performance-based)
     if "wins_to_date" in df.columns and "shuffle_avg_wins" in df.columns:
@@ -317,6 +393,14 @@ def calculate_expected_records(
 
     print(f"\nExpected records calculation complete!")
     print(f"Updated {len(df)} records with expected record simulations")
+
+    # ===========================
+    # FILL BYE WEEKS
+    # ===========================
+    # Add rows for teams with bye weeks (no opponent)
+    # Weekly stats = 0, cumulative stats carried forward from previous week
+    df = fill_bye_weeks(df)
+    validate_bye_week_coverage(df)
 
     return df
 

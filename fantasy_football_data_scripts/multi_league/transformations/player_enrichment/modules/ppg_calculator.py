@@ -24,13 +24,18 @@ def calculate_season_ppg(
     min_games: int = 1
 ) -> Union[pl.DataFrame, pl.LazyFrame]:
     """
-    Calculate season PPG for each player-year.
+    Calculate season PPG for each player-year based on NFL games played.
 
     Memory-optimized version that uses lazy evaluation when possible.
 
+    IMPORTANT: Groups by nfl_player_id (not yahoo_player_id) to capture ALL games
+    a player played, regardless of fantasy roster status. Only counts games where
+    the player actually played (nfl_player_id is not null). This gives TRUE season
+    PPG values based on actual NFL performance.
+
     Args:
         df: DataFrame or LazyFrame with player stats
-        player_id_col: Player identifier column
+        player_id_col: Player identifier column (IGNORED - uses nfl_player_id)
         points_col: Points column
         year_col: Year column
         min_games: Minimum games to qualify for PPG
@@ -49,9 +54,28 @@ def calculate_season_ppg(
     if cols_to_drop:
         lf = lf.drop(cols_to_drop)
 
-    # Aggregate by player-season and calculate PPG in one go
+    # CRITICAL: Find nfl_player_id column (case-insensitive)
+    schema_names = lf.collect_schema().names() if is_lazy else df.columns
+    nfl_id_col = None
+    for col in schema_names:
+        if col.lower() == "nfl_player_id":
+            nfl_id_col = col
+            break
+
+    if not nfl_id_col:
+        # No nfl_player_id column - return with null PPG columns
+        result = lf.with_columns([
+            pl.lit(None).alias("season_ppg"),
+            pl.lit(None).alias("season_games")
+        ])
+        return result if is_lazy else result.collect()
+
+    # Filter to only weeks where player actually played (nfl_player_id is not null)
+    lf_filtered = lf.filter(pl.col(nfl_id_col).is_not_null())
+
+    # Aggregate by nfl_player_id and year (captures ALL NFL games regardless of roster status)
     season_agg = (
-        lf.group_by([player_id_col, year_col])
+        lf_filtered.group_by([nfl_id_col, year_col])
         .agg([
             pl.col(points_col).sum().alias("_season_total"),
             pl.col(points_col).count().alias("season_games")
@@ -62,11 +86,11 @@ def calculate_season_ppg(
             .otherwise(None)
             .alias("season_ppg")
         )
-        .select([player_id_col, year_col, "season_ppg", "season_games"])
+        .select([nfl_id_col, year_col, "season_ppg", "season_games"])
     )
 
-    # Join back to main df
-    result = lf.join(season_agg, on=[player_id_col, year_col], how="left")
+    # Join back to main df using nfl_player_id (includes ALL rows)
+    result = lf.join(season_agg, on=[nfl_id_col, year_col], how="left")
 
     return result if is_lazy else result.collect()
 
@@ -78,13 +102,18 @@ def calculate_alltime_ppg(
     min_games: int = 1
 ) -> Union[pl.DataFrame, pl.LazyFrame]:
     """
-    Calculate all-time PPG for each player across all seasons.
+    Calculate all-time PPG for each player across all seasons based on NFL games played.
 
     Memory-optimized version that uses lazy evaluation when possible.
 
+    IMPORTANT: Groups by nfl_player_id (not yahoo_player_id) to capture ALL games
+    a player played across their entire career, regardless of fantasy roster status.
+    Only counts games where the player actually played (nfl_player_id is not null).
+    This gives TRUE career PPG values based on actual NFL performance.
+
     Args:
         df: DataFrame or LazyFrame with player stats
-        player_id_col: Player identifier column
+        player_id_col: Player identifier column (IGNORED - uses nfl_player_id)
         points_col: Points column
         min_games: Minimum games to qualify for PPG
 
@@ -102,9 +131,28 @@ def calculate_alltime_ppg(
     if cols_to_drop:
         lf = lf.drop(cols_to_drop)
 
-    # Aggregate by player and calculate alltime PPG
+    # CRITICAL: Find nfl_player_id column (case-insensitive)
+    schema_names = lf.collect_schema().names() if is_lazy else df.columns
+    nfl_id_col = None
+    for col in schema_names:
+        if col.lower() == "nfl_player_id":
+            nfl_id_col = col
+            break
+
+    if not nfl_id_col:
+        # No nfl_player_id column - return with null PPG columns
+        result = lf.with_columns([
+            pl.lit(None).alias("alltime_ppg"),
+            pl.lit(None).alias("alltime_games")
+        ])
+        return result if is_lazy else result.collect()
+
+    # Filter to only weeks where player actually played (nfl_player_id is not null)
+    lf_filtered = lf.filter(pl.col(nfl_id_col).is_not_null())
+
+    # Aggregate by nfl_player_id (captures ALL games across entire career)
     alltime_agg = (
-        lf.group_by([player_id_col])
+        lf_filtered.group_by([nfl_id_col])
         .agg([
             pl.col(points_col).sum().alias("_alltime_total"),
             pl.col(points_col).count().alias("alltime_games")
@@ -115,11 +163,11 @@ def calculate_alltime_ppg(
             .otherwise(None)
             .alias("alltime_ppg")
         )
-        .select([player_id_col, "alltime_ppg", "alltime_games"])
+        .select([nfl_id_col, "alltime_ppg", "alltime_games"])
     )
 
-    # Join back to main df
-    result = lf.join(alltime_agg, on=[player_id_col], how="left")
+    # Join back to main df using nfl_player_id (includes ALL rows)
+    result = lf.join(alltime_agg, on=[nfl_id_col], how="left")
 
     return result if is_lazy else result.collect()
 

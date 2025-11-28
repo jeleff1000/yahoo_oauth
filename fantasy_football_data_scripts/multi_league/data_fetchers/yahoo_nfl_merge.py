@@ -659,6 +659,41 @@ def layer_merge(layer_name: str, y_unmatched: pd.DataFrame, n_unmatched: pd.Data
         key_match = merged.get("player_key_Y", pd.Series("", index=merged.index)) == \
                     merged.get("player_key_N", pd.Series("", index=merged.index))
 
+        # CRITICAL FIX: Validate first names when matching on last_name_key only
+        # This prevents false matches like "Allen Robinson" with "Demarcus Robinson"
+        # Detect if we're matching on last_name_key (not full player_key)
+        matching_on_lastname = any(k[0] == "player_last_name_key" for k in key_cols)
+
+        if matching_on_lastname:
+            # Extract first names from player_key (normalized full names)
+            def get_first_name(name_key):
+                """Extract first name from normalized player key"""
+                if pd.isna(name_key) or str(name_key).strip() == "":
+                    return ""
+                tokens = str(name_key).strip().lower().split()
+                return tokens[0] if tokens else ""
+
+            yahoo_first = merged.get("player_key_Y", pd.Series("", index=merged.index)).apply(get_first_name)
+            nfl_first = merged.get("player_key_N", pd.Series("", index=merged.index)).apply(get_first_name)
+
+            # First names must match OR be variations (checked via _NAME_VARIATIONS)
+            # This allows "Mike" to match "Michael" but rejects "Allen" matching "Demarcus"
+            def first_names_compatible(y_first, n_first):
+                if y_first == n_first:
+                    return True
+                # Check if they're known variations of the same name
+                y_canonical = _NAME_VARIATIONS.get(y_first, y_first)
+                n_canonical = _NAME_VARIATIONS.get(n_first, n_first)
+                return y_canonical == n_canonical
+
+            first_name_match = pd.Series([
+                first_names_compatible(y, n)
+                for y, n in zip(yahoo_first, nfl_first)
+            ], index=merged.index)
+        else:
+            # Not matching on last name, skip first name validation
+            first_name_match = pd.Series(True, index=merged.index)
+
         # For defensive position data quality: Defense often has position mismatches
         # (e.g., Yahoo="DEF", NFL="DB"/"LB"/"DL")
         yahoo_is_def = merged.get("position_key_Y", pd.Series("", index=merged.index)).astype(str).str.upper() == "DEF"
@@ -681,9 +716,9 @@ def layer_merge(layer_name: str, y_unmatched: pd.DataFrame, n_unmatched: pd.Data
         # Keep match if:
         # 1. Player keys match (normalized names matched), OR
         # 2. BOTH sides are DEF position (defense-specific matching), OR
-        # 3. Yahoo has non-zero points AND not a lone DEF (normal matching), OR
-        # 4. Yahoo has zero points AND position matches AND not a lone DEF (stricter matching)
-        keep_mask = key_match | both_are_def | ((~yahoo_zero_points) & (~yahoo_is_def)) | ((yahoo_zero_points & position_match) & (~yahoo_is_def))
+        # 3. (Yahoo has non-zero points AND not a lone DEF AND first names match), OR
+        # 4. (Yahoo has zero points AND position matches AND not a lone DEF AND first names match)
+        keep_mask = key_match | both_are_def | ((~yahoo_zero_points) & (~yahoo_is_def) & first_name_match) | ((yahoo_zero_points & position_match) & (~yahoo_is_def) & first_name_match)
 
         merged = merged[keep_mask]
     # ------------------------------------------------------------------------------------
@@ -740,17 +775,49 @@ def assemble_rows(one_to_one: pd.DataFrame) -> pd.DataFrame:
         if b not in out.columns: out[b] = df[f"{b}_Y"]
     for b in only_n:
         if b not in out.columns: out[b] = df[f"{b}_N"]
-    out = out[[c for c in out.columns if not c.startswith("_")]]
+
+    # CRITICAL: Preserve _original_player_name for name restoration (don't drop it with other internal columns)
+    # Drop internal columns (starting with _) EXCEPT _original_player_name
+    out = out[[c for c in out.columns if not c.startswith("_") or c == "_original_player_name"]]
     return out
 
-def finalize_union(matched_blocks: List[pd.DataFrame], y_remaining: pd.DataFrame, n_remaining: pd.DataFrame) -> pd.DataFrame:
-    matched = pd.concat([blk for blk in matched_blocks if not blk.empty], ignore_index=True) if matched_blocks else pd.DataFrame()
-    y_only = y_remaining.drop(columns=[c for c in y_remaining.columns if c.startswith("_")], errors="ignore")
-    n_only = n_remaining.drop(columns=[c for c in n_remaining.columns if c.startswith("_")], errors="ignore")
-    final = pd.concat([matched, n_only, y_only], ignore_index=True, sort=False)
+def finalize_union(matched_blocks: List[pd.DataFrame], y_remaining: pd.DataFrame, n_remaining: pd.DataFrame,
+                    include_unrostered: bool = True) -> pd.DataFrame:
+    """
+    Combine matched and unmatched data.
 
-    if "player" in final.columns:
-        final["player"] = final["player"].astype(str).apply(lambda s: apply_manual_mapping(clean_name(s)))
+    Args:
+        matched_blocks: List of DataFrames with matched Yahoo+NFL data
+        y_remaining: Yahoo players that didn't match to NFL (rare)
+        n_remaining: NFL players that didn't match to Yahoo (unrostered players)
+        include_unrostered: Whether to include unrostered NFL players (default: True)
+                          - True: All players including historical unrostered (matched + y_only + n_only) - RECOMMENDED
+                          - False: Only rostered players (matched + y_only)
+    """
+    matched = pd.concat([blk for blk in matched_blocks if not blk.empty], ignore_index=True) if matched_blocks else pd.DataFrame()
+
+    # CRITICAL: Preserve _original_player_name for name restoration (don't drop it with other internal columns)
+    # Drop internal columns (starting with _) EXCEPT _original_player_name
+    y_only = y_remaining.drop(columns=[c for c in y_remaining.columns if c.startswith("_") and c != "_original_player_name"], errors="ignore")
+    n_only = n_remaining.drop(columns=[c for c in n_remaining.columns if c.startswith("_") and c != "_original_player_name"], errors="ignore")
+
+    # SCOPE CONTROL: Decide whether to include unrostered NFL players
+    if include_unrostered:
+        # Include ALL NFL players (1999+) - allows historical comparisons and pre-league stats
+        # Example: League started 2012, but includes Peyton Manning's 2001 stats
+        final = pd.concat([matched, n_only, y_only], ignore_index=True, sort=False)
+        print(f"[scope] Including {len(n_only):,} unrostered NFL players (all historical data)")
+    else:
+        # Only include rostered players - use this for league-specific analysis only
+        final = pd.concat([matched, y_only], ignore_index=True, sort=False)
+        print(f"[scope] Excluding {len(n_only):,} unrostered NFL players (rostered-only mode)")
+
+    print(f"[scope] Final dataset: {len(final):,} total player-week records")
+
+    # NOTE: DO NOT clean names here - original names are restored later (line ~1503)
+    # This preserves special characters like "St. Brown", "Smith-Njigba", etc.
+    # Name cleaning was already applied during merge key generation for matching purposes
+
     if "2-pt" in final.columns:
         final["2-pt"] = pd.to_numeric(final["2-pt"], errors="coerce").fillna(0).astype("Int64")
 
@@ -877,6 +944,8 @@ def main():
     parser.add_argument("--week", type=int, default=None, help="Week number (0 = all weeks)")
     parser.add_argument("--league-key", type=str, default=None, help="Yahoo league key")
     parser.add_argument("--context", type=str, default=None, help="Path to league_context.json (multi-league support)")
+    parser.add_argument("--rostered-only", action="store_true",
+                        help="Only include rostered players (exclude unrostered NFL players). Default: False (includes all NFL players 1999+)")
     args = parser.parse_args()
 
     # ===== CONTEXT-AWARE PATH SETUP =====
@@ -1000,8 +1069,12 @@ def main():
         n_df = n_df[pd.to_numeric(n_df["week"], errors="coerce") == week]
 
     # CRITICAL: Filter NFL data to max Yahoo week (prevent incomplete week data)
-    # This ensures we don't include partial week data from NFLverse that Yahoo hasn't fetched yet
+    # IMPORTANT: Only apply this filtering for CURRENT YEAR to avoid incomplete weeks
+    # For PAST YEARS: Keep all NFLverse weeks regardless of Yahoo data
     if "week" in y_df.columns and "week" in n_df.columns and week == 0:
+        from datetime import datetime
+        current_year = datetime.now().year
+
         # When merging all weeks, use Yahoo data as source of truth for completed weeks
         # For each year, filter NFL weeks to match Yahoo's max week
         if "year" in y_df.columns and "year" in n_df.columns:
@@ -1013,47 +1086,71 @@ def main():
             )
 
             if yahoo_max_weeks:
-                print(f"[nfl] Filtering to completed weeks per year (based on Yahoo data):")
-                for yr, max_wk in sorted(yahoo_max_weeks.items()):
-                    if pd.notna(yr) and pd.notna(max_wk):
-                        print(f"  {int(yr)}: weeks 1-{int(max_wk)}")
+                # Separate current year from past years
+                current_year_max = yahoo_max_weeks.get(current_year)
+                past_years = {yr: max_wk for yr, max_wk in yahoo_max_weeks.items() if yr != current_year}
 
-                # Filter NFL data: for each year, only keep weeks <= max Yahoo week for that year
+                if current_year_max is not None:
+                    print(f"[nfl] CURRENT YEAR {current_year}: Filtering to completed weeks (based on Yahoo data):")
+                    print(f"  {current_year}: weeks 1-{int(current_year_max)}")
+
+                if past_years:
+                    print(f"[nfl] PAST YEARS: Keeping ALL NFLverse weeks (no Yahoo limitation):")
+                    for yr in sorted(past_years.keys()):
+                        if pd.notna(yr):
+                            print(f"  {int(yr)}: all available weeks")
+
+                # Filter NFL data:
+                # - CURRENT YEAR: only keep weeks <= max Yahoo week
+                # - PAST YEARS: keep ALL weeks
                 nfl_year_numeric = pd.to_numeric(n_df["year"], errors="coerce")
                 nfl_week_numeric = pd.to_numeric(n_df["week"], errors="coerce")
                 initial_nfl_count = len(n_df)
 
-                # Build mask: for each row, check if week <= max_week for that year
+                # Build mask: for each row, check filtering rules
                 keep_mask = pd.Series([False] * len(n_df), index=n_df.index)
-                for yr, max_wk in yahoo_max_weeks.items():
-                    if pd.notna(yr) and pd.notna(max_wk):
-                        year_mask = (nfl_year_numeric == yr) & (nfl_week_numeric <= max_wk)
-                        keep_mask |= year_mask
+
+                # For current year ONLY: filter to max Yahoo week
+                if current_year_max is not None and pd.notna(current_year_max):
+                    current_year_mask = (nfl_year_numeric == current_year) & (nfl_week_numeric <= current_year_max)
+                    keep_mask |= current_year_mask
+
+                # For past years: keep ALL weeks
+                for yr in past_years.keys():
+                    if pd.notna(yr):
+                        past_year_mask = (nfl_year_numeric == yr)
+                        keep_mask |= past_year_mask
 
                 n_df = n_df[keep_mask]
                 filtered_count = initial_nfl_count - len(n_df)
 
                 if filtered_count > 0:
-                    print(f"[nfl] Excluded {filtered_count:,} rows from incomplete weeks")
+                    print(f"[nfl] Excluded {filtered_count:,} rows (incomplete weeks from current year)")
                 else:
-                    print(f"[nfl] All data within completed weeks")
+                    print(f"[nfl] All data kept (current year within completed weeks, past years all weeks)")
         else:
             # Fallback: if year column missing, use global max week
+            # IMPORTANT: Only filter for current year, not past years
             yahoo_weeks = pd.to_numeric(y_df["week"], errors="coerce").dropna()
             if len(yahoo_weeks) > 0:
                 max_yahoo_week = int(yahoo_weeks.max())
 
-                # Filter NFL data to only include weeks up to max Yahoo week
-                nfl_week_numeric = pd.to_numeric(n_df["week"], errors="coerce")
-                initial_nfl_count = len(n_df)
-                n_df = n_df[nfl_week_numeric <= max_yahoo_week]
-                filtered_count = initial_nfl_count - len(n_df)
+                # Only apply week filtering if processing current year (or year not specified)
+                # For past years: keep all NFLverse weeks
+                if year == current_year or year == 0:
+                    # Filter NFL data to only include weeks up to max Yahoo week
+                    nfl_week_numeric = pd.to_numeric(n_df["week"], errors="coerce")
+                    initial_nfl_count = len(n_df)
+                    n_df = n_df[nfl_week_numeric <= max_yahoo_week]
+                    filtered_count = initial_nfl_count - len(n_df)
 
-                if filtered_count > 0:
-                    print(f"[nfl] Filtered to weeks 1-{max_yahoo_week} (max Yahoo week)")
-                    print(f"[nfl] Excluded {filtered_count:,} rows from incomplete weeks (weeks > {max_yahoo_week})")
+                    if filtered_count > 0:
+                        print(f"[nfl] CURRENT YEAR: Filtered to weeks 1-{max_yahoo_week} (max Yahoo week)")
+                        print(f"[nfl] Excluded {filtered_count:,} rows from incomplete weeks (weeks > {max_yahoo_week})")
+                    else:
+                        print(f"[nfl] All data within completed weeks (max week: {max_yahoo_week})")
                 else:
-                    print(f"[nfl] All data within completed weeks (max week: {max_yahoo_week})")
+                    print(f"[nfl] PAST YEAR {year}: Keeping all NFLverse weeks (no Yahoo limitation)")
 
     # Log filtering results
     if year != 0:
@@ -1327,9 +1424,12 @@ def main():
                              key_cols=[("player_key","player_key"),("year_key","year_key"),("week_key","week_key")])
     l1b, yR, nR = layer_merge("1b: player+year+week+position", yR, nR,
                               key_cols=[("player_key","player_key"),("year_key","year_key"),("week_key","week_key"),("position_key","position_key")])
-    l2, yR, nR = layer_merge("2: last_name+year+week", yR, nR,
+    # REORDERED: Run fuzzy name matching BEFORE last-name-only matching
+    # This prevents false matches like "Demarcus Robinson" stealing "Wan'Dale Robinson"'s Yahoo ID
+    # Fuzzy matching validates first names, while last-name-only doesn't
+    l2, yR, nR = layer_merge_fuzzy_name("2: FUZZY_NAME middle_names+variations+year+week", yR, nR)
+    l2b, yR, nR = layer_merge("2b: last_name+year+week", yR, nR,
                              key_cols=[("player_last_name_key","player_last_name_key"),("year_key","year_key"),("week_key","week_key")])
-    l2b, yR, nR = layer_merge_fuzzy_name("2b: FUZZY_NAME middle_names+variations+year+week", yR, nR)
     l3, yR, nR = layer_merge("3: last_name+year+week+position", yR, nR,
                              key_cols=[("player_last_name_key","player_last_name_key"),("year_key","year_key"),("week_key","week_key"),("position_key","position_key")])
     l4, yR, nR = layer_merge("4: last_name+year+week+points", yR, nR,
@@ -1358,7 +1458,13 @@ def main():
         l5 = pd.DataFrame()
 
     matched_blocks = [assemble_rows(l) for l in (l1, l1b, l2, l2b, l3, l4, l5)]
-    final_df = finalize_union(matched_blocks, yR, nR)
+
+    # Control whether to include unrostered NFL players (1999+) for historical analysis
+    # Default: True (all NFL players) - includes historical data for comparisons
+    # Set --rostered-only flag to exclude unrostered players
+    rostered_only = args.rostered_only if hasattr(args, 'rostered_only') else False
+    include_unrostered = not rostered_only  # Invert the flag
+    final_df = finalize_union(matched_blocks, yR, nR, include_unrostered=include_unrostered)
 
     # ===================== DEDUPLICATE DEFENSES AFTER MERGE =====================
     # Remove duplicate defense rows where Yahoo and NFL data both exist but didn't merge
@@ -1494,9 +1600,68 @@ def main():
     if "_original_player_name" in final_df.columns:
         has_original = final_df["_original_player_name"].notna() & (final_df["_original_player_name"].astype(str).str.strip() != "")
         final_df.loc[has_original, "player"] = final_df.loc[has_original, "_original_player_name"]
-        # Drop the temporary column
+
+        restored_count = has_original.sum()
+        print(f"[names] Restored {restored_count:,} original player names (Yahoo preferred, NFL fallback)")
+
+        # Drop the temporary column (name canonicalization happens in next section)
         final_df = final_df.drop(columns=["_original_player_name"], errors="ignore")
-        print("[names] Restored original player names (Yahoo preferred, NFL fallback)")
+
+    # ===================== CANONICALIZE NAMES ACROSS ALL YEARS =====================
+    # Use the dedicated name_resolver module to canonicalize player names
+    # This ensures consistent naming: if Tom Brady was rostered 2014+, his 1999-2013 stats
+    # use the same Yahoo name instead of varying NFL spellings
+    try:
+        # Import the name resolver module
+        sys.path.insert(0, str(SCRIPT_DIR.parent / "transformations" / "player_enrichment" / "modules"))
+        from name_resolver import canonicalize_names_by_id
+
+        if "NFL_player_id" in final_df.columns and "yahoo_player_id" in final_df.columns:
+            # Use the proper name canonicalization module (more robust than custom implementation)
+            final_df = canonicalize_names_by_id(
+                final_df,
+                nfl_id_col="NFL_player_id",
+                yahoo_id_col="yahoo_player_id",
+                name_col="player",
+                add_debug_cols=False
+            )
+    except ImportError as e:
+        print(f"[names] Warning: Could not import name_resolver module: {e}")
+        print(f"[names] Falling back to basic name canonicalization")
+
+        # Fallback to basic implementation if module import fails
+        if "NFL_player_id" in final_df.columns and "yahoo_player_id" in final_df.columns:
+            # Build mapping: NFL_player_id → best_name (prefer Yahoo source)
+            name_mapping = {}
+
+            # Group by NFL_player_id and find canonical name
+            for nfl_id in final_df["NFL_player_id"].dropna().unique():
+                player_rows = final_df[final_df["NFL_player_id"] == nfl_id]
+
+                # Prefer name from rows with yahoo_player_id (rostered players)
+                yahoo_rows = player_rows[player_rows["yahoo_player_id"].notna()]
+                if len(yahoo_rows) > 0:
+                    # Use most common Yahoo name
+                    yahoo_names = yahoo_rows["player"].dropna()
+                    if len(yahoo_names) > 0:
+                        canonical_name = yahoo_names.mode().iloc[0] if len(yahoo_names.mode()) > 0 else yahoo_names.iloc[0]
+                        name_mapping[nfl_id] = canonical_name
+
+            # Apply mapping to all rows with these NFL_player_ids
+            if name_mapping:
+                for nfl_id, canonical_name in name_mapping.items():
+                    mask = final_df["NFL_player_id"] == nfl_id
+                    final_df.loc[mask, "player"] = canonical_name
+
+                print(f"[names] Canonicalized names for {len(name_mapping):,} players across all years (Yahoo names applied to historical data)")
+
+                # Log examples for verification
+                example_ids = list(name_mapping.keys())[:3]
+                for nfl_id in example_ids:
+                    player_years = final_df[final_df["NFL_player_id"] == nfl_id]["year"].dropna().unique()
+                    if len(player_years) > 1:
+                        year_range = f"{min(player_years)}-{max(player_years)}"
+                        print(f"  Example: {name_mapping[nfl_id]} ({year_range})")
 
     # ===================== DISAMBIGUATE MULTI-TEAM CITIES =====================
     # For cities with multiple teams (Los Angeles, New York), ensure consistent naming

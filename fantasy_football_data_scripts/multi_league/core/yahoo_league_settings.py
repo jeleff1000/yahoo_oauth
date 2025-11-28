@@ -90,7 +90,13 @@ def _fetch_url_xml(url: str, oauth: 'OAuth2', max_retries: int = 5, backoff: flo
     raise last_err or RuntimeError("unknown fetch error")
 
 
-def _discover_league_key(oauth: 'OAuth2', year: int, league_key_arg: Optional[str]) -> Optional[str]:
+def _discover_league_key(
+    oauth: 'OAuth2',
+    year: int,
+    league_key_arg: Optional[str],
+    league_name: Optional[str] = None,
+    discovered_leagues_file: Optional[Path] = None
+) -> Optional[str]:
     """
     Discover league key from OAuth if not provided.
 
@@ -98,21 +104,60 @@ def _discover_league_key(oauth: 'OAuth2', year: int, league_key_arg: Optional[st
         oauth: OAuth2 instance
         year: Season year
         league_key_arg: Explicit league key (if provided)
+        league_name: League name to match against (for multiple leagues)
+        discovered_leagues_file: Path to discovered_leagues.json (for fast lookup)
 
     Returns:
         League key string or None
     """
     if league_key_arg:
         return league_key_arg.strip()
+
+    # Try discovered_leagues.json first (fast path)
+    if discovered_leagues_file and discovered_leagues_file.exists() and league_name:
+        try:
+            discovered = json.loads(discovered_leagues_file.read_text(encoding="utf-8"))
+            for entry in discovered:
+                if entry.get("year") == year and entry.get("league_name") == league_name:
+                    key = entry.get("league_id")
+                    if key:
+                        print(f"[settings] Found league key for {year} in discovered_leagues.json: {key}")
+                        return key.strip()
+        except Exception as e:
+            print(f"[settings] Warning: Could not read discovered_leagues.json: {e}")
+
+    # Fall back to Yahoo API
     if yfa is None:
         return None
+
     try:
         gm = yfa.Game(oauth, "nfl")
+
+        # If league_name provided, fetch all leagues and match by name
+        if league_name:
+            try:
+                # Get all leagues for this year
+                leagues = gm.to_league(str(year))
+                if isinstance(leagues, list):
+                    for league in leagues:
+                        if hasattr(league, 'settings') and hasattr(league.settings, 'name'):
+                            if league.settings.name == league_name:
+                                key = league.league_id if hasattr(league, 'league_id') else None
+                                if key:
+                                    print(f"[settings] Matched league by name '{league_name}': {key}")
+                                    return key
+            except Exception:
+                pass  # Fall through to league_ids method
+
+        # Fallback: just get league IDs (may not be correct if multiple leagues)
         keys = gm.league_ids(year=year)
         if keys:
+            if len(keys) > 1 and league_name:
+                print(f"[settings] Warning: Multiple leagues found for {year}, but couldn't match by name. Using last one.")
             return keys[-1]
     except Exception:
         return None
+
     return None
 
 
@@ -447,14 +492,26 @@ def fetch_league_settings(
     """
     # Load from context if provided
     ctx = None
+    league_name = None
+    discovered_leagues_file = None
+
     if context and LEAGUE_CONTEXT_AVAILABLE:
         try:
             ctx = LeagueContext.load(context)
             year = year or ctx.start_year
-            league_key = league_key or ctx.league_id
+            league_name = ctx.league_name  # Get league name for matching
+
+            # Don't use ctx.league_id - let auto-discovery find the correct year-specific key
+            # league_key = league_key or ctx.league_id  # REMOVED
+
             if ctx.oauth_file_path:
                 oauth_file = oauth_file or Path(ctx.oauth_file_path)
             settings_dir = settings_dir or Path(ctx.data_directory) / "league_settings"  # League-wide config, not player-specific
+
+            # Look for discovered_leagues.json in the parent data directory
+            data_parent = Path(ctx.data_directory).parent
+            discovered_leagues_file = data_parent / "discovered_leagues.json"
+
         except Exception as e:
             print(f"[settings] Warning: Could not load context: {e}")
 
@@ -495,13 +552,19 @@ def fetch_league_settings(
     if not oauth:
         print("[settings] Error: Could not create OAuth session")
         return None
-    
+
     # Discover league key if not provided
-    discovered_key = _discover_league_key(oauth, year, league_key)
+    discovered_key = _discover_league_key(
+        oauth,
+        year,
+        league_key,
+        league_name=league_name,
+        discovered_leagues_file=discovered_leagues_file
+    )
     if not discovered_key:
         print(f"[settings] Error: Could not determine league key for {year}")
         return None
-    
+
     league_key = discovered_key
     print(f"[settings] Fetching ALL settings for {league_key} (year {year})...")
     

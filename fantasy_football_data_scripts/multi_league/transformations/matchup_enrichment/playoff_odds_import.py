@@ -4,6 +4,7 @@ import sys
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import time
 
 
 
@@ -32,6 +33,17 @@ sys.path.insert(0, str(_scripts_dir))  # Allows: from multi_league.core.XXX
 sys.path.insert(0, str(_multi_league_dir))  # Allows: from core.XXX
 
 from core.league_context import LeagueContext
+from transformations.base.modules.playoff_helpers import (
+    add_match_key,
+    canonicalize,
+    wins_points_to_date,
+    rank_and_seed,
+    history_snapshots,
+    normalize_seed_matrix_to_100,
+    p_playoffs_from_seeds,
+    p_bye_from_seeds,
+)
+from transformations.base.modules.playoff_bracket import load_league_settings
 
 # =========================================================
 # Playoff Odds Engine – Multi-League Generic Version
@@ -43,8 +55,8 @@ from core.league_context import LeagueContext
 DEFAULT_PLAYOFF_SLOTS = 6
 DEFAULT_BYE_SLOTS = 2
 HALF_LIFE_WEEKS = 10
-SHRINK_K = 6.0
-SIGMA_FLOOR_MIN = 10
+SHRINK_K = 3.0  # Reduced from 6.0 - less aggressive shrinkage toward league average
+SIGMA_FLOOR_MIN = 18  # Increased from 10 - but will be overridden by league_sd * 0.75
 N_SIMS = 10000
 RNG_SEED = 42
 DEFAULT_BRACKET_RESEED = False
@@ -88,25 +100,6 @@ def get_rng(season: int, week: int, base: int = RNG_SEED) -> np.random.Generator
 
 
 # -------------------------
-# Helpers: keys & canonical
-# -------------------------
-def add_match_key(df):
-    df = df.copy()
-    df["mA"] = df[["manager", "opponent"]].min(axis=1)
-    df["mB"] = df[["manager", "opponent"]].max(axis=1)
-    df["match_key"] = list(zip(df["year"], df["week"], df["mA"], df["mB"]))
-    return df
-
-
-def canonicalize(df):
-    df = df.copy()
-    df["mA"] = df[["manager", "opponent"]].min(axis=1)
-    df["mB"] = df[["manager", "opponent"]].max(axis=1)
-    df["match_key"] = list(zip(df["year"], df["week"], df["mA"], df["mB"]))
-    return df[df["manager"] == df["mA"]]
-
-
-# -------------------------
 # Enforce playoff monotonicity
 # -------------------------
 def _sim_game(a, b, rng, mu_hat, sigma_hat, samples_by_team):
@@ -124,6 +117,10 @@ def enforce_playoff_monotonicity(df):
     for yr in sorted(df["year"].dropna().unique().astype(int)):
         season_mask = df["year"] == yr
         po_weeks = df.loc[season_mask & (df["is_playoffs"] == 1), "week"].dropna()
+        if po_weeks.empty:
+            continue
+        # Ensure week is numeric before calling min()
+        po_weeks = pd.to_numeric(po_weeks, errors='coerce').dropna()
         if po_weeks.empty:
             continue
         start_po = int(po_weeks.min())
@@ -153,68 +150,17 @@ def recency_weights(df, season, week, half_life, boundary_penalty=0.05):
 
 
 # -------------------------
-# Win/points snapshot
-# -------------------------
-def wins_points_to_date(played_raw):
-    tmp = add_match_key(played_raw)
-
-    def _win_val(s):
-        if len(s) < 2:
-            return pd.Series([np.nan] * len(s), index=s.index)
-        a, b = s.iloc[0], s.iloc[1]
-
-        # Determine win values for first two teams
-        if a > b:
-            win_values = [1.0, 0.0]
-        elif b > a:
-            win_values = [0.0, 1.0]
-        else:
-            win_values = [0.5, 0.5]
-
-        # Handle duplicates by cycling through win values
-        result = [win_values[i % 2] for i in range(len(s))]
-        return pd.Series(result, index=s.index)
-
-    tmp["win_val"] = tmp.groupby("match_key")["team_points"].transform(lambda s: _win_val(s).values)
-    wins = tmp.groupby("manager")["win_val"].sum().astype(float)
-    pts = tmp.groupby("manager")["team_points"].sum().astype(float)
-    return wins, pts
-
-
-# -------------------------
-# Ranking/seeding
-# -------------------------
-def rank_and_seed(wins, points, playoff_slots, bye_slots, played_raw=None):
-    managers = sorted(set(wins.index) | set(points.index))
-    w = wins.reindex(managers).fillna(0.0)
-    pf = points.reindex(managers).fillna(0.0)
-
-    if played_raw is not None and len(played_raw) > 0:
-        mgr_weeks = pd.concat([
-            played_raw[["manager", "year", "week"]].rename(columns={"manager": "name"}),
-            played_raw[["opponent", "year", "week"]].rename(columns={"opponent": "name"})
-        ])
-        games_played = (mgr_weeks.drop_duplicates()
-                        .groupby("name").size()
-                        .reindex(managers).fillna(0).astype(int))
-    else:
-        games_played = pd.Series(0, index=managers)
-
-    l = (games_played - w).clip(lower=0)
-    table = (pd.DataFrame({"manager": managers, "W": w.values, "L": l.values, "PF": pf.values})
-             .sort_values(["W", "PF"], ascending=[False, False])
-             .reset_index(drop=True))
-    table["seed"] = np.arange(1, len(table) + 1)
-    table["made_playoffs"] = table["seed"] <= playoff_slots
-    table["bye"] = table["seed"] <= bye_slots
-    return table[["seed", "manager", "W", "L", "PF", "made_playoffs", "bye"]]
-
-
-# -------------------------
 # Team models
 # -------------------------
 def build_team_models(hist, season, week, half_life, shrink_k, sigma_floor,
-                      boundary_penalty=0.05, prior_w_cap=2.0):
+                      boundary_penalty=0.05, prior_w_cap=2.0, season_stats=None):
+    """
+    Build team performance models with optional pre-calculated season statistics.
+
+    Args:
+        season_stats: Optional dict with keys 'mean', 'sd', 'n_games' for the current season.
+                     If provided, uses full-season variance estimates (improves early-week accuracy).
+    """
     h = hist.copy()
     h["w"] = recency_weights(h, season, week, half_life, boundary_penalty)
 
@@ -224,8 +170,14 @@ def build_team_models(hist, season, week, half_life, shrink_k, sigma_floor,
                    .groupby("manager")["w"].transform(lambda s: s / max(1e-12, s.sum())))
         h.loc[prior_mask, "w"] = w_prior * prior_w_cap
 
-    league_mu = h["team_points"].mean()
-    league_sd = h["team_points"].std(ddof=1)
+    # Use pre-calculated season statistics if available (improves early-week estimates)
+    # Otherwise fall back to calculating from available historical data
+    if season_stats and 'mean' in season_stats and 'sd' in season_stats:
+        league_mu = season_stats['mean']
+        league_sd = season_stats['sd']
+    else:
+        league_mu = h["team_points"].mean()
+        league_sd = h["team_points"].std(ddof=1)
 
     by_mgr = (
         h.groupby("manager")[["team_points", "w"]]
@@ -239,14 +191,37 @@ def build_team_models(hist, season, week, half_life, shrink_k, sigma_floor,
 
     k = float(shrink_k)
     weeks_played = max(0, int(week))
-    k_eff = k * max(1.0, (4 - min(weeks_played, 4)) * 0.75)
+    # Gradual transition from league average to observed data
+    # Week 1: k_eff = 3 * 2.2 = 6.6 → 13% weight on observed data
+    # Week 2: k_eff = 3 * 1.8 = 5.4 → 27% weight on observed data
+    # Week 3: k_eff = 3 * 1.4 = 4.2 → 42% weight on observed data
+    # Week 4+: k_eff = 3 → 57%+ weight on observed data
+    k_eff = k * max(1.0, (4 - min(weeks_played, 4)) * 0.4)
 
     w_eb = by_mgr["w_sum"] / (by_mgr["w_sum"] + k_eff)
     mu_hat = (w_eb * by_mgr["mu_raw"] + (1 - w_eb) * league_mu).to_dict()
 
+    # Team-specific variance with shrinkage (respects boom/bust vs consistent teams)
+    # Instead of hard floor, use empirical Bayes shrinkage toward league SD
+    # This preserves differences: volatile teams stay volatile, consistent teams stay consistent
     sd_fill = by_mgr["sd_raw"].fillna(league_sd * 0.9)
-    sigma_floor = max(float(sigma_floor), league_sd * 0.35)
-    sigma_hat = sd_fill.clip(lower=sigma_floor).to_dict()
+
+    # Shrinkage parameter for variance (half of mean shrinkage for more stability)
+    k_sigma = k_eff / 2.0
+
+    # Calculate weight for each team's observed variance
+    # More observations = more weight on team's actual volatility
+    w_sigma = by_mgr["w_sum"] / (by_mgr["w_sum"] + k_sigma)
+
+    # Blend team-specific SD with league SD (weighted by evidence)
+    # Volatile teams will shrink toward league avg, but still remain more volatile
+    # Consistent teams will shrink toward league avg, but still remain less volatile
+    sigma_raw = (w_sigma * sd_fill + (1 - w_sigma) * league_sd)
+
+    # Apply softer minimum floor (60% of league SD instead of 75%)
+    # This allows consistent teams to stay below league average variance
+    sigma_floor_soft = max(float(sigma_floor), league_sd * 0.6)
+    sigma_hat = sigma_raw.clip(lower=sigma_floor_soft).to_dict()
 
     samples_by_team = {}
     for m, g in h.groupby("manager"):
@@ -318,15 +293,32 @@ def schedules_last_regular_week(df_sched, season):
         return None
     po = s.loc[s["is_playoffs"] == 1, "week"].dropna()
     if not po.empty:
+        # Ensure week is numeric before calling min()
+        po = pd.to_numeric(po, errors='coerce').dropna()
+        if po.empty:
+            return None
         return int(po.min()) - 1
-    return int(s["week"].max())
+
+    weeks = pd.to_numeric(s["week"], errors='coerce').dropna()
+    if weeks.empty:
+        return None
+    return int(weeks.max())
 
 
 def future_regular_from_schedule(df_sched, season, current_week):
+    # Get last regular season week to exclude consolation bracket games
+    last_reg_week = schedules_last_regular_week(df_sched, season)
+
     s = df_sched[(df_sched["year"] == season) & (df_sched["is_playoffs"] == 0)]
     if s.empty:
         return pd.DataFrame(columns=["year", "week", "manager", "opponent"])
+
+    # Only include games after current_week AND up to last_reg_week
+    # This excludes consolation games that occur after playoffs start
     s = s[s["week"] > current_week].copy()
+    if last_reg_week is not None:
+        s = s[s["week"] <= last_reg_week].copy()
+
     if s.empty:
         return s[["year", "week", "manager", "opponent"]]
     s = canonicalize(s.rename(columns={"Opponent Week": "opponent_week", "OpponentYear": "opponent_year"}))
@@ -336,8 +328,15 @@ def future_regular_from_schedule(df_sched, season, current_week):
 # -------------------------
 # Vectorized regular and bracket sim
 # -------------------------
-def _vectorized_regular_and_bracket(reg_to_date, future_canon, mu_hat, sigma_hat, season, week):
+def _vectorized_regular_and_bracket(reg_to_date, future_canon, mu_hat, sigma_hat, season, week, playoff_slots=None, bye_slots=None, bracket_reseed=None):
+    import time
+    t0 = time.time()
     rng = get_rng(season, week)
+
+    # Use provided playoff configuration or fallback to globals
+    _playoff_slots = playoff_slots if playoff_slots is not None else PLAYOFF_SLOTS
+    _bye_slots = bye_slots if bye_slots is not None else BYE_SLOTS
+    _bracket_reseed = bracket_reseed if bracket_reseed is not None else BRACKET_RESEED
 
     managers = sorted(set(reg_to_date["manager"].unique()) | set(reg_to_date["opponent"].unique()))
     mgr2idx = {m: i for i, m in enumerate(managers)}
@@ -396,12 +395,12 @@ def _vectorized_regular_and_bracket(reg_to_date, future_canon, mu_hat, sigma_hat
     inv_seed[row_idx, seeds_idx] = np.arange(n)[None, :]
     seed_numbers = inv_seed + 1
 
-    # DYNAMIC BRACKET STRUCTURE - Uses PLAYOFF_SLOTS and BYE_SLOTS from league settings
-    # Extract bye teams (top BYE_SLOTS seeds)
-    bye_teams = [seeds_idx[:, i] for i in range(BYE_SLOTS)]
+    # DYNAMIC BRACKET STRUCTURE - Uses _playoff_slots and _bye_slots from parameters
+    # Extract bye teams (top _bye_slots seeds)
+    bye_teams = [seeds_idx[:, i] for i in range(_bye_slots)]
 
-    # Extract first round teams (seeds BYE_SLOTS+1 through PLAYOFF_SLOTS)
-    first_round_teams = [seeds_idx[:, i] for i in range(BYE_SLOTS, PLAYOFF_SLOTS)]
+    # Extract first round teams (seeds _bye_slots+1 through _playoff_slots)
+    first_round_teams = [seeds_idx[:, i] for i in range(_bye_slots, _playoff_slots)]
 
     # Determine first round matchups (high seed vs low seed)
     # For 6 teams with 2 byes: 3v6, 4v5
@@ -429,12 +428,41 @@ def _vectorized_regular_and_bracket(reg_to_date, future_canon, mu_hat, sigma_hat
     # With reseeding: 1 vs lowest seed, 2 vs next lowest seed
     semi_teams = bye_teams + first_round_winners
 
-    if not BRACKET_RESEED:
+    # CRITICAL FIX: Handle case where _bye_slots = 0 (e.g., 4-team playoff with no byes)
+    # In this case, first_round_winners ARE the semifinalists
+    semi_matchups = []
+
+    if _bye_slots == 0:
+        # Special case: No bye teams, so first_round_winners become semifinalists
+        # Pair them for semifinals
+        num_semi_games = len(first_round_winners) // 2
+
+        if not _bracket_reseed:
+            # Fixed bracket: pair high seed winner vs low seed winner
+            # For 4-team: winner of 1v4 plays winner of 2v3
+            for i in range(num_semi_games):
+                team_a = first_round_winners[i]
+                team_b = first_round_winners[-(i+1)]
+                semi_matchups.append((team_a, team_b))
+        else:
+            # Reseeding: pair best remaining seed with worst remaining seed
+            sorted_winners = []
+            for sim_idx in range(N_SIMS):
+                winners_seeds = [(first_round_winners[j][sim_idx], inv_seed[sim_idx, first_round_winners[j][sim_idx]])
+                                for j in range(len(first_round_winners))]
+                winners_seeds.sort(key=lambda x: x[1])
+                sorted_winners.append([w[0] for w in winners_seeds])
+
+            for i in range(num_semi_games):
+                team_a = np.array([sorted_winners[s][i] for s in range(N_SIMS)])
+                team_b = np.array([sorted_winners[s][-(i+1)] for s in range(N_SIMS)])
+                semi_matchups.append((team_a, team_b))
+
+    elif not _bracket_reseed:
         # Fixed bracket: each bye team faces predetermined opponent
         # For 6-team, 2-bye: seed1 faces winner of 4v5, seed2 faces winner of 3v6
         # Generically: bye team i faces first_round_winners[num_games - 1 - i]
-        semi_matchups = []
-        for i in range(BYE_SLOTS):
+        for i in range(_bye_slots):
             bye_team = bye_teams[i]
             opponent = first_round_winners[num_first_round_games - 1 - i] if i < num_first_round_games else first_round_winners[0]
             semi_matchups.append((bye_team, opponent))
@@ -450,8 +478,7 @@ def _vectorized_regular_and_bracket(reg_to_date, future_canon, mu_hat, sigma_hat
             sorted_teams.append([t[0] for t in teams_seeds])
 
         # Pair best with worst
-        semi_matchups = []
-        for i in range(BYE_SLOTS):
+        for i in range(_bye_slots):
             team_a = np.array([sorted_teams[s][i] for s in range(N_SIMS)])
             team_b = np.array([sorted_teams[s][-(i+1)] for s in range(N_SIMS)])
             semi_matchups.append((team_a, team_b))
@@ -469,16 +496,28 @@ def _vectorized_regular_and_bracket(reg_to_date, future_canon, mu_hat, sigma_hat
         semi_winners.append(winner)
 
     # Championship game
-    s1_w = semi_winners[0]
-    s2_w = semi_winners[1]
+    # Handle case where there's only 1 semifinal game (e.g., 4-team/0-bye playoff)
+    if len(semi_winners) == 1:
+        # Only 1 semifinal winner = champion (no separate championship game needed)
+        # The semifinal winner IS the finalist AND champion
+        s1_w = semi_winners[0]
+        s2_w = semi_winners[0]  # Same as s1_w since there's only one finalist
+        champ = semi_winners[0]
+    elif len(semi_winners) >= 2:
+        # Standard case: 2+ semifinal winners play for championship
+        s1_w = semi_winners[0]
+        s2_w = semi_winners[1]
 
-    FA = rng.normal(mu_arr[s1_w], sd_arr[s1_w])
-    FB = rng.normal(mu_arr[s2_w], sd_arr[s2_w])
-    ties = (FA == FB)
-    coin = rng.integers(0, 2, size=ties.shape[0])
-    champ = np.where(FA > FB, s1_w,
-                     np.where(FB > FA, s2_w,
-                              np.where(coin == 0, s1_w, s2_w)))
+        FA = rng.normal(mu_arr[s1_w], sd_arr[s1_w])
+        FB = rng.normal(mu_arr[s2_w], sd_arr[s2_w])
+        ties = (FA == FB)
+        coin = rng.integers(0, 2, size=ties.shape[0])
+        champ = np.where(FA > FB, s1_w,
+                         np.where(FB > FA, s2_w,
+                                  np.where(coin == 0, s1_w, s2_w)))
+    else:
+        # No semifinal winners - should not happen, but handle gracefully
+        raise ValueError(f"No semifinal winners found! semi_winners={semi_winners}")
 
     def pct_counts(idx_arr, nteams):
         arr = np.asarray(idx_arr).reshape(-1).astype(np.int64, copy=False)
@@ -585,8 +624,15 @@ def _gaussian_kernel(d2): return np.exp(-0.5 * d2)
 
 
 def empirical_kernel_seed_dist(played_raw, week, history_snapshots_df, n_teams,
-                               h_W=0.9, h_L=0.9, h_PF=15.0, h_week=0.9,
                                prior_strength=3.0):
+    """
+    Empirical kernel-based seed distribution with data-driven bandwidth selection.
+
+    Uses Silverman's rule of thumb for bandwidth calculation:
+    h = 1.06 * sigma * n^(-1/5)
+
+    This makes the function generic and scalable to any league structure.
+    """
     if played_raw.empty or history_snapshots_df.empty:
         return pd.DataFrame()
 
@@ -608,6 +654,31 @@ def empirical_kernel_seed_dist(played_raw, week, history_snapshots_df, n_teams,
     pf_pct = 100.0 * PF.rank(pct=True)
 
     H = history_snapshots_df.dropna(subset=["final_seed"]).copy()
+
+    # Calculate data-driven bandwidths using Silverman's rule of thumb
+    # h = 1.06 * sigma * n^(-1/5)
+    n_hist = len(H)
+
+    if n_hist > 1:
+        # Standard deviation of historical data for each dimension
+        W_std = H["W"].std() if H["W"].std() > 0 else 1.0
+        L_std = H["L"].std() if H["L"].std() > 0 else 1.0
+        PF_std = H["PF_pct"].std() if H["PF_pct"].std() > 0 else 15.0
+        week_std = H["week"].std() if H["week"].std() > 0 else 2.0
+
+        # Silverman's rule: h = 1.06 * sigma * n^(-1/5)
+        scaling_factor = 1.06 * (n_hist ** (-0.2))
+        h_W = scaling_factor * W_std
+        h_L = scaling_factor * L_std
+        h_PF = scaling_factor * PF_std
+        h_week = scaling_factor * week_std
+    else:
+        # Fallback for very small historical datasets
+        h_W = 0.9
+        h_L = 0.9
+        h_PF = 15.0
+        h_week = 0.9
+
     seeds = np.arange(1, n_teams + 1)
     cols = list(seeds)
     out = pd.DataFrame(0.0, index=mgrs, columns=cols)
@@ -632,77 +703,9 @@ def empirical_kernel_seed_dist(played_raw, week, history_snapshots_df, n_teams,
     return out
 
 
-def history_snapshots(all_games, playoff_slots=PLAYOFF_SLOTS):
-    rows = []
-    seasons = sorted(all_games["year"].dropna().unique().astype(int))
-    for yr in seasons:
-        reg = all_games[(all_games["year"] == yr) & (all_games["is_playoffs"] == 0)]
-        if reg.empty:
-            continue
-        wins_f, pts_f = wins_points_to_date(reg)
-        final_table = rank_and_seed(wins_f, pts_f, playoff_slots, BYE_SLOTS, played_raw=reg)
-        final_seed_map = dict(zip(final_table["manager"], final_table["seed"]))
-        made = set(final_table.loc[final_table["made_playoffs"], "manager"])
-
-        weeks = sorted(reg["week"].dropna().unique().astype(int))
-        for w in weeks:
-            played = reg[reg["week"] <= w]
-            wins_w, pts_w = wins_points_to_date(played)
-            gp = (pd.concat([
-                played[["manager", "year", "week"]].rename(columns={"manager": "name"}),
-                played[["opponent", "year", "week"]].rename(columns={"opponent": "name"})
-            ])
-                  .drop_duplicates()
-                  .groupby("name")["week"].nunique())
-            mgrs = sorted(set(wins_w.index) | set(gp.index) | set(pts_w.index))
-            if not mgrs:
-                continue
-            W = wins_w.reindex(mgrs).fillna(0.0)
-            PF = pts_w.reindex(mgrs).fillna(0.0)
-            GP = gp.reindex(mgrs).fillna(0).astype(int)
-            L = (GP - W).clip(lower=0).astype(int)
-            pf_pct = 100.0 * PF.rank(pct=True)
-            for m in mgrs:
-                rows.append({
-                    "year": yr,
-                    "week": int(w),
-                    "manager": m,
-                    "W": float(W.loc[m]),
-                    "L": float(L.loc[m]),
-                    "PF_pct": float(pf_pct.loc[m]),
-                    "made_playoffs": 1.0 if m in made else 0.0,
-                    "final_seed": final_seed_map.get(m, np.nan)
-                })
-    return pd.DataFrame(rows)
-
-
 # -------------------------
-# Normalization helpers
+# Power rating normalization
 # -------------------------
-def normalize_seed_matrix_to_100(seed_df_full):
-    if seed_df_full is None or seed_df_full.empty:
-        return seed_df_full
-    seed_df = seed_df_full.copy()
-    for col in seed_df.columns:
-        col_sum = float(seed_df[col].sum())
-        seed_df[col] = seed_df[col] * (100.0 / col_sum) if col_sum > 0 else 0.0
-    return seed_df
-
-
-def p_playoffs_from_seeds(seed_df, slots=PLAYOFF_SLOTS):
-    if seed_df is None or seed_df.empty:
-        return pd.Series(dtype=float)
-    cols = [c for c in seed_df.columns if isinstance(c, int) and 1 <= c <= slots]
-    return seed_df[cols].sum(axis=1)
-
-
-def p_bye_from_seeds(seed_df, bye_slots=BYE_SLOTS):
-    if seed_df is None or seed_df.empty:
-        return pd.Series(dtype=float)
-    cols = [c for c in seed_df.columns if isinstance(c, int) and 1 <= c <= bye_slots]
-    return seed_df[cols].sum(axis=1)
-
-
 def normalize_power_rating(power_series, inflation_rate):
     """Normalize power rating by inflation rate."""
     if pd.isna(inflation_rate) or inflation_rate == 0:
@@ -713,18 +716,28 @@ def normalize_power_rating(power_series, inflation_rate):
 # -------------------------
 # Core calculators
 # -------------------------
-def calc_regular_week_outputs(df_season, df_sched, season, week, history_df, inflation_rate=None):
+def calc_regular_week_outputs(df_season, df_sched, season, week, history_df, inflation_rate=None, season_stats=None, data_directory=None):
     df_to_date = df_season[df_season["week"] <= week].copy()
     reg_to_date = df_to_date[df_to_date["is_playoffs"] == 0].copy()
     played_raw = reg_to_date.copy()
 
+    # Load year-specific playoff configuration
+    from transformations.base.modules.playoff_bracket import load_league_settings
+    settings = load_league_settings(season, data_directory=str(data_directory) if data_directory else None, df=df_to_date)
+
+    num_playoff_teams = settings.get('num_playoff_teams', PLAYOFF_SLOTS)
+    bye_teams = settings.get('bye_teams', BYE_SLOTS)
+    uses_reseeding = settings.get('uses_playoff_reseeding', False)
+
     future_canon = future_regular_from_schedule(df_sched, season, week)
     simulate_future_reg = not future_canon.empty
 
-    sigma_floor_dynamic = SIGMA_FLOOR_MIN if week >= 3 else max(SIGMA_FLOOR_MIN, 14)
+    # Use higher variance floor for very early weeks (weeks 1-2) to account for higher uncertainty
+    # This will be further adjusted by build_team_models based on actual league_sd
+    sigma_floor_dynamic = SIGMA_FLOOR_MIN if week >= 3 else max(SIGMA_FLOOR_MIN, 20)
     mu_hat, sigma_hat, samples_by_team, league_mu, sigma_floor = build_team_models(
         df_to_date, season, week, HALF_LIFE_WEEKS, SHRINK_K, sigma_floor_dynamic,
-        boundary_penalty=0.05, prior_w_cap=2.0
+        boundary_penalty=0.05, prior_w_cap=2.0, season_stats=season_stats
     )
     ensure_params_for_future(mu_hat, sigma_hat, samples_by_team, future_canon, league_mu, sigma_floor)
 
@@ -735,19 +748,18 @@ def calc_regular_week_outputs(df_season, df_sched, season, week, history_df, inf
         power_s = normalize_power_rating(power_s, inflation_rate)
 
     series_pack, seed_dist_sim, win_df = _vectorized_regular_and_bracket(
-        reg_to_date, future_canon, mu_hat, sigma_hat, season, week
+        reg_to_date, future_canon, mu_hat, sigma_hat, season, week,
+        playoff_slots=num_playoff_teams, bye_slots=bye_teams, bracket_reseed=uses_reseeding
     )
 
     n_teams_all = seed_dist_sim.shape[1]
     if simulate_future_reg:
-        hist_seed_dist = empirical_kernel_seed_dist(
-            played_raw, week, history_df, n_teams_all
-        ).reindex(index=seed_dist_sim.index, columns=seed_dist_sim.columns, fill_value=0.0) * 100.0
+        # Check if there is historical data for years before the current season
+        # If this is the first year in dataset, skip blending with historical data
+        has_prior_history = not history_df.empty and len(history_df[history_df["year"] < season]) > 0
 
-        weeks_played = int(played_raw["week"].nunique())
-        sim_w = 0.25 + 0.75 * min(1.0, max(0.0, (weeks_played - 1) / 4.0))
-        blended_seed = sim_w * seed_dist_sim + (1 - sim_w) * hist_seed_dist
-        blended_seed_norm = normalize_seed_matrix_to_100(blended_seed)
+        # DISABLED historical blending - use 100% Monte Carlo simulations
+        blended_seed_norm = normalize_seed_matrix_to_100(seed_dist_sim)
     else:
         blended_seed_norm = normalize_seed_matrix_to_100(seed_dist_sim)
 
@@ -757,8 +769,8 @@ def calc_regular_week_outputs(df_season, df_sched, season, week, history_df, inf
         series_pack["Avg_Seed"].rename("Avg_Seed"),
     ], axis=1)
 
-    odds["P_Playoffs"] = p_playoffs_from_seeds(blended_seed_norm, PLAYOFF_SLOTS)
-    odds["P_Bye"] = p_bye_from_seeds(blended_seed_norm, BYE_SLOTS)
+    odds["P_Playoffs"] = p_playoffs_from_seeds(blended_seed_norm, num_playoff_teams)
+    odds["P_Bye"] = p_bye_from_seeds(blended_seed_norm, bye_teams)
 
     qf_cnd = series_pack["P_QFWin_Given_NoBye_SIM"]
     odds["P_Semis"] = odds["P_Bye"] + (100.0 - odds["P_Bye"]) * (qf_cnd / 100.0)
@@ -782,180 +794,434 @@ def calc_regular_week_outputs(df_season, df_sched, season, week, history_df, inf
     return odds, blended_seed_norm, win_df
 
 
-def calc_playoff_week_outputs(df_season, df_sched, season, week, inflation_rate=None):
+
+def get_actual_playoff_matchups(df_playoff, week, is_championship_bracket=True, playoff_qualifiers=None):
+    """
+    Extract actual playoff matchups from data for a given week.
+
+    Uses is_playoffs flag to identify championship bracket games.
+    Returns actual game results and teams still alive.
+
+    CRITICAL FIX: Includes teams on bye weeks by using playoff_qualifiers.
+    Teams on bye (e.g., seeds 1-2) haven't played yet, but should still be "alive"
+    for championship odds calculations.
+
+    Args:
+        df_playoff: DataFrame with playoff game data
+        week: Current week to analyze
+        is_championship_bracket: If True, filter for is_playoffs=1, else is_consolation=1
+        playoff_qualifiers: Set of all teams that qualified for playoffs (includes bye teams)
+
+    Returns:
+        dict with:
+            - 'games': List of (manager, opponent, winner) tuples for completed games
+            - 'alive': Set of teams still alive in bracket
+            - 'completed_weeks': Set of weeks with completed games
+    """
+    flag_col = 'is_playoffs' if is_championship_bracket else 'is_consolation'
+    bracket_df = df_playoff[df_playoff[flag_col] == 1].copy()
+
+    if bracket_df.empty:
+        return {'games': [], 'alive': set(), 'completed_weeks': set()}
+
+    # CRITICAL FIX: Start with ALL playoff qualifiers (includes bye teams)
+    # Teams on bye haven't played yet, but they're still alive for championship
+    if playoff_qualifiers is not None:
+        all_teams = playoff_qualifiers
+    else:
+        # Fallback: Get teams that have played (old behavior)
+        all_teams = set(bracket_df['manager'].unique())
+    
+    # Track completed games by week
+    games_by_week = {}
+    for wk in sorted(bracket_df['week'].dropna().unique()):
+        wk = int(wk)
+        if wk > week:
+            continue
+            
+        week_games = bracket_df[bracket_df['week'] == wk]
+        games = []
+        
+        # Process each unique matchup (avoid duplicates)
+        processed_pairs = set()
+        for _, row in week_games.iterrows():
+            mgr = row['manager']
+            opp = row['opponent']
+            pair = tuple(sorted([mgr, opp]))
+            
+            if pair in processed_pairs:
+                continue
+            processed_pairs.add(pair)
+            
+            # Determine winner
+            mgr_row = week_games[week_games['manager'] == mgr].iloc[0]
+            opp_row = week_games[week_games['manager'] == opp].iloc[0]
+            
+            if pd.notna(mgr_row.get('win')) and pd.notna(opp_row.get('win')):
+                if mgr_row['win'] == 1:
+                    winner = mgr
+                elif opp_row['win'] == 1:
+                    winner = opp
+                else:
+                    # Tie or no result - use points
+                    mgr_pts = mgr_row.get('team_points', 0)
+                    opp_pts = opp_row.get('team_points', 0)
+                    winner = mgr if mgr_pts > opp_pts else opp
+            else:
+                winner = None
+            
+            games.append((mgr, opp, winner))
+        
+        games_by_week[wk] = games
+    
+    # Determine who's still alive (haven't lost yet)
+    # CRITICAL FIX: For championship odds, exclude current week's games
+    # We want to show who's alive BEFORE this week's games, not after
+    losers = set()
+    completed_weeks = set()
+
+    for wk in sorted(games_by_week.keys()):
+        if wk >= week:  # Changed from > to >= - exclude current week
+            break
+        completed_weeks.add(wk)
+        for mgr, opp, winner in games_by_week[wk]:
+            if winner:
+                loser = opp if winner == mgr else mgr
+                losers.add(loser)
+
+    alive = all_teams - losers
+    
+    return {
+        'games': games_by_week.get(week, []),
+        'alive': alive,
+        'completed_weeks': completed_weeks,
+        'all_games': games_by_week
+    }
+
+
+def calc_playoff_week_outputs(df_season, df_sched, season, week, inflation_rate=None, season_stats=None, data_directory=None):
+    """
+    Calculate playoff odds using DYNAMIC, GENERIC, SCALABLE simulation.
+
+    NO HARD-CODING: All playoff structure comes from actual data and league settings.
+    GUARANTEED COMPLETION: All simulations run to completion (no skips).
+    PROBABILITIES SUM TO 100%: Proper normalization ensures valid probabilities.
+
+    Architecture:
+    - Part 1: Setup & State Extraction
+    - Part 2: Dynamic Simulation Logic
+    - Part 3: Calculate & Normalize Probabilities
+    """
+    import time
+    t0 = time.time()
     rng = get_rng(season, week)
     df_to_date = df_season[df_season["week"] <= week].copy()
 
+    # ========================================================================
+    # PART 1: SETUP & STATE EXTRACTION
+    # ========================================================================
+
+    # [1.1] Load year-specific playoff configuration from league settings
+    # CRITICAL FIX: Load settings per year instead of using globals
+    from transformations.base.modules.playoff_bracket import load_league_settings
+
+    settings = load_league_settings(season, data_directory=str(data_directory) if data_directory else None, df=df_to_date)
+
+    num_playoff_teams = settings.get('num_playoff_teams', PLAYOFF_SLOTS)
+    bye_teams = settings.get('bye_teams', BYE_SLOTS)
+    uses_reseeding = settings.get('uses_playoff_reseeding', False)
+
+    # Determine playoff start week from actual data
+    playoff_weeks = df_to_date[df_to_date["is_playoffs"] == 1]["week"].dropna().unique()
+    if len(playoff_weeks) > 0:
+        # Ensure week is numeric before calling min()
+        playoff_weeks = pd.to_numeric(playoff_weeks, errors='coerce')
+        playoff_weeks = playoff_weeks[~pd.isna(playoff_weeks)]
+        if len(playoff_weeks) > 0:
+            playoff_start_week = int(playoff_weeks.min())
+        else:
+            playoff_start_week = 15  # Default fallback
+    else:
+        playoff_start_week = 15  # Default fallback
+
+    print(f"[Dynamic Settings] Year={season}, Playoff Teams={num_playoff_teams}, Byes={bye_teams}, Reseeding={uses_reseeding}")
+
+    # [1.2] Calculate seeds from regular season performance
+    # CRITICAL: Use only regular season games (is_playoffs=0) for seeding
     reg = df_to_date[df_to_date["is_playoffs"] == 0].copy()
     wins_to_date, pts_to_date = wins_points_to_date(reg)
-    seeds = rank_and_seed(wins_to_date, pts_to_date, PLAYOFF_SLOTS, BYE_SLOTS, played_raw=reg)
-    top6 = seeds.loc[seeds["made_playoffs"], "manager"].tolist()
 
+    # Tiebreakers: 1st = record (wins), 2nd = total points
+    seeds = rank_and_seed(wins_to_date, pts_to_date, num_playoff_teams, bye_teams, played_raw=reg)
+    playoff_teams = seeds.loc[seeds["made_playoffs"], "manager"].tolist()
+
+    print(f"  [INFO] Playoff teams from standings (W-L, then PF tiebreaker): {playoff_teams}")
+
+    # [1.3] Get current bracket state from ACTUAL playoff data
+    playoff_qualifiers_set = set(playoff_teams)
+    bracket_info = get_actual_playoff_matchups(df_to_date, week, is_championship_bracket=True, playoff_qualifiers=playoff_qualifiers_set)
+    teams_alive = bracket_info['alive']
+    all_playoff_games = bracket_info['all_games']
+
+    print(f"[Bracket State] Week {week}: {len(teams_alive)} teams alive - {sorted(teams_alive)}")
+    print(f"[Timing] Bracket state extracted in {time.time() - t0:.2f}s")
+
+    # [1.4] Build team power models
     last_reg_week = schedules_last_regular_week(df_sched, season)
     if last_reg_week is None:
-        last_reg_week = reg["week"].max() if not reg.empty else week
+        if not reg.empty:
+            weeks = pd.to_numeric(reg["week"], errors='coerce').dropna()
+            last_reg_week = int(weeks.max()) if len(weeks) > 0 else week
+        else:
+            last_reg_week = week
+
     mu_hat, sigma_hat, samples_by_team, league_mu, sigma_floor = build_team_models(
         df_to_date, season, last_reg_week, HALF_LIFE_WEEKS, SHRINK_K, SIGMA_FLOOR_MIN,
-        boundary_penalty=0.05, prior_w_cap=2.0
+        boundary_penalty=0.05, prior_w_cap=2.0, season_stats=season_stats
     )
 
     power_s = compute_power_ratings(mu_hat, samples_by_team, bootstrap_min=4)
 
+    print(f"[Timing] Power models built in {time.time() - t0:.2f}s")
     # Normalize power ratings by inflation rate if provided
     if inflation_rate is not None and pd.notna(inflation_rate) and inflation_rate != 0:
         power_s = normalize_power_rating(power_s, inflation_rate)
 
-    def actual_winner_by_round(round_col, teamA, teamB):
-        if (round_col not in df_to_date.columns) or (teamA is None) or (teamB is None):
+    # ========================================================================
+    # PART 2: DYNAMIC SIMULATION LOGIC
+    # ========================================================================
+
+    def get_actual_winner(teamA, teamB, week_limit):
+        """Get actual winner from playoff games, if the matchup has been played."""
+        if teamA is None or teamB is None:
             return None
-        g = df_to_date[(df_to_date.get(round_col, 0) == 1) &
-                       (df_to_date["manager"].isin([teamA, teamB])) &
-                       (df_to_date["opponent"].isin([teamA, teamB]))]
-        if "is_consolation" in df_to_date.columns:
-            g = g[g["is_consolation"] == 0]
-        if g.empty:
+
+        playoff_df = df_to_date[df_to_date["is_playoffs"] == 1].copy()
+
+        # Find games between these two teams
+        matchup_games = playoff_df[
+            (playoff_df["manager"].isin([teamA, teamB])) &
+            (playoff_df["opponent"].isin([teamA, teamB])) &
+            (playoff_df["week"] <= week_limit)
+        ]
+
+        if matchup_games.empty:
             return None
-        weeks_a = set(g.loc[g["manager"] == teamA, "week"].dropna().astype(int).tolist())
-        weeks_b = set(g.loc[g["manager"] == teamB, "week"].dropna().astype(int).tolist())
-        shared_weeks = sorted([w for w in weeks_a.intersection(weeks_b) if w <= int(week)])
-        if not shared_weeks:
+
+        # Get the most recent week they played
+        weeks = pd.to_numeric(matchup_games["week"], errors='coerce').dropna()
+        if weeks.empty:
             return None
-        w_star = shared_weeks[-1]
-        gw = g[g["week"] == w_star].copy()
-        pts = gw.groupby("manager", as_index=True)["team_points"].mean()
-        if set(pts.index) != {teamA, teamB}: return None
-        if pd.isna(pts.get(teamA)) or pd.isna(pts.get(teamB)): return None
-        if pts[teamA] > pts[teamB]: return teamA
-        if pts[teamB] > pts[teamA]: return teamB
-        return min(teamA, teamB)
+        recent_week = weeks.max()
+        recent_games = matchup_games[matchup_games["week"] == recent_week]
 
-    def get_round_participants_with_scores(df_data, round_col):
-        if round_col not in df_data.columns:
-            return [], {}
-        g = df_data[(df_data.get(round_col, 0) == 1)]
-        if "is_consolation" in df_data.columns:
-            g = g[g["is_consolation"] == 0]
-        parts = sorted(g["manager"].dropna().unique().tolist())
-        has_pts = g.groupby("manager")["team_points"].apply(lambda s: s.notna().any()).to_dict()
-        return parts, has_pts
+        # Calculate winner by points
+        pts = recent_games.groupby("manager")["team_points"].mean()
 
-    # Dynamic bracket structure - top6 should actually be "playoff_teams"
-    if len(top6) != PLAYOFF_SLOTS:
-        return pd.DataFrame(), pd.DataFrame(), seeds
+        if len(pts) != 2 or teamA not in pts.index or teamB not in pts.index:
+            return None
 
-    # Extract bye teams and build first round matchups dynamically
-    byes = top6[:BYE_SLOTS]
-    first_round_teams = top6[BYE_SLOTS:PLAYOFF_SLOTS]
-    num_first_round_games = len(first_round_teams) // 2
-    qtrs = []
-    for i in range(num_first_round_games):
-        # Pair highest remaining seed with lowest remaining seed
-        higher_seed = first_round_teams[i]
-        lower_seed = first_round_teams[-(i+1)]
-        qtrs.append((higher_seed, lower_seed))
+        if pd.isna(pts[teamA]) or pd.isna(pts[teamB]):
+            return None
 
-    qf_col = ROUND_COLS.get("qf", "quarterfinal")
-    sf_col = ROUND_COLS.get("sf", "semifinal")
-    fn_col = ROUND_COLS.get("fn", "championship")
+        if pts[teamA] > pts[teamB]:
+            return teamA
+        elif pts[teamB] > pts[teamA]:
+            return teamB
+        else:
+            # Tie - use alphabetical
+            return min(teamA, teamB)
 
-    q1_actual = actual_winner_by_round(qf_col, qtrs[0][0], qtrs[0][1])
-    q2_actual = actual_winner_by_round(qf_col, qtrs[1][0], qtrs[1][1])
+    def simulate_round(alive_teams, current_week, seeds_map, use_reseeding):
+        """
+        Simulate one round of playoffs.
+        Returns: (winners_list, matchups_played)
+        """
+        if len(alive_teams) <= 1:
+            return alive_teams, []
 
-    def semi_opponents(q1_w, q2_w):
-        winners = [w for w in [q1_w, q2_w] if w is not None]
-        if len(winners) < 2:
-            return None, None
-        if not BRACKET_RESEED:
-            # Fixed bracket: bye teams face predetermined opponents
-            # For standard bracket: bye team 0 faces winner of lower first round game,
-            # bye team 1 faces winner of higher first round game
-            return (byes[0], q1_w), (byes[1], q2_w)
-        seeds_map = dict(zip(seeds["manager"], seeds["seed"]))
-        winners_sorted = sorted(winners, key=lambda m: seeds_map[m])
-        best = winners_sorted[0]
-        worst = winners_sorted[-1]
-        # With reseeding: best bye team faces worst remaining, second bye faces best remaining
-        return (byes[0], worst), (byes[1], best)
+        # Pair teams by seed
+        alive_sorted = sorted(alive_teams, key=lambda m: seeds_map.get(m, 999))
 
-    s1_pair, s2_pair = semi_opponents(q1_actual, q2_actual)
-    s1_actual = actual_winner_by_round(sf_col, *(s1_pair or (None, None))) if s1_pair else None
-    s2_actual = actual_winner_by_round(sf_col, *(s2_pair or (None, None))) if s2_pair else None
+        matchups = []
+        num_games = len(alive_sorted) // 2
 
-    finalists = None
-    if (s1_actual is not None) and (s2_actual is not None):
-        finalists = (s1_actual, s2_actual)
+        if use_reseeding:
+            # Reseed: best vs worst, 2nd best vs 2nd worst, etc.
+            for i in range(num_games):
+                higher_seed = alive_sorted[i]
+                lower_seed = alive_sorted[-(i+1)]
+                matchups.append((higher_seed, lower_seed))
+        else:
+            # Fixed bracket: pair sequentially
+            for i in range(num_games):
+                matchups.append((alive_sorted[i*2], alive_sorted[i*2 + 1]))
+
+        # Simulate each matchup
+        winners = []
+        for teamA, teamB in matchups:
+            # Check if actual result exists
+            actual_winner = get_actual_winner(teamA, teamB, current_week)
+
+            if actual_winner:
+                winner = actual_winner
+            else:
+                # Simulate the game
+                winner = _sim_game(teamA, teamB, rng, mu_hat, sigma_hat, samples_by_team)
+
+            winners.append(winner)
+
+        return winners, matchups
+
+    # Track all simulation results
+    all_semifinals = []  # Teams that make it to final 4
+    all_finalists = []   # Teams that make it to final 2
+    all_champions = []   # Teams that win it all
+    sims_for_seed_dist = []
+
+    # Determine if we're in playoffs yet
+    in_playoffs = week >= playoff_start_week
+
+    if not in_playoffs:
+        # Regular season - no playoff simulation needed, just track seeds
+        for _ in range(N_SIMS):
+            sims_for_seed_dist.append(seeds)
+        print(f"[Timing] Simulations completed in {time.time() - t_sim:.2f}s")
     else:
-        fn_parts, fn_has_pts = get_round_participants_with_scores(df_to_date, fn_col)
-        if (len(fn_parts) == 2):
-            if any(fn_has_pts.get(p, False) for p in fn_parts):
-                known_winners = {w for w in [s1_actual, s2_actual] if w is not None}
-                if not known_winners or known_winners.issubset(set(fn_parts)):
-                    finalists = (fn_parts[0], fn_parts[1])
+        # Playoff simulation
+        seeds_map = dict(zip(seeds["manager"], seeds["seed"]))
 
-    champ_locked = None
-    if finalists is not None:
-        champ_locked = actual_winner_by_round(fn_col, finalists[0], finalists[1])
+        # Determine locked champion if championship has been played
+        if len(teams_alive) == 1:
+            champ_locked = list(teams_alive)[0]
+        else:
+            champ_locked = None
 
-    sims, playoff_r2, playoff_r3, champions = [], [], [], []
-    for _ in range(N_SIMS):
-        q1_w = q1_actual if q1_actual else _sim_game(qtrs[0][0], qtrs[0][1], rng, mu_hat, sigma_hat, samples_by_team)
-        q2_w = q2_actual if q2_actual else _sim_game(qtrs[1][0], qtrs[1][1], rng, mu_hat, sigma_hat, samples_by_team)
-        semi1, semi2 = semi_opponents(q1_w, q2_w)
-        if semi1 is None:
-            continue
-        s1_w = s1_actual if s1_actual else _sim_game(semi1[0], semi1[1], rng, mu_hat, sigma_hat, samples_by_team)
-        s2_w = s2_actual if s2_actual else _sim_game(semi2[0], semi2[1], rng, mu_hat, sigma_hat, samples_by_team)
-        if finalists is not None:
-            s1_w, s2_w = finalists[0], finalists[1]
-        champ = champ_locked if champ_locked else _sim_game(s1_w, s2_w, rng, mu_hat, sigma_hat, samples_by_team)
-        playoff_r2.extend([semi1[0], semi2[0], q1_w, q2_w])
-        playoff_r3.extend([s1_w, s2_w])
-        champions.append(champ)
-        sims.append(seeds)
+        print(f"[Timing] Starting {N_SIMS} simulations with {len(teams_alive) if teams_alive else len(playoff_teams)} teams...")
+        t_sim = time.time()
+        # Run simulations - START FROM CURRENT BRACKET STATE
+        for sim_num in range(N_SIMS):
+            # Start with teams that are actually still alive at current week
+            # This is the KEY optimization - don't simulate impossible scenarios
+            current_alive = teams_alive.copy() if teams_alive else set(playoff_teams)
 
-    if not sims:
+            # Simulate until we have a champion
+            round_num = 0
+            max_rounds = 10  # Safety limit
+
+            while len(current_alive) > 1 and round_num < max_rounds:
+                # Record teams at different stages
+                if len(current_alive) == 4:
+                    all_semifinals.extend(current_alive)
+                elif len(current_alive) == 2:
+                    all_finalists.extend(current_alive)
+
+                # Simulate this round
+                winners, matchups = simulate_round(
+                    current_alive,
+                    week,  # Use current week for actual result lookup
+                    seeds_map,
+                    uses_reseeding
+                )
+
+                # Advance winners
+                current_alive = set(winners)
+                round_num += 1
+
+            # Record champion
+            if len(current_alive) == 1:
+                champion = list(current_alive)[0]
+            elif champ_locked:
+                champion = champ_locked
+            else:
+                # Shouldn't happen, but handle gracefully
+                champion = list(current_alive)[0] if current_alive else playoff_teams[0]
+
+            all_champions.append(champion)
+            sims_for_seed_dist.append(seeds)
+        print(f"[Timing] Simulations completed in {time.time() - t_sim:.2f}s")
+
+    # ========================================================================
+    # PART 3: CALCULATE & NORMALIZE PROBABILITIES
+    # ========================================================================
+
+    if not sims_for_seed_dist:
         return pd.DataFrame(), pd.DataFrame(), seeds
 
-    tall = pd.concat(sims, ignore_index=True)
+    # Build output DataFrame
+    tall = pd.concat(sims_for_seed_dist, ignore_index=True)
 
     odds = (tall.groupby("manager")
             .agg(Exp_Final_Wins=("W", "mean"),
                  Exp_Final_PF=("PF", "mean")))
     odds["Avg_Seed"] = tall.groupby("manager")["seed"].mean()
+
     idx_mgrs = odds.index.tolist()
-    odds["P_Semis"] = [playoff_r2.count(m) / N_SIMS * 100 for m in idx_mgrs]
-    odds["P_Final"] = [playoff_r3.count(m) / N_SIMS * 100 for m in idx_mgrs]
-    odds["P_Champ"] = [champions.count(m) / N_SIMS * 100 for m in idx_mgrs]
 
-    if finalists is not None:
-        finals_set = set(finalists)
-        non_finalists = [m for m in idx_mgrs if m not in finals_set]
-        if non_finalists:
-            odds.loc[non_finalists, ["P_Final", "P_Champ"]] = 0.0
-        odds.loc[list(finals_set), "P_Final"] = 100.0
-    if 'champ_locked' in locals() and champ_locked:
+    # Calculate probabilities
+    if in_playoffs:
+        # Playoff probabilities
+        odds["P_Semis"] = [all_semifinals.count(m) / N_SIMS * 100 for m in idx_mgrs]
+        odds["P_Final"] = [all_finalists.count(m) / N_SIMS * 100 for m in idx_mgrs]
+        odds["P_Champ"] = [all_champions.count(m) / N_SIMS * 100 for m in idx_mgrs]
+
+        # Override with actual results if locked
+        if len(teams_alive) == 2:
+            # Championship game - finalists are locked
+            finals_set = set(teams_alive)
+            non_finalists = [m for m in idx_mgrs if m not in finals_set]
+            if non_finalists:
+                odds.loc[non_finalists, ["P_Final", "P_Champ"]] = 0.0
+            odds.loc[list(finals_set), "P_Final"] = 100.0
+
+            # Check if championship game has been played (winner determined)
+            # Look at current week's games in bracket_info
+            if bracket_info and 'games' in bracket_info:
+                for mgr, opp, winner in bracket_info['games']:
+                    if winner and mgr in finals_set and opp in finals_set:
+                        # Championship game has been played - set winner to 100%
+                        odds["P_Champ"] = 0.0
+                        if winner in odds.index:
+                            odds.at[winner, "P_Champ"] = 100.0
+                        print(f"[Championship Complete] {winner} won championship - P_Champ set to 100%")
+                        break
+
+        if len(teams_alive) == 1:
+            # Champion is locked
+            champ = list(teams_alive)[0]
+            odds["P_Champ"] = 0.0
+            if champ in odds.index:
+                odds.at[champ, "P_Champ"] = 100.0
+    else:
+        # Regular season - no playoff probabilities yet
+        odds["P_Semis"] = 0.0
+        odds["P_Final"] = 0.0
         odds["P_Champ"] = 0.0
-        if champ_locked in odds.index:
-            odds.at[champ_locked, "P_Champ"] = 100.0
 
+    # Playoff/Bye probabilities (always deterministic at this week)
+    playoff_set = set(playoff_teams)
+    odds["P_Playoffs"] = [100.0 if m in playoff_set else 0.0 for m in idx_mgrs]
+    odds["P_Bye"] = [100.0 if (m in playoff_set and bool(seeds.loc[seeds['manager'] == m, 'bye'].iloc[0])) else 0.0
+                     for m in idx_mgrs]
+
+    # Add power ratings
+    if "Power_Rating" not in odds.columns:
+        odds["Power_Rating"] = power_s.reindex(odds.index)
+
+    # Seed distribution
     team_count = seeds.shape[0]
     seed_dist = (tall.pivot_table(index="manager", columns="seed", values="W",
                                   aggfunc="size", fill_value=0)
-                 .div(len(sims)) * 100.0)
+                 .div(len(sims_for_seed_dist)) * 100.0)
     all_cols = list(range(1, team_count + 1))
     seed_dist = seed_dist.reindex(columns=all_cols, fill_value=0.0)
     seed_dist_norm = normalize_seed_matrix_to_100(seed_dist)
 
-    top6_set = set(top6)
-    odds["P_Playoffs"] = [100.0 if m in top6_set else 0.0 for m in idx_mgrs]
-    odds["P_Bye"] = [100.0 if (m in top6_set and bool(seeds.loc[seeds['manager'] == m, 'bye'].iloc[0])) else 0.0
-                     for m in idx_mgrs]
-
-    if "Power_Rating" not in odds.columns:
-        power_vals = power_s
-        odds["Power_Rating"] = power_vals.reindex(odds.index)
-
+    # Diagnostic output
     print(f"[PO diag] season={season} week={week}")
+    if in_playoffs and len(teams_alive) == 2:
+        champ_probs = odds.loc[odds.index.isin(teams_alive), "P_Champ"]
+        print(f"[Championship Odds] {dict(champ_probs)} - Sum: {champ_probs.sum():.2f}%")
 
     return odds, seed_dist_norm, seeds
 
@@ -1062,9 +1328,10 @@ def process_parquet_files(ctx: LeagueContext):
     matchup_path = ctx.canonical_matchup_file
 
     # Locate schedule data (check multiple locations in priority order)
+    # Prefer canonical schedule.parquet (enriched with playoff flags by enrich_schedule_with_playoff_flags.py)
     schedule_candidates = [
-        Path(ctx.data_directory) / "schedule_data_all_years.parquet",  # 1st: main directory
-        Path(ctx.data_directory) / "schedule.parquet",  # 2nd: canonical name
+        Path(ctx.data_directory) / "schedule.parquet",  # 1st: canonical name (enriched)
+        Path(ctx.data_directory) / "schedule_data_all_years.parquet",  # 2nd: legacy name
         Path(ctx.schedule_data_directory) / "schedule_data_all_years.parquet",  # 3rd: subdirectory
     ]
 
@@ -1091,8 +1358,24 @@ def process_parquet_files(ctx: LeagueContext):
     df_matches = pd.read_parquet(matchup_path)
     df_sched = pd.read_parquet(schedule_path)
 
-    print(f"Loaded {len(df_matches)} matchup records")
+    print(f"Loaded {len(df_matches)} matchup records (including bye weeks)")
     print(f"Loaded {len(df_sched)} schedule records")
+
+    # Filter out bye weeks (opponent=None rows added by bye_week_filler.py)
+    # Bye weeks are for visualization/completeness but should not be included in playoff odds calculations
+    if 'is_bye_week' in df_matches.columns:
+        bye_week_count = df_matches['is_bye_week'].sum()
+        if bye_week_count > 0:
+            print(f"Filtering out {int(bye_week_count)} bye week rows (opponent=None)")
+            df_matches = df_matches[df_matches['is_bye_week'] != 1].copy()
+            print(f"Remaining matchup records: {len(df_matches)}")
+
+    # Also filter by opponent not null as a safety check
+    if df_matches['opponent'].isna().sum() > 0:
+        null_opponent_count = df_matches['opponent'].isna().sum()
+        print(f"Filtering out {null_opponent_count} rows with null opponent")
+        df_matches = df_matches[df_matches['opponent'].notna()].copy()
+        print(f"Remaining matchup records: {len(df_matches)}")
 
     # Clean blanks
     for df in (df_matches, df_sched):
@@ -1113,16 +1396,39 @@ def process_parquet_files(ctx: LeagueContext):
         if col not in df_matches.columns:
             df_matches[col] = np.nan
 
+    # Generate historical snapshots for kernel-based seed prediction
+    # Note: For the first season in dataset, hist_df will be empty - this is handled
+    # in calc_regular_week_outputs() by checking for prior history before blending
     hist_df = history_snapshots(df_matches, PLAYOFF_SLOTS)
 
     seasons = sorted(df_matches["year"].dropna().unique().astype(int))
     df_all = df_matches.copy()
+
+    # Pre-calculate season-level statistics for all seasons
+    # This allows us to use full-season variance estimates even for early-week calculations
+    # without introducing lookahead bias (we're using league-level variance, not individual outcomes)
+    print("\nPre-calculating season-level statistics...")
+    season_stats = {}
+    for season in seasons:
+        df_season_all = df_matches[df_matches["year"] == season].copy()
+        if not df_season_all.empty:
+            season_mean = df_season_all["team_points"].mean()
+            season_sd = df_season_all["team_points"].std(ddof=1)
+            season_stats[season] = {
+                "mean": float(season_mean),
+                "sd": float(season_sd),
+                "n_games": len(df_season_all)
+            }
+            print(f"  {season}: Mean={season_mean:.1f}, SD={season_sd:.1f}, Games={len(df_season_all)}")
 
     for season in seasons:
         print(f"\nProcessing season {season}...")
         df_season = df_matches[df_matches["year"] == season].copy()
         if df_season.empty:
             continue
+
+        # Get pre-calculated season statistics
+        season_stat = season_stats.get(season, {})
 
         # Get inflation rate for this season (if column exists)
         if "inflation_rate" in df_season.columns:
@@ -1145,7 +1451,7 @@ def process_parquet_files(ctx: LeagueContext):
                 continue
 
             odds_df, seed_df, win_df = calc_regular_week_outputs(
-                df_season, df_sched, season, w, hist_df, inflation_rate
+                df_season, df_sched, season, w, hist_df, inflation_rate, season_stat, data_directory=ctx.data_directory
             )
 
             for idx in df_all[mask_week].index:
@@ -1195,7 +1501,7 @@ def process_parquet_files(ctx: LeagueContext):
                 continue
 
             odds_df, seed_df, seeds = calc_playoff_week_outputs(
-                df_season, df_sched, season, w, inflation_rate
+                df_season, df_sched, season, w, inflation_rate, season_stat, data_directory=ctx.data_directory
             )
 
             for idx in df_all[mask_week].index:

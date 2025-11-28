@@ -107,8 +107,8 @@ def add_player_personal_ranks(
     Adds:
     - player_personal_week_rank: Rank within this player's all weekly performances
     - player_personal_week_pct: Percentile within player's weekly performances
-    - player_personal_season_rank: Rank within this player's seasons
-    - player_personal_season_pct: Percentile within player's seasons
+    - player_personal_season_rank: Rank within this player's seasons (FULL SEASON totals)
+    - player_personal_season_pct: Percentile within player's seasons (FULL SEASON totals)
 
     Args:
         df: DataFrame with player stats
@@ -130,7 +130,7 @@ def add_player_personal_ranks(
         valid_mask=pl.col(points_col).is_not_null()
     )
 
-    # Seasonal aggregation for personal season ranks
+    # Seasonal aggregation for personal season ranks (FULL SEASON)
     season_agg = (
         df.group_by([player_id_col, year_col])
         .agg(pl.col(points_col).sum().alias("_season_points"))
@@ -179,8 +179,8 @@ def add_league_wide_position_ranks(
     Adds:
     - position_week_rank: Rank among all players at this position this week
     - position_week_pct: Percentile among position this week
-    - position_season_rank: Rank among all players at this position this season
-    - position_season_pct: Percentile among position this season
+    - position_season_rank: Rank among all players at this position this season (FULL SEASON totals)
+    - position_season_pct: Percentile among position this season (FULL SEASON totals)
     - position_alltime_rank: Rank among all players at this position all-time
     - position_alltime_pct: Percentile among position all-time
 
@@ -204,7 +204,7 @@ def add_league_wide_position_ranks(
         valid_mask=pl.col(points_col).is_not_null()
     )
 
-    # Season position ranks
+    # Season position ranks (FULL SEASON)
     season_agg = (
         df.group_by([position_col, year_col, "yahoo_player_id"])
         .agg(pl.col(points_col).sum().alias("_season_points"))
@@ -350,8 +350,8 @@ def add_manager_player_ranks(
     Adds:
     - manager_player_week_rank: Rank among this manager's players this week
     - manager_player_week_pct: Percentile among manager's players this week
-    - manager_player_season_rank: Rank among manager's players this season
-    - manager_player_season_pct: Percentile among manager's players this season
+    - manager_player_season_rank: Rank among manager's players this season (FULL SEASON totals)
+    - manager_player_season_pct: Percentile among manager's players this season (FULL SEASON totals)
     - manager_player_alltime_rank: Rank among manager's all-time players
     - manager_player_alltime_pct: Percentile among manager's all-time players
 
@@ -378,7 +378,7 @@ def add_manager_player_ranks(
         valid_mask=rostered_mask & pl.col(points_col).is_not_null()
     )
 
-    # Season manager-player ranks
+    # Season manager-player ranks (FULL SEASON)
     season_agg = (
         df.filter(rostered_mask)
         .group_by([manager_col, year_col, "yahoo_player_id"])

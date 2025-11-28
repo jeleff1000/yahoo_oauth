@@ -81,9 +81,19 @@ class LeagueContext:
     manager_name_overrides: Dict[str, str] = field(default_factory=dict)
     # Maps old manager names to new names (e.g., {"--hidden--": "Ilan"})
 
-    # === Historical Data Imports ===
-    espn_csv_imports: Optional[list] = None  # List of ESPN CSV imports for historical data (league-specific)
-    # Example: [{"year": 2013, "csv_path": "path/to/2013.csv", "description": "ESPN 8-team league"}]
+    # === Keeper Rules ===
+    keeper_rules: Optional[Dict[str, Any]] = None
+    # Keeper price calculation rules - see schema:
+    # {
+    #   "enabled": bool,
+    #   "max_keepers": int,
+    #   "budget": int,
+    #   "formulas_by_keeper_year": {"1": {...}, "2+": {...}},
+    #   "base_cost_rules": {"auction": {...}, "snake": {...}, ...},
+    #   "min_price": int,
+    #   "max_price": int or null,
+    #   "round_to_integer": bool
+    # }
 
     # === Metadata ===
     created_at: Optional[str] = None        # ISO timestamp of context creation
@@ -256,51 +266,72 @@ class LeagueContext:
         """Path to canonical draft.parquet file"""
         return self.data_directory / "draft.parquet"
 
-    # === Year Range Helpers ===
+    # === Keeper Rules Helpers ===
 
     @property
-    def espn_csv_years(self) -> set:
+    def keepers_enabled(self) -> bool:
+        """Check if keeper rules are enabled for this league."""
+        if self.keeper_rules is None:
+            return False
+        return self.keeper_rules.get('enabled', False)
+
+    @property
+    def max_keepers(self) -> int:
+        """Get maximum number of keepers allowed (default 0 if not configured)."""
+        if self.keeper_rules is None:
+            return 0
+        return self.keeper_rules.get('max_keepers', 0)
+
+    @property
+    def keeper_budget(self) -> int:
+        """Get auction budget for keeper calculations (default 200)."""
+        if self.keeper_rules is None:
+            return 200
+        return self.keeper_rules.get('budget', 200)
+
+    def get_keeper_formula(self, keeper_year: int) -> Optional[Dict[str, Any]]:
         """
-        Get set of years that have ESPN CSV imports (non-Yahoo data sources).
-
-        These years should be EXCLUDED from Yahoo API fetchers (player, draft, transactions)
-        but INCLUDED in schedule and matchup aggregation.
-
-        Returns:
-            Set of years (integers) that come from ESPN CSV imports
-        """
-        if not self.espn_csv_imports:
-            return set()
-
-        years = set()
-        for import_entry in self.espn_csv_imports:
-            if isinstance(import_entry, dict) and 'year' in import_entry:
-                years.add(int(import_entry['year']))
-        return years
-
-    def get_yahoo_years(self, end_year: Optional[int] = None) -> list:
-        """
-        Get list of years to fetch from Yahoo API (excludes ESPN CSV years).
+        Get keeper price formula for a specific keeper year.
 
         Args:
-            end_year: Optional end year (defaults to self.end_year or current year)
+            keeper_year: How many times player has been kept (1 = first time)
 
         Returns:
-            List of years to fetch from Yahoo API
+            Formula dict with 'expression' and 'description', or None
         """
-        import datetime
+        if self.keeper_rules is None:
+            return None
 
-        if end_year is None:
-            end_year = self.end_year or datetime.datetime.now().year
+        formulas = self.keeper_rules.get('formulas_by_keeper_year', {})
 
-        # Get all years in range
-        all_years = range(self.start_year, end_year + 1)
+        # Check for exact year match first
+        if str(keeper_year) in formulas:
+            return formulas[str(keeper_year)]
 
-        # Exclude ESPN CSV years
-        espn_years = self.espn_csv_years
-        yahoo_years = [y for y in all_years if y not in espn_years]
+        # Check for "2+" style wildcards
+        for key, formula in formulas.items():
+            if '+' in key:
+                base_year = int(key.replace('+', ''))
+                if keeper_year >= base_year:
+                    return formula
 
-        return yahoo_years
+        return None
+
+    def get_base_cost_rule(self, acquisition_type: str) -> Optional[Dict[str, Any]]:
+        """
+        Get base cost calculation rule for an acquisition type.
+
+        Args:
+            acquisition_type: 'auction', 'snake', 'faab_only', or 'free_agent'
+
+        Returns:
+            Rule dict with 'source', optional 'formula', 'multiplier', 'value'
+        """
+        if self.keeper_rules is None:
+            return None
+
+        base_rules = self.keeper_rules.get('base_cost_rules', {})
+        return base_rules.get(acquisition_type)
 
     # === OAuth Helpers ===
 
@@ -519,6 +550,11 @@ class LeagueContext:
 
         if self.manager_name_overrides:
             lines.append(f"Manager Overrides: {len(self.manager_name_overrides)}")
+
+        if self.keepers_enabled:
+            lines.append(f"Keepers: {self.max_keepers} max, ${self.keeper_budget} budget")
+        else:
+            lines.append("Keepers: disabled")
 
         lines.append(f"Created: {self.created_at}")
         lines.append(f"Updated: {self.updated_at}")

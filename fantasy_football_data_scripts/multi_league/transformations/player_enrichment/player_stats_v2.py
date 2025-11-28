@@ -127,12 +127,25 @@ def unify_player_id(df):
             if 'player_id' not in pdf.columns:
                 pdf['player_id'] = pd.NA
 
+    # Ensure player_id is string type (not object with mixed types) for Polars compatibility
+    if 'player_id' in pdf.columns:
+        pdf['player_id'] = pdf['player_id'].astype(str).replace('nan', pd.NA).replace('<NA>', pd.NA)
+
     # Build composite keys consistently
     if 'player_week' not in pdf.columns and {'player_id','year','week'}.issubset(pdf.columns):
         pdf['player_week'] = pdf['player_id'].astype(str) + "_" + pdf['year'].astype(str) + "_" + pdf['week'].astype(str)
 
     if 'player_year' not in pdf.columns and {'player_id','year'}.issubset(pdf.columns):
         pdf['player_year'] = pdf['player_id'].astype(str) + "_" + pdf['year'].astype(str)
+
+    # Calculate cumulative_week for ALL players (Yahoo and NFLverse)
+    # Format: YYYYWW (e.g., 201504 for 2015 week 4)
+    # This should be present for all rows regardless of source
+    if {'year', 'week'}.issubset(pdf.columns):
+        # Convert year and week to YYYYWW format (e.g., 2015 week 4 -> 201504)
+        pdf['cumulative_week'] = (
+            pdf['year'].astype(int) * 100 + pdf['week'].astype(int)
+        ).astype('Int64')
 
     if is_polars:
         return _pl.from_pandas(pdf)
@@ -197,6 +210,34 @@ def calculate_player_stats(
     print(f"Input: {len(player_df)} player records")
 
     df = player_df.clone()
+
+    # =========================================================
+    # CRITICAL FIX: Deduplicate input data to prevent cascade
+    # =========================================================
+    # If input has duplicates, joins will multiply them exponentially
+    # Deduplicate on (player, year, week, yahoo_player_id) keeping first occurrence
+    initial_count = len(df)
+
+    # Convert to pandas for deduplication (easier to handle)
+    df_pd = df.to_pandas()
+
+    # Deduplicate based on key columns
+    dedup_cols = []
+    for col in ['player', 'year', 'week', 'yahoo_player_id', 'NFL_player_id']:
+        if col in df_pd.columns:
+            dedup_cols.append(col)
+
+    if dedup_cols:
+        df_pd = df_pd.drop_duplicates(subset=dedup_cols, keep='first')
+        removed = initial_count - len(df_pd)
+        if removed > 0:
+            print(f"[DEDUP] Removed {removed:,} duplicate rows from input (prevents cascade)")
+            print(f"[DEDUP] Rows after dedup: {len(df_pd):,}")
+
+        # Convert back to Polars
+        df = pl.from_pandas(df_pd)
+    else:
+        print("[DEDUP] Warning: Could not deduplicate - required columns missing")
 
     # Normalize player identifier: prefer yahoo_player_id, fall back to nfl_player_id
     df = unify_player_id(df)
@@ -277,21 +318,27 @@ def calculate_player_stats(
     # Create is_started flag based on fantasy_position
     # is_started = 1 if:
     #   - Player is rostered (is_rostered == 1), AND
-    #   - fantasy_position is not "BN" (bench) or "IR" (injured reserve)
+    #   - fantasy_position is a valid active position (not bench/IR/null/blank)
     # This indicates the player was in an active lineup slot
     if "fantasy_position" in df.columns:
+        # Exclude positions that don't count as "started":
+        # - BN: Bench
+        # - IR: Injured Reserve
+        # - Null/blank values: "", "0", "null", "NULL", "nan", "NaN"
+        excluded_positions = ["BN", "IR", "", "0", "null", "NULL", "nan", "NaN"]
+
         df = df.with_columns(
             pl.when(
                 (pl.col("is_rostered") == 1) &
                 pl.col("fantasy_position").is_not_null() &
-                ~pl.col("fantasy_position").is_in(["BN", "IR"])
+                ~pl.col("fantasy_position").is_in(excluded_positions)
             )
             .then(pl.lit(1))
             .otherwise(pl.lit(0))
             .cast(pl.Int64)
             .alias("is_started")
         )
-        print(f"  Added is_started column based on is_rostered and fantasy_position")
+        print(f"  Added is_started column (excludes BN, IR, null, blank)")
     else:
         # If fantasy_position doesn't exist, set is_started to 0 for all rows
         df = df.with_columns(pl.lit(0).cast(pl.Int64).alias("is_started"))
@@ -463,14 +510,15 @@ def calculate_player_stats(
     print(f"  Added league-wide position rankings")
 
     # Player personal rankings (comparing player to their own history)
+    # CRITICAL FIX: Use NFL_player_id to capture full career, not just rostered weeks
     df = add_player_personal_ranks(
         df,
-        player_id_col="yahoo_player_id",
+        player_id_col="NFL_player_id",  # Changed from yahoo_player_id
         points_col="points",
         year_col="year",
         week_col="week"
     )
-    print(f"  Added player personal rankings")
+    print(f"  Added player personal rankings (based on NFL_player_id - full career)")
 
     # All players all-time rankings (cross-position)
     df = add_all_players_alltime_ranks(
@@ -609,70 +657,173 @@ def calculate_player_stats(
     )
     print(f"  Added rolling_point_total")
 
+    # CRITICAL FIX: Use NFL_player_id for PPG calculations
+    # This captures ALL weeks the player recorded NFL stats, not just rostered weeks
+    # Example: Tom Brady's 1999-2013 stats count even if league started in 2014
     df = calculate_season_ppg(
         df,
-        player_id_col="NFL_player_id",
+        player_id_col="NFL_player_id",  # Changed from yahoo_player_id
         points_col="fantasy_points",
         year_col="year",
         min_games=1
     )
-    print(f"  Added season_ppg, season_games")
+    print(f"  Added season_ppg, season_games (based on NFL_player_id - all weeks played)")
 
+    # Add avg_points_next_year: season_ppg from the following year
+    # This shows how a player performed in year Y+1
+    # CRITICAL FIX: Use group_by to ensure unique join keys (not .unique() which keeps all column combinations)
+    # If there are duplicate rows with different season_ppg values, take the first non-null value
+    # CRITICAL FIX: Use NFL_player_id for join (matches season_ppg calculation above)
+
+    # Drop any existing avg_points_next_year columns from previous runs
+    cols_to_drop = [c for c in df.columns if "avg_points_next_year" in c]
+    if cols_to_drop:
+        df = df.drop(cols_to_drop)
+
+    next_year_ppg = (
+        df.select(["NFL_player_id", "year", "season_ppg"])
+        .group_by(["NFL_player_id", "year"])  # Changed from yahoo_player_id
+        .agg(pl.col("season_ppg").drop_nulls().first().alias("season_ppg"))  # Take first non-null season_ppg
+        .with_columns((pl.col("year") - 1).alias("year"))  # Shift year back by 1
+        .select(["NFL_player_id", "year", pl.col("season_ppg").alias("avg_points_next_year")])
+    )
+    df = df.join(next_year_ppg, on=["NFL_player_id", "year"], how="left")
+    print(f"  Added avg_points_next_year (based on NFL_player_id)")
+
+    # CRITICAL FIX: Use NFL_player_id for all PPG calculations
+    # This captures the player's true NFL performance across ALL weeks played
     df = calculate_alltime_ppg(
         df,
-        player_id_col="NFL_player_id",
+        player_id_col="NFL_player_id",  # Changed from yahoo_player_id
         points_col="fantasy_points",
         min_games=1
     )
-    print(f"  Added alltime_ppg, alltime_games")
+    print(f"  Added alltime_ppg, alltime_games (based on NFL_player_id - career stats)")
 
     df = calculate_rolling_avg(
         df,
-        player_id_col="NFL_player_id",
+        player_id_col="NFL_player_id",  # Changed from yahoo_player_id
         points_col="fantasy_points",
         year_col="year",
         week_col="week",
         window_size=3,
         output_col="rolling_3_avg"
     )
-    print(f"  Added rolling_3_avg")
+    print(f"  Added rolling_3_avg (based on NFL_player_id)")
 
     df = calculate_rolling_avg(
         df,
-        player_id_col="NFL_player_id",
+        player_id_col="NFL_player_id",  # Changed from yahoo_player_id
         points_col="fantasy_points",
         year_col="year",
         week_col="week",
         window_size=5,
         output_col="rolling_5_avg"
     )
-    print(f"  Added rolling_5_avg")
+    print(f"  Added rolling_5_avg (based on NFL_player_id)")
 
     df = calculate_weighted_ppg(
         df,
-        player_id_col="NFL_player_id",
+        player_id_col="NFL_player_id",  # Changed from yahoo_player_id
         points_col="fantasy_points",
         year_col="year",
         week_col="week",
         decay_factor=0.9
     )
-    print(f"  Added weighted_ppg")
+    print(f"  Added weighted_ppg (based on NFL_player_id)")
 
     df = calculate_ppg_trend(
         df,
-        player_id_col="NFL_player_id",
+        player_id_col="NFL_player_id",  # Changed from yahoo_player_id
         year_col="year"
     )
-    print(f"  Added ppg_trend")
+    print(f"  Added ppg_trend (based on NFL_player_id)")
 
     df = calculate_consistency_score(
         df,
-        player_id_col="NFL_player_id",
+        player_id_col="NFL_player_id",  # Changed from yahoo_player_id
         points_col="fantasy_points",
         year_col="year",
         min_games=3
     )
-    print(f"  Added consistency_score")
+    print(f"  Added consistency_score (based on NFL_player_id)")
+
+    # =========================================================
+    # Step 7: Calculate SPAR (Season Points Above Replacement)
+    # =========================================================
+    print("\nStep 7: Calculating SPAR metrics...")
+
+    # Load replacement levels from transformations directory
+    replacement_file = ctx.data_directory / 'transformations' / 'replacement_levels.parquet'
+
+    if replacement_file.exists():
+        print(f"  Loading replacement levels from {replacement_file.name}...")
+
+        # Load replacement levels (has weekly replacement_ppg)
+        replacement_df = pl.read_parquet(replacement_file)
+        print(f"  Loaded {len(replacement_df):,} replacement level records")
+
+        # Drop any existing replacement/SPAR columns to avoid conflicts
+        # (These might exist from previous pipeline runs)
+        cols_to_drop = [col for col in df.columns if col in [
+            'replacement_ppg', 'replacement_ppg_right', 'replacement_ppg_season',
+            'player_spar', 'manager_spar'
+        ]]
+        if cols_to_drop:
+            print(f"  Dropping existing SPAR columns to avoid conflicts: {cols_to_drop}")
+            df = df.drop(cols_to_drop)
+
+        # Join replacement levels to player data
+        # Match on (year, week, position)
+        df = df.join(
+            replacement_df.select(['year', 'week', 'position', 'replacement_ppg']),
+            on=['year', 'week', 'position'],
+            how='left'
+        )
+
+        # Fill missing replacement values with 0 (for positions not in roster requirements)
+        df = df.with_columns(
+            pl.col('replacement_ppg').fill_null(0.0)
+        )
+
+        print(f"  Joined replacement levels to player data")
+
+        # Calculate dual SPAR metrics (weekly level)
+        # player_spar: Weekly points above replacement (all games)
+        # manager_spar: Weekly points above replacement (started games only)
+
+        df = df.with_columns([
+            # Player SPAR: All games (talent metric)
+            (pl.col("fantasy_points") - pl.col("replacement_ppg")).alias("player_spar"),
+
+            # Manager SPAR: Started games only (usage metric)
+            pl.when(pl.col("is_started") == 1)
+            .then(pl.col("fantasy_points") - pl.col("replacement_ppg"))
+            .otherwise(0.0)
+            .alias("manager_spar")
+        ])
+
+        print(f"  Added player_spar (all games) and manager_spar (started only)")
+
+        # Validate SPAR calculations
+        spar_stats = df.select([
+            pl.col("player_spar").count().alias("count"),
+            pl.col("player_spar").mean().alias("avg_player_spar"),
+            pl.col("manager_spar").mean().alias("avg_manager_spar")
+        ]).to_pandas().iloc[0]
+
+        print(f"  SPAR stats: {spar_stats['count']:,.0f} records, avg player_spar={spar_stats['avg_player_spar']:.2f}, avg manager_spar={spar_stats['avg_manager_spar']:.2f}")
+
+    else:
+        print(f"  [WARN] Replacement levels file not found: {replacement_file}")
+        print(f"  [WARN] Skipping SPAR calculation - run replacement_level_v2.py first")
+
+        # Add placeholder columns with 0 values
+        df = df.with_columns([
+            pl.lit(0.0).alias("replacement_ppg"),
+            pl.lit(0.0).alias("player_spar"),
+            pl.lit(0.0).alias("manager_spar")
+        ])
 
     # =========================================================
     # Final Step: Validation
