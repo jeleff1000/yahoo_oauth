@@ -60,22 +60,6 @@
       <option name="presentableId" value="Default" />
       <updated>1760740985328</updated>
     </task>
-    <task id="LOCAL-00007" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760741929948</created>
-      <option name="number" value="00007" />
-      <option name="presentableId" value="LOCAL-00007" />
-      <option name="project" value="LOCAL" />
-      <updated>1760741929948</updated>
-    </task>
-    <task id="LOCAL-00008" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760742108184</created>
-      <option name="number" value="00008" />
-      <option name="presentableId" value="LOCAL-00008" />
-      <option name="project" value="LOCAL" />
-      <updated>1760742108184</updated>
-    </task>
     <task id="LOCAL-00009" summary="commit">
       <option name="closed" value="true" />
       <created>1760747512681</created>
@@ -452,7 +436,23 @@
       <option name="project" value="LOCAL" />
       <updated>1764343225510</updated>
     </task>
-    <option name="localTasksCounter" value="56" />
+    <task id="LOCAL-00056" summary="Merge remote-tracking branch 'origin/main'">
+      <option name="closed" value="true" />
+      <created>1764345070355</created>
+      <option name="number" value="00056" />
+      <option name="presentableId" value="LOCAL-00056" />
+      <option name="project" value="LOCAL" />
+      <updated>1764345070355</updated>
+    </task>
+    <task id="LOCAL-00057" summary="Merge remote-tracking branch 'origin/main'">
+      <option name="closed" value="true" />
+      <created>1764345599407</created>
+      <option name="number" value="00057" />
+      <option name="presentableId" value="LOCAL-00057" />
+      <option name="project" value="LOCAL" />
+      <updated>1764345599407</updated>
+    </task>
+    <option name="localTasksCounter" value="58" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -479,7 +479,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/main.py</url>
-          <line>1238</line>
+          <line>1233</line>
           <option name="timeStamp" value="1" />
         </line-breakpoint>
       </breakpoints>
