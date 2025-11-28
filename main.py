@@ -1180,7 +1180,7 @@ def perform_import_flow(league_info: dict):
         st.session_state.league_info = league_info
 
         # Check if we have the GitHub token to trigger the workflow
-        github_token = os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_WORKFLOW_TOKEN")
+        github_token = os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_WORKFLOW_TOKEN") or st.secrets.get("GITHUB_TOKEN")
 
         if not github_token:
             st.error("⚠️ GitHub token not configured. The import cannot run on Streamlit Cloud due to timeout limits.")
