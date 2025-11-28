@@ -1758,6 +1758,7 @@ def main():
             for f in failed:
                 log(f"      FAILED: {f}")
 
+    _summarize("settings")
     _summarize("fetchers")
     _summarize("merges")
     _summarize("transformations")

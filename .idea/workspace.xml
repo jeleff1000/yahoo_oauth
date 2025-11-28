@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Merge remote-tracking branch 'origin/main'" />
+    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/initial_import_v2.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/initial_import_v2.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/core/data_normalization.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/core/data_normalization.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -59,22 +63,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1760740985328</updated>
-    </task>
-    <task id="LOCAL-00010" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760751545234</created>
-      <option name="number" value="00010" />
-      <option name="presentableId" value="LOCAL-00010" />
-      <option name="project" value="LOCAL" />
-      <updated>1760751545234</updated>
-    </task>
-    <task id="LOCAL-00011" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760751747684</created>
-      <option name="number" value="00011" />
-      <option name="presentableId" value="LOCAL-00011" />
-      <option name="project" value="LOCAL" />
-      <updated>1760751747684</updated>
     </task>
     <task id="LOCAL-00012" summary="commit">
       <option name="closed" value="true" />
@@ -452,7 +440,23 @@
       <option name="project" value="LOCAL" />
       <updated>1764349962699</updated>
     </task>
-    <option name="localTasksCounter" value="59" />
+    <task id="LOCAL-00059" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
+      <option name="closed" value="true" />
+      <created>1764361433705</created>
+      <option name="number" value="00059" />
+      <option name="presentableId" value="LOCAL-00059" />
+      <option name="project" value="LOCAL" />
+      <updated>1764361433705</updated>
+    </task>
+    <task id="LOCAL-00060" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
+      <option name="closed" value="true" />
+      <created>1764368606500</created>
+      <option name="number" value="00060" />
+      <option name="presentableId" value="LOCAL-00060" />
+      <option name="project" value="LOCAL" />
+      <updated>1764368606500</updated>
+    </task>
+    <option name="localTasksCounter" value="61" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -472,7 +476,8 @@
     <MESSAGE value="commit" />
     <MESSAGE value="Add debug logging to troubleshoot data truncation&#10;&#10;- Log what trigger sends (league_id, name, season, start_year)&#10;- Log what workflow receives and decodes&#10;- Will help identify where truncation occurs&#10;&#10; Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
     <MESSAGE value="Merge remote-tracking branch 'origin/main'" />
-    <option name="LAST_COMMIT_MESSAGE" value="Merge remote-tracking branch 'origin/main'" />
+    <MESSAGE value="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10; Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
+    <option name="LAST_COMMIT_MESSAGE" value="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10; Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

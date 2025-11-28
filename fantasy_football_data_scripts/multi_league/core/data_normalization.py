@@ -206,38 +206,49 @@ def add_composite_keys(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def validate_league_isolation(df: pd.DataFrame, expected_league_id: Any) -> bool:
+def validate_league_isolation(
+    df: pd.DataFrame,
+    expected_league_id: Any,
+    file_name: str = "unknown",
+    log: Any = None
+) -> bool:
     """
     Validate that all rows in DataFrame belong to expected league.
 
     Args:
         df: Input DataFrame
         expected_league_id: Expected league ID
+        file_name: Name of file being validated (for logging)
+        log: Optional logging function (defaults to print)
 
     Returns:
         True if all rows match expected league, False otherwise
     """
+    # Use provided log function or fall back to print
+    _log = log if log is not None else print
+
     if 'league_id' not in df.columns:
-        print(f"  WARNING: league_id column not found, cannot validate isolation")
+        _log(f"  [{file_name}] WARNING: league_id column not found, cannot validate isolation")
         return False
 
     unique_leagues = df['league_id'].dropna().unique()
 
     if len(unique_leagues) == 0:
-        print(f"  WARNING: No league_id values found")
+        _log(f"  [{file_name}] WARNING: No league_id values found")
         return False
 
     if len(unique_leagues) > 1:
-        print(f"  ERROR: Multiple league IDs found: {unique_leagues}")
+        _log(f"  [{file_name}] ERROR: Multiple league IDs found: {unique_leagues}")
         return False
 
     actual_league_id = str(unique_leagues[0])
     expected_league_id = str(expected_league_id)
 
     if actual_league_id != expected_league_id:
-        print(f"  ERROR: League ID mismatch - expected {expected_league_id}, got {actual_league_id}")
+        _log(f"  [{file_name}] ERROR: League ID mismatch - expected {expected_league_id}, got {actual_league_id}")
         return False
 
+    _log(f"  [{file_name}] OK: League isolation validated")
     return True
 
 
