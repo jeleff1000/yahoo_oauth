@@ -1088,18 +1088,42 @@ def perform_import_flow(league_info: dict):
             "token_time": datetime.now(timezone.utc).timestamp(),
         }
 
+        # Discover ALL years this league has existed
+        league_name = league_info.get("name", "Unknown League")
+        selected_season = league_info.get("season", 2024)
+        start_year = selected_season
+        end_year = selected_season
+
+        with st.spinner(f"Discovering all seasons for '{league_name}'..."):
+            try:
+                if "access_token" in st.session_state and "games_data" in st.session_state:
+                    all_games = extract_football_games(st.session_state.games_data)
+                    all_seasons = seasons_for_league_name(
+                        st.session_state.access_token,
+                        all_games,
+                        league_name
+                    )
+                    if all_seasons:
+                        start_year = int(min(all_seasons))
+                        end_year = int(max(all_seasons))
+                        st.success(f"Found {len(all_seasons)} seasons: {min(all_seasons)} - {max(all_seasons)}")
+                    else:
+                        st.warning(f"Could not discover seasons, importing only {selected_season}")
+            except Exception as e:
+                st.warning(f"Season discovery failed: {e}. Importing only {selected_season}")
+
         league_data = {
             "league_id": league_info.get("league_key") or league_info.get("league_id"),
-            "league_name": league_info.get("name", "Unknown League"),
-            "season": league_info.get("season", 2024),
-            "start_year": league_info.get("start_year", league_info.get("season", 2024)),
+            "league_name": league_name,
+            "season": end_year,  # Most recent year
+            "start_year": start_year,  # First year the league existed
             "oauth_token": oauth_token,
             "num_teams": league_info.get("num_teams", 10),
             "playoff_teams": 6,
             "regular_season_weeks": 14
         }
 
-        st.info("🚀 Starting import via GitHub Actions...")
+        st.info(f"🚀 Starting import via GitHub Actions for {start_year}-{end_year}...")
         st.caption("This runs in GitHub's cloud to avoid Streamlit timeouts. Takes 60-120 minutes.")
 
         # Import the trigger function
