@@ -196,9 +196,12 @@ def add_composite_keys(df: pd.DataFrame) -> pd.DataFrame:
             df['cumulative_week'].astype(str)
         )
 
-    # Optional deprecation alias for back-compat (remove once everything reads manager_week)
+    # Ensure BOTH manager_week and manager_year_week exist (bidirectional alias)
+    # This fixes cloud/local sync issues where one might exist without the other
     if 'manager_week' in df.columns and 'manager_year_week' not in df.columns:
         df['manager_year_week'] = df['manager_week']
+    elif 'manager_year_week' in df.columns and 'manager_week' not in df.columns:
+        df['manager_week'] = df['manager_year_week']
 
     return df
 

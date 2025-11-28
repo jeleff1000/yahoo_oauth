@@ -120,11 +120,21 @@ def aggregate_player_to_matchup(
     matchup = pd.read_parquet(matchup_path)
     print(f"  Loaded {len(matchup):,} matchup records")
 
-    # Validate required columns
+    # Validate required columns (handle manager_week / manager_year_week alias)
+    # Create manager_week from manager_year_week if needed (bidirectional alias)
     if "manager_week" not in player.columns:
-        raise KeyError("player.parquet missing required column: manager_week")
+        if "manager_year_week" in player.columns:
+            player["manager_week"] = player["manager_year_week"]
+            print("  Created manager_week from manager_year_week in player data")
+        else:
+            raise KeyError("player.parquet missing required column: manager_week (or manager_year_week)")
+
     if "manager_week" not in matchup.columns:
-        raise KeyError("matchup.parquet missing required column: manager_week")
+        if "manager_year_week" in matchup.columns:
+            matchup["manager_week"] = matchup["manager_year_week"]
+            print("  Created manager_week from manager_year_week in matchup data")
+        else:
+            raise KeyError("matchup.parquet missing required column: manager_week (or manager_year_week)")
 
     # Normalize join keys
     player["manager_week"] = to_str(player["manager_week"])
@@ -312,8 +322,12 @@ def aggregate_player_to_matchup(
     # Cleanup
     # =========================================================
 
-    # Drop temporary manager_week column (will be recreated by matchup transformation)
-    matchup.drop(columns=["manager_week"], errors="ignore", inplace=True)
+    # Keep manager_week column for downstream transformations
+    # Also ensure manager_year_week exists (bidirectional alias)
+    if "manager_week" in matchup.columns and "manager_year_week" not in matchup.columns:
+        matchup["manager_year_week"] = matchup["manager_week"]
+    elif "manager_year_week" in matchup.columns and "manager_week" not in matchup.columns:
+        matchup["manager_week"] = matchup["manager_year_week"]
 
     # Drop any duplicate or suffix columns
     cols_to_drop = []
