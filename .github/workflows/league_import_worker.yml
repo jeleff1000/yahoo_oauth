@@ -8,7 +8,11 @@ on:
     inputs:
       league_data_b64:
         description: 'Base64-encoded JSON with league configuration'
-        required: true
+        required: false
+        type: string
+      league_data:
+        description: 'DEPRECATED - raw JSON (for backward compat)'
+        required: false
         type: string
       user_id:
         description: 'Unique identifier for this user/import job'
@@ -46,7 +50,8 @@ jobs:
         env:
           YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
           YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
-          LEAGUE_DATA_B64: ${{ github.event.inputs.league_data_b64 || github.event.client_payload.league_data_b64 }}
+          LEAGUE_DATA_B64: ${{ github.event.inputs.league_data_b64 || github.event.client_payload.league_data_b64 || '' }}
+          LEAGUE_DATA_RAW: ${{ github.event.inputs.league_data || github.event.client_payload.league_data || '' }}
           USER_ID_INPUT: ${{ github.event.inputs.user_id || github.event.client_payload.user_id }}
         run: |
           python - <<'PYEOF'
@@ -56,30 +61,47 @@ jobs:
           import base64
 
           # Get input data from environment (avoids shell escaping issues)
-          league_data_b64 = os.environ.get('LEAGUE_DATA_B64', '')
+          league_data_b64 = os.environ.get('LEAGUE_DATA_B64', '').strip()
+          league_data_raw = os.environ.get('LEAGUE_DATA_RAW', '').strip()
           user_id = os.environ.get('USER_ID_INPUT', '')
 
-          if not league_data_b64:
-              print("ERROR: No league_data_b64 provided")
+          print(f"[DEBUG] Received league_data_b64 length: {len(league_data_b64)}")
+          print(f"[DEBUG] Received league_data_raw length: {len(league_data_raw)}")
+
+          league_data = None
+
+          # Try base64-encoded format first (new format)
+          if league_data_b64:
+              print("[DEBUG] Using base64-encoded format")
+              print(f"[DEBUG] First 50 chars of base64: {league_data_b64[:50]}...")
+              try:
+                  league_data_json = base64.b64decode(league_data_b64).decode('utf-8')
+                  league_data = json.loads(league_data_json)
+                  print(f"✅ Successfully decoded base64 league data")
+              except Exception as e:
+                  print(f"WARNING: Failed to decode base64: {e}")
+                  league_data = None
+
+          # Fallback to raw JSON format (old format - may be truncated!)
+          if league_data is None and league_data_raw:
+              print("[DEBUG] Falling back to raw JSON format (WARNING: may be truncated)")
+              print(f"[DEBUG] First 100 chars of raw: {league_data_raw[:100]}...")
+              try:
+                  league_data = json.loads(league_data_raw)
+                  print(f"✅ Successfully parsed raw JSON")
+              except Exception as e:
+                  print(f"ERROR: Failed to parse raw JSON: {e}")
+                  league_data = None
+
+          if league_data is None:
+              print("ERROR: No valid league data provided (neither base64 nor raw JSON)")
+              print("Make sure your Streamlit app is sending league_data_b64")
               sys.exit(1)
 
-          # Debug: show what we received
-          print(f"[DEBUG] Base64 length received: {len(league_data_b64)}")
-          print(f"[DEBUG] First 50 chars of base64: {league_data_b64[:50]}...")
-
-          try:
-              # Decode base64 to get JSON string
-              league_data_json = base64.b64decode(league_data_b64).decode('utf-8')
-              league_data = json.loads(league_data_json)
-              print(f"✅ Successfully decoded league data")
-              print(f"[DEBUG] Decoded league_id: {league_data.get('league_id')}")
-              print(f"[DEBUG] Decoded league_name: {league_data.get('league_name')}")
-              print(f"[DEBUG] Decoded season: {league_data.get('season')}")
-              print(f"[DEBUG] Decoded start_year: {league_data.get('start_year')}")
-          except Exception as e:
-              print(f"ERROR: Failed to decode/parse league data: {e}")
-              print(f"Raw base64 (first 100 chars): {league_data_b64[:100]}...")
-              sys.exit(1)
+          print(f"[DEBUG] Decoded league_id: {league_data.get('league_id')}")
+          print(f"[DEBUG] Decoded league_name: {league_data.get('league_name')}")
+          print(f"[DEBUG] Decoded season: {league_data.get('season')}")
+          print(f"[DEBUG] Decoded start_year: {league_data.get('start_year')}")
 
           # Extract league configuration
           league_id = league_data.get('league_id', '')

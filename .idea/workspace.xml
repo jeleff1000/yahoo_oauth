@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="commit" />
+    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Add debug logging to troubleshoot data truncation&#10;&#10;- Log what trigger sends (league_id, name, season, start_year)&#10;- Log what workflow receives and decodes&#10;- Will help identify where truncation occurs&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -59,14 +59,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1760740985328</updated>
-    </task>
-    <task id="LOCAL-00004" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760741645804</created>
-      <option name="number" value="00004" />
-      <option name="presentableId" value="LOCAL-00004" />
-      <option name="project" value="LOCAL" />
-      <updated>1760741645804</updated>
     </task>
     <task id="LOCAL-00005" summary="commit">
       <option name="closed" value="true" />
@@ -452,7 +444,15 @@
       <option name="project" value="LOCAL" />
       <updated>1764341013462</updated>
     </task>
-    <option name="localTasksCounter" value="53" />
+    <task id="LOCAL-00053" summary="Add debug logging to troubleshoot data truncation&#10;&#10;- Log what trigger sends (league_id, name, season, start_year)&#10;- Log what workflow receives and decodes&#10;- Will help identify where truncation occurs&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
+      <option name="closed" value="true" />
+      <created>1764342215916</created>
+      <option name="number" value="00053" />
+      <option name="presentableId" value="LOCAL-00053" />
+      <option name="project" value="LOCAL" />
+      <updated>1764342215916</updated>
+    </task>
+    <option name="localTasksCounter" value="54" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -470,7 +470,8 @@
     <MESSAGE value="Fix main.py to create LeagueContext for initial import&#10;&#10;- Import LeagueContext and create context file before running initial_import_v2.py&#10;- Discover all seasons for a league to import full history&#10;- Use league-specific data directories for isolation between leagues&#10;- Update collect_parquet_files to use league-specific directory&#10;- Read GITHUB_TOKEN from st.secrets&#10;- Remove secrets.toml from repo (keep in .gitignore)&#10;&#10; Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
     <MESSAGE value="Merge remote-tracking branch 'origin/main'&#10;&#10;# Conflicts:&#10;#&#9;.streamlit/secrets.toml" />
     <MESSAGE value="commit" />
-    <option name="LAST_COMMIT_MESSAGE" value="commit" />
+    <MESSAGE value="Add debug logging to troubleshoot data truncation&#10;&#10;- Log what trigger sends (league_id, name, season, start_year)&#10;- Log what workflow receives and decodes&#10;- Will help identify where truncation occurs&#10;&#10; Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add debug logging to troubleshoot data truncation&#10;&#10;- Log what trigger sends (league_id, name, season, start_year)&#10;- Log what workflow receives and decodes&#10;- Will help identify where truncation occurs&#10;&#10; Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
