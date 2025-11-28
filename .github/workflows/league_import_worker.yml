@@ -43,6 +43,9 @@ jobs:
 
       - name: Parse league data
         id: parse
+        env:
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
         run: |
           python - <<'PYEOF'
           import json
@@ -66,6 +69,18 @@ jobs:
           start_year = league_data.get('start_year', season)
           oauth_data = league_data.get('oauth_token', {})
 
+          # Add Yahoo app credentials from secrets (required for yahoo_oauth library)
+          consumer_key = os.environ.get('YAHOO_CLIENT_ID')
+          consumer_secret = os.environ.get('YAHOO_CLIENT_SECRET')
+
+          if consumer_key and consumer_secret:
+              oauth_data['consumer_key'] = consumer_key
+              oauth_data['consumer_secret'] = consumer_secret
+              print("✅ Added Yahoo app credentials to OAuth data")
+          else:
+              print("⚠️  WARNING: YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET not set")
+              print("   Import will likely fail - add these to GitHub secrets")
+
           # Create sanitized database name
           db_name = f"{league_name}_{season}".lower().replace(' ', '_').replace('-', '_')
           db_name = ''.join(c if c.isalnum() or c == '_' else '' for c in db_name)
@@ -79,7 +94,7 @@ jobs:
               f.write(f"start_year={start_year}\n")
               f.write(f"database_name={db_name}\n")
 
-          # Save OAuth token to file
+          # Save OAuth token to file (now includes consumer credentials)
           os.makedirs("oauth", exist_ok=True)
           with open("oauth/Oauth.json", 'w') as f:
               json.dump(oauth_data, f, indent=2)
