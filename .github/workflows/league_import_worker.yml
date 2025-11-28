@@ -301,6 +301,61 @@ jobs:
           echo "$PARQUET_FILES" > parquet_files.txt
           echo "file_count=${PARQUET_COUNT}" >> $GITHUB_OUTPUT
 
+      - name: Diagnose parquet files
+        if: steps.import.outputs.exit_code == '0'
+        run: |
+          echo "========================================"
+          echo "Diagnostic: Parquet file columns"
+          echo "========================================"
+          python - <<'PYEOF'
+          import pandas as pd
+          from pathlib import Path
+
+          data_dir = Path("fantasy_football_data")
+
+          # Check canonical files
+          canonical_files = ["player.parquet", "matchup.parquet", "draft.parquet", "transactions.parquet", "schedule.parquet"]
+
+          for fname in canonical_files:
+              fpath = data_dir / fname
+              print(f"\n{'='*60}")
+              print(f"File: {fname}")
+              print('='*60)
+              if fpath.exists():
+                  try:
+                      df = pd.read_parquet(fpath)
+                      print(f"  Rows: {len(df):,}")
+                      print(f"  Columns: {len(df.columns)}")
+
+                      # Check for critical columns
+                      critical = ["manager_week", "cumulative_week", "manager", "year", "week", "fantasy_points"]
+                      for col in critical:
+                          if col in df.columns:
+                              non_null = df[col].notna().sum()
+                              print(f"  ✓ {col}: {non_null:,} non-null values")
+                          else:
+                              print(f"  ✗ {col}: MISSING")
+
+                      # Show first few column names
+                      print(f"  Sample columns: {list(df.columns[:15])}...")
+                  except Exception as e:
+                      print(f"  ERROR reading file: {e}")
+              else:
+                  print(f"  FILE NOT FOUND")
+
+          # Check subdirectories for intermediate files
+          print(f"\n{'='*60}")
+          print("Subdirectory file counts:")
+          print('='*60)
+          for subdir in ["player_data", "matchup_data", "draft_data", "transaction_data", "schedule_data"]:
+              subpath = data_dir / subdir
+              if subpath.exists():
+                  files = list(subpath.glob("*.parquet"))
+                  print(f"  {subdir}/: {len(files)} parquet files")
+              else:
+                  print(f"  {subdir}/: DIRECTORY NOT FOUND")
+          PYEOF
+
       - name: Upload to MotherDuck
         if: steps.import.outputs.exit_code == '0'
         id: motherduck
