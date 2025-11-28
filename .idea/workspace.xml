@@ -60,30 +60,6 @@
       <option name="presentableId" value="Default" />
       <updated>1760740985328</updated>
     </task>
-    <task id="LOCAL-00001" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760741184363</created>
-      <option name="number" value="00001" />
-      <option name="presentableId" value="LOCAL-00001" />
-      <option name="project" value="LOCAL" />
-      <updated>1760741184363</updated>
-    </task>
-    <task id="LOCAL-00002" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760741261411</created>
-      <option name="number" value="00002" />
-      <option name="presentableId" value="LOCAL-00002" />
-      <option name="project" value="LOCAL" />
-      <updated>1760741261411</updated>
-    </task>
-    <task id="LOCAL-00003" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760741493252</created>
-      <option name="number" value="00003" />
-      <option name="presentableId" value="LOCAL-00003" />
-      <option name="project" value="LOCAL" />
-      <updated>1760741493252</updated>
-    </task>
     <task id="LOCAL-00004" summary="commit">
       <option name="closed" value="true" />
       <created>1760741645804</created>
@@ -452,7 +428,31 @@
       <option name="project" value="LOCAL" />
       <updated>1764340091297</updated>
     </task>
-    <option name="localTasksCounter" value="50" />
+    <task id="LOCAL-00050" summary="commit">
+      <option name="closed" value="true" />
+      <created>1764340729291</created>
+      <option name="number" value="00050" />
+      <option name="presentableId" value="LOCAL-00050" />
+      <option name="project" value="LOCAL" />
+      <updated>1764340729291</updated>
+    </task>
+    <task id="LOCAL-00051" summary="commit">
+      <option name="closed" value="true" />
+      <created>1764340763009</created>
+      <option name="number" value="00051" />
+      <option name="presentableId" value="LOCAL-00051" />
+      <option name="project" value="LOCAL" />
+      <updated>1764340763009</updated>
+    </task>
+    <task id="LOCAL-00052" summary="commit">
+      <option name="closed" value="true" />
+      <created>1764341013462</created>
+      <option name="number" value="00052" />
+      <option name="presentableId" value="LOCAL-00052" />
+      <option name="project" value="LOCAL" />
+      <updated>1764341013462</updated>
+    </task>
+    <option name="localTasksCounter" value="53" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -467,17 +467,17 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="commit" />
     <MESSAGE value="Fix main.py to create LeagueContext for initial import&#10;&#10;- Import LeagueContext and create context file before running initial_import_v2.py&#10;- Discover all seasons for a league to import full history&#10;- Use league-specific data directories for isolation between leagues&#10;- Update collect_parquet_files to use league-specific directory&#10;- Read GITHUB_TOKEN from st.secrets&#10;- Remove secrets.toml from repo (keep in .gitignore)&#10;&#10; Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
     <MESSAGE value="Merge remote-tracking branch 'origin/main'&#10;&#10;# Conflicts:&#10;#&#9;.streamlit/secrets.toml" />
-    <option name="LAST_COMMIT_MESSAGE" value="Merge remote-tracking branch 'origin/main'&#10;&#10;# Conflicts:&#10;#&#9;.streamlit/secrets.toml" />
+    <MESSAGE value="commit" />
+    <option name="LAST_COMMIT_MESSAGE" value="commit" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/main.py</url>
-          <line>1313</line>
+          <line>1220</line>
           <option name="timeStamp" value="1" />
         </line-breakpoint>
       </breakpoints>
