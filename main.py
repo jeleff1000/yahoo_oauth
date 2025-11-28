@@ -13,6 +13,12 @@ import subprocess
 import sys
 import re
 
+# Import LeagueContext for creating context files
+try:
+    from fantasy_football_data_scripts.multi_league.core.league_context import LeagueContext
+except ImportError:
+    LeagueContext = None
+
 try:
     import streamlit as st
 except ImportError as e:
@@ -455,29 +461,40 @@ INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import_v2.py"
 # =========================
 # Simplified File Collection
 # =========================
-def collect_parquet_files() -> list[Path]:
+def collect_parquet_files(base_dir: Optional[Path] = None) -> list[Path]:
     """
     Collect parquet files in priority order:
-    1. Canonical files at DATA_DIR root (schedule.parquet, matchup.parquet, etc.)
-    2. Any other parquet files in DATA_DIR subdirectories
+    1. Canonical files at base_dir root (schedule.parquet, matchup.parquet, etc.)
+    2. Any other parquet files in base_dir subdirectories
+
+    Args:
+        base_dir: Directory to collect from. If None, uses session state league_data_dir or DATA_DIR.
     """
+    # Determine which directory to use
+    if base_dir is None:
+        # Try league-specific directory from session state first
+        if "league_data_dir" in st.session_state and st.session_state.league_data_dir:
+            base_dir = Path(st.session_state.league_data_dir)
+        else:
+            base_dir = DATA_DIR
+
     files = []
     seen = set()
 
     # Priority 1: Canonical files at root
     canonical_names = ["schedule.parquet", "matchup.parquet", "transactions.parquet",
-                       "player.parquet", "players_by_year.parquet"]
+                       "player.parquet", "players_by_year.parquet", "draft.parquet"]
 
     for name in canonical_names:
-        p = DATA_DIR / name
+        p = base_dir / name
         if p.exists() and p.is_file():
             files.append(p)
             seen.add(p.resolve())
 
     # Priority 2: Subdirectories (schedule_data, matchup_data, etc.)
-    if DATA_DIR.exists():
-        for subdir in ["schedule_data", "matchup_data", "transaction_data", "player_data"]:
-            sub_path = DATA_DIR / subdir
+    if base_dir.exists():
+        for subdir in ["schedule_data", "matchup_data", "transaction_data", "player_data", "draft_data"]:
+            sub_path = base_dir / subdir
             if sub_path.exists() and sub_path.is_dir():
                 for p in sub_path.glob("*.parquet"):
                     resolved = p.resolve()
@@ -485,9 +502,9 @@ def collect_parquet_files() -> list[Path]:
                         files.append(p)
                         seen.add(resolved)
 
-    # Priority 3: Any other parquet files in DATA_DIR (non-recursive, to avoid noise)
-    if DATA_DIR.exists():
-        for p in DATA_DIR.glob("*.parquet"):
+    # Priority 3: Any other parquet files in base_dir (non-recursive, to avoid noise)
+    if base_dir.exists():
+        for p in base_dir.glob("*.parquet"):
             resolved = p.resolve()
             if resolved not in seen:
                 files.append(p)
@@ -642,6 +659,8 @@ def run_initial_import() -> bool:
             # status_placeholder may not be available in some failure branches; ignore
             pass
 
+        # Create league context file for the import script
+        context_file_path = None
         if "league_info" in st.session_state:
             league_info = st.session_state.league_info
             env["LEAGUE_NAME"] = league_info.get("name", "Unknown League")
@@ -649,7 +668,75 @@ def run_initial_import() -> bool:
             env["LEAGUE_SEASON"] = str(league_info.get("season", ""))
             env["LEAGUE_NUM_TEAMS"] = str(league_info.get("num_teams", ""))
 
-        cmd = [sys.executable, str(INITIAL_IMPORT_SCRIPT)]
+            # Create LeagueContext file for initial_import_v2.py
+            if LeagueContext is not None:
+                try:
+                    oauth_file = env.get("OAUTH_PATH", str(OAUTH_DIR / "Oauth.json"))
+                    league_key = league_info.get("league_key", "unknown")
+                    league_name = league_info.get("name", "Unknown League")
+                    season = league_info.get("season")
+                    num_teams = league_info.get("num_teams")
+
+                    # Discover all years this league has existed
+                    all_seasons = []
+                    if "access_token" in st.session_state and "games_data" in st.session_state:
+                        try:
+                            all_games = extract_football_games(st.session_state.games_data)
+                            all_seasons = seasons_for_league_name(
+                                st.session_state.access_token,
+                                all_games,
+                                league_name
+                            )
+                            if all_seasons:
+                                status_placeholder.info(f"Found {len(all_seasons)} seasons for '{league_name}': {', '.join(all_seasons)}")
+                        except Exception as e:
+                            status_placeholder.warning(f"Could not discover all seasons: {e}")
+
+                    # Determine year range - all years the league has existed
+                    if all_seasons:
+                        start_year = int(min(all_seasons))
+                        end_year = int(max(all_seasons))
+                    else:
+                        # Fallback to single season if discovery fails
+                        start_year = int(season) if season else 2014
+                        end_year = start_year
+
+                    # Create league-specific data directory for isolation
+                    # Sanitize league name for filesystem
+                    safe_league_name = re.sub(r"[^a-zA-Z0-9_-]", "_", league_name).strip("_")
+                    league_data_dir = DATA_DIR / safe_league_name
+
+                    # Create context with league-isolated data directory
+                    ctx = LeagueContext(
+                        league_id=league_key,
+                        league_name=league_name,
+                        oauth_file_path=oauth_file,
+                        start_year=start_year,
+                        end_year=end_year,  # Full history for this league
+                        num_teams=int(num_teams) if num_teams else None,
+                        data_directory=league_data_dir,
+                    )
+
+                    # Save context file in the league-specific directory
+                    context_file_path = league_data_dir / "league_context.json"
+                    ctx.save(context_file_path)
+                    status_placeholder.info(f"Created league context: {context_file_path}")
+                    status_placeholder.info(f"Importing years {start_year}-{end_year} for '{league_name}'")
+
+                    # Store league data directory in session for file collection later
+                    st.session_state.league_data_dir = league_data_dir
+
+                except Exception as e:
+                    st.warning(f"Could not create league context file: {e}")
+                    st.warning("The import may fail without a context file.")
+
+        # Build command - include --context if we have a context file
+        if context_file_path and context_file_path.exists():
+            cmd = [sys.executable, str(INITIAL_IMPORT_SCRIPT), "--context", str(context_file_path)]
+        else:
+            # Fallback - try without context (will likely fail)
+            cmd = [sys.executable, str(INITIAL_IMPORT_SCRIPT)]
+            st.warning("Running without context file - import may fail.")
 
         with st.spinner("Importing league data..."):
             process = subprocess.Popen(
