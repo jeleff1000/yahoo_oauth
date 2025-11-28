@@ -338,7 +338,15 @@ def _vectorized_regular_and_bracket(reg_to_date, future_canon, mu_hat, sigma_hat
     _bye_slots = bye_slots if bye_slots is not None else BYE_SLOTS
     _bracket_reseed = bracket_reseed if bracket_reseed is not None else BRACKET_RESEED
 
-    managers = sorted(set(reg_to_date["manager"].unique()) | set(reg_to_date["opponent"].unique()))
+    # Build manager list from BOTH reg_to_date AND future_canon to ensure all managers are indexed
+    # This prevents IndexError when future schedule contains managers not yet in reg_to_date
+    manager_set = set(reg_to_date["manager"].unique()) | set(reg_to_date["opponent"].unique())
+    if future_canon is not None and not future_canon.empty:
+        manager_set |= set(future_canon["manager"].dropna().unique())
+        manager_set |= set(future_canon["opponent"].dropna().unique())
+    # Remove any NaN values that may have slipped through
+    manager_set = {m for m in manager_set if pd.notna(m) and m != ''}
+    managers = sorted(manager_set)
     mgr2idx = {m: i for i, m in enumerate(managers)}
     idx2mgr = np.array(managers)
     n = len(managers)
@@ -358,28 +366,46 @@ def _vectorized_regular_and_bracket(reg_to_date, future_canon, mu_hat, sigma_hat
     else:
         A = future_canon["manager"].map(mgr2idx).to_numpy()
         B = future_canon["opponent"].map(mgr2idx).to_numpy()
+
+        # Safety check: Filter out any rows where manager or opponent couldn't be mapped
+        # This handles edge cases where schedule has managers not in the matchup data
+        valid_mask = ~(np.isnan(A.astype(float)) | np.isnan(B.astype(float)))
+        if not valid_mask.all():
+            unmapped_count = (~valid_mask).sum()
+            print(f"[WARNING] Filtering out {unmapped_count} future games with unmapped managers")
+            A = A[valid_mask].astype(int)
+            B = B[valid_mask].astype(int)
+        else:
+            A = A.astype(int)
+            B = B.astype(int)
+
         G = A.size
 
-        SA = rng.normal(mu_arr[A][None, :], sd_arr[A][None, :], size=(N_SIMS, G))
-        SB = rng.normal(mu_arr[B][None, :], sd_arr[B][None, :], size=(N_SIMS, G))
+        if G == 0:
+            # No valid future games - treat as if no future schedule
+            PF_all = np.tile(PFTD, (N_SIMS, 1))
+            W_all = np.tile(WTD, (N_SIMS, 1))
+        else:
+            SA = rng.normal(mu_arr[A][None, :], sd_arr[A][None, :], size=(N_SIMS, G))
+            SB = rng.normal(mu_arr[B][None, :], sd_arr[B][None, :], size=(N_SIMS, G))
 
-        PF_add = np.zeros((N_SIMS, n), dtype=float)
-        rows = np.arange(N_SIMS)[:, None]
-        np.add.at(PF_add, (rows, A[None, :]), SA)
-        np.add.at(PF_add, (rows, B[None, :]), SB)
-        PF_all = PF_add + PFTD
+            PF_add = np.zeros((N_SIMS, n), dtype=float)
+            rows = np.arange(N_SIMS)[:, None]
+            np.add.at(PF_add, (rows, A[None, :]), SA)
+            np.add.at(PF_add, (rows, B[None, :]), SB)
+            PF_all = PF_add + PFTD
 
-        a_wins = (SA > SB).astype(float)
-        ties = (SA == SB)
-        if ties.any():
-            coin = rng.integers(0, 2, size=ties.shape)
-            a_wins = np.where(ties, coin, a_wins)
-        b_wins = 1.0 - a_wins
+            a_wins = (SA > SB).astype(float)
+            ties = (SA == SB)
+            if ties.any():
+                coin = rng.integers(0, 2, size=ties.shape)
+                a_wins = np.where(ties, coin, a_wins)
+            b_wins = 1.0 - a_wins
 
-        W_add = np.zeros((N_SIMS, n), dtype=float)
-        np.add.at(W_add, (rows, A[None, :]), a_wins)
-        np.add.at(W_add, (rows, B[None, :]), b_wins)
-        W_all = W_add + WTD
+            W_add = np.zeros((N_SIMS, n), dtype=float)
+            np.add.at(W_add, (rows, A[None, :]), a_wins)
+            np.add.at(W_add, (rows, B[None, :]), b_wins)
+            W_all = W_add + WTD
 
     order_w = np.argsort(-W_all, axis=1, kind="stable")
     W_sorted = np.take_along_axis(W_all, order_w, axis=1)

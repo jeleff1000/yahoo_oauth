@@ -323,6 +323,20 @@ def main():
         successful_years = []
         failed_years = []
 
+        # Create a SHARED OAuth session BEFORE parallel fetching
+        # This avoids race conditions when multiple threads try to read/write the OAuth file
+        shared_oauth = None
+        try:
+            from yahoo_oauth import OAuth2
+            oauth_file = Path(ctx.oauth_file_path) if ctx.oauth_file_path else None
+            if oauth_file and oauth_file.exists():
+                log("[SETTINGS] Creating shared OAuth session for parallel fetch...")
+                shared_oauth = OAuth2(None, None, from_file=str(oauth_file))
+                log("[SETTINGS] Shared OAuth session created successfully")
+        except Exception as e:
+            log(f"[SETTINGS] Warning: Could not create shared OAuth session: {e}")
+            log("[SETTINGS] Falling back to per-thread OAuth (may have race conditions)")
+
         def fetch_year_settings(year):
             """Fetch settings for a single year (runs in parallel)"""
             try:
@@ -330,7 +344,8 @@ def main():
                     year=year,
                     league_key=None,  # Let auto-discovery find correct league key for each year
                     settings_dir=settings_dir,
-                    context=str(context_path)
+                    context=str(context_path),
+                    oauth=shared_oauth  # Pass shared OAuth to avoid race conditions
                 )
                 if settings:
                     return (year, True, settings)

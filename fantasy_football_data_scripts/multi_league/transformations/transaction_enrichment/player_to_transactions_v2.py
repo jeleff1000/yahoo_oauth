@@ -134,11 +134,21 @@ def get_player_performance_metrics(
     # ROS Managed: Only count weeks where player was on THIS MANAGER'S roster
     # This automatically stops at drops/trades where manager changes
     if manager and 'manager' in player_data.columns:
-        rest_of_season_managed = player_data[
-            (player_data['cumulative_week'] > trans_week) &
-            (player_data['manager'] == manager) &
-            (player_data['is_rostered'] == 1)  # Only rostered weeks
-        ]
+        # Check if is_rostered column exists; if not, derive it from manager column
+        if 'is_rostered' in player_data.columns:
+            rest_of_season_managed = player_data[
+                (player_data['cumulative_week'] > trans_week) &
+                (player_data['manager'] == manager) &
+                (player_data['is_rostered'] == 1)  # Only rostered weeks
+            ]
+        else:
+            # Fallback: assume rostered if manager matches (is_rostered column missing)
+            rest_of_season_managed = player_data[
+                (player_data['cumulative_week'] > trans_week) &
+                (player_data['manager'] == manager) &
+                (player_data['manager'].notna()) &
+                (player_data['manager'].astype(str).str.strip() != 'Unrostered')
+            ]
     else:
         # Fallback: if no manager specified, use all future weeks
         rest_of_season_managed = player_data[player_data['cumulative_week'] > trans_week]

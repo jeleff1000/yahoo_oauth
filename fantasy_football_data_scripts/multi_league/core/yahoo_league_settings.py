@@ -45,14 +45,17 @@ except ImportError:
     LEAGUE_CONTEXT_AVAILABLE = False
 
 try:
-    from imports_and_utils import OAuth2, yfa
+    import yahoo_fantasy_api as yfa
+except ImportError:
+    yfa = None
+
+try:
+    from imports_and_utils import OAuth2
 except ImportError:
     try:
         from oauth_utils import create_oauth2 as OAuth2
-        yfa = None
     except ImportError:
         OAuth2 = None
-        yfa = None
 
 
 def _fetch_url_xml(url: str, oauth: 'OAuth2', max_retries: int = 5, backoff: float = 0.5) -> ET.Element:
@@ -457,7 +460,8 @@ def fetch_league_settings(
     league_key: Optional[str] = None,
     oauth_file: Optional[Path] = None,
     settings_dir: Optional[Path] = None,
-    context: Optional[str] = None
+    context: Optional[str] = None,
+    oauth: Optional['OAuth2'] = None
 ) -> Optional[Dict[str, Any]]:
     """
     Fetch ALL league settings from Yahoo API in a single call.
@@ -475,6 +479,7 @@ def fetch_league_settings(
         oauth_file: Path to OAuth credentials file
         settings_dir: Directory to save settings JSON
         context: Path to league_context.json (alternative to individual params)
+        oauth: Pre-created OAuth2 session (avoids race conditions in parallel calls)
 
     Returns:
         Dictionary containing all league settings, or None if fetch fails
@@ -515,43 +520,44 @@ def fetch_league_settings(
         except Exception as e:
             print(f"[settings] Warning: Could not load context: {e}")
 
-    # Create OAuth session (from file or context)
-    oauth = None
-    try:
-        from yahoo_oauth import OAuth2
-    except ImportError:
-        print("[settings] Error: yahoo_oauth not installed. Install with: pip install yahoo_oauth")
-        return None
+    # Use provided OAuth session or create one (from file or context)
+    # IMPORTANT: When running in parallel, pass a shared oauth session to avoid race conditions
+    if oauth is None:
+        try:
+            from yahoo_oauth import OAuth2
+        except ImportError:
+            print("[settings] Error: yahoo_oauth not installed. Install with: pip install yahoo_oauth")
+            return None
 
-    if oauth_file and oauth_file.exists():
-        # Load from file
-        try:
-            oauth = OAuth2(None, None, from_file=str(oauth_file))
-        except Exception as e:
-            print(f"[settings] Error creating OAuth from file: {e}")
-    elif ctx and ctx.oauth_credentials:
-        # Create from context (inline credentials) - write to temp file
-        try:
-            import tempfile
-            import json
-            # Create temp JSON file with credentials
-            temp_fd, temp_path = tempfile.mkstemp(suffix='.json', text=True)
+        if oauth_file and oauth_file.exists():
+            # Load from file
             try:
-                with os.fdopen(temp_fd, 'w') as f:
-                    json.dump(ctx.oauth_credentials, f, indent=2)
-                oauth = OAuth2(None, None, from_file=temp_path)
-                # Clean up temp file after OAuth is initialized
-                Path(temp_path).unlink(missing_ok=True)
+                oauth = OAuth2(None, None, from_file=str(oauth_file))
             except Exception as e:
-                os.close(temp_fd)
-                Path(temp_path).unlink(missing_ok=True)
-                raise e
-        except Exception as e:
-            print(f"[settings] Error creating OAuth from context: {e}")
+                print(f"[settings] Error creating OAuth from file: {e}")
+        elif ctx and ctx.oauth_credentials:
+            # Create from context (inline credentials) - write to temp file
+            try:
+                import tempfile
+                import json
+                # Create temp JSON file with credentials
+                temp_fd, temp_path = tempfile.mkstemp(suffix='.json', text=True)
+                try:
+                    with os.fdopen(temp_fd, 'w') as f:
+                        json.dump(ctx.oauth_credentials, f, indent=2)
+                    oauth = OAuth2(None, None, from_file=temp_path)
+                    # Clean up temp file after OAuth is initialized
+                    Path(temp_path).unlink(missing_ok=True)
+                except Exception as e:
+                    os.close(temp_fd)
+                    Path(temp_path).unlink(missing_ok=True)
+                    raise e
+            except Exception as e:
+                print(f"[settings] Error creating OAuth from context: {e}")
 
-    if not oauth:
-        print("[settings] Error: Could not create OAuth session")
-        return None
+        if not oauth:
+            print("[settings] Error: Could not create OAuth session")
+            return None
 
     # Discover league key if not provided
     discovered_key = _discover_league_key(
