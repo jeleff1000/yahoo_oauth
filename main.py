@@ -1054,7 +1054,7 @@ def main():
 
         st.caption("🔒 Your data is secure. We only access league statistics, never personal information.")
 
-    # If the page was loaded with start_import query params, run the import flow
+    # If the page was loaded with start_import query params, trigger GitHub Actions workflow
     if "start_import" in qp and qp.get("start_import"):
         try:
             # Extract params (Streamlit returns lists for qp values)
@@ -1063,66 +1063,19 @@ def main():
             lseason = qp.get("league_season", [None])[0]
 
             if lkey and lname:
-                st.info(f"📥 Starting import for {lname} ({lseason})")
-                # Restore league info into session_state for downstream use
-                st.session_state.league_info = {"league_key": lkey, "name": lname, "season": lseason}
+                # Build league_info dict
+                league_info = {"league_key": lkey, "name": lname, "season": lseason}
+                st.session_state.league_info = league_info
 
-                # Save OAuth token locally (ensure oauth file exists for the import script)
-                if "token_data" in st.session_state:
-                    try:
-                        saved_path = save_oauth_token(st.session_state.token_data, st.session_state.league_info)
-                        st.info(f"Saved OAuth token to: {saved_path}")
-                    except Exception:
-                        st.warning(
-                            "Failed to write per-league OAuth file; import will fall back to global Oauth.json if present.")
-
-                # Run the import (calls the initial_import.py script)
-                ok = run_initial_import()
-
-                if ok:
-                    st.success("🎉 Import finished — collecting files and uploading (if configured)...")
-
-                    files = collect_parquet_files()
-                    if not files:
-                        st.warning("⚠️ No parquet files found after import. Check the import logs.")
-                    else:
-                        st.success(f"✅ Found {len(files)} parquet file(s)")
-                        # Upload to MotherDuck if token available
-                        if MOTHERDUCK_TOKEN:
-                            league_name = st.session_state.league_info.get("name", "league")
-                            all_games = extract_football_games(st.session_state.get("games_data", {}))
-                            season_list = seasons_for_league_name(st.session_state.access_token, all_games, league_name)
-                            selected_season = str(st.session_state.league_info.get("season", "")).strip()
-                            if selected_season and selected_season not in season_list:
-                                season_list.append(selected_season)
-
-                            dbs = [f"{league_name}_{season}" for season in sorted(set(s for s in season_list if s))]
-                            if not dbs:
-                                dbs = [league_name]
-
-                            overall_summary = []
-                            for db_name in dbs:
-                                st.write(f"**Database:** `{db_name}`")
-                                uploaded = upload_to_motherduck(files, db_name, MOTHERDUCK_TOKEN)
-                                if uploaded:
-                                    overall_summary.append((db_name, uploaded))
-
-                            if overall_summary:
-                                st.success("✅ Upload complete!")
-                                with st.expander("📊 Upload Summary"):
-                                    for db_name, items in overall_summary:
-                                        st.write(f"**{db_name}**")
-                                        for tbl, cnt in items:
-                                            st.write(f"- `public.{tbl}` → {cnt:,} rows")
-
-                # Clear the query params and rerun to reset UI state
+                # Clear query params first so we don't re-trigger on rerun
                 st.query_params.clear()
-                st.button("Continue")
-                st.rerun()
+
+                # Trigger GitHub Actions workflow
+                perform_import_flow(league_info)
+
         except Exception as e:
             st.error(f"Error starting import: {e}")
             st.query_params.clear()
-            st.rerun()
 
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -1141,12 +1094,8 @@ def perform_import_flow(league_info: dict):
         github_token = os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_WORKFLOW_TOKEN") or st.secrets.get("GITHUB_TOKEN")
 
         if not github_token:
-            st.error("⚠️ GitHub token not configured. The import cannot run on Streamlit Cloud due to timeout limits.")
-            st.info("**Option 1**: Add `GITHUB_TOKEN` to Streamlit secrets")
-            st.info("**Option 2**: Run the import locally using the button below (not recommended)")
-
-            if st.button("🏠 Run Import Locally (May Timeout)", type="secondary"):
-                run_local_import_fallback(league_info)
+            st.error("⚠️ GitHub token not configured. Please add `GITHUB_TOKEN` to your Streamlit secrets.")
+            st.info("Go to your Streamlit Cloud app settings and add `GITHUB_TOKEN` with a valid GitHub Personal Access Token.")
             return
 
         # Prepare league data for GitHub Actions
