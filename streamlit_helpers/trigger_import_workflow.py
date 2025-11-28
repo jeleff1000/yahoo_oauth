@@ -69,6 +69,13 @@ def trigger_import_workflow(
     league_data_json = json.dumps(league_data)
     league_data_b64 = base64.b64encode(league_data_json.encode()).decode()
 
+    # Debug: Log what we're sending (helps troubleshoot truncation issues)
+    print(f"[DEBUG] Sending league_id: {league_data.get('league_id')}")
+    print(f"[DEBUG] Sending league_name: {league_data.get('league_name')}")
+    print(f"[DEBUG] Sending season: {league_data.get('season')}")
+    print(f"[DEBUG] Sending start_year: {league_data.get('start_year')}")
+    print(f"[DEBUG] Base64 length: {len(league_data_b64)}")
+
     # Prepare workflow inputs
     workflow_inputs = {
         'league_data_b64': league_data_b64,

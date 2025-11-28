@@ -63,11 +63,19 @@ jobs:
               print("ERROR: No league_data_b64 provided")
               sys.exit(1)
 
+          # Debug: show what we received
+          print(f"[DEBUG] Base64 length received: {len(league_data_b64)}")
+          print(f"[DEBUG] First 50 chars of base64: {league_data_b64[:50]}...")
+
           try:
               # Decode base64 to get JSON string
               league_data_json = base64.b64decode(league_data_b64).decode('utf-8')
               league_data = json.loads(league_data_json)
               print(f"✅ Successfully decoded league data")
+              print(f"[DEBUG] Decoded league_id: {league_data.get('league_id')}")
+              print(f"[DEBUG] Decoded league_name: {league_data.get('league_name')}")
+              print(f"[DEBUG] Decoded season: {league_data.get('season')}")
+              print(f"[DEBUG] Decoded start_year: {league_data.get('start_year')}")
           except Exception as e:
               print(f"ERROR: Failed to decode/parse league data: {e}")
               print(f"Raw base64 (first 100 chars): {league_data_b64[:100]}...")
