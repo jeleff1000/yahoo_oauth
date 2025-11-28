@@ -1105,12 +1105,24 @@ def perform_import_flow(league_info: dict):
             return
 
         # Prepare league data for GitHub Actions
+        # Include token_time so the yahoo_oauth library knows when the token was obtained
+        raw_token = st.session_state.get("token_data", {})
+        oauth_token = {
+            "access_token": raw_token.get("access_token"),
+            "refresh_token": raw_token.get("refresh_token"),
+            "token_type": raw_token.get("token_type", "bearer"),
+            "expires_in": raw_token.get("expires_in", 3600),
+            "xoauth_yahoo_guid": raw_token.get("xoauth_yahoo_guid"),
+            # token_time is CRITICAL for yahoo_oauth library to check expiration
+            "token_time": datetime.now(timezone.utc).timestamp(),
+        }
+
         league_data = {
             "league_id": league_info.get("league_key") or league_info.get("league_id"),
             "league_name": league_info.get("name", "Unknown League"),
             "season": league_info.get("season", 2024),
             "start_year": league_info.get("start_year", league_info.get("season", 2024)),
-            "oauth_token": st.session_state.get("token_data", {}),
+            "oauth_token": oauth_token,
             "num_teams": league_info.get("num_teams", 10),
             "playoff_teams": 6,
             "regular_season_weeks": 14
