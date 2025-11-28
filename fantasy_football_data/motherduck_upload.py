@@ -25,7 +25,13 @@ def upload_parquets_to_motherduck(
     if token:
         os.environ["MOTHERDUCK_TOKEN"] = token
     db_slug = _slug(db_name, "l")
-    con = duckdb.connect(f"md:{db_slug}")
+
+    # Connect to MotherDuck first (without specific database)
+    con = duckdb.connect("md:")
+    # Create the database if it doesn't exist
+    con.execute(f"CREATE DATABASE IF NOT EXISTS {db_slug}")
+    # Switch to the database
+    con.execute(f"USE {db_slug}")
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
 
     results: list[tuple[str, int]] = []
