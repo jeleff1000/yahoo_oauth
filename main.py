@@ -1057,10 +1057,16 @@ def main():
     # If the page was loaded with start_import query params, trigger GitHub Actions workflow
     if "start_import" in qp and qp.get("start_import"):
         try:
-            # Extract params (Streamlit returns lists for qp values)
-            lkey = qp.get("league_key", [None])[0]
-            lname = qp.get("league_name", [None])[0]
-            lseason = qp.get("league_season", [None])[0]
+            # Extract params - st.query_params returns strings directly (not lists!)
+            lkey = qp.get("league_key", "")
+            lname = qp.get("league_name", "")
+            lseason = qp.get("league_season", "")
+
+            # Debug: log what we received
+            print(f"[DEBUG main.py] Received from query params:")
+            print(f"  league_key: {lkey}")
+            print(f"  league_name: {lname}")
+            print(f"  league_season: {lseason}")
 
             if lkey and lname:
                 # Build league_info dict
