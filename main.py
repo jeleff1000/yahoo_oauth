@@ -982,48 +982,6 @@ def main():
 
                             st.markdown(card_html, unsafe_allow_html=True)
 
-                            # Debug & server-start fallback: visible expander to diagnose why the card click may not trigger
-                            try:
-                                league_key_for_debug = selected_league.get("league_key") or "unknown"
-                                safe_key_dbg = re.sub(r"[^a-zA-Z0-9_-]", "_", str(league_key_for_debug))
-                            except Exception:
-                                safe_key_dbg = "unknown"
-
-                            with st.expander("Debug & Server Start", expanded=True):
-                                st.write("Session keys:", list(st.session_state.keys()))
-                                has_token = "token_data" in st.session_state
-                                st.write("Session has token_data:", has_token)
-                                if has_token:
-                                    at = st.session_state.token_data.get("access_token")
-                                    st.write("Access token present:", bool(at))
-
-                                # List oauth files present on disk
-                                try:
-                                    files = [p.name for p in OAUTH_DIR.glob("Oauth*.json")]
-                                except Exception:
-                                    files = []
-                                st.write("Oauth files:", files)
-
-                                st.write(
-                                    "If clicking the card does nothing, use the button below to start the import.")
-                                if st.button("🚀 Start Import (GitHub Actions - 60-120 min)", key=f"start_import_btn_{safe_key_dbg}",
-                                             use_container_width=True, type="primary"):
-                                    perform_import_flow(selected_league)
-
-                            # Explicit Start Import button: fallback to ensure import can be triggered reliably
-                            if st.button("☁️ Start Import via GitHub Actions", use_container_width=True, type="primary"):
-                                perform_import_flow(selected_league)
-
-                            # Note: the card above is a clickable div that starts the import via query params.
-                            # Secondary details moved into an expander (non-primary action)
-                            with st.expander("Details & Stats", expanded=False):
-                                st.markdown(f"**Season:** {selected_league['season']}  \
-                                **Teams:** {selected_league['num_teams']}")
-                                st.markdown("\n")
-                                st.markdown("### More options")
-                                st.markdown(
-                                    "You can review league metadata, download tokens, or run the import immediately.")
-
                     except Exception as e:
                         st.error(f"Error: {e}")
 

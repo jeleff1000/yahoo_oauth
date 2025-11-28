@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="commit">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-    </list>
+    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="commit" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -447,12 +444,33 @@
       <option name="project" value="LOCAL" />
       <updated>1764338484249</updated>
     </task>
-    <option name="localTasksCounter" value="49" />
+    <task id="LOCAL-00049" summary="Merge remote-tracking branch 'origin/main'&#10;&#10;# Conflicts:&#10;#&#9;.streamlit/secrets.toml">
+      <option name="closed" value="true" />
+      <created>1764340091297</created>
+      <option name="number" value="00049" />
+      <option name="presentableId" value="LOCAL-00049" />
+      <option name="project" value="LOCAL" />
+      <updated>1764340091297</updated>
+    </task>
+    <option name="localTasksCounter" value="50" />
     <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="commit" />
-    <option name="LAST_COMMIT_MESSAGE" value="commit" />
+    <MESSAGE value="Fix main.py to create LeagueContext for initial import&#10;&#10;- Import LeagueContext and create context file before running initial_import_v2.py&#10;- Discover all seasons for a league to import full history&#10;- Use league-specific data directories for isolation between leagues&#10;- Update collect_parquet_files to use league-specific directory&#10;- Read GITHUB_TOKEN from st.secrets&#10;- Remove secrets.toml from repo (keep in .gitignore)&#10;&#10; Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
+    <MESSAGE value="Merge remote-tracking branch 'origin/main'&#10;&#10;# Conflicts:&#10;#&#9;.streamlit/secrets.toml" />
+    <option name="LAST_COMMIT_MESSAGE" value="Merge remote-tracking branch 'origin/main'&#10;&#10;# Conflicts:&#10;#&#9;.streamlit/secrets.toml" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
