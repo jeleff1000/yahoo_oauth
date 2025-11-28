@@ -957,30 +957,27 @@ def main():
                             selected_name = st.radio("", league_names, label_visibility="collapsed")
                             selected_league = league_list[league_names.index(selected_name)]
 
-                            # Prominent CTA card: the import button is the main focus; other details are secondary
-                            # We'll make the whole card clickable by wrapping it in a link that sets query params.
-                            # Clicking the card will reload the app with the parameters and the import will run server-side.
-                            link_params = {
-                                "start_import": "1",
-                                "league_key": selected_league.get("league_key", ""),
-                                "league_name": selected_league.get("name", ""),
-                                "league_season": str(selected_league.get("season", "")),
-                            }
-                            link_url = "?" + urllib.parse.urlencode(link_params)
+                            # Store selected league in session for import
+                            st.session_state.selected_league = selected_league
 
-                            # Use an anchor link to reliably set query params in Streamlit Cloud
-                            safe_link = link_url.replace('"', '%22')
-                            card_html = f'''
-                            <a href="{safe_link}" style="text-decoration:none; display:block;">
-                                <div class="cta-card" style="background: linear-gradient(135deg,#667eea,#7f5af0); padding:1.5rem; border-radius:0.75rem; color:white; text-align:center; cursor:pointer;">
-                                    <h2 style="margin:0;">🚀 Start Import for {selected_league['name']}</h2>
-                                    <p style="margin:0.25rem 0 0.75rem; opacity:0.95;">Season {selected_league['season']} — {selected_league['num_teams']} teams</p>
-                                    <p style="margin:0.2rem 0 0; font-size:0.9rem; opacity:0.95;">Click anywhere on this card to start the import.</p>
-                                </div>
-                            </a>
-                            '''
+                            # Use a proper Streamlit button to preserve session state
+                            # Anchor links lose session state on Streamlit Cloud!
+                            st.markdown(f"""
+                            <div style="background: linear-gradient(135deg,#667eea,#7f5af0); padding:1.5rem; border-radius:0.75rem; color:white; text-align:center; margin-bottom:1rem;">
+                                <h2 style="margin:0;">🚀 Import {selected_league['name']}</h2>
+                                <p style="margin:0.25rem 0 0.75rem; opacity:0.95;">Season {selected_league['season']} — {selected_league['num_teams']} teams</p>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                            st.markdown(card_html, unsafe_allow_html=True)
+                            if st.button("Start Import", key="start_import_btn", type="primary", use_container_width=True):
+                                # Trigger import directly - session state is preserved!
+                                league_info = {
+                                    "league_key": selected_league.get("league_key"),
+                                    "name": selected_league.get("name"),
+                                    "season": selected_league.get("season"),
+                                    "num_teams": selected_league.get("num_teams"),
+                                }
+                                perform_import_flow(league_info)
 
                     except Exception as e:
                         st.error(f"Error: {e}")
@@ -1054,34 +1051,8 @@ def main():
 
         st.caption("🔒 Your data is secure. We only access league statistics, never personal information.")
 
-    # If the page was loaded with start_import query params, trigger GitHub Actions workflow
-    if "start_import" in qp and qp.get("start_import"):
-        try:
-            # Extract params - st.query_params returns strings directly (not lists!)
-            lkey = qp.get("league_key", "")
-            lname = qp.get("league_name", "")
-            lseason = qp.get("league_season", "")
-
-            # Debug: log what we received
-            print(f"[DEBUG main.py] Received from query params:")
-            print(f"  league_key: {lkey}")
-            print(f"  league_name: {lname}")
-            print(f"  league_season: {lseason}")
-
-            if lkey and lname:
-                # Build league_info dict
-                league_info = {"league_key": lkey, "name": lname, "season": lseason}
-                st.session_state.league_info = league_info
-
-                # Clear query params first so we don't re-trigger on rerun
-                st.query_params.clear()
-
-                # Trigger GitHub Actions workflow
-                perform_import_flow(league_info)
-
-        except Exception as e:
-            st.error(f"Error starting import: {e}")
-            st.query_params.clear()
+    # Note: Import is now triggered via st.button() in the league selection UI
+    # This preserves session state (including OAuth tokens) which anchor links did not
 
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
