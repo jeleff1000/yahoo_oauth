@@ -51,6 +51,7 @@ def trigger_import_workflow(
             - workflow_run_url: URL to track the workflow
             - message: Status message
     """
+    import base64
 
     # Validate required fields
     required_fields = ['league_id', 'league_name', 'season', 'oauth_token']
@@ -64,9 +65,13 @@ def trigger_import_workflow(
     # Generate unique user ID
     user_id = generate_user_id(league_data['league_id'], league_data['season'])
 
+    # Base64 encode the JSON to avoid shell escaping issues in GitHub Actions
+    league_data_json = json.dumps(league_data)
+    league_data_b64 = base64.b64encode(league_data_json.encode()).decode()
+
     # Prepare workflow inputs
     workflow_inputs = {
-        'league_data': json.dumps(league_data),
+        'league_data_b64': league_data_b64,
         'user_id': user_id
     }
 

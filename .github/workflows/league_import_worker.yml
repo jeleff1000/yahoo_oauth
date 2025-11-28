@@ -6,8 +6,8 @@ name: League Import Worker
 on:
   workflow_dispatch:
     inputs:
-      league_data:
-        description: 'JSON with league configuration (league_id, name, oauth, season, etc.)'
+      league_data_b64:
+        description: 'Base64-encoded JSON with league configuration'
         required: true
         type: string
       user_id:
@@ -46,20 +46,31 @@ jobs:
         env:
           YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
           YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
+          LEAGUE_DATA_B64: ${{ github.event.inputs.league_data_b64 || github.event.client_payload.league_data_b64 }}
+          USER_ID_INPUT: ${{ github.event.inputs.user_id || github.event.client_payload.user_id }}
         run: |
           python - <<'PYEOF'
           import json
           import os
           import sys
+          import base64
 
-          # Get input data
-          league_data_str = '''${{ github.event.inputs.league_data || github.event.client_payload.league_data }}'''
-          user_id = '''${{ github.event.inputs.user_id || github.event.client_payload.user_id }}'''
+          # Get input data from environment (avoids shell escaping issues)
+          league_data_b64 = os.environ.get('LEAGUE_DATA_B64', '')
+          user_id = os.environ.get('USER_ID_INPUT', '')
+
+          if not league_data_b64:
+              print("ERROR: No league_data_b64 provided")
+              sys.exit(1)
 
           try:
-              league_data = json.loads(league_data_str)
+              # Decode base64 to get JSON string
+              league_data_json = base64.b64decode(league_data_b64).decode('utf-8')
+              league_data = json.loads(league_data_json)
+              print(f"✅ Successfully decoded league data")
           except Exception as e:
-              print(f"ERROR: Failed to parse league data: {e}")
+              print(f"ERROR: Failed to decode/parse league data: {e}")
+              print(f"Raw base64 (first 100 chars): {league_data_b64[:100]}...")
               sys.exit(1)
 
           # Extract league configuration
