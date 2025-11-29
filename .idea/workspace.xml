@@ -5,9 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/initial_import_v2.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/initial_import_v2.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/core/data_normalization.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/core/data_normalization.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/core/yahoo_league_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/core/yahoo_league_settings.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -63,14 +61,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1760740985328</updated>
-    </task>
-    <task id="LOCAL-00012" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760753527384</created>
-      <option name="number" value="00012" />
-      <option name="presentableId" value="LOCAL-00012" />
-      <option name="project" value="LOCAL" />
-      <updated>1760753527384</updated>
     </task>
     <task id="LOCAL-00013" summary="commit">
       <option name="closed" value="true" />
@@ -456,7 +446,15 @@
       <option name="project" value="LOCAL" />
       <updated>1764368606500</updated>
     </task>
-    <option name="localTasksCounter" value="61" />
+    <task id="LOCAL-00061" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
+      <option name="closed" value="true" />
+      <created>1764372972025</created>
+      <option name="number" value="00061" />
+      <option name="presentableId" value="LOCAL-00061" />
+      <option name="project" value="LOCAL" />
+      <updated>1764372972025</updated>
+    </task>
+    <option name="localTasksCounter" value="62" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
