@@ -31,6 +31,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import pandas as pd
 import duckdb  # <-- needed by verify_unified_outputs()
+import polars as pl  # <-- needed by calculate_fantasy_points()
 
 # Import new modular utilities
 from multi_league.core.data_normalization import (
@@ -122,7 +123,7 @@ TRANSFORMATIONS_PASS_3 = [
     ("multi_league/transformations/player_enrichment/transactions_to_player_v2.py", "Transactions -> Player", 600),  # Add FAAB data TO player (preserves draft columns added above)
     ("multi_league/transformations/draft_enrichment/keeper_economics_v2.py", "Keeper Economics", 600),  # Calculate keeper_price for next year planning (needs draft cost + FAAB from transactions)
     ("multi_league/transformations/matchup_enrichment/expected_record_v2.py", "Expected Record (V2)", 900),  # Needs wins_to_date and playoff_seed_to_date from cumulative_stats
-    ("multi_league/transformations/matchup_enrichment/playoff_odds_import.py", "Playoff Odds", None),  # No timeout - Monte Carlo simulations can take a while
+    ("multi_league/transformations/matchup_enrichment/playoff_odds_import.py", "Playoff Odds", 1800),  # 30 min timeout - Monte Carlo sims are slow but shouldn't take 2+ hours
     ("multi_league/transformations/aggregation/aggregate_player_season_v2.py", "Aggregate Player Season", 600),  # Create players_by_year
     ("multi_league/transformations/finalize/normalize_canonical_types.py", "Normalize Join Key Types", 120),  # MUST BE LAST - ensures all join keys have consistent Int64 types for cross-table joins
     # ("multi_league/transformations/validation/validate_outputs.py", "Validate Outputs", 600),  # TODO: Create this script

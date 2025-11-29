@@ -57,7 +57,7 @@ DEFAULT_BYE_SLOTS = 2
 HALF_LIFE_WEEKS = 10
 SHRINK_K = 3.0  # Reduced from 6.0 - less aggressive shrinkage toward league average
 SIGMA_FLOOR_MIN = 18  # Increased from 10 - but will be overridden by league_sd * 0.75
-N_SIMS = 10000
+N_SIMS = 1000  # Reduced from 10000 for faster initial import (can be increased via --n-sims)
 RNG_SEED = 42
 DEFAULT_BRACKET_RESEED = False
 
@@ -1616,8 +1616,20 @@ Note:
         required=True,
         help="Path to league_context.json (required)"
     )
+    parser.add_argument(
+        "--n-sims",
+        type=int,
+        default=None,
+        help=f"Number of Monte Carlo simulations (default: {N_SIMS})"
+    )
 
     args = parser.parse_args()
+
+    # Override N_SIMS if provided
+    global N_SIMS
+    if args.n_sims is not None:
+        N_SIMS = args.n_sims
+        print(f"Using {N_SIMS} simulations (from --n-sims argument)")
 
     print("=" * 70)
     print("Fantasy Football Playoff Odds Calculator")
