@@ -713,6 +713,10 @@ def weekly_matchup_data(
         # Priority: 1) ctx.get_league_id_for_year(), 2) league_key param, 3) league_ids[-1] (warn)
         yearid = None
 
+        # Debug: Show what league_ids are available
+        if ctx and hasattr(ctx, 'league_ids'):
+            print(f"[league] Context has {len(ctx.league_ids)} league_ids: {list(ctx.league_ids.keys())}")
+
         # Try context first (safest - ensures league isolation)
         if ctx and hasattr(ctx, 'get_league_id_for_year'):
             yearid = ctx.get_league_id_for_year(year)

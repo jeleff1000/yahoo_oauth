@@ -268,7 +268,7 @@ def main():
             )
             if league_ids:
                 ctx.league_ids = league_ids
-                ctx.save()  # Save back to league_context.json
+                ctx.save(context_path)  # Save back to ORIGINAL context file (not data_directory)
                 log(f"[LEAGUE HISTORY] Discovered {len(league_ids)} league IDs and saved to context")
             else:
                 log("[LEAGUE HISTORY] WARNING: Could not discover league history. Data may be mixed if user is in multiple leagues.")

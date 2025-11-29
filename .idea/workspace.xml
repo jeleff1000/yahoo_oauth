@@ -6,15 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
       <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/initial_import_v2.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/initial_import_v2.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/core/league_context.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/core/league_context.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/core/yahoo_league_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/core/yahoo_league_settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/data_fetchers/draft_data_v2.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/data_fetchers/draft_data_v2.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/data_fetchers/season_schedules.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/data_fetchers/season_schedules.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/data_fetchers/transactions_v2.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/data_fetchers/transactions_v2.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/data_fetchers/weekly_matchup_data_v2.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/data_fetchers/weekly_matchup_data_v2.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/transformations/base/cumulative_stats_v2.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/transformations/base/cumulative_stats_v2.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/transformations/matchup_enrichment/modules/bye_week_filler.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/transformations/matchup_enrichment/modules/bye_week_filler.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/transformations/matchup_enrichment/playoff_odds_import.py" beforeDir="false" afterPath="$PROJECT_DIR$/fantasy_football_data_scripts/multi_league/transformations/matchup_enrichment/playoff_odds_import.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -70,22 +62,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1760740985328</updated>
-    </task>
-    <task id="LOCAL-00015" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760754568814</created>
-      <option name="number" value="00015" />
-      <option name="presentableId" value="LOCAL-00015" />
-      <option name="project" value="LOCAL" />
-      <updated>1760754568814</updated>
-    </task>
-    <task id="LOCAL-00016" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760754662885</created>
-      <option name="number" value="00016" />
-      <option name="presentableId" value="LOCAL-00016" />
-      <option name="project" value="LOCAL" />
-      <updated>1760754662885</updated>
     </task>
     <task id="LOCAL-00017" summary="commit">
       <option name="closed" value="true" />
@@ -463,7 +439,23 @@
       <option name="project" value="LOCAL" />
       <updated>1764376484265</updated>
     </task>
-    <option name="localTasksCounter" value="64" />
+    <task id="LOCAL-00064" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
+      <option name="closed" value="true" />
+      <created>1764428298381</created>
+      <option name="number" value="00064" />
+      <option name="presentableId" value="LOCAL-00064" />
+      <option name="project" value="LOCAL" />
+      <updated>1764428298381</updated>
+    </task>
+    <task id="LOCAL-00065" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
+      <option name="closed" value="true" />
+      <created>1764451911451</created>
+      <option name="number" value="00065" />
+      <option name="presentableId" value="LOCAL-00065" />
+      <option name="project" value="LOCAL" />
+      <updated>1764451911451</updated>
+    </task>
+    <option name="localTasksCounter" value="66" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
