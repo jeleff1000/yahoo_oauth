@@ -539,7 +539,8 @@ def fetch_league_settings(
             # Create from context (inline credentials) - write to temp file
             try:
                 import tempfile
-                import json
+                # Note: json is already imported at module level - do NOT re-import here
+                # as it creates a scoping bug where json.dumps() fails later
                 # Create temp JSON file with credentials
                 temp_fd, temp_path = tempfile.mkstemp(suffix='.json', text=True)
                 try:
