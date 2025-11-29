@@ -583,13 +583,75 @@ def transform_cumulative_stats(
                 except UnicodeEncodeError:
                     print(f"[ERROR] Fallback also failed: {str(fallback_error).encode('ascii', errors='replace').decode('ascii')}. Skipping playoff normalization.")
 
+    # Step 3a: DEFENSIVE - Ensure all_time columns are calculated
+    # This runs regardless of whether apply_cumulative_fixes succeeded or failed
+    # Checks if columns exist and have valid (non-zero) data; recalculates if missing/invalid
+    _safe_print("[3a/11] Ensuring manager all-time stats are calculated...")
+    try:
+        # Check if all_time columns need to be calculated
+        all_time_cols_needed = ['manager_all_time_gp', 'manager_all_time_wins',
+                                'manager_all_time_losses', 'manager_all_time_ties', 'manager_all_time_win_pct']
+        needs_calculation = (
+            any(col not in df.columns for col in all_time_cols_needed) or
+            (df.get('manager_all_time_gp', pd.Series([0])).fillna(0).sum() == 0)
+        )
+
+        if needs_calculation and 'manager' in df.columns and 'win' in df.columns:
+            _safe_print("  [INFO] Calculating manager all-time stats...")
+
+            # Ensure win/loss/tie are numeric
+            for c in ['win', 'loss', 'tie']:
+                if c in df.columns:
+                    df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(int)
+                else:
+                    df[c] = 0
+
+            # Aggregate historical totals per manager
+            all_time = (
+                df.groupby('manager', dropna=False)
+                  .agg(
+                      manager_all_time_gp=('win', 'size'),
+                      manager_all_time_wins=('win', 'sum'),
+                      manager_all_time_losses=('loss', 'sum'),
+                      manager_all_time_ties=('tie', 'sum')
+                  )
+                  .reset_index()
+            )
+
+            # Compute win percentage
+            denom = (all_time['manager_all_time_wins'] + all_time['manager_all_time_losses']).replace(0, pd.NA)
+            all_time['manager_all_time_win_pct'] = (all_time['manager_all_time_wins'] / denom).fillna(0.0)
+
+            # Drop old columns if they exist
+            df = df.drop(columns=[c for c in all_time_cols_needed if c in df.columns], errors='ignore')
+
+            # Merge aggregates back onto main df
+            df = df.merge(all_time, on='manager', how='left')
+
+            _safe_print(f"  [OK] Calculated all-time stats for {len(all_time)} managers")
+        else:
+            _safe_print("  [OK] All-time stats already present and valid")
+    except Exception as e:
+        _safe_print(f"  [WARN] Failed to calculate all-time stats: {e}")
+
     # Step 3b: Add season_result column (AFTER playoff bracket simulation)
     _safe_print("[3b/11] Adding season_result column...")
     try:
         if playoff_flags_module:
             df = playoff_flags_module.add_season_result(df)
+        else:
+            _safe_print("  [WARN] playoff_flags module not loaded, initializing season_result to empty")
+            if 'season_result' not in df.columns:
+                df['season_result'] = ""
     except Exception as e:
         _safe_print(f"[WARN] Failed to add season_result: {e}. Skipping this step.")
+
+    # DEFENSIVE: Ensure season_result column exists and has no NaN values
+    if 'season_result' not in df.columns:
+        df['season_result'] = ""
+    else:
+        # Replace NaN with empty string for consistency
+        df['season_result'] = df['season_result'].fillna("")
 
     # Create aliases for streak columns (backwards compatibility)
     if 'win_streak' in df.columns:
@@ -708,6 +770,13 @@ def transform_cumulative_stats(
     else:
         df["inflation_rate"] = 1.0
         _safe_print("[inflation] Missing required columns, defaulting inflation_rate to 1.0")
+
+    # FINAL DEFENSIVE: Ensure string columns are never null (use empty string instead)
+    # This prevents downstream issues with merges and comparisons
+    string_cols_to_clean = ['playoff_round', 'consolation_round', 'season_result']
+    for col in string_cols_to_clean:
+        if col in df.columns:
+            df[col] = df[col].fillna("").astype(str)
 
     _safe_print("\n" + "="*80)
     _safe_print(f"[OK] Transformation complete: {len(df)} rows, {len(df.columns)} columns")

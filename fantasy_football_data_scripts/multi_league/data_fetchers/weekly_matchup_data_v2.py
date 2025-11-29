@@ -109,22 +109,28 @@ def norm_manager(nickname: str, overrides: Dict[str, str] = None) -> str:
         overrides: Dictionary mapping old names to new names
 
     Returns:
-        Normalized manager name
+        Normalized manager name (title case for consistency)
     """
     if not nickname:
         return "N/A"
 
     s = str(nickname).strip()
 
-    # Apply overrides if provided
-    if overrides and s in overrides:
-        return overrides[s]
+    # Apply overrides if provided (check both original case and title case)
+    if overrides:
+        if s in overrides:
+            return overrides[s]
+        if s.title() in overrides:
+            return overrides[s.title()]
+        if s.lower() in overrides:
+            return overrides[s.lower()]
 
     # Default fallback for --hidden--
     if s == "--hidden--":
         return "Unknown"
 
-    return s
+    # Normalize to title case for consistency (e.g., "ezra" -> "Ezra")
+    return s.title()
 
 
 def safe_float(text, default=np.nan):
@@ -402,6 +408,7 @@ def parse_matchups_for_week(
         close_margin = int(abs(margin) <= 10.0)
         win = 1 if a_points > b_points else 0
         loss = 1 if a_points < b_points else 0
+        tie = 1 if a_points == b_points else 0
 
         # Projection-based metrics
         a_proj = safe_float(a['team_projected_points'], np.nan)
@@ -441,6 +448,7 @@ def parse_matchups_for_week(
             'close_margin': close_margin,
             'win': win,
             'loss': loss,
+            'tie': tie,
             'proj_wins': proj_wins,
             'proj_losses': proj_losses,
             'proj_score_error': proj_score_error,
@@ -701,7 +709,29 @@ def weekly_matchup_data(
         if not league_ids:
             raise RuntimeError(f"No leagues found for {year}")
 
-        yearid = league_key if league_key else league_ids[-1]
+        # CRITICAL: Use specific league_id from context to avoid data mixing
+        # Priority: 1) ctx.get_league_id_for_year(), 2) league_key param, 3) league_ids[-1] (warn)
+        yearid = None
+
+        # Try context first (safest - ensures league isolation)
+        if ctx and hasattr(ctx, 'get_league_id_for_year'):
+            yearid = ctx.get_league_id_for_year(year)
+            if yearid:
+                print(f"[league] Using league_id from context for {year}: {yearid}")
+
+        # Fallback to explicit league_key parameter
+        if not yearid and league_key:
+            yearid = league_key
+            print(f"[league] Using explicit league_key parameter: {yearid}")
+
+        # Last resort: use API discovery (may mix leagues if user is in multiple!)
+        if not yearid:
+            if len(league_ids) > 1:
+                print(f"[league] WARNING: Multiple leagues found for {year}: {league_ids}")
+                print(f"[league] WARNING: Using last one ({league_ids[-1]}) - this may cause data mixing!")
+                print(f"[league] TIP: Populate ctx.league_ids to ensure correct league isolation")
+            yearid = league_ids[-1]
+
         league = gm.to_league(yearid)
 
         print(f"[league] Using league: {yearid}")
@@ -740,6 +770,16 @@ def weekly_matchup_data(
         df = pd.DataFrame(all_rows)
         print(f"[matchups] Fetched {len(df)} matchup rows")
 
+        # VALIDATION: Ensure all league_ids in fetched data match expected league
+        if 'league_id' in df.columns and ctx:
+            unique_league_ids = df['league_id'].unique()
+            expected_league_id = yearid
+            if len(unique_league_ids) > 1:
+                print(f"[matchups] WARNING: Multiple league_ids found in data: {unique_league_ids}")
+                print(f"[matchups] WARNING: Expected only: {expected_league_id}")
+            elif len(unique_league_ids) == 1 and unique_league_ids[0] != expected_league_id:
+                print(f"[matchups] WARNING: League ID mismatch - expected {expected_league_id}, got {unique_league_ids[0]}")
+
         if logger:
             logger.complete_step(rows_read=len(df))
 
@@ -772,7 +812,7 @@ def weekly_matchup_data(
             'opponent_projected_points', 'margin', 'total_matchup_score', 'close_margin',
             'weekly_mean', 'weekly_median',
             'league_weekly_mean', 'league_weekly_median', 'above_league_median', 'below_league_median',
-            'win', 'loss',
+            'win', 'loss', 'tie',
             'proj_wins', 'proj_losses',
             'teams_beat_this_week', 'opponent_teams_beat_this_week',
             'proj_score_error', 'abs_proj_score_error', 'above_proj_score', 'below_proj_score',

@@ -151,6 +151,11 @@ def fill_bye_weeks(df: pd.DataFrame) -> pd.DataFrame:
                 # Set flags
                 bye_row['is_bye_week'] = 1
 
+                # Ensure string columns that should be empty for bye weeks
+                for str_col in ['season_result', 'playoff_round', 'consolation_round']:
+                    if str_col in bye_row:
+                        bye_row[str_col] = ""
+
                 # Preserve team identifiers and playoff flags
                 # (already copied from ref_row)
 

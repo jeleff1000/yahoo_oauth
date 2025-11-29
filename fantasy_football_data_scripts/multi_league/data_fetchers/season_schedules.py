@@ -112,12 +112,30 @@ def safe_float(x, default=np.nan):
     except Exception:
         return default
 
-def get_league_for_year(y: int):
-    """Return (league_key, league_obj) for a given year (choose last if multiple)."""
-    league_ids = gm.league_ids(year=y)
-    if not league_ids:
-        raise RuntimeError(f"No Yahoo leagues found for {y}")
-    league_key = league_ids[-1]  # if multiple, pick the last
+def get_league_for_year(y: int, ctx=None):
+    """Return (league_key, league_obj) for a given year.
+
+    CRITICAL: Uses context.league_ids if available to avoid data mixing
+    when user is in multiple leagues.
+    """
+    league_key = None
+
+    # Try context first (safest - ensures league isolation)
+    if ctx and hasattr(ctx, 'get_league_id_for_year'):
+        league_key = ctx.get_league_id_for_year(y)
+        if league_key:
+            print(f"[schedule] Using league_id from context for {y}: {league_key}")
+
+    # Fallback to API discovery (may mix leagues!)
+    if not league_key:
+        league_ids = gm.league_ids(year=y)
+        if not league_ids:
+            raise RuntimeError(f"No Yahoo leagues found for {y}")
+        if len(league_ids) > 1:
+            print(f"[schedule] WARNING: Multiple leagues found for {y}: {league_ids}")
+            print(f"[schedule] WARNING: Using last one - this may cause data mixing!")
+        league_key = league_ids[-1]
+
     league = gm.to_league(league_key)
     return league_key, league
 
@@ -284,9 +302,9 @@ def discover_all_years(min_year: int = 2008, max_year: int | None = None) -> lis
             pass
     return years
 
-def build_and_save_for_year(year_val: int, manager_overrides: dict = None) -> tuple[str, str, int]:
+def build_and_save_for_year(year_val: int, manager_overrides: dict = None, ctx=None) -> tuple[str, str, int]:
     """Fetch full schedule for a year, write CSV/Parquet, return (csv_path, parquet_path, nrows)."""
-    league_key, league = get_league_for_year(year_val)
+    league_key, league = get_league_for_year(year_val, ctx=ctx)
     all_rows: list[dict] = []
     for w in league_weeks(league):
         try:
@@ -339,6 +357,7 @@ Examples:
 
     # Multi-league mode (preferred)
     manager_overrides = {}  # Will be set from context if available
+    ctx = None  # Will be set from context if available
 
     if args.context:
         if not MULTI_LEAGUE_AVAILABLE:
@@ -411,7 +430,7 @@ Examples:
 
     for y in years:
         try:
-            _, parquet_path, n = build_and_save_for_year(y, manager_overrides)
+            _, parquet_path, n = build_and_save_for_year(y, manager_overrides, ctx=ctx)
             total_rows += n
         except Exception as e:
             print(f"[ERROR] Failed to process year {y}: {e}", file=sys.stderr)

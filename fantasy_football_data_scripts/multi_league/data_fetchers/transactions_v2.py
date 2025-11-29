@@ -162,11 +162,23 @@ def build_week_windows_from_yahoo(ctx, year: int) -> pd.DataFrame:
     oauth = ctx.get_oauth_session()
     gm = yfa.Game(oauth, ctx.game_code)
 
-    # Resolve the league_key for this year
-    league_ids = gm.league_ids(year=year)
-    if not league_ids:
-        return pd.DataFrame(columns=["year","week","week_start","week_end","cumulative_week"])
-    league_key = league_ids[-1]
+    # CRITICAL: Use specific league_id from context to avoid data mixing
+    league_key = None
+    if hasattr(ctx, 'get_league_id_for_year'):
+        league_key = ctx.get_league_id_for_year(year)
+        if league_key:
+            print(f"[transactions] Using league_id from context for {year}: {league_key}")
+
+    # Fallback to API discovery (may mix leagues!)
+    if not league_key:
+        league_ids = gm.league_ids(year=year)
+        if not league_ids:
+            return pd.DataFrame(columns=["year","week","week_start","week_end","cumulative_week"])
+        if len(league_ids) > 1:
+            print(f"[transactions] WARNING: Multiple leagues found for {year}: {league_ids}")
+            print(f"[transactions] WARNING: Using last one - this may cause data mixing!")
+        league_key = league_ids[-1]
+
     league = gm.to_league(league_key)
 
     # Figure out min/max weeks from settings; fall back to 1..17
@@ -866,16 +878,27 @@ def fetch_transactions(
     oauth = ctx.get_oauth_session()
     gm = yfa.Game(oauth, ctx.game_code)
 
-    # Get league key for this year
-    try:
-        league_ids = gm.league_ids(year=year)
-        if not league_ids:
-            print(f"  No league IDs found for year {year}")
+    # CRITICAL: Use specific league_id from context to avoid data mixing
+    league_key = None
+    if hasattr(ctx, 'get_league_id_for_year'):
+        league_key = ctx.get_league_id_for_year(year)
+        if league_key:
+            print(f"[transactions] Using league_id from context for {year}: {league_key}")
+
+    # Fallback to API discovery (may mix leagues!)
+    if not league_key:
+        try:
+            league_ids = gm.league_ids(year=year)
+            if not league_ids:
+                print(f"  No league IDs found for year {year}")
+                return pd.DataFrame()
+            if len(league_ids) > 1:
+                print(f"[transactions] WARNING: Multiple leagues found for {year}: {league_ids}")
+                print(f"[transactions] WARNING: Using last one - this may cause data mixing!")
+            league_key = league_ids[-1]
+        except Exception as e:
+            print(f"  ERROR: Failed to get league key for {year}: {e}")
             return pd.DataFrame()
-        league_key = league_ids[-1]
-    except Exception as e:
-        print(f"  ERROR: Failed to get league key for {year}: {e}")
-        return pd.DataFrame()
 
     # Load matchup windows exactly like the matchup job (and build if missing)
     if matchup_windows is None:

@@ -722,15 +722,160 @@ def fetch_yahoo_dst_scoring(
 ) -> Optional[Dict[str, float]]:
     """
     DEPRECATED: Use fetch_league_settings() instead.
-    
+
     Fetch only DST scoring (old API for backwards compatibility).
     """
     print("[settings] WARNING: fetch_yahoo_dst_scoring() is deprecated. Use fetch_league_settings() instead.")
-    
+
     full_settings = fetch_league_settings(year, league_key_arg, oauth_file, settings_dir)
     if full_settings:
         return full_settings.get("dst_scoring")
     return None
+
+
+def discover_league_history(
+    league_key: str,
+    oauth_file: Optional[Path] = None,
+    oauth: Optional['OAuth2'] = None,
+    start_year: Optional[int] = None,
+    end_year: Optional[int] = None
+) -> Dict[str, str]:
+    """
+    Discover all league IDs for a league by following the renew/renewed chain.
+
+    Yahoo creates a new league_key each season. The settings contain:
+    - 'renew': points to previous season's league (e.g., "449_198278")
+    - 'renewed': points to next season's league
+
+    This function follows these links to build a complete year -> league_id mapping,
+    ensuring we always fetch from the correct league for each year.
+
+    Args:
+        league_key: Current (or any) Yahoo league_key (e.g., "449.l.198278")
+        oauth_file: Path to OAuth JSON file
+        oauth: Pre-existing OAuth2 session (alternative to oauth_file)
+        start_year: Earliest year to include (optional, will go back as far as possible)
+        end_year: Latest year to include (optional, defaults to current year)
+
+    Returns:
+        Dictionary mapping year (as string) to league_key
+        e.g., {"2015": "359.l.123456", "2016": "380.l.234567", ...}
+
+    Example:
+        # Discover all KMFFL league IDs
+        league_ids = discover_league_history("449.l.198278", oauth_file=Path("oauth.json"))
+        # Returns: {"2015": "359.l.12345", "2016": "380.l.23456", "2017": "390.l.34567", ...}
+    """
+    print(f"[settings] Discovering league history starting from {league_key}...")
+
+    # Get OAuth session
+    if oauth is None:
+        if oauth_file is None:
+            print("[settings] Error: OAuth file or session required")
+            return {}
+        try:
+            from yahoo_oauth import OAuth2 as YahooOAuth2
+            oauth = YahooOAuth2(None, None, from_file=str(oauth_file))
+            if not oauth.token_is_valid():
+                oauth.refresh_access_token()
+        except Exception as e:
+            print(f"[settings] Error creating OAuth session: {e}")
+            return {}
+
+    if yfa is None:
+        print("[settings] Error: yahoo_fantasy_api not available")
+        return {}
+
+    current_year = datetime.now().year
+    if end_year is None:
+        end_year = current_year
+
+    league_ids: Dict[str, str] = {}
+    visited: set = set()
+
+    def _parse_renew_key(renew_str: str) -> Optional[str]:
+        """Convert renew format (e.g., '449_198278') to league_key ('449.l.198278')."""
+        if not renew_str:
+            return None
+        # Format: "game_id_league_num" -> "game_id.l.league_num"
+        parts = renew_str.split("_")
+        if len(parts) >= 2:
+            game_id = parts[0]
+            league_num = "_".join(parts[1:])  # Handle edge case of underscores in league_num
+            return f"{game_id}.l.{league_num}"
+        return None
+
+    def _fetch_league_settings_minimal(lkey: str) -> Optional[Dict[str, Any]]:
+        """Fetch just metadata (season, renew, renewed) for a league key."""
+        try:
+            url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{lkey}/settings"
+            root = _fetch_url_xml(url, oauth)
+            metadata = _parse_league_metadata(root)
+            return metadata
+        except Exception as e:
+            print(f"[settings]   Warning: Could not fetch {lkey}: {e}")
+            return None
+
+    # Start with the provided league key
+    keys_to_process = [league_key]
+
+    while keys_to_process:
+        current_key = keys_to_process.pop(0)
+
+        if current_key in visited:
+            continue
+        visited.add(current_key)
+
+        print(f"[settings]   Checking {current_key}...")
+        metadata = _fetch_league_settings_minimal(current_key)
+
+        if not metadata:
+            continue
+
+        # Get the season year
+        season_str = metadata.get("season", "")
+        if not season_str:
+            continue
+
+        try:
+            season_year = int(season_str)
+        except ValueError:
+            continue
+
+        # Check if this year is within our range
+        if start_year and season_year < start_year:
+            # Don't record, but still follow 'renewed' to find future years
+            pass
+        elif season_year > end_year:
+            # Don't record, but still follow 'renew' to find past years
+            pass
+        else:
+            # Record this mapping
+            league_ids[str(season_year)] = current_key
+            print(f"[settings]   -> {season_year}: {current_key} ({metadata.get('name', 'Unknown')})")
+
+        # Follow the 'renew' link to previous season
+        renew_raw = metadata.get("renew", "")
+        if renew_raw:
+            prev_key = _parse_renew_key(renew_raw)
+            if prev_key and prev_key not in visited:
+                keys_to_process.append(prev_key)
+
+        # Follow the 'renewed' link to next season
+        renewed_raw = metadata.get("renewed", "")
+        if renewed_raw:
+            next_key = _parse_renew_key(renewed_raw)
+            if next_key and next_key not in visited:
+                keys_to_process.append(next_key)
+
+    # Sort by year for nice output
+    league_ids = dict(sorted(league_ids.items(), key=lambda x: int(x[0])))
+
+    print(f"[settings] Discovered {len(league_ids)} league IDs:")
+    for yr, lid in league_ids.items():
+        print(f"[settings]   {yr}: {lid}")
+
+    return league_ids
 
 
 if __name__ == "__main__":

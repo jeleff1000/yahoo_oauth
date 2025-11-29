@@ -1558,6 +1558,22 @@ def process_parquet_files(ctx: LeagueContext):
                         if k in seed_df.columns:
                             set_val(f"x{k}_seed", seed_df.loc[m, k])
 
+    # Add playoff scenario columns (p_playoffs_change, p_champ_change, is_critical_matchup, etc.)
+    # These require p_playoffs column to exist, which was just calculated above
+    print("\nAdding playoff scenario columns (changes, critical matchups)...")
+    try:
+        from transformations.base.modules.playoff_scenarios import add_playoff_scenario_columns
+        df_all = add_playoff_scenario_columns(df_all, data_directory=str(ctx.data_directory))
+        print("  [OK] Playoff scenario columns added")
+    except Exception as e:
+        print(f"  [WARN] Could not add playoff scenario columns: {e}")
+
+    # DEFENSIVE: Ensure string columns are never null (use empty string instead)
+    string_cols_to_clean = ['playoff_round', 'consolation_round', 'season_result']
+    for col in string_cols_to_clean:
+        if col in df_all.columns:
+            df_all[col] = df_all[col].fillna("").astype(str)
+
     # Save outputs using context paths
     output_matchup_parquet = ctx.canonical_matchup_file
     output_matchup_csv = output_matchup_parquet.with_suffix('.csv')

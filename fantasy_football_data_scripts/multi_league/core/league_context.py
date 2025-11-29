@@ -81,6 +81,13 @@ class LeagueContext:
     manager_name_overrides: Dict[str, str] = field(default_factory=dict)
     # Maps old manager names to new names (e.g., {"--hidden--": "Ilan"})
 
+    # === League History (year -> league_id mapping) ===
+    league_ids: Dict[str, str] = field(default_factory=dict)
+    # Maps year (as string) to Yahoo league_key for that season
+    # e.g., {"2016": "449.l.198278", "2017": "380.l.123456", ...}
+    # This ensures we always fetch from the correct league for each year
+    # Built by following the renew/renewed chain from Yahoo API
+
     # === Keeper Rules ===
     keeper_rules: Optional[Dict[str, Any]] = None
     # Keeper price calculation rules - see schema:
@@ -390,6 +397,46 @@ class LeagueContext:
                     pass
 
         raise ValueError("Either oauth_file_path or oauth_credentials is required")
+
+    # === League ID Helpers ===
+
+    def get_league_id_for_year(self, year: int) -> Optional[str]:
+        """
+        Get the specific league_id for a given year.
+
+        This ensures we always fetch from the correct league for each season,
+        avoiding data mixing when a user is in multiple leagues.
+
+        Args:
+            year: The season year (e.g., 2016)
+
+        Returns:
+            The Yahoo league_key for that year, or None if not found
+
+        Example:
+            league_key = ctx.get_league_id_for_year(2016)
+            # Returns "449.l.198278" for KMFFL 2016
+        """
+        year_str = str(year)
+        if year_str in self.league_ids:
+            return self.league_ids[year_str]
+
+        # Fallback to current league_id only if year matches end_year or current year
+        current_year = datetime.now().year
+        end = self.end_year if self.end_year else current_year
+        if year == end:
+            return self.league_id
+
+        return None
+
+    def has_league_ids_mapping(self) -> bool:
+        """
+        Check if league_ids mapping is populated.
+
+        Returns:
+            True if league_ids dict has entries, False otherwise
+        """
+        return bool(self.league_ids)
 
     # === Serialization ===
 

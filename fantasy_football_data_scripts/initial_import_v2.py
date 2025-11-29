@@ -253,6 +253,30 @@ def main():
 
     ctx = _load_ctx(str(context_path))
 
+    # CRITICAL: Discover league history to ensure correct league_id for each year
+    # This prevents data mixing when user is in multiple leagues
+    if not ctx.has_league_ids_mapping():
+        log("[LEAGUE HISTORY] No league_ids mapping found - discovering league history...")
+        try:
+            from multi_league.core.yahoo_league_settings import discover_league_history
+            league_ids = discover_league_history(
+                league_key=ctx.league_id,
+                oauth_file=Path(ctx.oauth_file_path) if ctx.oauth_file_path else None,
+                start_year=ctx.start_year,
+                end_year=ctx.end_year
+            )
+            if league_ids:
+                ctx.league_ids = league_ids
+                ctx.save()  # Save back to league_context.json
+                log(f"[LEAGUE HISTORY] Discovered {len(league_ids)} league IDs and saved to context")
+            else:
+                log("[LEAGUE HISTORY] WARNING: Could not discover league history. Data may be mixed if user is in multiple leagues.")
+        except Exception as e:
+            log(f"[LEAGUE HISTORY] WARNING: Failed to discover league history: {e}")
+            log("[LEAGUE HISTORY] WARNING: Data may be mixed if user is in multiple leagues.")
+    else:
+        log(f"[LEAGUE HISTORY] Using {len(ctx.league_ids)} pre-configured league IDs from context")
+
     # If utilities requested, run them and exit
     if args.utility:
         action = args.util_action or "all"
@@ -340,9 +364,14 @@ def main():
         def fetch_year_settings(year):
             """Fetch settings for a single year (runs in parallel)"""
             try:
+                # CRITICAL: Use specific league_key from context to avoid data mixing
+                year_league_key = ctx.get_league_id_for_year(year) if hasattr(ctx, 'get_league_id_for_year') else None
+                if year_league_key:
+                    log(f"[SETTINGS] Using league_key from context for {year}: {year_league_key}")
+
                 settings = fetch_league_settings(
                     year=year,
-                    league_key=None,  # Let auto-discovery find correct league key for each year
+                    league_key=year_league_key,  # Use specific key from context (None falls back to auto-discovery)
                     settings_dir=settings_dir,
                     context=str(context_path),
                     oauth=shared_oauth  # Pass shared OAuth to avoid race conditions
@@ -1068,7 +1097,7 @@ def main():
                 # =========================================
                 log("\n[POINTS] Calculating fantasy points for ALL players (including unrostered and pre-league)...")
                 try:
-                    from multi_league.transformations.modules.scoring_calculator import (
+                    from multi_league.transformations.player_enrichment.modules.scoring_calculator import (
                         load_scoring_rules,
                         calculate_fantasy_points
                     )
@@ -1169,20 +1198,29 @@ def main():
                         if filled_count > 0:
                             log(f"[headshot_url] Backfilled {filled_count:,} missing headshot URLs based on yahoo_player_id")
 
-                # 9) Calculate fantasy points from league settings
-                log("[POINTS] Calculating fantasy points from league settings...")
+                # 9) Create calculated_points and yahoo_points columns for comparison
+                log("[POINTS] Creating calculated_points and yahoo_points columns...")
                 try:
-                    from calculate_fantasy_points import calculate_points_for_dataframe
-                    settings_dir = Path(ctx.data_directory) / "league_settings"
-                    if settings_dir.exists():
-                        player_df = calculate_points_for_dataframe(player_df, settings_dir)
-                        has_yahoo = player_df["yahoo_points"].notna().sum() if "yahoo_points" in player_df.columns else 0
-                        has_calc = player_df["calculated_points"].notna().sum()
-                        log(f"[POINTS] Yahoo points: {has_yahoo:,} rows, Calculated: {has_calc:,} rows")
-                    else:
-                        log(f"[POINTS] Settings directory not found: {settings_dir}, skipping calculation")
+                    # Copy fantasy_points to calculated_points (for comparison with Yahoo-reported points)
+                    if "fantasy_points" in player_df.columns:
+                        player_df["calculated_points"] = player_df["fantasy_points"].copy()
+
+                    # yahoo_points comes from the Yahoo API (points column from roster data)
+                    # If not present, try to use points_original or leave as NaN
+                    if "yahoo_points" not in player_df.columns:
+                        if "points_original" in player_df.columns:
+                            player_df["yahoo_points"] = player_df["points_original"].copy()
+                        elif "points" in player_df.columns and "fantasy_points" in player_df.columns:
+                            # points column might be Yahoo's original, use it only for rostered players
+                            player_df["yahoo_points"] = player_df["points"].where(
+                                player_df["manager"].notna() & (player_df["manager"] != "")
+                            )
+
+                    has_yahoo = player_df["yahoo_points"].notna().sum() if "yahoo_points" in player_df.columns else 0
+                    has_calc = player_df["calculated_points"].notna().sum() if "calculated_points" in player_df.columns else 0
+                    log(f"[POINTS] Yahoo points: {has_yahoo:,} rows, Calculated: {has_calc:,} rows")
                 except Exception as e:
-                    log(f"[WARN] Points calculation failed: {e}")
+                    log(f"[WARN] Points column creation failed: {e}")
 
                 # 9.5) Cleanup: Drop any duplicate "_right" columns from joins
                 right_cols = [c for c in player_df.columns if c.endswith('_right')]

@@ -546,14 +546,28 @@ def fetch_draft_data(
         if logger:
             logger.start_step("get_league_id")
 
-        league_ids = gm.league_ids(year=year)
-        if not league_ids:
-            raise ValueError(f"No league found for year {year}")
+        # CRITICAL: Use specific league_id from context to avoid data mixing
+        year_league_id = None
 
-        # Use specific league_key if provided, otherwise use last league
-        if league_key and league_key in league_ids:
+        # Try context first (safest - ensures league isolation)
+        if ctx and hasattr(ctx, 'get_league_id_for_year'):
+            year_league_id = ctx.get_league_id_for_year(year)
+            if year_league_id:
+                print(f"[draft] Using league_id from context for {year}: {year_league_id}")
+
+        # Fallback to explicit league_key parameter
+        if not year_league_id and league_key:
             year_league_id = league_key
-        else:
+            print(f"[draft] Using explicit league_key parameter: {year_league_id}")
+
+        # Last resort: use API discovery (may mix leagues!)
+        if not year_league_id:
+            league_ids = gm.league_ids(year=year)
+            if not league_ids:
+                raise ValueError(f"No league found for year {year}")
+            if len(league_ids) > 1:
+                print(f"[draft] WARNING: Multiple leagues found for {year}: {league_ids}")
+                print(f"[draft] WARNING: Using last one - this may cause data mixing!")
             year_league_id = league_ids[-1]
 
         print(f"[draft] Using league ID: {year_league_id}")
