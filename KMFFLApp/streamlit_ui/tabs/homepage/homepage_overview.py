@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """
-KMFFL Homepage Overview - Revamped Landing Page
+KMFFL Homepage Overview - Clean Landing Page
 
-A visually engaging landing page that:
+A clean, decluttered landing page that:
 - Shows dynamic current season info
 - Provides quick navigation to key sections
+- Uses the unified theme system
 - Works well in dark mode and mobile
-- Minimizes text, maximizes visual engagement
 """
 from __future__ import annotations
 from typing import Any, Dict, Optional
 import pandas as pd
 import streamlit as st
+
+# Theme and styles
+from streamlit_ui.shared.themes import inject_theme_css
 from ..shared.modern_styles import apply_modern_styles
 
 # Data helpers
@@ -35,141 +38,114 @@ except Exception as hof_import_error:
 
 
 def _apply_homepage_styles():
-    """Apply homepage-specific styles optimized for dark mode and mobile."""
+    """Apply minimal homepage-specific styles."""
     st.markdown("""
     <style>
     /* ========================================
-       HOMEPAGE HERO - Dark Mode Optimized
+       HOMEPAGE HERO - Subtle gradient
        ======================================== */
     .homepage-hero {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-        padding: 2.5rem 2rem;
-        border-radius: 16px;
-        margin-bottom: 2rem;
-        position: relative;
-        overflow: hidden;
-        border: 1px solid rgba(255,255,255,0.1);
-    }
-    .homepage-hero::before {
-        content: '';
-        position: absolute;
-        top: -50%;
-        right: -50%;
-        width: 100%;
-        height: 100%;
-        background: radial-gradient(circle, rgba(102,126,234,0.15) 0%, transparent 70%);
-        pointer-events: none;
+        background: linear-gradient(135deg,
+            var(--gradient-start, rgba(102, 126, 234, 0.1)) 0%,
+            var(--gradient-end, rgba(118, 75, 162, 0.06)) 100%);
+        padding: var(--space-xl, 2rem);
+        border-radius: var(--radius-lg, 12px);
+        margin-bottom: var(--space-lg, 1.5rem);
+        border: 1px solid var(--border, #E5E7EB);
     }
     .homepage-hero h1 {
-        color: #ffffff !important;
-        font-size: 2.5rem;
+        color: var(--text-primary, #1F2937) !important;
+        font-size: 2rem;
         font-weight: 700;
         margin: 0 0 0.5rem 0;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
     .homepage-hero .subtitle {
-        color: rgba(255,255,255,0.85);
-        font-size: 1.1rem;
+        color: var(--text-secondary, #6B7280);
+        font-size: 1rem;
         margin: 0;
     }
     .homepage-hero .season-badge {
         display: inline-block;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--accent, #667eea);
         color: white;
         padding: 0.4rem 1rem;
-        border-radius: 20px;
-        font-size: 0.9rem;
+        border-radius: var(--radius-full, 20px);
+        font-size: 0.875rem;
         font-weight: 600;
-        margin-top: 1rem;
+        margin-top: var(--space-md, 1rem);
     }
 
     /* ========================================
-       QUICK STATS ROW (Static info cards)
+       QUICK STATS ROW - Static, no hover
        ======================================== */
     .stats-row {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 1rem;
-        margin-bottom: 2rem;
+        gap: var(--space-md, 1rem);
+        margin-bottom: var(--space-lg, 1.5rem);
     }
     .stat-card {
-        background: linear-gradient(145deg, #1e1e2f 0%, #252538 100%);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 12px;
-        padding: 1.25rem;
+        background: var(--bg-secondary, #F8F9FA);
+        border: 1px solid var(--border, #E5E7EB);
+        border-radius: var(--radius-md, 8px);
+        padding: var(--space-md, 1rem);
         text-align: center;
+        /* NO shadow, NO hover - static display */
     }
-    .stat-value {
-        font-size: 2rem;
+    .stat-card .stat-value {
+        font-size: 1.75rem;
         font-weight: 700;
-        color: #667eea;
+        color: var(--accent, #667eea);
         margin-bottom: 0.25rem;
     }
-    .stat-label {
-        font-size: 0.85rem;
-        color: rgba(255,255,255,0.6);
+    .stat-card .stat-label {
+        font-size: 0.8rem;
+        color: var(--text-muted, #9CA3AF);
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
 
     /* ========================================
-       NAVIGATION TILES (Non-clickable info cards)
+       NAVIGATION TILES - Static info cards
        ======================================== */
     .nav-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 1.25rem;
-        margin-bottom: 2rem;
+        gap: var(--space-md, 1rem);
+        margin-bottom: var(--space-lg, 1.5rem);
     }
     .nav-tile {
-        background: linear-gradient(145deg, #1e1e2f 0%, #252538 100%);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 12px;
-        padding: 1.5rem;
-        cursor: default;
-        text-decoration: none;
-        display: block;
+        background: var(--bg-secondary, #F8F9FA);
+        border: 1px solid var(--border, #E5E7EB);
+        border-radius: var(--radius-md, 8px);
+        padding: var(--space-md, 1rem);
+        /* Static - no shadow, no hover */
     }
     .nav-tile-icon {
-        font-size: 2.5rem;
-        margin-bottom: 0.75rem;
+        font-size: 2rem;
+        margin-bottom: var(--space-sm, 0.5rem);
         display: block;
     }
     .nav-tile-title {
-        font-size: 1.25rem;
+        font-size: 1.1rem;
         font-weight: 600;
-        color: #ffffff;
-        margin-bottom: 0.5rem;
+        color: var(--text-primary, #1F2937);
+        margin-bottom: var(--space-xs, 0.25rem);
     }
     .nav-tile-desc {
-        font-size: 0.9rem;
-        color: rgba(255,255,255,0.6);
+        font-size: 0.875rem;
+        color: var(--text-secondary, #6B7280);
         line-height: 1.5;
     }
     .nav-tile-tag {
         display: inline-block;
-        background: rgba(102,126,234,0.2);
-        color: #667eea;
+        background: var(--accent-subtle, rgba(102, 126, 234, 0.1));
+        color: var(--accent, #667eea);
         padding: 0.2rem 0.6rem;
-        border-radius: 4px;
+        border-radius: var(--radius-sm, 4px);
         font-size: 0.75rem;
         font-weight: 600;
-        margin-top: 0.75rem;
-    }
-
-    /* ========================================
-       HAMBURGER MENU DROPDOWN STYLES
-       ======================================== */
-    .section-dropdown {
-        margin-bottom: 1.5rem;
-    }
-    .section-dropdown .stSelectbox > div > div {
-        background: linear-gradient(145deg, #1e1e2f 0%, #252538 100%);
-        border: 2px solid rgba(102,126,234,0.4);
-        border-radius: 8px;
-    }
-    .section-dropdown .stSelectbox > div > div:hover {
-        border-color: rgba(102,126,234,0.6);
+        margin-top: var(--space-sm, 0.5rem);
     }
 
     /* ========================================
@@ -179,65 +155,37 @@ def _apply_homepage_styles():
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        margin: 2rem 0 1.25rem 0;
-        padding-bottom: 0.75rem;
-        border-bottom: 2px solid rgba(102,126,234,0.3);
+        margin: var(--space-lg, 1.5rem) 0 var(--space-md, 1rem) 0;
+        padding-bottom: var(--space-sm, 0.5rem);
+        border-bottom: 2px solid var(--accent, #667eea);
     }
     .section-header h3 {
-        color: #ffffff !important;
-        font-size: 1.4rem;
+        color: var(--text-primary, #1F2937) !important;
+        font-size: 1.25rem;
         font-weight: 600;
         margin: 0;
     }
 
     /* ========================================
-       INFO CARDS (Light Mode Compatible)
+       INFO CARDS - Static display
        ======================================== */
     .info-card {
-        background: linear-gradient(145deg, #252538 0%, #1e1e2f 100%);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-left: 4px solid #667eea;
-        border-radius: 8px;
-        padding: 1.25rem;
-        margin-bottom: 1rem;
+        background: var(--bg-secondary, #F8F9FA);
+        border: 1px solid var(--border, #E5E7EB);
+        border-radius: var(--radius-md, 8px);
+        padding: var(--space-md, 1rem);
+        margin-bottom: var(--space-md, 1rem);
+        /* NO shadow, NO hover - static display */
     }
     .info-card h4 {
-        color: #667eea;
+        color: var(--accent, #667eea);
         margin: 0 0 0.5rem 0;
-        font-size: 1.1rem;
+        font-size: 1rem;
     }
     .info-card p, .info-card li {
-        color: rgba(255,255,255,0.8);
+        color: var(--text-secondary, #6B7280);
         line-height: 1.6;
-    }
-
-    /* ========================================
-       LIGHT MODE OVERRIDES
-       ======================================== */
-    @media (prefers-color-scheme: light) {
-        .homepage-hero {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-        }
-        .stat-card, .nav-tile, .info-card {
-            background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
-            border: 1px solid #e0e0e0;
-        }
-        .stat-value {
-            color: #5c6bc0;
-        }
-        .stat-label {
-            color: #666;
-        }
-        .nav-tile-title {
-            color: #333;
-        }
-        .nav-tile-desc {
-            color: #666;
-        }
-        .info-card p, .info-card li {
-            color: #555;
-        }
+        font-size: 0.9rem;
     }
 
     /* ========================================
@@ -245,58 +193,50 @@ def _apply_homepage_styles():
        ======================================== */
     @media (max-width: 768px) {
         .homepage-hero {
-            padding: 1.5rem 1.25rem;
-            border-radius: 12px;
+            padding: var(--space-md, 1rem);
         }
         .homepage-hero h1 {
-            font-size: 1.75rem;
+            font-size: 1.5rem;
         }
         .homepage-hero .subtitle {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
         }
         .stats-row {
             grid-template-columns: repeat(2, 1fr);
-            gap: 0.75rem;
+            gap: var(--space-sm, 0.5rem);
         }
         .stat-card {
-            padding: 1rem;
+            padding: var(--space-sm, 0.5rem);
         }
-        .stat-value {
-            font-size: 1.5rem;
+        .stat-card .stat-value {
+            font-size: 1.25rem;
         }
-        .stat-label {
-            font-size: 0.75rem;
+        .stat-card .stat-label {
+            font-size: 0.7rem;
         }
         .nav-grid {
             grid-template-columns: 1fr;
-            gap: 1rem;
         }
         .nav-tile {
-            padding: 1.25rem;
+            padding: var(--space-sm, 0.5rem);
         }
         .nav-tile-icon {
-            font-size: 2rem;
+            font-size: 1.5rem;
         }
         .nav-tile-title {
-            font-size: 1.1rem;
+            font-size: 1rem;
         }
     }
 
     @media (max-width: 480px) {
         .homepage-hero {
-            padding: 1.25rem 1rem;
+            padding: var(--space-sm, 0.5rem);
         }
         .homepage-hero h1 {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
         }
-        .stats-row {
-            gap: 0.5rem;
-        }
-        .stat-card {
-            padding: 0.75rem;
-        }
-        .stat-value {
-            font-size: 1.25rem;
+        .stat-card .stat-value {
+            font-size: 1rem;
         }
     }
     </style>
@@ -337,7 +277,7 @@ def _render_hero(summary: Dict[str, Any]) -> None:
     <div class="homepage-hero">
         <h1>Fantasy Football Command Center</h1>
         <p class="subtitle">25+ years of data, analytics, and insights at your fingertips</p>
-        <span class="season-badge">Season {latest_year} &bull; Week {latest_week}</span>
+        <span class="season-badge">Season {latest_year} - Week {latest_week}</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -349,7 +289,6 @@ def _render_quick_stats(summary: Dict[str, Any]) -> None:
     drafts = summary.get("draft_count", 0)
     transactions = summary.get("transactions_count", 0)
 
-    # Format large numbers
     def fmt(n):
         if n >= 1000:
             return f"{n/1000:.1f}K"
@@ -386,37 +325,37 @@ def _render_navigation_tiles() -> None:
         <div class="nav-tile">
             <span class="nav-tile-icon">📊</span>
             <div class="nav-tile-title">Matchups & Standings</div>
-            <div class="nav-tile-desc">Current standings, weekly matchups, head-to-head comparisons, and optimal lineup analysis</div>
+            <div class="nav-tile-desc">Current standings, weekly matchups, head-to-head comparisons</div>
             <span class="nav-tile-tag">Use Managers Tab</span>
         </div>
         <div class="nav-tile">
             <span class="nav-tile-icon">👤</span>
             <div class="nav-tile-title">Player Stats</div>
-            <div class="nav-tile-desc">Weekly, season, and career player analytics with 12+ visualization types</div>
+            <div class="nav-tile-desc">Weekly, season, and career player analytics</div>
             <span class="nav-tile-tag">Use Players Tab</span>
         </div>
         <div class="nav-tile">
             <span class="nav-tile-icon">🎯</span>
             <div class="nav-tile-title">Draft Analysis</div>
-            <div class="nav-tile-desc">Draft boards, SPAR values, ROI analysis, keeper decisions, and draft trends</div>
+            <div class="nav-tile-desc">Draft boards, SPAR values, ROI analysis</div>
             <span class="nav-tile-tag">Use Draft Tab</span>
         </div>
         <div class="nav-tile">
             <span class="nav-tile-icon">💼</span>
             <div class="nav-tile-title">Transactions</div>
-            <div class="nav-tile-desc">Trades, adds, drops, FAAB spending, and waiver wire success rates</div>
+            <div class="nav-tile-desc">Trades, adds, drops, FAAB spending</div>
             <span class="nav-tile-tag">Use Transactions Tab</span>
         </div>
         <div class="nav-tile">
             <span class="nav-tile-icon">🔮</span>
             <div class="nav-tile-title">Simulations</div>
-            <div class="nav-tile-desc">Playoff odds, schedule simulations, what-if scenarios, and predictions</div>
+            <div class="nav-tile-desc">Playoff odds and what-if scenarios</div>
             <span class="nav-tile-tag">Use Simulations Tab</span>
         </div>
         <div class="nav-tile">
             <span class="nav-tile-icon">🏆</span>
             <div class="nav-tile-title">Hall of Fame</div>
-            <div class="nav-tile-desc">Champions, records, legendary games, and dynasty tracking</div>
+            <div class="nav-tile-desc">Champions, records, legendary games</div>
             <span class="nav-tile-tag">See Below</span>
         </div>
     </div>
@@ -435,10 +374,6 @@ def _render_key_concepts() -> None:
             <h4>SPAR (Season Points Above Replacement)</h4>
             <p>Measures player value vs a replacement-level player at the same position.
             Higher SPAR = more valuable.</p>
-            <ul style="margin: 0.5rem 0 0 1rem; padding: 0;">
-                <li><strong>Player SPAR:</strong> Total production all season</li>
-                <li><strong>Manager SPAR:</strong> Production while on YOUR roster</li>
-            </ul>
         </div>
         """, unsafe_allow_html=True)
 
@@ -448,10 +383,6 @@ def _render_key_concepts() -> None:
             <h4>Optimal Lineup</h4>
             <p>The perfect lineup using hindsight. Compare actual vs optimal to measure
             lineup efficiency.</p>
-            <ul style="margin: 0.5rem 0 0 1rem; padding: 0;">
-                <li><strong>Team Optimal:</strong> Best from YOUR roster</li>
-                <li><strong>League Optimal:</strong> Best across ALL teams</li>
-            </ul>
         </div>
         """, unsafe_allow_html=True)
 
@@ -466,7 +397,7 @@ def _render_quick_tips() -> None:
         st.markdown("""
         <div class="info-card">
             <h4>Finding Players</h4>
-            <p>Go to <strong>Players</strong> tab and use the filters to search by name, position, or manager.</p>
+            <p>Go to <strong>Players</strong> tab and use the filters to search.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -474,7 +405,7 @@ def _render_quick_tips() -> None:
         st.markdown("""
         <div class="info-card">
             <h4>Playoff Odds</h4>
-            <p>Check <strong>Simulations</strong> tab for live playoff probabilities and championship odds.</p>
+            <p>Check <strong>Simulations</strong> tab for live playoff probabilities.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -482,7 +413,7 @@ def _render_quick_tips() -> None:
         st.markdown("""
         <div class="info-card">
             <h4>Draft Value</h4>
-            <p>Use <strong>Draft</strong> tab to see which picks delivered value and which were busts.</p>
+            <p>Use <strong>Draft</strong> tab to see which picks delivered value.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -490,6 +421,8 @@ def _render_quick_tips() -> None:
 @st.fragment
 def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
     """Homepage with subtab controlled via hamburger menu."""
+    # Apply theme and styles
+    inject_theme_css()
     apply_modern_styles()
     _apply_homepage_styles()
 
@@ -504,15 +437,10 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
 
     # Render only the active section (lazy loading)
     if section_name == "Overview":
-        # Hero section with current season info
         _render_hero(summary)
-        # Quick stats row
         _render_quick_stats(summary)
-        # Navigation tiles
         _render_navigation_tiles()
-        # Key concepts (compact)
         _render_key_concepts()
-        # Quick tips
         _render_quick_tips()
 
     elif section_name == "Hall of Fame":
@@ -529,11 +457,7 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
                 st.code(HALL_OF_FAME_ERROR)
 
     elif section_name == "Standings":
-        st.markdown("""
-        <div class="section-header">
-            <h3>Season Standings</h3>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="section-header"><h3>Season Standings</h3></div>', unsafe_allow_html=True)
 
         if matchup_df is None or matchup_df.empty:
             st.info("Season Standings will appear once game data is loaded.")
@@ -554,21 +478,12 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
             display_season_standings(matchup_df, prefix="standings")
 
     elif section_name == "Schedules":
-        st.markdown("""
-        <div class="section-header">
-            <h3>Team Schedules</h3>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="section-header"><h3>Team Schedules</h3></div>', unsafe_allow_html=True)
         display_schedules(df_dict, prefix="schedules")
 
     elif section_name == "Head-to-Head":
-        st.markdown("""
-        <div class="section-header">
-            <h3>Head-to-Head Matchups</h3>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.info("**Tip:** Select 'All' or 'Optimal' in the matchup dropdown to see the league-wide optimal lineup!")
+        st.markdown('<div class="section-header"><h3>Head-to-Head Matchups</h3></div>', unsafe_allow_html=True)
+        st.info("Select 'All' or 'Optimal' in the matchup dropdown to see the league-wide optimal lineup!")
 
         if matchup_df is not None and not matchup_df.empty:
             try:
@@ -585,13 +500,8 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
             display_head_to_head(df_dict)
 
     elif section_name == "Recaps":
-        st.markdown("""
-        <div class="section-header">
-            <h3>Weekly Team Recaps</h3>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.success("Get narrative recaps for each team including top performers, biggest disappointments, and award-worthy moments.")
+        st.markdown('<div class="section-header"><h3>Weekly Team Recaps</h3></div>', unsafe_allow_html=True)
+        st.success("Get narrative recaps for each team including top performers and award-worthy moments.")
 
         from md.tab_data_access.homepage import load_recaps_matchup_data
         recaps_data = load_recaps_matchup_data()

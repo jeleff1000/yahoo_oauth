@@ -17,7 +17,7 @@ from .shared.theme import (
     render_metric_grid,
     render_filter_count
 )
-from .shared.modern_styles import apply_modern_styles
+from ..shared.modern_styles import apply_modern_styles
 from .shared.filters import render_simple_position_filter
 from .shared.constants import TAB_LABELS
 

@@ -23,15 +23,17 @@ import plotly.graph_objects as go
 import plotly.io as pio
 from typing import Dict, List, Any, Optional
 
-# Import theme detection from existing module
+# Import theme detection and design tokens
 try:
     from .themes import detect_theme, get_theme_colors
+    from .design_tokens import COLORS
 except ImportError:
     # Fallback if running standalone
     def detect_theme():
         return 'dark'
     def get_theme_colors(theme=None):
         return {}
+    COLORS = {'light': {}, 'dark': {}}
 
 
 # ============================================

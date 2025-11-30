@@ -1,552 +1,413 @@
 """
-Shared modern CSS styles for consistent UI across all KMFFL pages.
-Import this module and call apply_modern_styles() at the top of your page display function.
+Global modern CSS styles for the KMFFL application.
+
+Key principles:
+- Static elements (info displays, stat boxes) have NO shadows or hover effects
+- Only interactive elements (buttons, clickable cards, links) have shadows and hover states
+- Clean, minimal borders - 1px max, subtle colors
+- Generous whitespace instead of heavy visual separators
+- Subtle gradients only on main heroes, not everywhere
+
+Usage:
+    from streamlit_ui.tabs.shared.modern_styles import apply_modern_styles
+    apply_modern_styles()
 """
+
 import streamlit as st
 
 
 def apply_modern_styles():
-    """Apply modern, consistent CSS styling to Streamlit pages."""
+    """Apply modern, decluttered CSS styling to Streamlit pages."""
     st.markdown("""
     <style>
-    /* Hero/Header Sections */
+    /* ===========================================
+       HERO SECTIONS - Subtle gradient
+       =========================================== */
     .hero-section {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem;
-        border-radius: 10px;
-        color: white;
-        margin-bottom: 2rem;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        background: linear-gradient(135deg,
+            var(--gradient-start, rgba(102, 126, 234, 0.08)) 0%,
+            var(--gradient-end, rgba(118, 75, 162, 0.05)) 100%);
+        padding: var(--space-lg, 1.5rem);
+        border-radius: var(--radius-md, 8px);
+        border-bottom: 1px solid var(--border, #E5E7EB);
+        margin-bottom: var(--space-lg, 1.5rem);
     }
-    .hero-section h1, .hero-section h2, .hero-section h3 {
-        color: white !important;
+    .hero-section h1,
+    .hero-section h2,
+    .hero-section h3 {
+        color: var(--text-primary, #1F2937) !important;
         margin-top: 0;
     }
     .hero-section p {
-        opacity: 0.95;
+        color: var(--text-secondary, #6B7280);
         line-height: 1.6;
     }
 
-    /* Tab Headers */
-    .tab-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .tab-header h2, .tab-header h3 {
-        margin: 0;
-        color: white !important;
-    }
-    .tab-header p {
-        margin: 0.5rem 0 0 0;
-        opacity: 0.9;
-    }
-
-    /* Feature Cards */
-    .feature-card {
-        background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.08);
-        margin: 1rem 0;
-        border-left: 4px solid #667eea;
-        transition: transform 0.2s;
-    }
-    .feature-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.12);
-    }
-    .feature-icon {
-        font-size: 2rem;
-        display: block;
-        margin-bottom: 0.5rem;
-    }
-    .feature-title {
-        font-size: 1.2rem;
+    /* ===========================================
+       SECTION HEADERS - Clean accent underline
+       =========================================== */
+    .section-header-title {
+        color: var(--text-primary, #1F2937);
+        font-size: 1.25rem;
         font-weight: 600;
-        margin-bottom: 0.5rem;
-        color: #333;
-    }
-    .feature-desc {
-        color: #666;
-        line-height: 1.5;
+        padding-bottom: var(--space-sm, 0.5rem);
+        border-bottom: 2px solid var(--accent, #667eea);
+        margin-bottom: var(--space-md, 1rem);
+        display: inline-block;
     }
 
-    /* Dark mode for feature cards */
-    @media (prefers-color-scheme: dark) {
-        .feature-card {
-            background: linear-gradient(145deg, #2b2d31 0%, #1e1f22 100%);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-            border-left: 4px solid #7289da;
-        }
-        .feature-card:hover {
-            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
-        }
-        .feature-title {
-            color: #f0f0f0;
-        }
-        .feature-desc {
-            color: #b0b0b0;
-        }
+    /* ===========================================
+       STATIC CARDS - No shadows, no hover
+       For displaying info, stats, data - NOT clickable
+       =========================================== */
+    .static-card,
+    .info-card,
+    .stat-card,
+    .feature-card {
+        background: var(--bg-secondary, #F8F9FA);
+        border: 1px solid var(--border, #E5E7EB);
+        border-radius: var(--radius-md, 8px);
+        padding: var(--space-md, 1rem);
+        margin: var(--space-sm, 0.5rem) 0;
+        /* NO shadow, NO hover transforms */
     }
 
-    /* Info Boxes */
-    .info-box {
-        background: linear-gradient(135deg, #f0f7ff 0%, #e3f2fd 100%);
-        border-left: 4px solid #2196F3;
-        padding: 1.2rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-    }
-    .success-box {
-        background: linear-gradient(135deg, #f1f8f4 0%, #e8f5e9 100%);
-        border-left: 4px solid #4CAF50;
-        padding: 1.2rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-    }
-    .warning-box {
-        background: linear-gradient(135deg, #fff8e1 0%, #fff9c4 100%);
-        border-left: 4px solid #ff9800;
-        padding: 1.2rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-    }
-
-    /* Metric Cards */
-    .metric-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        border-left: 4px solid #667eea;
-        margin-bottom: 1rem;
-    }
-    .metric-card h4 {
-        margin-top: 0;
-        color: #667eea;
-    }
-
-    /* Section Cards */
-    .section-card {
-        background: white;
-        border: 2px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        transition: all 0.3s;
-        color: #333;
-    }
-    .section-card:hover {
-        border-color: #667eea;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-    }
-    .section-card p {
-        color: #666;
-        line-height: 1.6;
-    }
-    .section-header {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        margin-bottom: 0.75rem;
-    }
-    .section-icon {
+    .feature-card .feature-icon {
         font-size: 1.5rem;
+        margin-bottom: var(--space-xs, 0.25rem);
     }
-    .section-title {
+    .feature-card .feature-title {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #333;
+        color: var(--text-primary, #1F2937);
+        margin-bottom: var(--space-xs, 0.25rem);
+    }
+    .feature-card .feature-desc {
+        color: var(--text-secondary, #6B7280);
+        line-height: 1.5;
+        font-size: 0.9rem;
     }
 
-    /* Dark mode for section cards */
-    @media (prefers-color-scheme: dark) {
-        .section-card {
-            background: #2b2d31;
-            border: 2px solid #3a3c41;
-            color: #f0f0f0;
-        }
-        .section-card:hover {
-            border-color: #7289da;
-            box-shadow: 0 4px 12px rgba(114, 137, 218, 0.25);
-        }
-        .section-card p {
-            color: #b0b0b0;
-        }
-        .section-title {
-            color: #f0f0f0;
-        }
+    /* ===========================================
+       INTERACTIVE CARDS - Has shadow and hover
+       For navigation, clickable items ONLY
+       =========================================== */
+    .interactive-card,
+    .nav-card,
+    .clickable-card {
+        background: var(--bg-primary, #FFFFFF);
+        border: 1px solid var(--border, #E5E7EB);
+        border-radius: var(--radius-md, 8px);
+        padding: var(--space-md, 1rem);
+        margin: var(--space-sm, 0.5rem) 0;
+        box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
+        cursor: pointer;
+        transition: box-shadow var(--transition-normal, 0.2s ease),
+                    border-color var(--transition-normal, 0.2s ease);
+    }
+    .interactive-card:hover,
+    .nav-card:hover,
+    .clickable-card:hover {
+        box-shadow: var(--shadow-md, 0 2px 4px rgba(0,0,0,0.08));
+        border-color: var(--accent, #667eea);
     }
 
-    /* ============================================
-       NATIVE STREAMLIT TABS (st.tabs)
-       ============================================ */
+    /* ===========================================
+       STATUS BOXES - Subtle background tint
+       =========================================== */
+    .info-box {
+        background: var(--info-bg, rgba(59, 130, 246, 0.1));
+        border: 1px solid var(--info, #3B82F6);
+        border-radius: var(--radius-md, 8px);
+        padding: var(--space-md, 1rem);
+        margin: var(--space-sm, 0.5rem) 0;
+    }
+    .success-box {
+        background: var(--success-bg, rgba(16, 185, 129, 0.1));
+        border: 1px solid var(--success, #10B981);
+        border-radius: var(--radius-md, 8px);
+        padding: var(--space-md, 1rem);
+        margin: var(--space-sm, 0.5rem) 0;
+    }
+    .warning-box {
+        background: var(--warning-bg, rgba(245, 158, 11, 0.1));
+        border: 1px solid var(--warning, #F59E0B);
+        border-radius: var(--radius-md, 8px);
+        padding: var(--space-md, 1rem);
+        margin: var(--space-sm, 0.5rem) 0;
+    }
+    .error-box {
+        background: var(--error-bg, rgba(239, 68, 68, 0.1));
+        border: 1px solid var(--error, #EF4444);
+        border-radius: var(--radius-md, 8px);
+        padding: var(--space-md, 1rem);
+        margin: var(--space-sm, 0.5rem) 0;
+    }
+
+    /* ===========================================
+       METRIC/STAT DISPLAY - Clean and minimal
+       =========================================== */
+    .stat-display {
+        text-align: center;
+        padding: var(--space-md, 1rem);
+    }
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--text-primary, #1F2937);
+        line-height: 1.2;
+    }
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--text-muted, #9CA3AF);
+        margin-top: var(--space-xs, 0.25rem);
+    }
+
+    /* ===========================================
+       STREAMLIT NATIVE TABS
+       =========================================== */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0.5rem;
+        gap: var(--space-sm, 0.5rem);
+        border-bottom: 1px solid var(--border, #E5E7EB);
+        padding-bottom: 0;
     }
 
-    /* Inactive tabs - light mode */
     .stTabs [data-baseweb="tab"] {
-        height: 3rem;
-        padding: 0 1.5rem;
-        border-radius: 8px;
-        font-weight: 600;
-        background-color: rgb(70, 73, 80);
-        color: rgb(255, 255, 255);
-        border: 2px solid rgb(100, 103, 110);
+        height: 2.75rem;
+        padding: 0 var(--space-md, 1rem);
+        border-radius: var(--radius-sm, 4px) var(--radius-sm, 4px) 0 0;
+        font-weight: 500;
+        background-color: transparent;
+        color: var(--text-secondary, #6B7280);
+        border: none;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
     }
 
-    /* Active/selected tab */
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-color: #667eea;
-    }
-
-    /* Force white text in tab content */
-    .stTabs [data-baseweb="tab"] * {
-        color: rgb(255, 255, 255) !important;
-    }
-
-    /* Hover state for inactive tabs */
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: rgb(80, 83, 90);
-        border-color: rgb(103, 108, 245);
-    }
-
-    /* Button Styling */
-    .stButton > button {
-        border-radius: 8px;
+        background-color: transparent;
+        color: var(--accent, #667eea);
+        border-bottom: 2px solid var(--accent, #667eea);
         font-weight: 600;
-        transition: all 0.2s;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover:not([aria-selected="true"]) {
+        color: var(--text-primary, #1F2937);
+        background-color: var(--hover, #F5F5F5);
+    }
+
+    /* Force consistent text in tabs */
+    .stTabs [data-baseweb="tab"] * {
+        color: inherit !important;
+    }
+
+    /* ===========================================
+       BUTTONS - Interactive, has hover
+       =========================================== */
+    .stButton > button {
+        border-radius: var(--radius-md, 8px);
+        font-weight: 600;
+        transition: all var(--transition-normal, 0.2s ease);
     }
     .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
     }
 
-    /* Remove extra padding from main container */
-    .main > div {
-        padding-top: 1rem;
+    /* Primary buttons */
+    .stButton > button[kind="primary"] {
+        background: var(--accent, #667eea);
+        border-color: var(--accent, #667eea);
+    }
+    .stButton > button[kind="primary"]:hover {
+        background: var(--accent-hover, #5a6fd6);
     }
 
-    /* Improve dataframe styling */
+    /* ===========================================
+       DATAFRAMES & TABLES
+       =========================================== */
     .stDataFrame {
-        border-radius: 8px;
+        border-radius: var(--radius-md, 8px);
         overflow: hidden;
+        border: 1px solid var(--border, #E5E7EB);
     }
 
-    /* Expander styling */
+    /* ===========================================
+       RADIO BUTTONS - Cleaner look
+       =========================================== */
+    .stRadio > div {
+        gap: var(--space-sm, 0.5rem);
+    }
+    .stRadio label {
+        padding: var(--space-sm, 0.5rem) var(--space-md, 1rem);
+        border-radius: var(--radius-sm, 4px);
+        border: 1px solid var(--border, #E5E7EB);
+        background: var(--bg-primary, #FFFFFF);
+        cursor: pointer;
+        transition: all var(--transition-fast, 0.1s ease);
+    }
+    .stRadio label:hover {
+        border-color: var(--accent, #667eea);
+    }
+    .stRadio label[data-checked="true"] {
+        background: var(--accent-subtle, rgba(102, 126, 234, 0.08));
+        border-color: var(--accent, #667eea);
+        color: var(--accent, #667eea);
+    }
+
+    /* ===========================================
+       EXPANDERS
+       =========================================== */
     .streamlit-expanderHeader {
         font-weight: 600;
-        border-radius: 8px;
+        border-radius: var(--radius-md, 8px);
+        background: var(--bg-secondary, #F8F9FA);
+        border: 1px solid var(--border, #E5E7EB);
     }
 
-    /* ========================================
-       MOBILE-RESPONSIVE STYLES
-       ======================================== */
+    /* ===========================================
+       REMOVE CLUTTER - Override existing styles
+       =========================================== */
+    /* Remove left accent borders from old styles */
+    .feature-card,
+    .info-box,
+    .success-box,
+    .warning-box,
+    .metric-card,
+    .section-card {
+        border-left: 1px solid var(--border, #E5E7EB) !important;
+    }
 
-    /* Tablets and smaller (768px and below) */
+    /* Remove hover transforms from static elements */
+    .feature-card:hover,
+    .stat-card:hover,
+    .info-card:hover {
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    /* ===========================================
+       RESPONSIVE - TABLET (768px)
+       =========================================== */
     @media (max-width: 768px) {
-        /* Hero sections - reduce padding */
         .hero-section {
-            padding: 1.5rem 1rem;
-            margin-bottom: 1.5rem;
+            padding: var(--space-md, 1rem);
+            margin-bottom: var(--space-md, 1rem);
         }
-        .hero-section h1 {
-            font-size: 1.75rem !important;
+        .hero-section h1 { font-size: 1.5rem !important; }
+        .hero-section h2 { font-size: 1.3rem !important; }
+        .hero-section p { font-size: 0.9rem; }
+
+        .static-card,
+        .feature-card,
+        .interactive-card {
+            padding: var(--space-sm, 0.5rem);
+            margin: var(--space-xs, 0.25rem) 0;
         }
-        .hero-section h2 {
-            font-size: 1.5rem !important;
-        }
-        .hero-section p {
+
+        .info-box, .success-box, .warning-box, .error-box {
+            padding: var(--space-sm, 0.5rem);
             font-size: 0.9rem;
         }
 
-        /* Tab headers - reduce padding */
-        .tab-header {
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-        .tab-header h2 {
-            font-size: 1.4rem !important;
-        }
-        .tab-header h3 {
-            font-size: 1.2rem !important;
-        }
-
-        /* Feature cards - reduce padding and margins */
-        .feature-card {
-            padding: 1rem;
-            margin: 0.75rem 0;
-        }
-
-        /* Info boxes - reduce padding */
-        .info-box, .success-box, .warning-box {
-            padding: 0.9rem;
-            margin: 0.75rem 0;
-            font-size: 0.9rem;
-        }
-
-        /* Metric cards - reduce padding */
-        .metric-card {
-            padding: 1rem;
-            margin-bottom: 0.75rem;
-        }
-
-        /* Section cards - reduce padding */
-        .section-card {
-            padding: 1rem;
-            margin: 0.75rem 0;
-        }
-
-        /* Native tabs - make them scrollable horizontally */
+        /* Scrollable tabs */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 0.25rem;
             flex-wrap: nowrap;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
         }
         .stTabs [data-baseweb="tab"] {
-            height: 2.5rem !important;
-            padding: 0 1rem !important;
-            font-size: 0.85rem !important;
-            min-width: fit-content;
+            height: 2.5rem;
+            padding: 0 var(--space-sm, 0.5rem);
+            font-size: 0.85rem;
             flex-shrink: 0;
         }
 
-        /* Buttons - full width on mobile */
+        /* Full width buttons */
         .stButton > button {
             width: 100%;
-            font-size: 0.9rem;
         }
 
-        /* Columns - stack vertically */
-        .row-widget.stHorizontal {
-            flex-direction: column !important;
-        }
-        .row-widget.stHorizontal > div {
-            width: 100% !important;
-            margin-bottom: 0.5rem;
-        }
-
-        /* Multiselect - better mobile touch targets */
-        .stMultiSelect {
-            font-size: 0.9rem;
-        }
-        .stMultiSelect [data-baseweb="select"] {
-            min-height: 44px; /* Better touch target */
-        }
-
-        /* Selectbox - better mobile touch targets */
-        .stSelectbox select {
-            min-height: 44px;
-            font-size: 0.9rem;
-        }
-
-        /* Text input - better mobile touch targets */
-        .stTextInput input {
-            min-height: 44px;
-            font-size: 0.9rem;
-        }
-
-        /* Number input - better mobile touch targets */
+        /* Better touch targets */
+        .stMultiSelect [data-baseweb="select"],
+        .stSelectbox select,
+        .stTextInput input,
         .stNumberInput input {
             min-height: 44px;
-            font-size: 0.9rem;
+            font-size: 16px; /* Prevents iOS zoom */
         }
 
-        /* Checkbox - larger touch targets */
-        .stCheckbox {
-            min-height: 44px;
-            display: flex;
-            align-items: center;
-        }
+        /* Reduce font sizes */
+        h1 { font-size: 1.5rem !important; }
+        h2 { font-size: 1.3rem !important; }
+        h3 { font-size: 1.1rem !important; }
+        h4 { font-size: 1rem !important; }
 
-        /* Dataframes - make them scrollable */
+        /* Scrollable tables */
         .stDataFrame {
             overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
         }
-        .stDataFrame table {
-            font-size: 0.85rem;
-        }
-        .stDataFrame th {
-            font-size: 0.8rem;
-            padding: 0.5rem !important;
-        }
-        .stDataFrame td {
-            padding: 0.4rem !important;
-        }
+        .stDataFrame table { font-size: 0.85rem; }
+        .stDataFrame th { padding: 0.4rem !important; }
+        .stDataFrame td { padding: 0.3rem !important; }
 
-        /* Metrics - reduce font sizes */
-        .stMetric {
-            font-size: 0.9rem;
-        }
-        .stMetric label {
-            font-size: 0.85rem;
-        }
-        .stMetric [data-testid="stMetricValue"] {
-            font-size: 1.5rem;
-        }
-
-        /* Expanders - better mobile styling */
-        .streamlit-expanderHeader {
-            font-size: 0.95rem;
-            padding: 0.75rem !important;
-        }
-
-        /* Reduce overall font sizes */
-        h1 {
-            font-size: 1.8rem !important;
-        }
-        h2 {
-            font-size: 1.5rem !important;
-        }
-        h3 {
-            font-size: 1.3rem !important;
-        }
-        h4 {
-            font-size: 1.1rem !important;
-        }
-        p, div, span {
-            font-size: 0.95rem;
-        }
+        .stat-value { font-size: 1.5rem; }
     }
 
-    /* Mobile phones (480px and below) */
+    /* ===========================================
+       RESPONSIVE - MOBILE (480px)
+       =========================================== */
     @media (max-width: 480px) {
-        /* Even more compact for phones */
         .hero-section {
-            padding: 1rem 0.75rem;
-            margin-bottom: 1rem;
+            padding: var(--space-sm, 0.5rem);
         }
-        .hero-section h1 {
-            font-size: 1.5rem !important;
-        }
-        .hero-section h2 {
-            font-size: 1.3rem !important;
+        .hero-section h1 { font-size: 1.3rem !important; }
+        .hero-section h2 { font-size: 1.1rem !important; }
+
+        .static-card,
+        .feature-card,
+        .interactive-card {
+            padding: var(--space-sm, 0.5rem);
         }
 
-        .tab-header {
-            padding: 0.75rem;
-        }
-        .tab-header h2 {
-            font-size: 1.2rem !important;
-        }
-        .tab-header h3 {
-            font-size: 1.1rem !important;
-        }
-
-        .feature-card, .section-card {
-            padding: 0.75rem;
-            margin: 0.5rem 0;
-        }
-
-        .info-box, .success-box, .warning-box {
-            padding: 0.75rem;
-            font-size: 0.85rem;
-        }
-
-        .metric-card {
-            padding: 0.75rem;
-        }
-
-        /* Native tabs - even smaller for phones */
         .stTabs [data-baseweb="tab"] {
-            height: 2.25rem !important;
-            padding: 0 0.75rem !important;
-            font-size: 0.8rem !important;
-        }
-
-        /* Further reduce font sizes */
-        h1 {
-            font-size: 1.5rem !important;
-        }
-        h2 {
-            font-size: 1.3rem !important;
-        }
-        h3 {
-            font-size: 1.15rem !important;
-        }
-        h4 {
-            font-size: 1rem !important;
-        }
-        p, div, span {
-            font-size: 0.9rem;
-        }
-
-        /* Dataframes - even smaller text */
-        .stDataFrame table {
-            font-size: 0.75rem;
-        }
-        .stDataFrame th {
-            font-size: 0.7rem;
-            padding: 0.3rem !important;
-        }
-        .stDataFrame td {
-            padding: 0.25rem !important;
-        }
-
-        /* Metrics - compact */
-        .stMetric [data-testid="stMetricValue"] {
-            font-size: 1.3rem;
-        }
-        .stMetric label {
+            height: 2.25rem;
+            padding: 0 var(--space-xs, 0.25rem);
             font-size: 0.8rem;
         }
+
+        h1 { font-size: 1.3rem !important; }
+        h2 { font-size: 1.15rem !important; }
+        h3 { font-size: 1rem !important; }
+
+        .stDataFrame table { font-size: 0.75rem; }
+        .stDataFrame th { font-size: 0.7rem; padding: 0.25rem !important; }
+        .stDataFrame td { padding: 0.2rem !important; }
+
+        .stat-value { font-size: 1.3rem; }
     }
 
-    /* Landscape mobile phones */
-    @media (max-width: 768px) and (orientation: landscape) {
-        .hero-section {
-            padding: 1rem;
-        }
-        .hero-section h1, .hero-section h2 {
-            font-size: 1.3rem !important;
-        }
-        .tab-header {
-            padding: 0.75rem;
-        }
-    }
-
-    /* Touch-friendly interactions for all mobile devices */
+    /* ===========================================
+       TOUCH DEVICES
+       =========================================== */
     @media (hover: none) and (pointer: coarse) {
-        /* Larger touch targets */
         button, a, input, select {
             min-height: 44px !important;
-            min-width: 44px !important;
         }
 
-        /* Remove hover effects on touch devices */
-        .feature-card:hover,
-        .section-card:hover {
-            transform: none;
-        }
-
-        /* Better spacing for touch */
-        .stButton {
-            margin: 0.5rem 0;
+        /* No hover effects on touch */
+        .interactive-card:hover,
+        .nav-card:hover {
+            box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
         }
     }
 
-    /* Prevent text selection issues on mobile */
-    @media (max-width: 768px) {
-        * {
-            -webkit-tap-highlight-color: transparent;
-        }
-    }
-
-    /* Improve scrolling performance on mobile */
-    @media (max-width: 768px) {
-        .stDataFrame, .stTabs [data-baseweb="tab-list"] {
-            -webkit-overflow-scrolling: touch;
-            scroll-behavior: smooth;
-        }
+    /* ===========================================
+       PRINT STYLES
+       =========================================== */
+    @media print {
+        .hero-section { background: none; border: 1px solid #ccc; }
+        .stTabs, .stButton { display: none; }
+        * { box-shadow: none !important; }
     }
     </style>
     """, unsafe_allow_html=True)
