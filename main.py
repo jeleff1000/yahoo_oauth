@@ -91,6 +91,179 @@ def validate_league_database(db_name: str) -> bool:
     except Exception:
         return False
 
+
+# =========================
+# Keeper Rules Configuration UI
+# =========================
+def render_keeper_rules_ui() -> Optional[dict]:
+    """
+    Render the keeper rules configuration UI.
+    Returns a keeper_rules dict if configured, None if keepers are disabled.
+    """
+    st.markdown("### Keeper Rules Configuration")
+
+    # Initialize session state for keeper rules if not exists
+    if "keeper_enabled" not in st.session_state:
+        st.session_state.keeper_enabled = False
+    if "keeper_formulas" not in st.session_state:
+        st.session_state.keeper_formulas = {}
+    if "keeper_base_rules" not in st.session_state:
+        st.session_state.keeper_base_rules = {}
+
+    # Enable keepers toggle
+    keeper_enabled = st.toggle("Enable Keeper Rules", value=st.session_state.keeper_enabled, key="keeper_toggle")
+    st.session_state.keeper_enabled = keeper_enabled
+
+    if not keeper_enabled:
+        st.info("Keeper rules are disabled. Your league will be treated as a redraft league.")
+        return None
+
+    st.markdown("---")
+
+    # Basic keeper settings
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        max_keepers = st.number_input("Max Keepers", min_value=1, max_value=10, value=3, key="max_keepers")
+    with col2:
+        budget = st.number_input("Auction Budget", min_value=100, max_value=500, value=200, key="keeper_budget")
+    with col3:
+        min_price = st.number_input("Min Keeper Price", min_value=0, max_value=50, value=1, key="min_price")
+
+    st.markdown("---")
+
+    # Base cost rules - how to determine original acquisition cost
+    st.markdown("#### Base Cost Rules")
+    st.caption("How should we calculate the original acquisition cost for different player types?")
+
+    base_rules = {}
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Auction Draft Picks**")
+        auction_source = st.selectbox(
+            "Cost source:",
+            ["Draft Price", "Custom Formula"],
+            key="auction_source"
+        )
+        if auction_source == "Draft Price":
+            base_rules["auction"] = {"source": "draft_price", "multiplier": 1.0}
+        else:
+            auction_mult = st.number_input("Multiplier", min_value=0.1, max_value=2.0, value=1.0, step=0.1, key="auction_mult")
+            base_rules["auction"] = {"source": "draft_price", "multiplier": auction_mult}
+
+    with col2:
+        st.markdown("**FAAB Pickups**")
+        faab_source = st.selectbox(
+            "Cost source:",
+            ["FAAB Price", "Half FAAB", "Custom Multiplier"],
+            key="faab_source"
+        )
+        if faab_source == "FAAB Price":
+            base_rules["faab_only"] = {"source": "faab_price", "multiplier": 1.0}
+        elif faab_source == "Half FAAB":
+            base_rules["faab_only"] = {"source": "faab_price", "multiplier": 0.5}
+        else:
+            faab_mult = st.number_input("Multiplier", min_value=0.1, max_value=2.0, value=0.5, step=0.1, key="faab_mult")
+            base_rules["faab_only"] = {"source": "faab_price", "multiplier": faab_mult}
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Free Agent Pickups**")
+        fa_value = st.number_input("Fixed cost for free agents", min_value=0, max_value=50, value=1, key="fa_value")
+        base_rules["free_agent"] = {"source": "fixed", "value": fa_value}
+
+    with col2:
+        st.markdown("**Snake Draft Picks**")
+        snake_value = st.number_input("Fixed cost for snake draft", min_value=0, max_value=50, value=5, key="snake_value")
+        base_rules["snake"] = {"source": "fixed", "value": snake_value}
+
+    st.session_state.keeper_base_rules = base_rules
+
+    st.markdown("---")
+
+    # Year-by-year keeper cost formulas
+    st.markdown("#### Keeper Year Formulas")
+    st.caption("Define how keeper costs increase each year. Use 'base_cost' as a variable.")
+
+    formulas = {}
+
+    # Year 1 (first time keeping)
+    st.markdown("**Year 1** (First time keeping a player)")
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        y1_formula = st.text_input(
+            "Formula:",
+            value="base_cost",
+            key="y1_formula",
+            help="Use 'base_cost' as the original acquisition cost. Examples: 'base_cost', 'base_cost + 5', '1.5 * base_cost'"
+        )
+    with col2:
+        y1_desc = st.text_input("Description:", value="Original cost", key="y1_desc")
+    with col3:
+        y1_apply_all = st.button("Apply to all future years", key="y1_apply")
+
+    formulas["1"] = {"expression": y1_formula, "description": y1_desc}
+
+    if y1_apply_all:
+        st.session_state.keeper_formulas = {"1": formulas["1"], "2+": formulas["1"]}
+        st.success("Year 1 formula applied to all future years!")
+        st.rerun()
+
+    # Year 2+
+    st.markdown("**Year 2+** (Subsequent keeper years)")
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        # Check if we have a saved formula
+        default_y2 = st.session_state.keeper_formulas.get("2+", {}).get("expression", "1.5 * base_cost + 7.5")
+        y2_formula = st.text_input(
+            "Formula:",
+            value=default_y2,
+            key="y2_formula",
+            help="This formula applies to year 2, 3, 4, etc. Use 'base_cost' and optionally 'keeper_year'."
+        )
+    with col2:
+        default_y2_desc = st.session_state.keeper_formulas.get("2+", {}).get("description", "Escalating cost")
+        y2_desc = st.text_input("Description:", value=default_y2_desc, key="y2_desc")
+    with col3:
+        st.caption("")  # Spacer
+
+    formulas["2+"] = {"expression": y2_formula, "description": y2_desc}
+
+    st.session_state.keeper_formulas = formulas
+
+    st.markdown("---")
+
+    # Preview
+    with st.expander("Preview Keeper Cost Calculation"):
+        st.markdown("**Example: Player drafted for $25**")
+        try:
+            base_cost = 25
+            y1_cost = eval(y1_formula.replace("base_cost", str(base_cost)))
+            y2_cost = eval(y2_formula.replace("base_cost", str(base_cost)).replace("keeper_year", "2"))
+            y3_cost = eval(y2_formula.replace("base_cost", str(base_cost)).replace("keeper_year", "3"))
+
+            st.markdown(f"""
+            - **Year 1**: ${y1_cost:.0f} ({y1_desc})
+            - **Year 2**: ${y2_cost:.0f} ({y2_desc})
+            - **Year 3**: ${y3_cost:.0f} ({y2_desc})
+            """)
+        except Exception as e:
+            st.error(f"Formula error: {e}")
+
+    # Build and return keeper_rules dict
+    keeper_rules = {
+        "enabled": True,
+        "max_keepers": max_keepers,
+        "budget": budget,
+        "min_price": min_price,
+        "max_price": None,  # No max by default
+        "round_to_integer": True,
+        "formulas_by_keeper_year": formulas,
+        "base_cost_rules": base_rules,
+    }
+
+    return keeper_rules
+
 # =========================
 # Config / Secrets
 # =========================
@@ -1178,15 +1351,51 @@ def run_register_flow():
                             </div>
                             """, unsafe_allow_html=True)
 
-                            if st.button("Start Import", key="start_import_btn", type="primary", use_container_width=True):
-                                # Trigger import directly - session state is preserved!
-                                league_info = {
-                                    "league_key": selected_league.get("league_key"),
-                                    "name": selected_league.get("name"),
-                                    "season": selected_league.get("season"),
-                                    "num_teams": selected_league.get("num_teams"),
-                                }
-                                perform_import_flow(league_info)
+                            # Two options: Quick Start or Advanced Settings
+                            col_start, col_advanced = st.columns(2)
+
+                            with col_start:
+                                if st.button("Start Import Now", key="start_import_btn", type="primary", use_container_width=True):
+                                    # Quick start - no keeper rules
+                                    league_info = {
+                                        "league_key": selected_league.get("league_key"),
+                                        "name": selected_league.get("name"),
+                                        "season": selected_league.get("season"),
+                                        "num_teams": selected_league.get("num_teams"),
+                                        "keeper_rules": None,
+                                    }
+                                    perform_import_flow(league_info)
+
+                            with col_advanced:
+                                if st.button("Advanced Settings", key="advanced_settings_btn", type="secondary", use_container_width=True):
+                                    st.session_state.show_advanced_settings = True
+
+                            # Advanced Settings Section
+                            if st.session_state.get("show_advanced_settings", False):
+                                st.markdown("---")
+                                st.markdown("## Advanced Settings")
+
+                                # Keeper Rules Tab
+                                with st.expander("Keeper Rules", expanded=True):
+                                    keeper_rules = render_keeper_rules_ui()
+                                    st.session_state.configured_keeper_rules = keeper_rules
+
+                                # Future: Add more advanced settings here
+                                # with st.expander("Scoring Settings"):
+                                #     pass
+
+                                st.markdown("---")
+
+                                # Import button with advanced settings
+                                if st.button("Start Import with Settings", key="start_import_advanced_btn", type="primary", use_container_width=True):
+                                    league_info = {
+                                        "league_key": selected_league.get("league_key"),
+                                        "name": selected_league.get("name"),
+                                        "season": selected_league.get("season"),
+                                        "num_teams": selected_league.get("num_teams"),
+                                        "keeper_rules": st.session_state.get("configured_keeper_rules"),
+                                    }
+                                    perform_import_flow(league_info)
 
                     except Exception as e:
                         st.error(f"Error: {e}")
@@ -1328,7 +1537,8 @@ def perform_import_flow(league_info: dict):
             "oauth_token": oauth_token,
             "num_teams": league_info.get("num_teams", 10),
             "playoff_teams": 6,
-            "regular_season_weeks": 14
+            "regular_season_weeks": 14,
+            "keeper_rules": league_info.get("keeper_rules"),  # Pass keeper rules if configured
         }
 
         st.info(f"🚀 Starting import via GitHub Actions for {start_year}-{end_year}...")
