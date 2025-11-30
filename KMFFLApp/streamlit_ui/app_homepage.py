@@ -173,19 +173,17 @@ def render_team_stats_tab():
 
 @st.fragment
 def render_players_tab():
-    """Render players tab with subtabs"""
-    subtab_names = ["Weekly", "Season", "Career", "Visualize"]
+    """Render players tab - subtab controlled via hamburger menu"""
+    subtab_idx = st.session_state.get("subtab_Players", 0)
 
-    # Use native Streamlit tabs for subtabs
-    tabs = st.tabs(subtab_names)
-
-    with tabs[0]:
+    # Render only the active subtab (lazy loading)
+    if subtab_idx == 0:
         render_players_weekly()
-    with tabs[1]:
+    elif subtab_idx == 1:
         render_players_season()
-    with tabs[2]:
+    elif subtab_idx == 2:
         render_players_career()
-    with tabs[3]:
+    elif subtab_idx == 3:
         render_players_visualize()
 
 
@@ -348,11 +346,10 @@ def render_simulations_tab():
 
 @st.fragment
 def render_extras_tab():
-    """Render extras tab with native tabs"""
-    subtab_names = ["Keeper", "Team Names"]
-    tabs = st.tabs(subtab_names)
+    """Render extras tab - subtab controlled via hamburger menu"""
+    subtab_idx = st.session_state.get("subtab_Extras", 0)
 
-    with tabs[0]:
+    if subtab_idx == 0:
         from md.tab_data_access.keepers import load_optimized_keepers_data
         from tabs.keepers.keepers_home import KeeperDataViewer
 
@@ -363,7 +360,7 @@ def render_extras_tab():
             else:
                 render_empty_state("Failed to load keepers data")
 
-    with tabs[1]:
+    elif subtab_idx == 1:
         from md.tab_data_access.team_names import load_optimized_team_names_data
         from tabs.team_names.team_names import display_team_names
 
@@ -401,23 +398,50 @@ def main():
     # Initialize session state
     _init_session_defaults()
 
-    # Navigation options
+    # Navigation structure: main tabs and their subtabs
     tab_names = ["Home", "Managers", "Team Stats", "Players", "Draft", "Transactions", "Simulations", "Extras"]
     tab_icons = ["🏠", "⚔️", "📊", "👤", "🎯", "💼", "🔮", "⭐"]
 
-    # Get current tab
+    # Subtabs for each main section (None = no subtabs)
+    subtabs = {
+        "Home": ["Overview", "Hall of Fame", "Standings", "Schedules", "Head-to-Head", "Recaps"],
+        "Managers": ["Weekly", "Seasons", "Career", "Visualize"],
+        "Team Stats": None,
+        "Players": ["Weekly", "Season", "Career", "Visualize"],
+        "Draft": None,
+        "Transactions": None,
+        "Simulations": None,
+        "Extras": ["Keeper", "Team Names"],
+    }
+
+    # Get current state
     current_idx = st.session_state.get("active_main_tab", 0)
     selected_tab = tab_names[current_idx]
+    current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Hamburger menu at top
+    # Hamburger menu at top with contextual subtabs
     with st.popover("☰ Menu"):
-        st.markdown("**Navigate to:**")
+        # Main sections
+        st.markdown("**Sections:**")
         for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
-            # Highlight current selection
-            label = f"{icon} {name}" + (" ✓" if i == current_idx else "")
+            is_current = (i == current_idx)
+            label = f"{icon} {name}" + (" ✓" if is_current else "")
             if st.button(label, key=f"nav_{name}", use_container_width=True):
                 st.session_state["active_main_tab"] = i
+                st.session_state[f"subtab_{name}"] = 0  # Reset subtab when switching main tab
                 st.rerun()
+
+        # Show subtabs for current section if they exist
+        current_subtabs = subtabs.get(selected_tab)
+        if current_subtabs:
+            st.markdown("---")
+            st.markdown(f"**{selected_tab}:**")
+            for j, subtab_name in enumerate(current_subtabs):
+                is_active = (j == current_subtab_idx)
+                sub_label = f"  {'●' if is_active else '○'} {subtab_name}"
+                if st.button(sub_label, key=f"subtab_{selected_tab}_{subtab_name}", use_container_width=True):
+                    st.session_state[f"subtab_{selected_tab}"] = j
+                    st.rerun()
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":

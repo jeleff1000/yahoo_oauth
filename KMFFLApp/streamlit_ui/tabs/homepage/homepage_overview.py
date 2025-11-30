@@ -489,7 +489,7 @@ def _render_quick_tips() -> None:
 
 @st.fragment
 def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
-    """Homepage with hamburger menu navigation - revamped for visual appeal."""
+    """Homepage with subtab controlled via hamburger menu."""
     apply_modern_styles()
     _apply_homepage_styles()
 
@@ -497,42 +497,25 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
     summary = df_dict.get("summary", {})
     matchup_df = _get_matchup_df(df_dict)
 
-    # Section names
-    section_names = [
-        "Overview",
-        "Hall of Fame",
-        "Standings",
-        "Schedules",
-        "Head-to-Head",
-        "Recaps",
-    ]
+    # Get subtab from session state (controlled by hamburger menu)
+    subtab_idx = st.session_state.get("subtab_Home", 0)
+    section_names = ["Overview", "Hall of Fame", "Standings", "Schedules", "Head-to-Head", "Recaps"]
+    section_name = section_names[subtab_idx] if subtab_idx < len(section_names) else "Overview"
 
-    # Use native tabs for navigation
-    tabs = st.tabs(section_names)
-
-    # ========================================
-    # TAB 0: OVERVIEW (Revamped Landing Page)
-    # ========================================
-    with tabs[0]:
+    # Render only the active section (lazy loading)
+    if section_name == "Overview":
         # Hero section with current season info
         _render_hero(summary)
-
         # Quick stats row
         _render_quick_stats(summary)
-
         # Navigation tiles
         _render_navigation_tiles()
-
         # Key concepts (compact)
         _render_key_concepts()
-
         # Quick tips
         _render_quick_tips()
 
-    # ========================================
-    # TAB 1: HALL OF FAME
-    # ========================================
-    with tabs[1]:
+    elif section_name == "Hall of Fame":
         if HALL_OF_FAME_AVAILABLE:
             try:
                 HallOfFameViewer(df_dict).display()
@@ -545,10 +528,7 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
             with st.expander("Debug: Import error"):
                 st.code(HALL_OF_FAME_ERROR)
 
-    # ========================================
-    # TAB 2: STANDINGS
-    # ========================================
-    with tabs[2]:
+    elif section_name == "Standings":
         st.markdown("""
         <div class="section-header">
             <h3>Season Standings</h3>
@@ -573,10 +553,7 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
 
             display_season_standings(matchup_df, prefix="standings")
 
-    # ========================================
-    # TAB 3: SCHEDULES
-    # ========================================
-    with tabs[3]:
+    elif section_name == "Schedules":
         st.markdown("""
         <div class="section-header">
             <h3>Team Schedules</h3>
@@ -584,10 +561,7 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
         """, unsafe_allow_html=True)
         display_schedules(df_dict, prefix="schedules")
 
-    # ========================================
-    # TAB 4: HEAD-TO-HEAD
-    # ========================================
-    with tabs[4]:
+    elif section_name == "Head-to-Head":
         st.markdown("""
         <div class="section-header">
             <h3>Head-to-Head Matchups</h3>
@@ -610,10 +584,7 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
         else:
             display_head_to_head(df_dict)
 
-    # ========================================
-    # TAB 5: RECAPS
-    # ========================================
-    with tabs[5]:
+    elif section_name == "Recaps":
         st.markdown("""
         <div class="section-header">
             <h3>Weekly Team Recaps</h3>
