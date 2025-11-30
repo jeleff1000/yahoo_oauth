@@ -401,28 +401,40 @@ def main():
     # Initialize session state
     _init_session_defaults()
 
-    # Top navigation using native tabs - always visible, no hidden sidebar
+    # Navigation options
     tab_names = ["Home", "Managers", "Team Stats", "Players", "Draft", "Transactions", "Simulations", "Extras"]
 
-    # Create main navigation tabs at top of page
-    main_tabs = st.tabs(tab_names)
+    # Compact top navigation - dropdown keeps lazy loading
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        selected_tab = st.selectbox(
+            "Navigate",
+            tab_names,
+            index=st.session_state.get("active_main_tab", 0),
+            key="main_nav_select",
+            label_visibility="collapsed"
+        )
+        # Update session state when selection changes
+        if tab_names.index(selected_tab) != st.session_state.get("active_main_tab", 0):
+            st.session_state["active_main_tab"] = tab_names.index(selected_tab)
+            st.rerun()
 
-    # Render content within each tab
-    with main_tabs[0]:
+    # Render ONLY the active tab (true lazy loading!)
+    if selected_tab == "Home":
         render_home_tab()
-    with main_tabs[1]:
+    elif selected_tab == "Managers":
         render_managers_tab()
-    with main_tabs[2]:
+    elif selected_tab == "Team Stats":
         render_team_stats_tab()
-    with main_tabs[3]:
+    elif selected_tab == "Players":
         render_players_tab()
-    with main_tabs[4]:
+    elif selected_tab == "Draft":
         render_draft_tab()
-    with main_tabs[5]:
+    elif selected_tab == "Transactions":
         render_transactions_tab()
-    with main_tabs[6]:
+    elif selected_tab == "Simulations":
         render_simulations_tab()
-    with main_tabs[7]:
+    elif selected_tab == "Extras":
         render_extras_tab()
 
 
