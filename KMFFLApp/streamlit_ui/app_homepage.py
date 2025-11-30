@@ -419,6 +419,48 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
+    # Force clean menu style in popover - injected AFTER modern_styles
+    st.markdown("""
+    <style>
+    /* POPOVER MENU OVERRIDE - Maximum specificity to beat tab styling */
+    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] {
+        flex-direction: column !important;
+        gap: 0.25rem !important;
+        background: transparent !important;
+    }
+    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+        all: unset !important;
+        display: flex !important;
+        align-items: center !important;
+        padding: 0.5rem 0.75rem !important;
+        border-radius: 6px !important;
+        cursor: pointer !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        font-size: 0.9rem !important;
+        font-weight: normal !important;
+        color: inherit !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
+        background: rgba(128, 128, 128, 0.12) !important;
+    }
+    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"],
+    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
+        background: rgba(102, 126, 234, 0.18) !important;
+        font-weight: 500 !important;
+    }
+    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label * {
+        color: inherit !important;
+    }
+    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
+        display: none !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     # Build menu options with hierarchy
     menu_options = []
     menu_mapping = {}  # Maps display string to (main_idx, subtab_idx or None)

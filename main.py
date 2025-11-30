@@ -39,6 +39,21 @@ except ImportError as e:
 # =========================
 # MotherDuck Database Discovery
 # =========================
+def format_league_display_name(db_name: str) -> str:
+    """
+    Format league database name for display.
+    Strips 'l_' prefix that was added for digit-starting names.
+
+    Example: 'l_5townsfootball' -> '5townsfootball'
+    """
+    if not db_name:
+        return db_name
+    # Strip the 'l_' prefix if it was added because name started with a digit
+    if db_name.startswith("l_") and len(db_name) > 2 and db_name[2].isdigit():
+        return db_name[2:]
+    return db_name
+
+
 def get_existing_league_databases() -> list[str]:
     """
     Discover existing league databases in MotherDuck.
@@ -1671,19 +1686,10 @@ def render_landing_page():
             existing_dbs = get_existing_league_databases()
 
         if existing_dbs:
-            def format_league_name(x: str) -> str:
-                """Format league name for display - strip 'l_' prefix added for digit-starting names."""
-                if x == "":
-                    return "-- Choose a league --"
-                # Strip the 'l_' prefix if it was added because name started with a digit
-                if x.startswith("l_") and len(x) > 2 and x[2].isdigit():
-                    return x[2:]
-                return x
-
             selected_db = st.selectbox(
                 "Select League:",
                 options=[""] + existing_dbs,
-                format_func=format_league_name,
+                format_func=lambda x: "-- Choose a league --" if x == "" else format_league_display_name(x),
                 key="league_selector"
             )
 
@@ -1737,7 +1743,7 @@ def run_analytics_app():
             st.cache_resource.clear()
             st.rerun()
 
-        st.markdown(f"**Current League:** {selected_db}")
+        st.markdown(f"**Current League:** {format_league_display_name(selected_db)}")
 
     # Set environment variable for the selected database BEFORE importing
     os.environ["SELECTED_LEAGUE_DB"] = selected_db
