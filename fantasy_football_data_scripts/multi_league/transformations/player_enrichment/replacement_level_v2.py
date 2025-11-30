@@ -213,6 +213,58 @@ def main(args):
     season_replacement.to_parquet(season_file, index=False)
     print(f"   [OK] Saved season averages to {season_file.name} ({len(season_replacement):,} rows)")
 
+    # =========================================================================
+    # NEW: Add SPAR columns directly to player.parquet
+    # This solves the circular dependency issue where player_stats_v2.py runs
+    # before replacement_levels exist, so SPAR was never calculated
+    # =========================================================================
+    print("\n[SPAR] Adding SPAR columns to player.parquet...")
+
+    # Merge weekly replacement levels to player data
+    player_with_spar = player_df.merge(
+        combined_df[['year', 'week', 'position', 'replacement_ppg', 'replacement_ppg_season']],
+        on=['year', 'week', 'position'],
+        how='left'
+    )
+
+    # Calculate SPAR metrics (matching player_stats_v2.py naming conventions)
+
+    # player_spar: Weekly points above replacement (all games - talent metric)
+    player_with_spar['player_spar'] = (
+        player_with_spar['fantasy_points'] - player_with_spar['replacement_ppg']
+    ).round(2)
+
+    # manager_spar: Weekly points above replacement (started games only - usage metric)
+    if 'is_started' in player_with_spar.columns:
+        player_with_spar['manager_spar'] = np.where(
+            player_with_spar['is_started'] == 1,
+            player_with_spar['player_spar'],
+            0.0
+        )
+    else:
+        # Fallback: same as player_spar if is_started not available
+        player_with_spar['manager_spar'] = player_with_spar['player_spar']
+
+    # spar_season: Season-level SPAR (for draft value comparison)
+    player_with_spar['spar_season'] = (
+        player_with_spar['fantasy_points'] - player_with_spar['replacement_ppg_season']
+    ).round(2)
+
+    # Count how many players got SPAR values
+    spar_count = player_with_spar['player_spar'].notna().sum()
+    total_count = len(player_with_spar)
+    print(f"   [OK] Calculated SPAR for {spar_count:,}/{total_count:,} player rows ({100*spar_count/total_count:.1f}%)")
+
+    # Save updated player.parquet
+    player_with_spar.to_parquet(player_file, index=False)
+    print(f"   [OK] Updated {player_file.name} with SPAR columns")
+
+    # Also update CSV if it exists
+    csv_file = player_file.with_suffix('.csv')
+    if csv_file.exists():
+        player_with_spar.to_csv(csv_file, index=False)
+        print(f"   [OK] Updated {csv_file.name}")
+
     print("\n" + "="*80)
     print("[SUCCESS] REPLACEMENT LEVEL CALCULATION COMPLETE")
     print("="*80 + "\n")
