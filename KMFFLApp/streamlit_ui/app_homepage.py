@@ -419,40 +419,30 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Hamburger menu styling
+    # Simple hamburger menu - clean list style
     st.markdown("""
     <style>
-    /* Current tab label */
-    .current-section {
+    /* Current section header */
+    .menu-current {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white !important;
-        padding: 0.5rem 0.75rem;
+        padding: 8px 12px;
         border-radius: 6px;
-        margin: 0.25rem 0;
+        margin: 4px 0;
         font-weight: 600;
     }
-    /* Active subtab */
-    .active-sub {
-        color: #667eea;
-        font-size: 0.78rem;
-        padding: 0.1rem 0;
-        font-weight: 500;
+    /* Subtab radio - make it a simple small list */
+    [data-testid="stPopover"] .stRadio > div {
+        margin-left: 20px;
+        gap: 0 !important;
     }
-
-    /* Make subtab buttons small and subtle */
-    [data-testid="stPopover"] [data-testid="column"]:last-child button {
-        font-size: 0.75rem !important;
-        padding: 0.2rem 0.4rem !important;
+    [data-testid="stPopover"] .stRadio label {
+        font-size: 0.8rem !important;
+        padding: 2px 8px !important;
         min-height: unset !important;
-        height: auto !important;
-        background: transparent !important;
-        border: none !important;
-        color: #666 !important;
-        box-shadow: none !important;
     }
-    [data-testid="stPopover"] [data-testid="column"]:last-child button:hover {
-        color: #667eea !important;
-        background: rgba(102, 126, 234, 0.08) !important;
+    [data-testid="stPopover"] .stRadio [data-baseweb="radio"] {
+        margin-right: 4px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -463,23 +453,24 @@ def main():
             is_current = (i == current_idx)
 
             if is_current:
-                # Current tab header
-                st.markdown(f'<div class="current-section">{icon} {name}</div>', unsafe_allow_html=True)
+                # Current section - styled header
+                st.markdown(f'<div class="menu-current">{icon} {name}</div>', unsafe_allow_html=True)
 
-                # Subtabs
+                # Subtabs as radio
                 section_subtabs = subtabs.get(name)
                 if section_subtabs:
-                    # Use columns for indentation: small spacer | subtab content
-                    spacer, content = st.columns([0.15, 0.85])
-                    with content:
-                        for j, subtab_name in enumerate(section_subtabs):
-                            if j == current_subtab_idx:
-                                st.markdown(f'<div class="active-sub">● {subtab_name}</div>', unsafe_allow_html=True)
-                            else:
-                                if st.button(f"○ {subtab_name}", key=f"sub_{i}_{j}"):
-                                    st.session_state[f"subtab_{name}"] = j
-                                    st.rerun()
+                    new_subtab = st.radio(
+                        "Subtab",
+                        options=section_subtabs,
+                        index=current_subtab_idx,
+                        key=f"radio_{name}",
+                        label_visibility="collapsed"
+                    )
+                    if section_subtabs.index(new_subtab) != current_subtab_idx:
+                        st.session_state[f"subtab_{name}"] = section_subtabs.index(new_subtab)
+                        st.rerun()
             else:
+                # Other sections - buttons
                 if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
                     st.session_state["active_main_tab"] = i
                     st.session_state[f"subtab_{name}"] = 0

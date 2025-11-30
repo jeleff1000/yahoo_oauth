@@ -148,6 +148,9 @@ jobs:
           # Create sanitized database name (just league name, no year - data contains all historical years)
           db_name = league_name.lower().replace(' ', '_').replace('-', '_')
           db_name = ''.join(c if c.isalnum() or c == '_' else '' for c in db_name)
+          # Add 'l_' prefix if name starts with a digit (SQL identifiers can't start with digits)
+          if db_name and db_name[0].isdigit():
+              db_name = f"l_{db_name}"
 
           # Set outputs for next steps
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
