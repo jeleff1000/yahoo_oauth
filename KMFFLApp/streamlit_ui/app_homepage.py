@@ -419,10 +419,8 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Hamburger menu at top with contextual subtabs
+    # Hamburger menu at top with nested subtabs
     with st.popover("☰ Menu"):
-        # Main sections
-        st.markdown("**Sections:**")
         for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
             is_current = (i == current_idx)
             label = f"{icon} {name}" + (" ✓" if is_current else "")
@@ -431,17 +429,16 @@ def main():
                 st.session_state[f"subtab_{name}"] = 0  # Reset subtab when switching main tab
                 st.rerun()
 
-        # Show subtabs for current section if they exist
-        current_subtabs = subtabs.get(selected_tab)
-        if current_subtabs:
-            st.markdown("---")
-            st.markdown(f"**{selected_tab}:**")
-            for j, subtab_name in enumerate(current_subtabs):
-                is_active = (j == current_subtab_idx)
-                sub_label = f"  {'●' if is_active else '○'} {subtab_name}"
-                if st.button(sub_label, key=f"subtab_{selected_tab}_{subtab_name}", use_container_width=True):
-                    st.session_state[f"subtab_{selected_tab}"] = j
-                    st.rerun()
+            # Show subtabs nested under current section
+            if is_current:
+                section_subtabs = subtabs.get(name)
+                if section_subtabs:
+                    for j, subtab_name in enumerate(section_subtabs):
+                        is_active = (j == current_subtab_idx)
+                        sub_label = f"    {'●' if is_active else '○'} {subtab_name}"
+                        if st.button(sub_label, key=f"subtab_{name}_{subtab_name}", use_container_width=True):
+                            st.session_state[f"subtab_{name}"] = j
+                            st.rerun()
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":
