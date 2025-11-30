@@ -238,13 +238,8 @@ def render_players_career():
 @st.fragment
 def render_players_visualize():
     """Player visualization graphs - navigation handled by unified menu"""
-    # Tab categories
-    tab_names = [
-        "📋 Player Cards & Reports",
-        "📊 Player Analysis",
-        "⚡ SPAR Efficiency",
-        "🌐 League Trends"
-    ]
+    # Tab categories (must match main() config)
+    tab_names = ["Player Cards", "Player Analysis", "SPAR Efficiency", "League Trends"]
 
     # Get selections from session state (set by unified hamburger menu)
     selected_idx = st.session_state.get("active_players_viz_tab", 0)
@@ -252,31 +247,30 @@ def render_players_visualize():
     selected_graph = st.session_state.get("selected_viz_graph", None)
 
     try:
-        # Tab 1: Player Cards & Reports
-        if selected_tab == "📋 Player Cards & Reports":
-            if selected_graph == "🏈 Player Card":
+        # Tab 1: Player Cards
+        if selected_tab == "Player Cards":
+            if selected_graph == "Player Card":
                 from tabs.player_stats.graphs.player_graphs.player_card import display_player_card
                 display_player_card(prefix="players_card")
-            elif selected_graph == "🗓️ Weekly Heatmap":
+            elif selected_graph == "Weekly Heatmap":
                 from tabs.player_stats.graphs.player_graphs.weekly_heatmap import display_weekly_performance_heatmap
                 display_weekly_performance_heatmap(prefix="players_heatmap")
-            elif selected_graph == "📈 Scoring Trends":
+            elif selected_graph == "Scoring Trends":
                 from tabs.player_stats.graphs.player_graphs.player_scoring_graph import display_player_scoring_graphs
                 display_player_scoring_graphs(prefix="players_player_scoring")
             else:
-                # Default to first graph
                 from tabs.player_stats.graphs.player_graphs.player_card import display_player_card
                 display_player_card(prefix="players_card")
 
         # Tab 2: Player Analysis
-        elif selected_tab == "📊 Player Analysis":
-            if selected_graph == "🎯 Consistency":
+        elif selected_tab == "Player Analysis":
+            if selected_graph == "Consistency":
                 from tabs.player_stats.graphs.player_graphs.player_consistency import display_player_consistency_graph
                 display_player_consistency_graph(prefix="players_consistency")
-            elif selected_graph == "💥 Boom/Bust":
+            elif selected_graph == "Boom/Bust":
                 from tabs.player_stats.graphs.player_graphs.boom_bust_distribution import display_boom_bust_distribution
                 display_boom_bust_distribution(prefix="players_boom_bust")
-            elif selected_graph == "🕸️ Radar Comparison":
+            elif selected_graph == "Radar Comparison":
                 from tabs.player_stats.graphs.player_graphs.player_radar_comparison import display_player_radar_comparison
                 display_player_radar_comparison(prefix="players_radar")
             else:
@@ -284,23 +278,23 @@ def render_players_visualize():
                 display_player_consistency_graph(prefix="players_consistency")
 
         # Tab 3: SPAR Efficiency
-        elif selected_tab == "⚡ SPAR Efficiency":
-            if selected_graph == "📊 Manager Capture Rate":
+        elif selected_tab == "SPAR Efficiency":
+            if selected_graph == "Manager Capture Rate":
                 from tabs.player_stats.graphs.spar_graphs.manager_capture_rate import display_manager_spar_capture_rate
                 display_manager_spar_capture_rate(prefix="spar_capture")
-            elif selected_graph == "📈 SPAR per Week":
+            elif selected_graph == "SPAR per Week":
                 from tabs.player_stats.graphs.spar_graphs.spar_per_week import display_spar_per_week_played
                 display_spar_per_week_played(prefix="spar_week")
-            elif selected_graph == "💧 Weekly Waterfall":
+            elif selected_graph == "Weekly Waterfall":
                 from tabs.player_stats.graphs.spar_graphs.weekly_spar_waterfall import display_weekly_spar_waterfall
                 display_weekly_spar_waterfall(prefix="spar_waterfall")
-            elif selected_graph == "🎯 Consistency Scatter":
+            elif selected_graph == "Consistency Scatter":
                 from tabs.player_stats.graphs.spar_graphs.spar_consistency_scatter import display_spar_consistency_scatter
                 display_spar_consistency_scatter(prefix="spar_consistency")
-            elif selected_graph == "📉 Cumulative SPAR":
+            elif selected_graph == "Cumulative SPAR":
                 from tabs.player_stats.graphs.spar_graphs.cumulative_spar import display_cumulative_spar_over_season
                 display_cumulative_spar_over_season(prefix="spar_cumulative")
-            elif selected_graph == "⚡ SPAR vs PPG":
+            elif selected_graph == "SPAR vs PPG":
                 from tabs.player_stats.graphs.spar_graphs.spar_vs_ppg_efficiency import display_spar_vs_ppg_efficiency
                 display_spar_vs_ppg_efficiency(prefix="spar_ppg")
             else:
@@ -308,14 +302,14 @@ def render_players_visualize():
                 display_manager_spar_capture_rate(prefix="spar_capture")
 
         # Tab 4: League Trends
-        elif selected_tab == "🌐 League Trends":
-            if selected_graph == "📊 Position Groups":
+        elif selected_tab == "League Trends":
+            if selected_graph == "Position Groups":
                 from tabs.player_stats.graphs.league_graphs.position_group_scoring import display_position_group_scoring_graphs
                 display_position_group_scoring_graphs(prefix="league_pos_group")
-            elif selected_graph == "📦 Position SPAR Distribution":
+            elif selected_graph == "Position SPAR Distribution":
                 from tabs.player_stats.graphs.league_graphs.position_spar_boxplot import display_position_spar_boxplot
                 display_position_spar_boxplot(prefix="league_spar_box")
-            elif selected_graph == "🏆 Manager Leaderboard":
+            elif selected_graph == "Manager Leaderboard":
                 from tabs.player_stats.graphs.league_graphs.manager_spar_leaderboard import display_manager_spar_leaderboard
                 display_manager_spar_leaderboard(prefix="league_manager_board")
             else:
@@ -419,6 +413,72 @@ def main():
     from tabs.shared.modern_styles import apply_modern_styles
     apply_modern_styles()
 
+    # Clean navigation menu styling (override button styles inside popover)
+    st.markdown("""
+    <style>
+    /* Clean menu styling inside popovers */
+    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        background: transparent;
+    }
+
+    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+        all: unset;
+        display: flex !important;
+        align-items: center !important;
+        padding: 0.6rem 1rem !important;
+        margin: 0 !important;
+        cursor: pointer !important;
+        border-radius: 6px !important;
+        font-size: 0.95rem !important;
+        font-weight: 400 !important;
+        color: inherit !important;
+        background: transparent !important;
+        border: none !important;
+        transition: background-color 0.15s ease !important;
+    }
+
+    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
+        background-color: rgba(128, 128, 128, 0.15) !important;
+    }
+
+    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
+        background-color: rgba(99, 102, 241, 0.15) !important;
+        color: rgb(99, 102, 241) !important;
+        font-weight: 600 !important;
+    }
+
+    /* Show radio circles in menu for clarity */
+    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
+        display: flex !important;
+        margin-right: 0.5rem !important;
+    }
+
+    /* Menu section labels */
+    [data-testid="stPopover"] div[data-testid="stRadio"] > label {
+        font-size: 0.75rem !important;
+        font-weight: 600 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        color: rgba(128, 128, 128, 0.8) !important;
+        margin-bottom: 0.25rem !important;
+    }
+
+    /* Dividers in menu */
+    [data-testid="stPopover"] hr {
+        margin: 0.75rem 0 !important;
+        border-color: rgba(128, 128, 128, 0.2) !important;
+    }
+
+    /* Popover container */
+    [data-testid="stPopover"] > div {
+        min-width: 220px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     # Check connectivity
     if not _safe_boot():
         st.stop()
@@ -437,19 +497,22 @@ def main():
     }
 
     # Visualization subtabs (nested under Players > Visualize)
-    viz_categories = ["📋 Player Cards & Reports", "📊 Player Analysis", "⚡ SPAR Efficiency", "🌐 League Trends"]
+    viz_categories = ["Player Cards", "Player Analysis", "SPAR Efficiency", "League Trends"]
     viz_graphs = {
-        "📋 Player Cards & Reports": ["🏈 Player Card", "🗓️ Weekly Heatmap", "📈 Scoring Trends"],
-        "📊 Player Analysis": ["🎯 Consistency", "💥 Boom/Bust", "🕸️ Radar Comparison"],
-        "⚡ SPAR Efficiency": ["📊 Manager Capture Rate", "📈 SPAR per Week", "💧 Weekly Waterfall", "🎯 Consistency Scatter", "📉 Cumulative SPAR", "⚡ SPAR vs PPG"],
-        "🌐 League Trends": ["📊 Position Groups", "📦 Position SPAR Distribution", "🏆 Manager Leaderboard"],
+        "Player Cards": ["Player Card", "Weekly Heatmap", "Scoring Trends"],
+        "Player Analysis": ["Consistency", "Boom/Bust", "Radar Comparison"],
+        "SPAR Efficiency": ["Manager Capture Rate", "SPAR per Week", "Weekly Waterfall", "Consistency Scatter", "Cumulative SPAR", "SPAR vs PPG"],
+        "League Trends": ["Position Groups", "Position SPAR Distribution", "Manager Leaderboard"],
     }
 
+    # Build current location display
+    current_location = selected_tab if "selected_tab" in dir() else tab_names[st.session_state.get("active_main_tab", 0)]
+
     # Unified hamburger menu
-    with st.popover("☰ Navigate", use_container_width=False):
+    with st.popover("☰ Menu", use_container_width=False):
         # Main tab selection
         selected_tab = st.radio(
-            "📍 Main Section:",
+            "Section",
             tab_names,
             index=st.session_state.get("active_main_tab", 0),
             key="main_tab_selector"
@@ -460,7 +523,7 @@ def main():
             st.divider()
             subtab_key = f"active_{selected_tab.lower()}_subtab"
             selected_subtab = st.radio(
-                f"📂 {selected_tab} View:",
+                f"{selected_tab}",
                 subtabs_config[selected_tab],
                 index=st.session_state.get(subtab_key, 0),
                 key=f"{selected_tab.lower()}_subtab_selector"
@@ -471,7 +534,7 @@ def main():
             if selected_tab == "Players" and selected_subtab == "Visualize":
                 st.divider()
                 selected_viz_cat = st.radio(
-                    "📊 Visualization Category:",
+                    "Category",
                     viz_categories,
                     index=st.session_state.get("active_players_viz_tab", 0),
                     key="viz_category_selector"
@@ -480,7 +543,7 @@ def main():
 
                 st.divider()
                 selected_graph = st.radio(
-                    "📈 Graph:",
+                    "Graph",
                     viz_graphs[selected_viz_cat],
                     key="viz_graph_selector"
                 )
