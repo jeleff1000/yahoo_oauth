@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 from typing import Any, Dict, Optional
+import sys
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+
+# Ensure streamlit_ui directory is in path for imports
+_streamlit_ui_dir = Path(__file__).parent.parent.parent.resolve()
+if str(_streamlit_ui_dir) not in sys.path:
+    sys.path.insert(0, str(_streamlit_ui_dir))
 
 # Reuse the proven viewer from player_stats
 from ..player_stats.weekly_player_subprocesses.head_to_head import H2HViewer, filter_h2h_data
@@ -15,26 +22,7 @@ from md.data_access import (
     load_player_week,
     load_optimal_week,
 )
-
-def _as_dataframe(obj: Any) -> Optional[pd.DataFrame]:
-    if isinstance(obj, pd.DataFrame):
-        return obj
-    try:
-        if isinstance(obj, (list, tuple)) and obj and isinstance(obj[0], dict):
-            return pd.DataFrame(obj)
-        if isinstance(obj, dict):
-            return pd.DataFrame(obj)
-    except Exception:
-        return None
-    return None
-
-def _get_matchup_df(df_dict: Dict[str, Any]) -> Optional[pd.DataFrame]:
-    if "Matchup Data" in df_dict:
-        return _as_dataframe(df_dict["Matchup Data"])
-    for k, v in df_dict.items():
-        if str(k).strip().lower() == "matchup data":
-            return _as_dataframe(v)
-    return None
+from shared.dataframe_utils import as_dataframe, get_matchup_df
 
 @st.fragment
 def display_head_to_head(df_dict: Dict[str, Any]):
@@ -46,7 +34,7 @@ def display_head_to_head(df_dict: Dict[str, Any]):
     """
     # We don't actually need the matchup dataframe for this viewer,
     # but we’ll use it to help infer available seasons/weeks if needed.
-    mdf = _get_matchup_df(df_dict)
+    mdf = get_matchup_df(df_dict)
 
     st.header("Head-to-Head")
 

@@ -16,45 +16,17 @@ opponent, opponent_week, opponent_year, week, year, team_points, opponent_points
 win, loss
 """
 import streamlit as st
+import sys
+from pathlib import Path
+
+# Ensure streamlit_ui directory is in path for imports
+_streamlit_ui_dir = Path(__file__).parent.parent.parent.resolve()
+if str(_streamlit_ui_dir) not in sys.path:
+    sys.path.insert(0, str(_streamlit_ui_dir))
+
 from md.data_access import run_query, T
 from ..shared.modern_styles import apply_modern_styles
-
-
-def _detect_theme():
-    """Detect if dark mode is active."""
-    try:
-        theme_base = st.get_option("theme.base")
-        if theme_base:
-            return 'dark' if theme_base == 'dark' else 'light'
-    except:
-        pass
-    if 'theme' in st.session_state:
-        return st.session_state['theme']
-    return 'light'
-
-
-def _get_theme_colors():
-    """Get theme-aware colors."""
-    theme = _detect_theme()
-    is_dark = theme == 'dark'
-
-    return {
-        'is_dark': is_dark,
-        # Backgrounds
-        'bg': '#1e1f22' if is_dark else '#ffffff',
-        'bg_secondary': '#2b2d31' if is_dark else '#f8f9fa',
-        # Borders & shadows
-        'border': '#3a3c41' if is_dark else '#e0e0e0',
-        'shadow': '0 4px 12px rgba(0,0,0,0.3)' if is_dark else '0 2px 8px rgba(0,0,0,0.08)',
-        # Text
-        'text': '#e0e0e0' if is_dark else '#333333',
-        'text_muted': '#a0a0a0' if is_dark else '#666666',
-        # Status colors
-        'win': '#66BB6A' if is_dark else '#4CAF50',
-        'loss': '#EF5350' if is_dark else '#f44336',
-        # Header gradient stays the same (works in both modes)
-        'header_gradient': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    }
+from shared.themes import detect_theme
 
 class SchedulesViewer:
     def __init__(self):
@@ -177,73 +149,65 @@ class SchedulesViewer:
     @st.fragment
     def display(self, prefix: str = "schedules"):
         """Display the schedules UI"""
-        # Apply shared modern styles
+        # Apply shared modern styles (includes CSS variables)
         apply_modern_styles()
 
-        # Get theme colors
-        colors = _get_theme_colors()
-        is_dark = colors['is_dark']
-
-        # Add theme-aware CSS
-        st.markdown(f"""
+        # Add theme-aware CSS using CSS variables
+        st.markdown("""
             <style>
-            /* Schedule section styling - theme aware */
-            .schedule-section {{
-                background: {colors['bg']};
-                border-radius: 10px;
-                padding: 1.5rem;
-                margin: 1rem 0;
-                box-shadow: {colors['shadow']};
-                border: 1px solid {colors['border']};
-            }}
+            /* Schedule section styling - uses CSS variables for theming */
+            .schedule-section {
+                background: var(--bg-primary, #ffffff);
+                border-radius: var(--radius-md, 8px);
+                padding: var(--space-lg, 1.5rem);
+                margin: var(--space-md, 1rem) 0;
+                border: 1px solid var(--border, #e0e0e0);
+                /* NO shadow for static display */
+            }
 
-            .schedule-header {{
-                background: {colors['header_gradient']};
-                color: white;
-                padding: 0.8rem 1.2rem;
-                border-radius: 8px;
-                margin-bottom: 1rem;
-                font-weight: bold;
+            .schedule-header {
+                color: var(--text-primary, #333333);
+                padding-bottom: var(--space-sm, 0.5rem);
+                border-bottom: 2px solid var(--accent, #667eea);
+                margin-bottom: var(--space-md, 1rem);
+                font-weight: 600;
                 font-size: 1.1rem;
-            }}
+            }
 
-            /* Metric cards styling */
-            div[data-testid="stMetric"] {{
-                background: {'linear-gradient(145deg, #2b2d31 0%, #1e1f22 100%)' if is_dark else 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)'};
+            /* Metric cards styling - static, no heavy shadows */
+            div[data-testid="stMetric"] {
+                background: var(--bg-secondary, #f8f9fa);
                 padding: 0.75rem;
-                border-radius: 8px;
-                border: 1px solid {colors['border']};
-                box-shadow: {colors['shadow']};
-            }}
+                border-radius: var(--radius-md, 8px);
+                border: 1px solid var(--border, #e0e0e0);
+            }
 
             /* Win/Loss cell styling */
-            .win-cell {{
-                color: {colors['win']};
+            .win-cell {
+                color: var(--success, #4CAF50);
                 font-weight: bold;
-            }}
-            .loss-cell {{
-                color: {colors['loss']};
+            }
+            .loss-cell {
+                color: var(--error, #f44336);
                 font-weight: bold;
-            }}
+            }
 
             /* Mobile responsive */
-            @media (max-width: 768px) {{
-                .schedule-section {{
-                    padding: 1rem;
-                    margin: 0.5rem 0;
-                }}
-                .schedule-header {{
-                    padding: 0.6rem 1rem;
+            @media (max-width: 768px) {
+                .schedule-section {
+                    padding: var(--space-md, 1rem);
+                    margin: var(--space-sm, 0.5rem) 0;
+                }
+                .schedule-header {
                     font-size: 1rem;
-                }}
-            }}
+                }
+            }
 
-            @media (max-width: 480px) {{
-                .schedule-header {{
-                    padding: 0.5rem 0.75rem;
+            @media (max-width: 480px) {
+                .schedule-header {
                     font-size: 0.9rem;
-                }}
-            }}
+                }
+            }
             </style>
         """, unsafe_allow_html=True)
 
@@ -279,6 +243,14 @@ class SchedulesViewer:
             )
 
         st.markdown(f"### {selected_manager}'s {selected_year} Season")
+
+        # Get theme-aware colors for pandas styling (requires actual values, not CSS vars)
+        is_dark = detect_theme() == 'dark'
+        colors = {
+            'win': '#10B981',  # success green
+            'loss': '#EF4444',  # error red
+            'text_muted': '#9CA3AF' if is_dark else '#6B7280',
+        }
 
         # Helper function to style schedule rows
         def style_schedule_row(row):
@@ -329,7 +301,7 @@ class SchedulesViewer:
                         record_color = colors['win'] if wins > losses else colors['loss'] if losses > wins else colors['text_muted']
                         st.markdown(f"""
                             <div style="text-align: center; padding: 0.5rem;">
-                                <div style="font-size: 0.85rem; color: {colors['text_muted']};">Record</div>
+                                <div style="font-size: 0.85rem; color: var(--text-muted, {colors['text_muted']});">Record</div>
                                 <div style="font-size: 1.8rem; font-weight: bold; color: {record_color};">{wins}-{losses}</div>
                             </div>
                         """, unsafe_allow_html=True)

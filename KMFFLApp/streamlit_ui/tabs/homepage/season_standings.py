@@ -1,19 +1,15 @@
 import streamlit as st
 import duckdb
+import sys
+from pathlib import Path
+
+# Ensure streamlit_ui directory is in path for imports
+_streamlit_ui_dir = Path(__file__).parent.parent.parent.resolve()
+if str(_streamlit_ui_dir) not in sys.path:
+    sys.path.insert(0, str(_streamlit_ui_dir))
+
 from ..shared.modern_styles import apply_modern_styles
-
-
-def _detect_theme():
-    """Detect if dark mode is active."""
-    try:
-        theme_base = st.get_option("theme.base")
-        if theme_base:
-            return 'dark' if theme_base == 'dark' else 'light'
-    except:
-        pass
-    if 'theme' in st.session_state:
-        return st.session_state['theme']
-    return 'light'
+from shared.themes import detect_theme
 
 
 class SeasonStandingsViewer:
@@ -23,12 +19,11 @@ class SeasonStandingsViewer:
         self.con.register(self.table, df)
 
     def _get_theme_aware_colors(self):
-        """Get colors that work in both light and dark mode."""
-        theme = _detect_theme()
-        is_dark = theme == 'dark'
+        """Get colors for pandas styling (requires actual values, not CSS vars)."""
+        is_dark = detect_theme() == 'dark'
 
         return {
-            # Championship/medals
+            # Championship/medals - same in both modes
             'gold': '#FFD700',
             'silver': '#C0C0C0',
             'bronze': '#D4A574' if is_dark else '#CD7F32',
@@ -51,18 +46,13 @@ class SeasonStandingsViewer:
             'consol_semi': '#37474F' if is_dark else '#E3F2FD',
 
             # Special
-            'sacko': '#ff4444',
-            'in_progress': '#64B5F6' if is_dark else '#2196F3',
+            'sacko': '#EF4444',  # Using design token error color
+            'in_progress': '#3B82F6',  # Using design token info color
             'missed': '#757575' if is_dark else '#9E9E9E',
 
             # Text colors based on background
             'text_dark': '#000000',
             'text_light': '#FFFFFF',
-
-            # Legend/UI colors
-            'legend_bg': '#1e1f22' if is_dark else '#f8f9fa',
-            'legend_border': '#3a3c41' if is_dark else '#e0e0e0',
-            'legend_text': '#e0e0e0' if is_dark else '#333333',
 
             # Is dark mode flag
             'is_dark': is_dark,
@@ -70,99 +60,98 @@ class SeasonStandingsViewer:
 
     @st.fragment
     def display(self, prefix: str = ""):
-        # Apply theme-aware styles
+        # Apply theme-aware styles (includes CSS variables)
         apply_modern_styles()
 
         colors = self._get_theme_aware_colors()
         is_dark = colors['is_dark']
 
-        # Theme-aware CSS
-        st.markdown(f"""
+        # Theme-aware CSS using CSS variables
+        st.markdown("""
             <style>
-            /* Standings table container */
-            .standings-container {{
-                border-radius: 12px;
+            /* Standings table container - static display, no heavy shadows */
+            .standings-container {
+                border-radius: var(--radius-md, 8px);
                 overflow: hidden;
-                box-shadow: {'0 4px 12px rgba(0,0,0,0.3)' if is_dark else '0 2px 8px rgba(0,0,0,0.1)'};
-            }}
+                border: 1px solid var(--border, #e0e0e0);
+            }
 
             /* Modern table styling */
-            div[data-testid="stDataFrame"] {{
-                border-radius: 10px;
+            div[data-testid="stDataFrame"] {
+                border-radius: var(--radius-md, 8px);
                 overflow: hidden;
-                box-shadow: {'0 4px 12px rgba(0,0,0,0.3)' if is_dark else '0 2px 8px rgba(0,0,0,0.1)'};
-            }}
-            div[data-testid="stDataFrame"] > div {{
+                border: 1px solid var(--border, #e0e0e0);
+            }
+            div[data-testid="stDataFrame"] > div {
                 border: none !important;
-            }}
+            }
 
-            /* Metric cards styling - theme aware */
-            div[data-testid="stMetric"] {{
-                background: {'linear-gradient(145deg, #2b2d31 0%, #1e1f22 100%)' if is_dark else 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)'};
-                padding: 1rem;
-                border-radius: 10px;
-                border: 1px solid {colors['legend_border']};
-                box-shadow: {'0 2px 8px rgba(0,0,0,0.3)' if is_dark else '0 2px 4px rgba(0,0,0,0.05)'};
-            }}
+            /* Metric cards styling - static, no heavy shadows */
+            div[data-testid="stMetric"] {
+                background: var(--bg-secondary, #f8f9fa);
+                padding: var(--space-md, 1rem);
+                border-radius: var(--radius-md, 8px);
+                border: 1px solid var(--border, #e0e0e0);
+            }
 
             /* Legend styling */
-            .standings-legend {{
-                margin-top: 1rem;
-                padding: 1rem;
-                background: {colors['legend_bg']};
-                border: 1px solid {colors['legend_border']};
-                border-radius: 10px;
-            }}
+            .standings-legend {
+                margin-top: var(--space-md, 1rem);
+                padding: var(--space-md, 1rem);
+                background: var(--bg-secondary, #f8f9fa);
+                border: 1px solid var(--border, #e0e0e0);
+                border-radius: var(--radius-md, 8px);
+            }
 
-            .legend-row {{
+            .legend-row {
                 display: flex;
                 flex-wrap: wrap;
                 gap: 8px;
-                margin-top: 0.5rem;
+                margin-top: var(--space-sm, 0.5rem);
                 align-items: center;
-            }}
+            }
 
-            .legend-item {{
+            .legend-item {
                 padding: 4px 10px;
-                border-radius: 6px;
+                border-radius: var(--radius-sm, 4px);
                 font-size: 0.85rem;
                 font-weight: 500;
                 white-space: nowrap;
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
-            }}
+            }
 
-            .legend-label {{
+            .legend-label {
                 font-weight: 600;
                 margin-right: 8px;
-                color: {colors['legend_text']};
-            }}
+                color: var(--text-primary, #333333);
+            }
 
             /* Mobile responsive legend */
-            @media (max-width: 768px) {{
-                .legend-row {{
+            @media (max-width: 768px) {
+                .legend-row {
                     gap: 6px;
-                }}
-                .legend-item {{
+                }
+                .legend-item {
                     padding: 3px 8px;
                     font-size: 0.75rem;
-                }}
-                .legend-label {{
+                }
+                .legend-label {
                     width: 100%;
                     margin-bottom: 4px;
-                }}
-            }}
+                }
+            }
 
-            @media (max-width: 480px) {{
-                .standings-legend {{
-                    padding: 0.75rem;
-                }}
-                .legend-item {{
+            @media (max-width: 480px) {
+                .standings-legend {
+                    padding: var(--space-sm, 0.75rem);
+                }
+                .legend-item {
                     padding: 2px 6px;
                     font-size: 0.7rem;
-                }}
-            }}
+                }
+            }
             </style>
         """, unsafe_allow_html=True)
 

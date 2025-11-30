@@ -116,7 +116,7 @@ class LegendaryGamesViewer:
                             <div class='hof-game-card'>
                                 <div class='game-header'>
                                     <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: #059669;'>{row['combined_score']:.1f} Total</span>
+                                    <span class='game-stat' style='color: var(--success, #059669);'>{row['combined_score']:.1f} Total</span>
                                 </div>
                                 <div style='font-size: 0.95rem;'>
                                     <div style='margin-bottom: 0.2rem;'>
@@ -141,7 +141,7 @@ class LegendaryGamesViewer:
                             <div class='hof-game-card hof-game-card-playoff'>
                                 <div class='game-header'>
                                     <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: #059669;'>{row['combined_score']:.1f} Total</span>
+                                    <span class='game-stat' style='color: var(--success, #059669);'>{row['combined_score']:.1f} Total</span>
                                 </div>
                                 <div style='font-size: 0.95rem;'>
                                     <div style='margin-bottom: 0.2rem;'>
@@ -172,7 +172,7 @@ class LegendaryGamesViewer:
                             <div class='hof-game-card'>
                                 <div class='game-header'>
                                     <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: #059669;'>{row['combined_score']:.1f} Total</span>
+                                    <span class='game-stat' style='color: var(--success, #059669);'>{row['combined_score']:.1f} Total</span>
                                 </div>
                                 <div style='font-size: 0.95rem;'>
                                     <div style='margin-bottom: 0.2rem;'>
@@ -197,7 +197,7 @@ class LegendaryGamesViewer:
                             <div class='hof-game-card hof-game-card-playoff'>
                                 <div class='game-header'>
                                     <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: #059669;'>{row['combined_score']:.1f} Total</span>
+                                    <span class='game-stat' style='color: var(--success, #059669);'>{row['combined_score']:.1f} Total</span>
                                 </div>
                                 <div style='font-size: 0.95rem;'>
                                     <div style='margin-bottom: 0.2rem;'>
@@ -268,10 +268,10 @@ class LegendaryGamesViewer:
                     reg = games[games['is_playoffs'] == 0].head(10)
                     for i, row in reg.iterrows():
                         st.markdown(f"""
-                            <div class='hof-game-card' style='border-left: 3px solid #EF4444;'>
+                            <div class='hof-game-card' style='border-left: 3px solid var(--error, #EF4444);'>
                                 <div class='game-header'>
                                     <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: #EF4444;'>±{row['margin']:.2f}</span>
+                                    <span class='game-stat' style='color: var(--error, #EF4444);'>±{row['margin']:.2f}</span>
                                 </div>
                                 <div style='font-size: 0.95rem;'>
                                     <div style='margin-bottom: 0.2rem;'>
@@ -292,10 +292,10 @@ class LegendaryGamesViewer:
                     if not playoff.empty:
                         for i, row in playoff.iterrows():
                             st.markdown(f"""
-                                <div class='hof-game-card hof-game-card-playoff' style='border-left: 3px solid #EF4444;'>
+                                <div class='hof-game-card hof-game-card-playoff' style='border-left: 3px solid var(--error, #EF4444);'>
                                     <div class='game-header'>
                                         <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                        <span class='game-stat' style='color: #EF4444;'>±{row['margin']:.2f}</span>
+                                        <span class='game-stat' style='color: var(--error, #EF4444);'>±{row['margin']:.2f}</span>
                                     </div>
                                     <div style='font-size: 0.95rem;'>
                                         <div style='margin-bottom: 0.2rem;'>
@@ -387,10 +387,10 @@ class LegendaryGamesViewer:
                     reg = upsets[upsets['is_playoffs'] == 0].head(10)
                     for i, row in reg.iterrows():
                         st.markdown(f"""
-                            <div class='hof-game-card' style='border-left: 3px solid #8B5CF6;'>
+                            <div class='hof-game-card' style='border-left: 3px solid var(--accent, #8B5CF6);'>
                                 <div class='game-header'>
                                     <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: #8B5CF6;'>Upset by {row['proj_diff']:.1f}</span>
+                                    <span class='game-stat' style='color: var(--accent, #8B5CF6);'>Upset by {row['proj_diff']:.1f}</span>
                                 </div>
                                 <div style='font-size: 0.9rem;'>
                                     <div style='margin-bottom: 0.3rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.2);'>
@@ -402,11 +402,11 @@ class LegendaryGamesViewer:
                                         </span>
                                     </div>
                                     <div>
-                                        <div style='color: #059669; font-size: 0.8rem; margin-bottom: 0.2rem;'>Underdog (Won)</div>
-                                        <span class='team-name' style='color: #059669;'>{row['underdog']}</span>
+                                        <div style='color: var(--success, #059669); font-size: 0.8rem; margin-bottom: 0.2rem;'>Underdog (Won)</div>
+                                        <span class='team-name' style='color: var(--success, #059669);'>{row['underdog']}</span>
                                         <span style='float: right;'>
                                             <span class='loser-score' style='font-size: 0.85rem;'>Proj: {row['underdog_proj']:.1f}</span>
-                                            <span style='margin-left: 0.5rem; color: #059669; font-weight: bold;'>{row['underdog_actual']:.1f}</span>
+                                            <span style='margin-left: 0.5rem; color: var(--success, #059669); font-weight: bold;'>{row['underdog_actual']:.1f}</span>
                                         </span>
                                     </div>
                                 </div>
@@ -419,10 +419,10 @@ class LegendaryGamesViewer:
                     if not playoff.empty:
                         for i, row in playoff.iterrows():
                             st.markdown(f"""
-                                <div class='hof-game-card hof-game-card-playoff' style='border-left: 3px solid #8B5CF6;'>
+                                <div class='hof-game-card hof-game-card-playoff' style='border-left: 3px solid var(--accent, #8B5CF6);'>
                                     <div class='game-header'>
                                         <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                        <span class='game-stat' style='color: #8B5CF6;'>Upset by {row['proj_diff']:.1f}</span>
+                                        <span class='game-stat' style='color: var(--accent, #8B5CF6);'>Upset by {row['proj_diff']:.1f}</span>
                                     </div>
                                     <div style='font-size: 0.9rem;'>
                                         <div style='margin-bottom: 0.3rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.2);'>
@@ -434,11 +434,11 @@ class LegendaryGamesViewer:
                                             </span>
                                         </div>
                                         <div>
-                                            <div style='color: #059669; font-size: 0.8rem; margin-bottom: 0.2rem;'>Underdog (Won)</div>
-                                            <span class='team-name' style='color: #059669;'>{row['underdog']}</span>
+                                            <div style='color: var(--success, #059669); font-size: 0.8rem; margin-bottom: 0.2rem;'>Underdog (Won)</div>
+                                            <span class='team-name' style='color: var(--success, #059669);'>{row['underdog']}</span>
                                             <span style='float: right;'>
                                                 <span class='loser-score' style='font-size: 0.85rem;'>Proj: {row['underdog_proj']:.1f}</span>
-                                                <span style='margin-left: 0.5rem; color: #059669; font-weight: bold;'>{row['underdog_actual']:.1f}</span>
+                                                <span style='margin-left: 0.5rem; color: var(--success, #059669); font-weight: bold;'>{row['underdog_actual']:.1f}</span>
                                             </span>
                                         </div>
                                     </div>
@@ -533,7 +533,7 @@ class LegendaryGamesViewer:
                                     <div class='rivalry-stats'>
                                         <span>{row['team_a']}: <b>{int(row['team_a_wins'])}</b></span>
                                         <span>{row['team_b']}: <b>{int(row['team_b_wins'])}</b></span>
-                                        <span style='color: #a5f3fc;'>Avg: {row['avg_combined_score']:.1f}</span>
+                                        <span style='color: var(--text-muted, #a5f3fc);'>Avg: {row['avg_combined_score']:.1f}</span>
                                     </div>
                                 </div>
                             """, unsafe_allow_html=True)
@@ -554,7 +554,7 @@ class LegendaryGamesViewer:
                                     <div class='rivalry-stats'>
                                         <span>{row['team_a']}: <b>{int(row['team_a_wins'])}</b></span>
                                         <span>{row['team_b']}: <b>{int(row['team_b_wins'])}</b></span>
-                                        <span style='color: #a5f3fc;'>Avg: {row['avg_combined_score']:.1f}</span>
+                                        <span style='color: var(--text-muted, #a5f3fc);'>Avg: {row['avg_combined_score']:.1f}</span>
                                     </div>
                                 </div>
                             """, unsafe_allow_html=True)

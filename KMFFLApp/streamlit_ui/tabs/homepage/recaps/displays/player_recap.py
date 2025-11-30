@@ -27,27 +27,59 @@ EXCLUDED_LINEUP_POSITIONS = {"IR", "BN"}
 
 AWARD_CSS = """
 <style>
+/* Award cards - theme-aware with CSS variables */
 .awards-row {display:flex;flex-wrap:wrap;gap:14px;margin:6px 0 18px 0;}
 .awards-row.row1 .award-card,.awards-row.row2 .award-card {flex:1 1 48%;max-width:48%;}
+
+/* Tablet breakpoint */
 @media (max-width:960px){
   .awards-row.row1 .award-card,.awards-row.row2 .award-card {flex:1 1 100%;max-width:100%;}
 }
+
+/* Mobile breakpoint */
+@media (max-width:768px){
+  .awards-row {gap:10px;margin:4px 0 14px 0;}
+  .award-card {padding:8px 12px 8px 10px;min-height:70px;border-radius:14px;}
+  .award-img-wrap {width:56px;height:56px;padding:4px;}
+  .award-emoji {font-size:32px;right:8px;}
+  .award-content {padding-right:48px;}
+  .award-content h4 {font-size:0.75rem;max-width:180px;}
+  .award-content .player-name {font-size:0.95rem;max-width:180px;}
+  .award-content .pts-line {font-size:0.72rem;max-width:180px;}
+}
+
+/* Small mobile breakpoint */
+@media (max-width:480px){
+  .awards-row {gap:8px;margin:3px 0 10px 0;}
+  .award-card {padding:6px 10px 6px 8px;min-height:60px;border-radius:12px;gap:0.6rem;}
+  .award-img-wrap {width:48px;height:48px;padding:3px;}
+  .award-emoji {font-size:26px;right:6px;}
+  .award-content {padding-right:40px;}
+  .award-content h4 {font-size:0.68rem;max-width:140px;}
+  .award-content .player-name {font-size:0.85rem;max-width:140px;line-height:1rem;}
+  .award-content .pts-line {font-size:0.65rem;max-width:140px;}
+}
+
 .award-card {position:relative;display:flex;align-items:center;gap:0.85rem;padding:10px 16px 10px 12px;
-  border-radius:18px;box-shadow:0 3px 8px rgba(0,0,0,0.18);border:2px solid #334155;background:#f1f5f9;min-height:82px;overflow:hidden;}
+  border-radius:18px;box-shadow:0 3px 8px rgba(0,0,0,0.18);border:2px solid var(--border, #334155);
+  background:var(--bg-secondary, #f1f5f9);min-height:82px;overflow:hidden;}
+/* Semantic colors for awards - these stay colorful even in dark mode */
 .award-card.star {background:linear-gradient(135deg,#ecfdf5,#a7f3d0,#34d399);border-color:#059669;}
 .award-card.dud {background:linear-gradient(135deg,#fef2f2,#fecaca,#f87171);border-color:#dc2626;}
 .award-card.whatif {background:linear-gradient(135deg,#eef2ff,#c7d2fe,#818cf8);border-color:#6366f1;}
 .award-card.improved {background:linear-gradient(135deg,#fefce8,#fde68a,#facc15);border-color:#f59e0b;}
-.award-img-wrap {position:relative;width:70px;height:70px;flex-shrink:0;border-radius:50%;background:#fff;padding:6px;
+.award-img-wrap {position:relative;width:70px;height:70px;flex-shrink:0;border-radius:50%;
+  background:var(--bg-primary, #fff);padding:6px;
   display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,0.15);}
 .award-img-wrap.star {box-shadow:0 0 0 4px #6ee7b7,0 0 0 8px #34d39933;}
 .award-img-wrap.dud {box-shadow:0 0 0 4px #f87171,0 0 0 8px #dc262633;}
 .award-img-wrap.whatif {box-shadow:0 0 0 4px #818cf8,0 0 0 8px #6366f133;}
 .award-img-wrap.improved {box-shadow:0 0 0 4px #fbbf24,0 0 0 8px #f59e0b33;}
-.award-img-wrap img {width:100%;height:100%;object-fit:cover;border-radius:50%;border:2px solid #334155;}
+.award-img-wrap img {width:100%;height:100%;object-fit:cover;border-radius:50%;border:2px solid var(--border, #334155);}
 .award-emoji {position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:40px;line-height:1;
   filter:drop-shadow(0 2px 2px rgba(0,0,0,0.25));pointer-events:none;user-select:none;}
 .award-content {display:flex;flex-direction:column;justify-content:center;min-width:0;padding-right:60px;}
+/* Award text - dark text for light gradient backgrounds (semantic colors must remain readable) */
 .award-content h4 {margin:0 0 3px 0;font-size:0.82rem;font-weight:800;color:#1e293b;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px;}
 .award-content .player-name {margin:0 0 3px 0;font-size:1.12rem;font-weight:800;color:#0f172a;line-height:1.20rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px;}
 .award-content .pts-line {font-size:0.78rem;font-weight:600;color:#374151;line-height:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px;}

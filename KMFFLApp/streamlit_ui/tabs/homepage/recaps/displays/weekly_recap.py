@@ -7,9 +7,16 @@ All text/criteria are defined in weekly_recap_config.py for easy editing.
 
 from typing import Any, Dict, Optional, List
 import re
+import sys
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+
+# Ensure streamlit_ui directory is in path for imports
+_streamlit_ui_dir = Path(__file__).parent.parent.parent.parent.parent.resolve()
+if str(_streamlit_ui_dir) not in sys.path:
+    sys.path.insert(0, str(_streamlit_ui_dir))
 
 from ..weekly_recap_config import (
     RESULT_TEMPLATES,
@@ -28,34 +35,7 @@ from ..weekly_recap_config import (
     _to_int,
     _is_win,
 )
-
-
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
-
-def _as_dataframe(obj: Any) -> Optional[pd.DataFrame]:
-    if isinstance(obj, pd.DataFrame):
-        return obj
-    try:
-        if isinstance(obj, (list, tuple)) and obj and isinstance(obj[0], dict):
-            return pd.DataFrame(obj)
-        if isinstance(obj, dict):
-            return pd.DataFrame(obj)
-    except Exception:
-        return None
-    return None
-
-
-def _get_matchup_df(df_dict: Optional[Dict[Any, Any]]) -> Optional[pd.DataFrame]:
-    if not isinstance(df_dict, dict):
-        return None
-    if "Matchup Data" in df_dict:
-        return _as_dataframe(df_dict["Matchup Data"])
-    for k, v in df_dict.items():
-        if str(k).strip().lower() == "matchup data":
-            return _as_dataframe(v)
-    return None
+from shared.dataframe_utils import as_dataframe, get_matchup_df
 
 
 def _norm(s: str) -> str:
@@ -135,7 +115,7 @@ def display_weekly_recap(
     Display a flowing weekly recap narrative.
     All criteria and text are defined in weekly_recap_config.py.
     """
-    matchup_df = _get_matchup_df(df_dict)
+    matchup_df = get_matchup_df(df_dict)
     if matchup_df is None:
         st.info("No `Matchup Data` dataset available.")
         return

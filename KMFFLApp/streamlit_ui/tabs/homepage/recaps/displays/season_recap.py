@@ -1,35 +1,19 @@
 from typing import Any, Dict, Optional
 import re
+import sys
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
+# Ensure streamlit_ui directory is in path for imports
+_streamlit_ui_dir = Path(__file__).parent.parent.parent.parent.parent.resolve()
+if str(_streamlit_ui_dir) not in sys.path:
+    sys.path.insert(0, str(_streamlit_ui_dir))
+
 # Import contextual helpers module to avoid circular imports
 from ..helpers import contextual_helpers as ctx
-
-
-def _as_dataframe(obj: Any) -> Optional[pd.DataFrame]:
-    if isinstance(obj, pd.DataFrame):
-        return obj
-    try:
-        if isinstance(obj, (list, tuple)) and obj and isinstance(obj[0], dict):
-            return pd.DataFrame(obj)
-        if isinstance(obj, dict):
-            return pd.DataFrame(obj)
-    except Exception:
-        return None
-    return None
-
-
-def _get_matchup_df(df_dict: Optional[Dict[Any, Any]]) -> Optional[pd.DataFrame]:
-    if not isinstance(df_dict, dict):
-        return None
-    if "Matchup Data" in df_dict:
-        return _as_dataframe(df_dict["Matchup Data"])
-    for k, v in df_dict.items():
-        if str(k).strip().lower() == "matchup data":
-            return _as_dataframe(v)
-    return None
+from shared.dataframe_utils import as_dataframe, get_matchup_df
 
 
 def _norm(s: str) -> str:
@@ -181,7 +165,7 @@ def display_season_recap(
     """
     Text-only season recap. Assumes selection is handled by the caller.
     """
-    matchup_df = _get_matchup_df(df_dict)
+    matchup_df = get_matchup_df(df_dict)
     if matchup_df is None:
         st.info("No `Matchup Data` dataset available.")
         return

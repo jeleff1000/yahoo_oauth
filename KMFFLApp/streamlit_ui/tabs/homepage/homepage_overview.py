@@ -26,6 +26,7 @@ from ..shared.modern_styles import apply_modern_styles
 
 # Data helpers
 from md.data_access import load_player_two_week_slice
+from shared.dataframe_utils import as_dataframe, get_matchup_df
 
 # Homepage sections
 from .season_standings import display_season_standings
@@ -250,31 +251,6 @@ def _apply_homepage_styles():
     """, unsafe_allow_html=True)
 
 
-def _as_dataframe(obj: Any) -> Optional[pd.DataFrame]:
-    if isinstance(obj, pd.DataFrame):
-        return obj
-    try:
-        if isinstance(obj, (list, tuple)) and obj and isinstance(obj[0], dict):
-            return pd.DataFrame(obj)
-        if isinstance(obj, dict):
-            return pd.DataFrame(obj)
-    except Exception:
-        return None
-    return None
-
-
-def _get_matchup_df(df_dict: Optional[Dict[str, Any]]) -> Optional[pd.DataFrame]:
-    """Extract a matchup DataFrame from df_dict if provided."""
-    if not isinstance(df_dict, dict):
-        return None
-    if "Matchup Data" in df_dict:
-        return _as_dataframe(df_dict["Matchup Data"])
-    for k, v in df_dict.items():
-        if str(k).strip().lower() == "matchup data":
-            return _as_dataframe(v)
-    return None
-
-
 def _render_hero(summary: Dict[str, Any]) -> None:
     """Render the dynamic hero section."""
     latest_year = summary.get("latest_year", 2024)
@@ -435,7 +411,7 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
 
     df_dict = df_dict or {}
     summary = df_dict.get("summary", {})
-    matchup_df = _get_matchup_df(df_dict)
+    matchup_df = get_matchup_df(df_dict)
 
     # Get subtab from session state (controlled by hamburger menu)
     subtab_idx = st.session_state.get("subtab_Home", 0)

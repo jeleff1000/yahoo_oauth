@@ -6,7 +6,71 @@ duplicated across many files.
 """
 
 import pandas as pd
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
+
+
+def as_dataframe(obj: Any) -> Optional[pd.DataFrame]:
+    """
+    Convert various data types to a pandas DataFrame.
+
+    This function safely converts dicts, lists of dicts, tuples, etc.
+    to a DataFrame. Returns the object unchanged if already a DataFrame.
+
+    Args:
+        obj: Object to convert (dict, list of dicts, tuple, or DataFrame)
+
+    Returns:
+        DataFrame or None if conversion fails
+
+    Example:
+        ```python
+        from streamlit_ui.shared.dataframe_utils import as_dataframe
+
+        data = [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]
+        df = as_dataframe(data)
+        ```
+    """
+    if isinstance(obj, pd.DataFrame):
+        return obj
+    try:
+        if isinstance(obj, (list, tuple)) and obj and isinstance(obj[0], dict):
+            return pd.DataFrame(obj)
+        if isinstance(obj, dict):
+            return pd.DataFrame(obj)
+    except Exception:
+        pass
+    return None
+
+
+def get_matchup_df(df_dict: Optional[Dict[str, Any]]) -> Optional[pd.DataFrame]:
+    """
+    Extract matchup data from a dictionary of dataframes.
+
+    Looks for a key named "Matchup Data" (case-insensitive) and
+    converts it to a DataFrame.
+
+    Args:
+        df_dict: Dictionary that may contain matchup data
+
+    Returns:
+        DataFrame of matchup data or None if not found
+
+    Example:
+        ```python
+        from streamlit_ui.shared.dataframe_utils import get_matchup_df
+
+        data = {"Matchup Data": [...], "Other Data": [...]}
+        matchup_df = get_matchup_df(data)
+        ```
+    """
+    if not isinstance(df_dict, dict):
+        return None
+    if "Matchup Data" in df_dict:
+        return as_dataframe(df_dict["Matchup Data"])
+    for k, v in df_dict.items():
+        if str(k).strip().lower() == "matchup data":
+            return as_dataframe(v)
+    return None
 
 
 def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:

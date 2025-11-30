@@ -3,35 +3,20 @@ from __future__ import annotations
 from typing import Any, Dict, Optional, List, Tuple
 from datetime import datetime
 import re
+import sys
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
+# Ensure streamlit_ui directory is in path for imports
+_streamlit_ui_dir = Path(__file__).parent.parent.parent.parent.resolve()
+if str(_streamlit_ui_dir) not in sys.path:
+    sys.path.insert(0, str(_streamlit_ui_dir))
+
 from .displays import weekly_recap, season_recap, player_recap
 from md.tab_data_access.homepage.recaps_player_data import load_player_two_week_slice  # ✅ Optimized: 18 cols vs 270+
-
-# ----- helpers -----
-def _as_dataframe(obj: Any) -> Optional[pd.DataFrame]:
-    if isinstance(obj, pd.DataFrame):
-        return obj
-    try:
-        if isinstance(obj, (list, tuple)) and obj and isinstance(obj[0], dict):
-            return pd.DataFrame(obj)
-        if isinstance(obj, dict):
-            return pd.DataFrame(obj)
-    except Exception:
-        return None
-    return None
-
-def _get_matchup_df(df_dict: Optional[Dict[str, Any]]) -> Optional[pd.DataFrame]:
-    if not isinstance(df_dict, dict):
-        return None
-    if "Matchup Data" in df_dict:
-        return _as_dataframe(df_dict["Matchup Data"])
-    for k, v in df_dict.items():
-        if str(k).strip().lower() == "matchup data":
-            return _as_dataframe(v)
-    return None
+from shared.dataframe_utils import as_dataframe, get_matchup_df
 
 def _unique_numeric(df: pd.DataFrame, col: str) -> List[int]:
     if col not in df.columns:
@@ -74,7 +59,7 @@ def _manager_options(df: Optional[pd.DataFrame]) -> List[str]:
 # ----- main -----
 @st.fragment
 def display_recap_overview(df_dict: Optional[Dict[str, Any]] = None, key_prefix: str = "") -> None:
-    matchup_df = _get_matchup_df(df_dict)
+    matchup_df = get_matchup_df(df_dict)
     if matchup_df is None or matchup_df.empty:
         st.info("No matchup data available.")
         return

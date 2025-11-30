@@ -9,6 +9,13 @@ import importlib.machinery
 import sys
 from pathlib import Path
 
+# Ensure streamlit_ui directory is in path for imports
+_streamlit_ui_dir = Path(__file__).parent.parent.parent.parent.resolve()
+if str(_streamlit_ui_dir) not in sys.path:
+    sys.path.insert(0, str(_streamlit_ui_dir))
+
+from shared.dataframe_utils import as_dataframe, get_matchup_df
+
 # Import all Hall of Fame modules
 from .top_teams import TopTeamsViewer
 from .playoff_brackets import PlayoffBracketsViewer
@@ -68,32 +75,6 @@ def _render_df(df: pd.DataFrame, highlight_cols: Tuple[str, ...] = (), index: bo
         column_config=col_cfg,
     )
 
-def _as_df(x: Any) -> Optional[pd.DataFrame]:
-    if isinstance(x, pd.DataFrame):
-        return x
-    if isinstance(x, list) and x and isinstance(x[0], dict):
-        return pd.DataFrame(x)
-    if isinstance(x, dict):
-        try:
-            return pd.DataFrame(x)
-        except Exception:
-            return None
-    return None
-
-def _get_matchup_df(df_dict: Optional[Dict[str, Any]]) -> Optional[pd.DataFrame]:
-    if not isinstance(df_dict, dict):
-        return None
-    if "Matchup Data" in df_dict:
-        df = _as_df(df_dict["Matchup Data"])
-        if df is not None:
-            return df
-    for k, v in df_dict.items():
-        if str(k).strip().lower() == "matchup data":
-            df = _as_df(v)
-            if df is not None:
-                return df
-    return None
-
 def _col(df: pd.DataFrame, *candidates: str) -> Optional[str]:
     """Return the first column in df (case-insensitive match) from candidates."""
     cols = {c.lower(): c for c in df.columns}
@@ -134,13 +115,15 @@ def _pill_nav(options: List[str], key: str, default: str) -> str:
 
 def _apply_hero():
     st.markdown("""
-        <div style="background: linear-gradient(135deg, #5b86e5 0%, #36d1dc 100%);
+        <div style="background: linear-gradient(135deg,
+                    var(--gradient-start, rgba(102, 126, 234, 0.1)) 0%,
+                    var(--gradient-end, rgba(118, 75, 162, 0.06)) 100%);
                     padding: 1.75rem 1.5rem; border-radius: 16px; margin-bottom: 1.25rem;
-                    box-shadow: 0 8px 32px rgba(54, 209, 220, 0.25);">
-          <h1 style="margin:0; color: white; font-size: 2.2rem; text-align: center;">
+                    border: 1px solid var(--border, #E5E7EB);">
+          <h1 style="margin:0; color: var(--text-primary, #1F2937); font-size: 2.2rem; text-align: center;">
             🏛️ KMFFL Hall of Fame
           </h1>
-          <p style="margin: 0.5rem 0 0 0; color: rgba(255,255,255,0.95); 
+          <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary, #6B7280);
                      text-align: center; font-size: 1.05rem;">
             Champions, legends, records — and the full playoff story in one place.
           </p>
@@ -149,7 +132,7 @@ def _apply_hero():
 
 class HallOfFameViewer:
     def __init__(self, df_dict: Optional[Dict[str, Any]]):
-        self.df: Optional[pd.DataFrame] = _get_matchup_df(df_dict)
+        self.df: Optional[pd.DataFrame] = get_matchup_df(df_dict)
         if self.df is None:
             try:
                 self.df = pd.read_csv(_FALLBACK_CSV)
