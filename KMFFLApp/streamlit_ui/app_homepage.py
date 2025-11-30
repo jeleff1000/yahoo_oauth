@@ -429,12 +429,12 @@ def main():
         menu_options.append(label)
         menu_mapping[label] = (i, None)
 
-        # Add subtabs for current section
+        # Add subtabs for current section (indented)
         if is_current:
             section_subtabs = subtabs.get(name)
             if section_subtabs:
                 for j, subtab_name in enumerate(section_subtabs):
-                    sub_label = f"     ↳ {subtab_name}"
+                    sub_label = f"    ↳ {subtab_name}"
                     menu_options.append(sub_label)
                     menu_mapping[sub_label] = (i, j)
 
@@ -442,32 +442,31 @@ def main():
     current_main_label = f"{tab_icons[current_idx]} {tab_names[current_idx]}"
     section_subtabs = subtabs.get(selected_tab)
     if section_subtabs and current_subtab_idx < len(section_subtabs):
-        current_selection = f"     ↳ {section_subtabs[current_subtab_idx]}"
+        current_selection = f"    ↳ {section_subtabs[current_subtab_idx]}"
     else:
         current_selection = current_main_label
 
     default_idx = menu_options.index(current_selection) if current_selection in menu_options else 0
 
-    # Simple selectbox menu - clean and works
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        selection = st.selectbox(
-            "☰",
+    # Hamburger menu with clean radio buttons
+    with st.popover("☰ Menu"):
+        selection = st.radio(
+            "Navigate",
             menu_options,
             index=default_idx,
             label_visibility="collapsed"
         )
 
-    # Handle selection change
-    if selection in menu_mapping:
-        main_idx, sub_idx = menu_mapping[selection]
-        if main_idx != current_idx:
-            st.session_state["active_main_tab"] = main_idx
-            st.session_state[f"subtab_{tab_names[main_idx]}"] = 0
-            st.rerun()
-        elif sub_idx is not None and sub_idx != current_subtab_idx:
-            st.session_state[f"subtab_{selected_tab}"] = sub_idx
-            st.rerun()
+        # Handle selection change
+        if selection in menu_mapping:
+            main_idx, sub_idx = menu_mapping[selection]
+            if main_idx != current_idx:
+                st.session_state["active_main_tab"] = main_idx
+                st.session_state[f"subtab_{tab_names[main_idx]}"] = 0
+                st.rerun()
+            elif sub_idx is not None and sub_idx != current_subtab_idx:
+                st.session_state[f"subtab_{selected_tab}"] = sub_idx
+                st.rerun()
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":

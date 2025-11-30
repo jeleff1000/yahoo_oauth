@@ -218,109 +218,6 @@ def apply_modern_styles():
         border-color: rgb(103, 108, 245);
     }
 
-    /* ============================================
-       RADIO BUTTON TABS (Subtabs throughout app)
-       EXCLUDES popovers - they use clean list style
-       ============================================ */
-
-    /* Hide radio button circles - except in popovers */
-    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
-        display: none;
-    }
-
-    /* Reset radio button default styles - except in popovers */
-    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-        all: unset;
-    }
-
-    /* Style radio group container - except in popovers */
-    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] {
-        display: flex;
-        gap: 0.5rem;
-        background-color: transparent;
-        padding: 0;
-        margin: 0;
-        flex-wrap: wrap;
-        width: 100%;
-    }
-
-    /* Universal dark button style - except in popovers */
-    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        background-color: rgb(70, 73, 80) !important;
-        border: 2px solid rgb(100, 103, 110) !important;
-        padding: 0.5rem 1rem !important;
-        border-radius: 0.5rem !important;
-        cursor: pointer !important;
-        transition: all 0.15s ease-in-out !important;
-        font-family: "Source Sans Pro", sans-serif !important;
-        font-size: 1rem !important;
-        font-weight: 500 !important;
-        color: rgb(255, 255, 255) !important;
-        line-height: 1.6 !important;
-        white-space: nowrap !important;
-        user-select: none !important;
-        box-sizing: border-box !important;
-    }
-
-    /* Force white text in all children - except in popovers */
-    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label * {
-        color: rgb(255, 255, 255) !important;
-    }
-
-    /* Hover state - except in popovers */
-    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
-        border-color: rgb(103, 108, 245) !important;
-        background-color: rgb(80, 83, 90) !important;
-    }
-
-    /* Active/selected tab - bright purple - except in popovers */
-    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
-        background-color: rgb(103, 108, 245) !important;
-        border-color: rgb(103, 108, 245) !important;
-        color: rgb(255, 255, 255) !important;
-        font-weight: 600 !important;
-    }
-
-    /* Force active tab text color - except in popovers */
-    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) * {
-        color: rgb(255, 255, 255) !important;
-    }
-
-    /* Remove default radio container padding */
-    div[data-testid="stRadio"] {
-        margin-bottom: 0.5rem;
-    }
-
-    /* ============================================
-       POPOVER MENU - Clean list style
-       ============================================ */
-    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] {
-        flex-direction: column !important;
-        gap: 0 !important;
-    }
-    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-        background: transparent !important;
-        border: none !important;
-        border-radius: 4px !important;
-        padding: 0.5rem 0.75rem !important;
-        justify-content: flex-start !important;
-        color: inherit !important;
-        font-weight: normal !important;
-    }
-    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label * {
-        color: inherit !important;
-    }
-    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
-        background: rgba(128, 128, 128, 0.15) !important;
-    }
-    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
-        background: rgba(102, 126, 234, 0.2) !important;
-        font-weight: 500 !important;
-    }
-
     /* Button Styling */
     .stButton > button {
         border-radius: 8px;
@@ -355,16 +252,6 @@ def apply_modern_styles():
 
     /* Tablets and smaller (768px and below) */
     @media (max-width: 768px) {
-        /* Radio button tabs - mobile optimized */
-        div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-            padding: 0.375rem 0.625rem !important;
-            font-size: 0.9rem !important;
-        }
-
-        div[data-testid="stRadio"] > div[role="radiogroup"] {
-            gap: 0.375rem !important;
-        }
-
         /* Hero sections - reduce padding */
         .hero-section {
             padding: 1.5rem 1rem;
@@ -533,18 +420,6 @@ def apply_modern_styles():
 
     /* Mobile phones (480px and below) */
     @media (max-width: 480px) {
-        /* Radio button tabs - compact for phones */
-        div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-            padding: 0.3rem 0.5rem !important;
-            font-size: 0.85rem !important;
-            flex: 1 1 auto !important;
-            min-width: fit-content !important;
-        }
-
-        div[data-testid="stRadio"] > div[role="radiogroup"] {
-            gap: 0.25rem !important;
-        }
-
         /* Even more compact for phones */
         .hero-section {
             padding: 1rem 0.75rem;

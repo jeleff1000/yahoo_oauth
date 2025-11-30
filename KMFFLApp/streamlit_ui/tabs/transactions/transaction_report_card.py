@@ -19,6 +19,9 @@ def get_league_name() -> str:
     try:
         table_ref = T.get('transactions', 'league.transactions')
         schema = table_ref.split('.')[0] if '.' in table_ref else 'League'
+        # Strip 'l_' prefix if it was added for digit-starting names (e.g., 'l_5townsfootball')
+        if schema.startswith("l_") and len(schema) > 2 and schema[2].isdigit():
+            schema = schema[2:]
         return schema.upper()
     except Exception:
         return 'Fantasy League'
