@@ -268,6 +268,15 @@ def main():
             )
             if league_ids:
                 ctx.league_ids = league_ids
+                # Update start_year/end_year to match ONLY discovered years
+                # This prevents trying to fetch data for years the user can't access
+                discovered_years = sorted([int(y) for y in league_ids.keys()])
+                if discovered_years:
+                    old_start, old_end = ctx.start_year, ctx.end_year
+                    ctx.start_year = min(discovered_years)
+                    ctx.end_year = max(discovered_years)
+                    if ctx.start_year != old_start or ctx.end_year != old_end:
+                        log(f"[LEAGUE HISTORY] Adjusted year range from {old_start}-{old_end} to {ctx.start_year}-{ctx.end_year} (based on accessible years)")
                 ctx.save(context_path)  # Save back to ORIGINAL context file (not data_directory)
                 log(f"[LEAGUE HISTORY] Discovered {len(league_ids)} league IDs and saved to context")
             else:
