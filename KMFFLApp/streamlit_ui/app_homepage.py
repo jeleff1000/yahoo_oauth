@@ -483,30 +483,35 @@ def main():
         }
         .stRadio > div > label {
             font-size: 0.8rem !important;
-            padding: 8px 8px !important;
-            margin-bottom: 6px !important;
+            padding: 6px 12px !important;
+            margin-bottom: 4px !important;
             white-space: nowrap !important;
             display: flex !important;
             align-items: center !important;
-            min-height: 32px !important;
+            min-height: 28px !important;
+            border-radius: 4px !important;
+            cursor: pointer !important;
         }
+        /* Hide radio button circles */
         .stRadio [data-baseweb="radio"] {
-            width: 16px !important;
-            height: 16px !important;
-            min-width: 16px !important;
-            min-height: 16px !important;
-            margin-right: 8px !important;
+            display: none !important;
+        }
+        /* Selected item - light purple highlight */
+        .stRadio > div > label:has(input:checked) {
+            background: rgba(102, 126, 234, 0.15) !important;
+            color: #667eea !important;
+            font-weight: 500 !important;
+        }
+        /* Hover state */
+        .stRadio > div > label:hover {
+            background: rgba(102, 126, 234, 0.08) !important;
         }
         /* Mobile adjustments */
         @media (max-width: 768px) {
             .stRadio > div > label {
                 font-size: 0.85rem !important;
-                padding: 8px 10px !important;
+                padding: 8px 14px !important;
                 min-height: 36px !important;
-            }
-            .stRadio [data-baseweb="radio"] {
-                width: 18px !important;
-                height: 18px !important;
             }
         }
         </style>
