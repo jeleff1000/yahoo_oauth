@@ -34,6 +34,62 @@ try:
 except ImportError as e:
     raise ImportError("Missing dependency: duckdb. Install with `pip install duckdb`") from e
 
+
+# =========================
+# MotherDuck Database Discovery
+# =========================
+def get_existing_league_databases() -> list[str]:
+    """
+    Discover existing league databases in MotherDuck.
+    Returns a sorted list of database names (excluding system databases).
+    """
+    if not MOTHERDUCK_TOKEN:
+        return []
+
+    try:
+        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
+        con = duckdb.connect("md:")
+
+        # Query all databases
+        result = con.execute("SHOW DATABASES").fetchall()
+        con.close()
+
+        # Filter out system databases and return sorted list
+        system_dbs = {"my_db", "sample_data", "secrets", "ops", "information_schema"}
+        league_dbs = [
+            row[0] for row in result
+            if row[0].lower() not in system_dbs
+            and not row[0].startswith("_")
+        ]
+
+        return sorted(league_dbs, key=str.lower)
+    except Exception as e:
+        st.warning(f"Could not discover databases: {e}")
+        return []
+
+
+def validate_league_database(db_name: str) -> bool:
+    """
+    Validate that a database has the expected league tables (matchup, player, etc.).
+    """
+    if not MOTHERDUCK_TOKEN or not db_name:
+        return False
+
+    try:
+        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
+        con = duckdb.connect("md:")
+
+        # Check if required tables exist
+        result = con.execute(f"SHOW TABLES IN {db_name}").fetchall()
+        con.close()
+
+        tables = {row[0].lower() for row in result}
+        required_tables = {"matchup", "player"}
+
+        return required_tables.issubset(tables)
+    except Exception:
+        return False
+
 # =========================
 # Config / Secrets
 # =========================
@@ -886,13 +942,150 @@ def main():
                 token_data = exchange_code_for_tokens(qp["code"])
                 st.session_state.token_data = token_data
                 st.session_state.access_token = token_data.get("access_token")
+                st.session_state.app_mode = "register"  # Stay in register mode after OAuth
                 st.query_params.clear()
                 st.rerun()
             except Exception as e:
                 st.error(f"Authentication failed: {e}")
         return
 
-    # Main application
+    # Initialize app mode if not set
+    if "app_mode" not in st.session_state:
+        st.session_state.app_mode = "landing"
+
+    # Landing page - choose between existing leagues or register new
+    if st.session_state.app_mode == "landing":
+        render_landing_page()
+        return
+
+    # Analytics mode - run the KMFFL app for selected league
+    if st.session_state.app_mode == "analytics":
+        run_analytics_app()
+        return
+
+    # Register mode - the current OAuth flow
+    if st.session_state.app_mode == "register":
+        run_register_flow()
+        return
+
+
+def render_landing_page():
+    """Render the landing page with existing leagues dropdown and register button."""
+    render_hero()
+
+    st.markdown("### Choose Your Path")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <div class="feature-title">View Existing League</div>
+            <div class="feature-desc">Select a league that's already been imported to view analytics</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Get existing databases
+        with st.spinner("Loading available leagues..."):
+            existing_dbs = get_existing_league_databases()
+
+        if existing_dbs:
+            selected_db = st.selectbox(
+                "Select League:",
+                options=[""] + existing_dbs,
+                format_func=lambda x: "-- Choose a league --" if x == "" else x,
+                key="league_selector"
+            )
+
+            if selected_db:
+                if st.button("View Analytics", type="primary", use_container_width=True, key="view_analytics_btn"):
+                    # Store selected database in session state
+                    st.session_state.selected_league_db = selected_db
+                    st.session_state.app_mode = "analytics"
+                    st.rerun()
+        else:
+            st.info("No existing leagues found. Register a new league to get started!")
+
+    with col2:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">➕</div>
+            <div class="feature-title">Register New League</div>
+            <div class="feature-desc">Connect your Yahoo account and import a new fantasy football league</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("Register New League", type="secondary", use_container_width=True, key="register_btn"):
+            st.session_state.app_mode = "register"
+            st.rerun()
+
+    # Footer
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.caption("Made with ❤️ for fantasy football managers | Powered by MotherDuck & GitHub Actions")
+
+
+def run_analytics_app():
+    """Run the KMFFL analytics app for the selected league."""
+    selected_db = st.session_state.get("selected_league_db")
+
+    if not selected_db:
+        st.error("No league selected. Please go back and select a league.")
+        if st.button("Back to Home"):
+            st.session_state.app_mode = "landing"
+            st.rerun()
+        return
+
+    # Add back button in sidebar
+    with st.sidebar:
+        if st.button("← Back to League Selection"):
+            st.session_state.app_mode = "landing"
+            # Clear any cached data when switching leagues
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.rerun()
+
+        st.markdown(f"**Current League:** {selected_db}")
+
+    # Import and run the KMFFL app
+    try:
+        # Add the streamlit_ui directory to path if needed
+        kmffl_app_dir = ROOT_DIR / "KMFFLApp" / "streamlit_ui"
+        if str(kmffl_app_dir) not in sys.path:
+            sys.path.insert(0, str(kmffl_app_dir))
+
+        # Set environment variable for the selected database
+        os.environ["SELECTED_LEAGUE_DB"] = selected_db
+
+        # Import and run the app_homepage main function
+        from app_homepage import main as run_kmffl_app
+        run_kmffl_app()
+
+    except ImportError as e:
+        st.error(f"Failed to load analytics app: {e}")
+        st.info("Make sure the KMFFLApp is properly installed.")
+        if st.button("Back to Home"):
+            st.session_state.app_mode = "landing"
+            st.rerun()
+    except Exception as e:
+        st.error(f"Error running analytics app: {e}")
+        import traceback
+        with st.expander("Error Details"):
+            st.code(traceback.format_exc())
+        if st.button("Back to Home"):
+            st.session_state.app_mode = "landing"
+            st.rerun()
+
+
+def run_register_flow():
+    """Run the registration/OAuth flow for new leagues."""
+    # Add back button
+    if st.button("← Back to Home"):
+        st.session_state.app_mode = "landing"
+        st.rerun()
+
+    # Main application (original OAuth flow)
     if "access_token" in st.session_state:
         render_hero()
 
