@@ -22,6 +22,11 @@ on:
   repository_dispatch:
     types: [league_import]
 
+# Permissions needed to trigger the playoff odds workflow
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   import-league-data:
     runs-on: ubuntu-latest
