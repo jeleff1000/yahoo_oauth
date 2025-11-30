@@ -101,7 +101,7 @@ REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.a
 AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
 TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
 
-ROOT_DIR = Path(__file__).parent
+ROOT_DIR = Path(__file__).parent.resolve()
 OAUTH_DIR = ROOT_DIR / "oauth"
 
 
