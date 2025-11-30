@@ -419,48 +419,6 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Force clean menu style in popover - injected AFTER modern_styles
-    st.markdown("""
-    <style>
-    /* POPOVER MENU OVERRIDE - Maximum specificity to beat tab styling */
-    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] {
-        flex-direction: column !important;
-        gap: 0.25rem !important;
-        background: transparent !important;
-    }
-    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-        all: unset !important;
-        display: flex !important;
-        align-items: center !important;
-        padding: 0.5rem 0.75rem !important;
-        border-radius: 6px !important;
-        cursor: pointer !important;
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        font-size: 0.9rem !important;
-        font-weight: normal !important;
-        color: inherit !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-    }
-    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
-        background: rgba(128, 128, 128, 0.12) !important;
-    }
-    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"],
-    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
-        background: rgba(102, 126, 234, 0.18) !important;
-        font-weight: 500 !important;
-    }
-    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label * {
-        color: inherit !important;
-    }
-    div[data-testid="stPopoverBody"] div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
-        display: none !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     # Build menu options with hierarchy
     menu_options = []
     menu_mapping = {}  # Maps display string to (main_idx, subtab_idx or None)
@@ -476,39 +434,40 @@ def main():
             section_subtabs = subtabs.get(name)
             if section_subtabs:
                 for j, subtab_name in enumerate(section_subtabs):
-                    sub_label = f"    ∟ {subtab_name}"
+                    sub_label = f"     ↳ {subtab_name}"
                     menu_options.append(sub_label)
                     menu_mapping[sub_label] = (i, j)
 
-    # Find current selection in menu
+    # Find current selection
     current_main_label = f"{tab_icons[current_idx]} {tab_names[current_idx]}"
     section_subtabs = subtabs.get(selected_tab)
     if section_subtabs and current_subtab_idx < len(section_subtabs):
-        current_selection = f"    ∟ {section_subtabs[current_subtab_idx]}"
+        current_selection = f"     ↳ {section_subtabs[current_subtab_idx]}"
     else:
         current_selection = current_main_label
 
     default_idx = menu_options.index(current_selection) if current_selection in menu_options else 0
 
-    # Hamburger menu with radio buttons
-    with st.popover("☰"):
-        selection = st.radio(
-            "Navigate",
+    # Simple selectbox menu - clean and works
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        selection = st.selectbox(
+            "☰",
             menu_options,
             index=default_idx,
             label_visibility="collapsed"
         )
 
-        # Handle selection
-        if selection in menu_mapping:
-            main_idx, sub_idx = menu_mapping[selection]
-            if main_idx != current_idx:
-                st.session_state["active_main_tab"] = main_idx
-                st.session_state[f"subtab_{tab_names[main_idx]}"] = 0
-                st.rerun()
-            elif sub_idx is not None and sub_idx != current_subtab_idx:
-                st.session_state[f"subtab_{selected_tab}"] = sub_idx
-                st.rerun()
+    # Handle selection change
+    if selection in menu_mapping:
+        main_idx, sub_idx = menu_mapping[selection]
+        if main_idx != current_idx:
+            st.session_state["active_main_tab"] = main_idx
+            st.session_state[f"subtab_{tab_names[main_idx]}"] = 0
+            st.rerun()
+        elif sub_idx is not None and sub_idx != current_subtab_idx:
+            st.session_state[f"subtab_{selected_tab}"] = sub_idx
+            st.rerun()
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":
