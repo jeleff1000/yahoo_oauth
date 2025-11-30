@@ -100,18 +100,22 @@ GPA_SCALE = {
 # Helper Functions
 # =============================================================================
 
-def norm_manager(nickname: str, overrides: Dict[str, str] = None) -> str:
+def norm_manager(nickname: str, overrides: Dict[str, str] = None, team_name_fallback: str = None) -> str:
     """
     Normalize manager name with optional overrides.
 
     Args:
         nickname: Raw manager nickname from Yahoo API
         overrides: Dictionary mapping old names to new names
+        team_name_fallback: Team name to use if manager name is hidden/unavailable
 
     Returns:
         Normalized manager name (title case for consistency)
     """
     if not nickname:
+        # Use team name as fallback if available
+        if team_name_fallback:
+            return str(team_name_fallback).strip().title()
         return "N/A"
 
     s = str(nickname).strip()
@@ -125,8 +129,10 @@ def norm_manager(nickname: str, overrides: Dict[str, str] = None) -> str:
         if s.lower() in overrides:
             return overrides[s.lower()]
 
-    # Default fallback for --hidden--
+    # Default fallback for --hidden-- - use team name if available
     if s == "--hidden--":
+        if team_name_fallback:
+            return str(team_name_fallback).strip().title()
         return "Unknown"
 
     # Normalize to title case for consistency (e.g., "ezra" -> "Ezra")
@@ -262,14 +268,18 @@ def extract_team(team_node: ET.Element, matchup_node: ET.Element = None, manager
     Returns:
         Dictionary with team data
     """
+    # Extract team_name first so it can be used as fallback for hidden managers
+    team_name_raw = team_node.findtext("name") or ""
+
     nickname = (
         team_node.findtext(".//managers/manager/nickname")
         or team_node.findtext(".//managers/manager/name")
         or team_node.findtext(".//managers/manager/guid")
         or ""
     )
-    manager = norm_manager(nickname, manager_overrides)
-    team_name = team_node.findtext("name") or manager
+    # Pass team_name as fallback for --hidden-- or missing manager names
+    manager = norm_manager(nickname, manager_overrides, team_name_fallback=team_name_raw)
+    team_name = team_name_raw or manager
 
     points = safe_float(team_node.findtext("team_points/total"), 0.0)
     projected = safe_float(team_node.findtext("team_projected_points/total"), np.nan)
