@@ -419,6 +419,29 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
+    # Clean menu styling
+    st.markdown("""
+    <style>
+    /* Clean menu styling for popover */
+    [data-testid="stPopover"] [data-testid="stVerticalBlock"] button {
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        text-align: left !important;
+        padding: 0.5rem 0.75rem !important;
+        margin: 0 !important;
+        border-radius: 4px !important;
+        font-size: 0.95rem !important;
+    }
+    [data-testid="stPopover"] [data-testid="stVerticalBlock"] button:hover {
+        background: rgba(128, 128, 128, 0.15) !important;
+    }
+    [data-testid="stPopover"] [data-testid="stVerticalBlock"] button p {
+        margin: 0 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     # Hamburger menu at top with nested subtabs
     with st.popover("☰ Menu"):
         for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
@@ -435,7 +458,7 @@ def main():
                 if section_subtabs:
                     for j, subtab_name in enumerate(section_subtabs):
                         is_active = (j == current_subtab_idx)
-                        sub_label = f"    {'●' if is_active else '○'} {subtab_name}"
+                        sub_label = f"{'●' if is_active else '○'} {subtab_name}"
                         if st.button(sub_label, key=f"subtab_{name}_{subtab_name}", use_container_width=True):
                             st.session_state[f"subtab_{name}"] = j
                             st.rerun()
