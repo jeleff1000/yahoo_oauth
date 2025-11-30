@@ -70,64 +70,63 @@ def inject_theme_css():
     Inject theme-aware CSS variables into the page.
 
     This should be called once at the top of each page to enable theme support.
-    Uses the design tokens for consistent styling.
+    Uses CSS media queries to automatically respond to light/dark mode changes.
     """
-    theme = detect_theme()
-    colors = get_theme_tokens(theme)
-    shadows = SHADOWS_DARK if theme == 'dark' else SHADOWS
+    light = get_theme_tokens('light')
+    dark = get_theme_tokens('dark')
 
     css = f"""
     <style>
     /* ===========================================
        CSS Variables from Design Tokens
-       Theme: {theme}
+       Light Mode (default)
        =========================================== */
     :root {{
         /* Backgrounds */
-        --bg-primary: {colors['bg_primary']};
-        --bg-secondary: {colors['bg_secondary']};
-        --bg-tertiary: {colors['bg_tertiary']};
+        --bg-primary: {light['bg_primary']};
+        --bg-secondary: {light['bg_secondary']};
+        --bg-tertiary: {light['bg_tertiary']};
 
         /* Text */
-        --text-primary: {colors['text_primary']};
-        --text-secondary: {colors['text_secondary']};
-        --text-muted: {colors['text_muted']};
+        --text-primary: {light['text_primary']};
+        --text-secondary: {light['text_secondary']};
+        --text-muted: {light['text_muted']};
 
         /* Borders */
-        --border: {colors['border']};
-        --border-subtle: {colors['border_subtle']};
+        --border: {light['border']};
+        --border-subtle: {light['border_subtle']};
 
         /* Accent */
-        --accent: {colors['accent']};
-        --accent-hover: {colors['accent_hover']};
-        --accent-subtle: {colors['accent_subtle']};
-        --accent-light: {colors['accent_light']};
+        --accent: {light['accent']};
+        --accent-hover: {light['accent_hover']};
+        --accent-subtle: {light['accent_subtle']};
+        --accent-light: {light['accent_light']};
 
         /* Gradients */
-        --gradient-start: {colors['gradient_start']};
-        --gradient-end: {colors['gradient_end']};
+        --gradient-start: {light['gradient_start']};
+        --gradient-end: {light['gradient_end']};
 
         /* Status */
-        --success: {colors['success']};
-        --success-bg: {colors['success_bg']};
-        --warning: {colors['warning']};
-        --warning-bg: {colors['warning_bg']};
-        --error: {colors['error']};
-        --error-bg: {colors['error_bg']};
-        --info: {colors['info']};
-        --info-bg: {colors['info_bg']};
+        --success: {light['success']};
+        --success-bg: {light['success_bg']};
+        --warning: {light['warning']};
+        --warning-bg: {light['warning_bg']};
+        --error: {light['error']};
+        --error-bg: {light['error_bg']};
+        --info: {light['info']};
+        --info-bg: {light['info_bg']};
 
         /* Interactive */
-        --hover: {colors['hover']};
-        --active: {colors['active']};
-        --focus: {colors['focus']};
+        --hover: {light['hover']};
+        --active: {light['active']};
+        --focus: {light['focus']};
 
         /* Charts */
-        --chart-1: {colors['chart_1']};
-        --chart-2: {colors['chart_2']};
-        --chart-3: {colors['chart_3']};
-        --chart-4: {colors['chart_4']};
-        --chart-5: {colors['chart_5']};
+        --chart-1: {light['chart_1']};
+        --chart-2: {light['chart_2']};
+        --chart-3: {light['chart_3']};
+        --chart-4: {light['chart_4']};
+        --chart-5: {light['chart_5']};
 
         /* Spacing */
         --space-xs: {SPACING['xs']};
@@ -144,16 +143,59 @@ def inject_theme_css():
         --radius-full: {RADIUS['full']};
 
         /* Shadows */
-        --shadow-none: {shadows['none']};
-        --shadow-sm: {shadows['sm']};
-        --shadow-md: {shadows['md']};
-        --shadow-lg: {shadows['lg']};
-        --shadow-xl: {shadows['xl']};
+        --shadow-none: {SHADOWS['none']};
+        --shadow-sm: {SHADOWS['sm']};
+        --shadow-md: {SHADOWS['md']};
+        --shadow-lg: {SHADOWS['lg']};
+        --shadow-xl: {SHADOWS['xl']};
 
         /* Transitions */
         --transition-fast: {TRANSITIONS['fast']};
         --transition-normal: {TRANSITIONS['normal']};
         --transition-slow: {TRANSITIONS['slow']};
+    }}
+
+    /* ===========================================
+       Dark Mode Variables
+       Responds to system preference AND Streamlit's theme
+       =========================================== */
+    @media (prefers-color-scheme: dark) {{
+        :root {{
+            --bg-primary: {dark['bg_primary']};
+            --bg-secondary: {dark['bg_secondary']};
+            --bg-tertiary: {dark['bg_tertiary']};
+            --text-primary: {dark['text_primary']};
+            --text-secondary: {dark['text_secondary']};
+            --text-muted: {dark['text_muted']};
+            --border: {dark['border']};
+            --border-subtle: {dark['border_subtle']};
+            --accent: {dark['accent']};
+            --accent-hover: {dark['accent_hover']};
+            --accent-subtle: {dark['accent_subtle']};
+            --accent-light: {dark['accent_light']};
+            --gradient-start: {dark['gradient_start']};
+            --gradient-end: {dark['gradient_end']};
+            --success: {dark['success']};
+            --success-bg: {dark['success_bg']};
+            --warning: {dark['warning']};
+            --warning-bg: {dark['warning_bg']};
+            --error: {dark['error']};
+            --error-bg: {dark['error_bg']};
+            --info: {dark['info']};
+            --info-bg: {dark['info_bg']};
+            --hover: {dark['hover']};
+            --active: {dark['active']};
+            --focus: {dark['focus']};
+            --chart-1: {dark['chart_1']};
+            --chart-2: {dark['chart_2']};
+            --chart-3: {dark['chart_3']};
+            --chart-4: {dark['chart_4']};
+            --chart-5: {dark['chart_5']};
+            --shadow-sm: {SHADOWS_DARK['sm']};
+            --shadow-md: {SHADOWS_DARK['md']};
+            --shadow-lg: {SHADOWS_DARK['lg']};
+            --shadow-xl: {SHADOWS_DARK['xl']};
+        }}
     }}
 
     /* ===========================================
