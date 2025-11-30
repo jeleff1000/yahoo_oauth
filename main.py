@@ -1028,6 +1028,8 @@ def render_landing_page():
 
 def run_analytics_app():
     """Run the KMFFL analytics app for the selected league."""
+    import importlib.util
+
     selected_db = st.session_state.get("selected_league_db")
 
     if not selected_db:
@@ -1048,32 +1050,45 @@ def run_analytics_app():
 
         st.markdown(f"**Current League:** {selected_db}")
 
+    # Set environment variable for the selected database BEFORE importing
+    os.environ["SELECTED_LEAGUE_DB"] = selected_db
+
     # Import and run the KMFFL app
     try:
-        # Add the streamlit_ui directory to path if needed
-        kmffl_app_dir = ROOT_DIR / "KMFFLApp" / "streamlit_ui"
-        if str(kmffl_app_dir) not in sys.path:
-            sys.path.insert(0, str(kmffl_app_dir))
+        # Path to the app_homepage.py file
+        app_homepage_path = ROOT_DIR / "KMFFLApp" / "streamlit_ui" / "app_homepage.py"
 
-        # Set environment variable for the selected database
-        os.environ["SELECTED_LEAGUE_DB"] = selected_db
+        if not app_homepage_path.exists():
+            st.error(f"Analytics app not found at: {app_homepage_path}")
+            if st.button("Back to Home"):
+                st.session_state.app_mode = "landing"
+                st.rerun()
+            return
 
-        # Import and run the app_homepage main function
-        from app_homepage import main as run_kmffl_app
-        run_kmffl_app()
+        # Add required directories to path for the app's imports to work
+        streamlit_ui_dir = ROOT_DIR / "KMFFLApp" / "streamlit_ui"
+        if str(streamlit_ui_dir) not in sys.path:
+            sys.path.insert(0, str(streamlit_ui_dir))
 
-    except ImportError as e:
-        st.error(f"Failed to load analytics app: {e}")
-        st.info("Make sure the KMFFLApp is properly installed.")
-        if st.button("Back to Home"):
-            st.session_state.app_mode = "landing"
-            st.rerun()
+        # Also add the root directory for fantasy_football_data_scripts imports
+        if str(ROOT_DIR) not in sys.path:
+            sys.path.insert(0, str(ROOT_DIR))
+
+        # Use importlib to load the module directly from the file path
+        spec = importlib.util.spec_from_file_location("app_homepage", str(app_homepage_path))
+        app_module = importlib.util.module_from_spec(spec)
+        sys.modules["app_homepage"] = app_module
+        spec.loader.exec_module(app_module)
+
+        # Run the main function
+        app_module.main()
+
     except Exception as e:
         st.error(f"Error running analytics app: {e}")
         import traceback
         with st.expander("Error Details"):
             st.code(traceback.format_exc())
-        if st.button("Back to Home"):
+        if st.button("Back to Home", key="back_home_error"):
             st.session_state.app_mode = "landing"
             st.rerun()
 
