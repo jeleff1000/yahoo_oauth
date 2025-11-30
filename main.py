@@ -693,10 +693,10 @@ def get_user_football_leagues(access_token: str, game_key: str):
     return yahoo_api_call(access_token, f"users;use_login=1/games;game_keys={game_key}/leagues?format=json")
 
 
-def get_league_teams(access_token: str, league_key: str) -> list[dict]:
+def get_league_teams(access_token: str, league_key: str, year: int = None) -> list[dict]:
     """
     Fetch all teams/managers for a league.
-    Returns list of dicts with team_name, manager_name, team_key.
+    Returns list of dicts with team_name, manager_name, team_key, year.
     """
     try:
         data = yahoo_api_call(access_token, f"league/{league_key}/teams?format=json")
@@ -728,12 +728,51 @@ def get_league_teams(access_token: str, league_key: str) -> list[dict]:
                     "team_key": team_dict.get("team_key", ""),
                     "team_name": team_dict.get("name", "Unknown Team"),
                     "manager_name": team_dict.get("manager_name", "Unknown"),
+                    "year": year,
                 })
 
         return teams
     except Exception as e:
-        st.warning(f"Could not fetch team data: {e}")
+        # Don't warn for old years that might not exist
         return []
+
+
+def get_league_teams_all_years(access_token: str, league_name: str, games_data: dict) -> list[dict]:
+    """
+    Fetch teams/managers across all years for a league.
+    Returns list of dicts with team_name, manager_name, team_key, year.
+    """
+    all_teams = []
+    football_games = extract_football_games(games_data)
+
+    for game in football_games:
+        game_key = game.get("game_key")
+        year = game.get("season")
+
+        try:
+            # Get leagues for this game/year
+            leagues_data = get_user_football_leagues(access_token, game_key)
+            leagues = (
+                leagues_data.get("fantasy_content", {})
+                .get("users", {}).get("0", {}).get("user", [])[1]
+                .get("games", {}).get("0", {}).get("game", [])[1]
+                .get("leagues", {})
+            )
+
+            for key in leagues:
+                if key == "count":
+                    continue
+                league = leagues[key].get("league", [])[0]
+                if league.get("name") == league_name:
+                    league_key = league.get("league_key")
+                    teams = get_league_teams(access_token, league_key, year)
+                    all_teams.extend(teams)
+                    break
+
+        except Exception:
+            continue
+
+    return all_teams
 
 
 def find_hidden_managers(teams: list[dict]) -> list[dict]:
@@ -755,16 +794,30 @@ def render_hidden_manager_ui(hidden_teams: list[dict], all_teams: list[dict]) ->
     Returns dict mapping old manager names to new names.
     """
     st.markdown("### Identify Hidden Managers")
-    st.warning(f"Found {len(hidden_teams)} manager(s) with hidden/private names. Please identify them:")
+
+    # Group by unique team name + manager combo to avoid duplicates
+    unique_hidden = {}
+    for team in hidden_teams:
+        key = (team.get("team_name", ""), team.get("manager_name", "--hidden--"))
+        if key not in unique_hidden:
+            unique_hidden[key] = {"team": team, "years": []}
+        if team.get("year"):
+            unique_hidden[key]["years"].append(team["year"])
+
+    st.warning(f"Found {len(unique_hidden)} manager(s) with hidden/private names. Please identify them:")
 
     overrides = {}
 
-    for i, team in enumerate(hidden_teams):
+    for i, (key, info) in enumerate(unique_hidden.items()):
+        team = info["team"]
+        years = sorted(set(info["years"])) if info["years"] else ["Unknown"]
+
         col1, col2, col3 = st.columns([2, 1, 2])
 
         with col1:
             st.markdown(f"**Team Name:** {team['team_name']}")
-            st.caption(f"Current manager: `{team.get('manager_name', '--hidden--')}`")
+            years_str = ", ".join(str(y) for y in years)
+            st.caption(f"Year(s): {years_str} | Manager: `{team.get('manager_name', '--hidden--')}`")
 
         with col2:
             st.markdown("→")
@@ -1642,11 +1695,15 @@ def run_register_flow():
 
                                 # Hidden Manager Detection - Check automatically when opening advanced settings
                                 with st.expander("Identify Hidden Managers", expanded=True):
-                                    # Fetch teams if not already done
-                                    cache_key = f"teams_{selected_league.get('league_key')}"
+                                    # Fetch teams across ALL years if not already done
+                                    cache_key = f"teams_all_years_{selected_league.get('name')}"
                                     if cache_key not in st.session_state:
-                                        with st.spinner("Checking for hidden managers..."):
-                                            teams = get_league_teams(st.session_state.access_token, selected_league.get("league_key"))
+                                        with st.spinner("Checking for hidden managers across all years..."):
+                                            teams = get_league_teams_all_years(
+                                                st.session_state.access_token,
+                                                selected_league.get("name"),
+                                                st.session_state.get("games_data", {})
+                                            )
                                             st.session_state[cache_key] = teams
 
                                     teams = st.session_state.get(cache_key, [])
@@ -1659,11 +1716,21 @@ def run_register_flow():
                                         st.success("No hidden managers found! All managers have visible names.")
                                         st.session_state.configured_manager_overrides = {}
 
-                                    # Show all teams for reference
+                                    # Show all teams for reference grouped by year
                                     if teams:
-                                        with st.expander("View All Teams"):
+                                        with st.expander("View All Teams by Year"):
+                                            # Group by year
+                                            by_year = {}
                                             for team in teams:
-                                                st.markdown(f"- **{team['team_name']}** - {team['manager_name']}")
+                                                year = team.get("year", "Unknown")
+                                                if year not in by_year:
+                                                    by_year[year] = []
+                                                by_year[year].append(team)
+
+                                            for year in sorted(by_year.keys(), reverse=True):
+                                                st.markdown(f"**{year}**")
+                                                for team in by_year[year]:
+                                                    st.markdown(f"  - {team['team_name']} - {team['manager_name']}")
 
                                 # Keeper Rules Tab
                                 with st.expander("Keeper Rules", expanded=False):
