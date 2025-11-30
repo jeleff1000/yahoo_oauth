@@ -491,6 +491,13 @@ def main():
             min-height: 28px !important;
             border-radius: 4px !important;
             cursor: pointer !important;
+            color: #333 !important;
+        }
+        /* Dark mode text */
+        @media (prefers-color-scheme: dark) {
+            .stRadio > div > label {
+                color: #e0e0e0 !important;
+            }
         }
         /* Hide radio button circles only */
         .stRadio [data-baseweb="radio"] > div {
