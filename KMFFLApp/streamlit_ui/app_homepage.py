@@ -477,16 +477,17 @@ def main():
             margin-left: 1rem !important;
             padding-left: 0.5rem !important;
             border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
-            gap: 2px !important;
+            gap: 6px !important;
             flex-direction: column !important;
         }
         .stRadio > div > label {
             font-size: 0.78rem !important;
-            padding: 3px 6px !important;
+            padding: 4px 6px !important;
             white-space: nowrap !important;
             overflow: visible !important;
             width: auto !important;
             min-width: fit-content !important;
+            line-height: 1.3 !important;
         }
         .stRadio [data-baseweb="radio"] {
             width: 14px !important;
