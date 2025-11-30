@@ -1,0 +1,388 @@
+name: Weekly Update Worker
+
+# Runs every Tuesday at 4 AM UTC (Sunday night / Monday morning in US)
+# Also can be triggered manually for a specific league
+
+on:
+  schedule:
+    # 4 AM UTC on Tuesdays = 11 PM EST Monday / 8 PM PST Monday
+    # This is after Monday Night Football finishes
+    - cron: '0 4 * * 2'
+
+  workflow_dispatch:
+    inputs:
+      database_name:
+        description: 'MotherDuck database name (leave empty for all leagues)'
+        required: false
+        type: string
+      week:
+        description: 'Force specific week (leave empty for auto-detect)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run (show what would happen without doing it)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # First, discover all leagues that need updating
+  discover-leagues:
+    runs-on: ubuntu-latest
+    outputs:
+      leagues: ${{ steps.list.outputs.leagues }}
+      league_count: ${{ steps.list.outputs.count }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: List registered leagues
+        id: list
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          TARGET_DB: ${{ github.event.inputs.database_name || '' }}
+        run: |
+          # If specific database requested, just use that
+          if [ -n "$TARGET_DB" ]; then
+            echo "leagues=[\"${TARGET_DB}\"]" >> $GITHUB_OUTPUT
+            echo "count=1" >> $GITHUB_OUTPUT
+            echo "Targeting specific database: ${TARGET_DB}"
+            exit 0
+          fi
+
+          # Otherwise, discover all databases from MotherDuck
+          # For now, use a static list of known databases
+          # TODO: Query MotherDuck to get list of fantasy football databases
+
+          # Check for registered leagues file
+          if [ -f "registered_leagues.json" ]; then
+            LEAGUES=$(cat registered_leagues.json | jq -c '.leagues')
+            COUNT=$(cat registered_leagues.json | jq '.leagues | length')
+            echo "leagues=${LEAGUES}" >> $GITHUB_OUTPUT
+            echo "count=${COUNT}" >> $GITHUB_OUTPUT
+            echo "Found ${COUNT} registered leagues"
+          else
+            echo "leagues=[]" >> $GITHUB_OUTPUT
+            echo "count=0" >> $GITHUB_OUTPUT
+            echo "No registered_leagues.json found"
+          fi
+
+  # Update each league
+  update-league:
+    needs: discover-leagues
+    if: needs.discover-leagues.outputs.league_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false  # Continue updating other leagues even if one fails
+      matrix:
+        database: ${{ fromJson(needs.discover-leagues.outputs.leagues) }}
+
+    env:
+      PYTHONUNBUFFERED: 1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download existing data from MotherDuck
+        id: download
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          DATABASE_NAME: ${{ matrix.database }}
+        run: |
+          echo "========================================"
+          echo "Downloading existing data for: ${DATABASE_NAME}"
+          echo "========================================"
+
+          mkdir -p fantasy_football_data
+
+          python - <<'PYEOF'
+          import duckdb
+          import os
+          from pathlib import Path
+
+          db_name = os.environ['DATABASE_NAME']
+          token = os.environ['MOTHERDUCK_TOKEN']
+          output_dir = Path("fantasy_football_data")
+
+          print(f"Connecting to MotherDuck database: {db_name}")
+
+          try:
+              conn = duckdb.connect(f"md:{db_name}?motherduck_token={token}")
+
+              # Get list of tables
+              tables = conn.execute("SHOW TABLES").fetchall()
+              print(f"Found {len(tables)} tables")
+
+              for (table_name,) in tables:
+                  print(f"  Downloading {table_name}...")
+                  output_file = output_dir / f"{table_name}.parquet"
+                  conn.execute(f"COPY (SELECT * FROM {table_name}) TO '{output_file}' (FORMAT PARQUET)")
+                  print(f"    -> {output_file}")
+
+              conn.close()
+              print("✅ Download complete")
+
+          except Exception as e:
+              print(f"❌ Error downloading data: {e}")
+              # Continue anyway - may be a new database
+              exit(0)
+          PYEOF
+
+      - name: Reconstruct league context
+        id: context
+        env:
+          DATABASE_NAME: ${{ matrix.database }}
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
+        run: |
+          python - <<'PYEOF'
+          import json
+          import os
+          from pathlib import Path
+          import pandas as pd
+
+          db_name = os.environ['DATABASE_NAME']
+          data_dir = Path("fantasy_football_data")
+
+          # Try to read league info from league_settings.parquet
+          settings_file = data_dir / "league_settings.parquet"
+
+          if settings_file.exists():
+              df = pd.read_parquet(settings_file)
+              if not df.empty:
+                  # Get most recent year's settings
+                  latest = df.sort_values('year', ascending=False).iloc[0]
+
+                  context = {
+                      "league_id": latest.get('league_key', db_name),
+                      "league_name": db_name.replace('_', ' ').title(),
+                      "oauth_file_path": str(Path("oauth/Oauth.json").resolve()),
+                      "game_code": "nfl",
+                      "start_year": int(df['year'].min()),
+                      "end_year": int(df['year'].max()),
+                      "num_teams": int(latest.get('num_teams', 10)),
+                      "playoff_teams": int(latest.get('num_playoff_teams', 6)),
+                      "data_directory": str(data_dir.resolve()),
+                      "max_workers": 5,
+                      "enable_caching": True,
+                      "rate_limit_per_sec": 4.0,
+                  }
+
+                  # Try to load league_ids mapping from settings_json
+                  try:
+                      settings_json = json.loads(latest.get('settings_json', '{}'))
+                      if 'league_ids' in settings_json:
+                          context['league_ids'] = settings_json['league_ids']
+                  except:
+                      pass
+
+                  with open("league_context.json", 'w') as f:
+                      json.dump(context, f, indent=2)
+
+                  print(f"✅ Reconstructed context for {db_name}")
+                  print(json.dumps(context, indent=2))
+                  exit(0)
+
+          # Fallback: create minimal context
+          print(f"⚠️ Could not find league_settings.parquet, creating minimal context")
+          context = {
+              "league_id": db_name,
+              "league_name": db_name.replace('_', ' ').title(),
+              "oauth_file_path": str(Path("oauth/Oauth.json").resolve()),
+              "game_code": "nfl",
+              "start_year": 2020,
+              "end_year": 2024,
+              "data_directory": str(data_dir.resolve()),
+          }
+
+          with open("league_context.json", 'w') as f:
+              json.dump(context, f, indent=2)
+
+          print(json.dumps(context, indent=2))
+          PYEOF
+
+      - name: Retrieve stored credentials
+        id: creds
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CREDENTIAL_ENCRYPTION_KEY }}
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
+          DATABASE_NAME: ${{ matrix.database }}
+        run: |
+          mkdir -p oauth
+
+          echo "========================================"
+          echo "Retrieving stored credentials for: ${DATABASE_NAME}"
+          echo "========================================"
+
+          python - <<'PYEOF'
+          import json
+          import os
+          import sys
+          import time
+
+          sys.path.insert(0, 'fantasy_football_data_scripts')
+
+          database_name = os.environ['DATABASE_NAME']
+          consumer_key = os.environ.get('YAHOO_CLIENT_ID')
+          consumer_secret = os.environ.get('YAHOO_CLIENT_SECRET')
+          encryption_key = os.environ.get('CREDENTIAL_ENCRYPTION_KEY')
+
+          refresh_token = None
+
+          # Try to retrieve stored credentials from MotherDuck
+          if encryption_key:
+              try:
+                  from multi_league.utils.credential_store import retrieve_league_credentials
+                  creds = retrieve_league_credentials(database_name)
+                  if creds:
+                      refresh_token = creds.get('refresh_token')
+                      print(f"✅ Retrieved stored credentials for {creds.get('league_name')}")
+              except Exception as e:
+                  print(f"⚠️ Could not retrieve stored credentials: {e}")
+          else:
+              print("⚠️ CREDENTIAL_ENCRYPTION_KEY not set - cannot decrypt stored credentials")
+
+          if not refresh_token:
+              print("⚠️ No refresh token available - data fetching may fail")
+              print("   This league may need to be re-imported to store credentials")
+
+          # Create OAuth file
+          oauth_data = {
+              'consumer_key': consumer_key,
+              'consumer_secret': consumer_secret,
+              'refresh_token': refresh_token,
+              'token_time': time.time() - 7200,  # Force refresh
+          }
+
+          with open("oauth/Oauth.json", 'w') as f:
+              json.dump(oauth_data, f, indent=2)
+
+          # Set output for later steps
+          has_token = "true" if refresh_token else "false"
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"has_refresh_token={has_token}\n")
+
+          if refresh_token:
+              print("✅ OAuth credentials configured from stored credentials")
+          else:
+              print("⚠️ OAuth file created but may not work without refresh token")
+          PYEOF
+
+      - name: Run weekly update
+        id: update
+        env:
+          DATABASE_NAME: ${{ matrix.database }}
+          FORCE_WEEK: ${{ github.event.inputs.week || '' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        working-directory: fantasy_football_data_scripts
+        run: |
+          echo "========================================"
+          echo "Running weekly update for: ${DATABASE_NAME}"
+          echo "========================================"
+
+          ARGS="--context ../league_context.json"
+
+          if [ -n "$FORCE_WEEK" ]; then
+            ARGS="$ARGS --week $FORCE_WEEK"
+          fi
+
+          if [ "$DRY_RUN" == "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+
+          echo "Command: python weekly_update_v2.py $ARGS"
+
+          python weekly_update_v2.py $ARGS 2>&1 | tee ../weekly_update.log
+
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "exit_code=${EXIT_CODE}" >> $GITHUB_OUTPUT
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ Weekly update completed successfully"
+          else
+            echo "❌ Weekly update failed with exit code ${EXIT_CODE}"
+            tail -100 ../weekly_update.log
+          fi
+
+      - name: Upload updated data to MotherDuck
+        if: steps.update.outputs.exit_code == '0' && github.event.inputs.dry_run != 'true'
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          DATABASE_NAME: ${{ matrix.database }}
+        run: |
+          echo "========================================"
+          echo "Uploading updated data to MotherDuck"
+          echo "========================================"
+
+          cd fantasy_football_data
+          python motherduck_upload.py "${DATABASE_NAME}" . 2>&1 | tee ../motherduck_upload.log
+
+          if [ $? -eq 0 ]; then
+            echo "✅ Upload complete!"
+          else
+            echo "❌ Upload failed"
+            tail -50 ../motherduck_upload.log
+          fi
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-update-${{ matrix.database }}
+          path: |
+            weekly_update.log
+            motherduck_upload.log
+            league_context.json
+          retention-days: 7
+
+      - name: Update workflow summary
+        if: always()
+        run: |
+          echo "# Weekly Update: ${{ matrix.database }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.update.outputs.exit_code }}" == "0" ]; then
+            echo "## ✅ Update Successful" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Update Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Database**: \`${{ matrix.database }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry Run**: ${{ github.event.inputs.dry_run || 'false' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Forced Week**: ${{ github.event.inputs.week || 'auto-detect' }}" >> $GITHUB_STEP_SUMMARY
+
+  # Summary job
+  summary:
+    needs: [discover-leagues, update-league]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create summary
+        run: |
+          echo "# Weekly Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -Iseconds)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Leagues Processed**: ${{ needs.discover-leagues.outputs.league_count }}" >> $GITHUB_STEP_SUMMARY

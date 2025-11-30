@@ -471,6 +471,89 @@ jobs:
             exit $UPLOAD_EXIT
           fi
 
+      - name: Store credentials for weekly updates
+        if: steps.motherduck.outputs.upload_success == 'true'
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CREDENTIAL_ENCRYPTION_KEY }}
+          DATABASE_NAME: ${{ steps.parse.outputs.database_name }}
+          LEAGUE_ID: ${{ steps.parse.outputs.league_id }}
+          LEAGUE_NAME: ${{ steps.parse.outputs.league_name }}
+        run: |
+          echo "========================================"
+          echo "Storing credentials for weekly updates"
+          echo "========================================"
+
+          # Check if encryption key is available
+          if [ -z "$CREDENTIAL_ENCRYPTION_KEY" ]; then
+            echo "⚠️ CREDENTIAL_ENCRYPTION_KEY not set - weekly updates will require manual auth"
+            echo "To enable automatic weekly updates, add CREDENTIAL_ENCRYPTION_KEY to GitHub secrets"
+            echo "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            exit 0
+          fi
+
+          python - <<'PYEOF'
+          import json
+          import sys
+          sys.path.insert(0, 'fantasy_football_data_scripts')
+
+          from multi_league.utils.credential_store import store_league_credentials
+          import os
+
+          # Read the refresh token from the OAuth file we created earlier
+          with open("oauth/Oauth.json", 'r') as f:
+              oauth_data = json.load(f)
+
+          refresh_token = oauth_data.get('refresh_token')
+          if not refresh_token:
+              print("⚠️ No refresh_token in OAuth data - weekly updates may not work")
+              exit(0)
+
+          database_name = os.environ['DATABASE_NAME']
+          league_id = os.environ['LEAGUE_ID']
+          league_name = os.environ['LEAGUE_NAME']
+
+          success = store_league_credentials(
+              database_name=database_name,
+              refresh_token=refresh_token,
+              league_id=league_id,
+              league_name=league_name
+          )
+
+          if success:
+              print(f"✅ Credentials stored - weekly updates enabled for {league_name}")
+          else:
+              print("⚠️ Failed to store credentials - weekly updates may require manual auth")
+          PYEOF
+
+      - name: Register league for weekly updates
+        if: steps.motherduck.outputs.upload_success == 'true'
+        run: |
+          # Add this league to the registered_leagues.json
+          python - <<'PYEOF'
+          import json
+          from pathlib import Path
+
+          db_name = "${{ steps.parse.outputs.database_name }}"
+          registry_file = Path("registered_leagues.json")
+
+          # Load existing or create new
+          if registry_file.exists():
+              with open(registry_file) as f:
+                  registry = json.load(f)
+          else:
+              registry = {"description": "Leagues for weekly updates", "leagues": []}
+
+          # Add if not already present
+          if db_name not in registry["leagues"]:
+              registry["leagues"].append(db_name)
+              with open(registry_file, 'w') as f:
+                  json.dump(registry, f, indent=2)
+              print(f"✅ Added {db_name} to weekly update registry")
+          else:
+              print(f"ℹ️ {db_name} already in registry")
+          PYEOF
+
       - name: Create deployment manifest
         if: steps.motherduck.outputs.upload_success == 'true'
         run: |
@@ -490,6 +573,7 @@ jobs:
               "created_at": os.popen('date -Iseconds').read().strip(),
               "workflow_run_id": "${{ github.run_id }}",
               "status": "ready",
+              "weekly_updates_enabled": os.environ.get('CREDENTIAL_ENCRYPTION_KEY') is not None,
               "next_steps": [
                   "Create KMFFLApp-based UI repository",
                   "Configure MotherDuck connection",

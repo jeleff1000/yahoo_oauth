@@ -29,6 +29,9 @@ streamlit-aggrid>=1.0.0
 python-dotenv>=1.0.0
 click>=8.1.0
 
+# Credential encryption for weekly updates
+cryptography>=41.0.0
+
 # For GitHub Actions worker
 pyyaml>=6.0
 
