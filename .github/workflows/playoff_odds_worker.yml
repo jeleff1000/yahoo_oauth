@@ -71,14 +71,14 @@ jobs:
               print(f"ERROR: Failed to connect to MotherDuck: {e}")
               sys.exit(1)
 
-          # Download required tables
+          # Download required tables (from public schema)
           tables = ['matchup', 'schedule']
           failed_tables = []
 
           for table in tables:
               print(f"Downloading {table}...")
               try:
-                  df = conn.execute(f"SELECT * FROM {table}").fetchdf()
+                  df = conn.execute(f"SELECT * FROM public.{table}").fetchdf()
                   df.to_parquet(f"fantasy_football_data/{table}.parquet", index=False)
                   print(f"  ✓ {table}: {len(df):,} rows")
               except Exception as e:
@@ -93,13 +93,13 @@ jobs:
 
           # Download league settings and extract to JSON files
           try:
-              # Check if league_settings table exists
-              result = conn.execute("SHOW TABLES").fetchall()
+              # Check if league_settings table exists in public schema
+              result = conn.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'").fetchall()
               table_names = [r[0] for r in result]
 
               if 'league_settings' in table_names:
                   print("Downloading league_settings...")
-                  settings_df = conn.execute("SELECT * FROM league_settings").fetchdf()
+                  settings_df = conn.execute("SELECT * FROM public.league_settings").fetchdf()
                   print(f"  ✓ league_settings: {len(settings_df):,} rows")
 
                   # Extract each year's settings from the settings_json column
