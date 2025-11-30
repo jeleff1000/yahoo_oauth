@@ -529,33 +529,13 @@ jobs:
               print("⚠️ Failed to store credentials - weekly updates may require manual auth")
           PYEOF
 
-      - name: Register league for weekly updates
+      - name: Confirm weekly updates enabled
         if: steps.motherduck.outputs.upload_success == 'true'
         run: |
-          # Add this league to the registered_leagues.json
-          python - <<'PYEOF'
-          import json
-          from pathlib import Path
-
-          db_name = "${{ steps.parse.outputs.database_name }}"
-          registry_file = Path("registered_leagues.json")
-
-          # Load existing or create new
-          if registry_file.exists():
-              with open(registry_file) as f:
-                  registry = json.load(f)
-          else:
-              registry = {"description": "Leagues for weekly updates", "leagues": []}
-
-          # Add if not already present
-          if db_name not in registry["leagues"]:
-              registry["leagues"].append(db_name)
-              with open(registry_file, 'w') as f:
-                  json.dump(registry, f, indent=2)
-              print(f"✅ Added {db_name} to weekly update registry")
-          else:
-              print(f"ℹ️ {db_name} already in registry")
-          PYEOF
+          # Weekly updates are auto-discovered from MotherDuck
+          # Any database with a 'matchup' table will receive weekly updates
+          echo "✅ League '${{ steps.parse.outputs.database_name }}' uploaded to MotherDuck"
+          echo "ℹ️ Weekly updates will be auto-discovered (database has matchup table)"
 
       - name: Create deployment manifest
         if: steps.motherduck.outputs.upload_success == 'true'

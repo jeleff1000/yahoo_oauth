@@ -431,27 +431,39 @@ def main():
         margin: 4px 0;
         font-weight: 600;
     }
-    /* Subtab radio - smaller, indented, clearly secondary */
-    [data-testid="stPopover"] .stRadio > div {
-        margin-left: 1.5rem;
-        padding-left: 0.75rem;
-        border-left: 2px solid rgba(102, 126, 234, 0.3);
+    /* Subtab radio - force smaller and indented */
+    .stPopover .stRadio > div,
+    [data-testid="stPopoverBody"] .stRadio > div,
+    div[data-baseweb="popover"] .stRadio > div {
+        margin-left: 1.5rem !important;
+        padding-left: 0.75rem !important;
+        border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
         gap: 0 !important;
     }
-    [data-testid="stPopover"] .stRadio label {
+    .stPopover .stRadio label,
+    .stPopover .stRadio p,
+    [data-testid="stPopoverBody"] .stRadio label,
+    [data-testid="stPopoverBody"] .stRadio p,
+    div[data-baseweb="popover"] .stRadio label,
+    div[data-baseweb="popover"] .stRadio p {
         font-size: 0.72rem !important;
         padding: 1px 6px !important;
         min-height: unset !important;
         color: #666 !important;
     }
-    [data-testid="stPopover"] .stRadio label:has(input:checked) {
+    .stPopover .stRadio input:checked + div,
+    .stPopover .stRadio input:checked ~ label,
+    [data-testid="stPopoverBody"] .stRadio input:checked + div {
         color: #667eea !important;
-        font-weight: 500;
+        font-weight: 500 !important;
     }
-    [data-testid="stPopover"] .stRadio [data-baseweb="radio"] {
+    .stPopover .stRadio [data-baseweb="radio"],
+    [data-testid="stPopoverBody"] .stRadio [data-baseweb="radio"],
+    div[data-baseweb="popover"] .stRadio [data-baseweb="radio"] {
         width: 12px !important;
         height: 12px !important;
-        margin-right: 4px;
+        min-width: 12px !important;
+        min-height: 12px !important;
     }
     </style>
     """, unsafe_allow_html=True)
