@@ -83,26 +83,32 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
 
     def _is_connection_valid(self) -> bool:
         """Check if the current connection is still valid."""
-        if not hasattr(self, '_instance') or self._instance is None:
-            return False
         try:
+            if self._instance is None:
+                return False
             # Try a simple query to test connection
             self._instance.execute("SELECT 1").fetchone()
             return True
         except Exception:
             return False
 
-    def _ensure_connection(self):
-        """Ensure we have a valid connection, reconnecting if necessary."""
-        if not self._is_connection_valid():
-            # Close existing connection if any
-            if hasattr(self, '_instance') and self._instance:
+    def _force_reconnect(self):
+        """Force a reconnection by resetting the connection."""
+        try:
+            # Try to close existing connection
+            if self._instance is not None:
                 try:
                     self._instance.close()
                 except Exception:
                     pass
-            # Create new connection
-            self._instance = self._connect()
+        except Exception:
+            pass
+
+        # Use parent's reset method to clear the cached connection
+        try:
+            super().reset()
+        except Exception:
+            pass
 
     def query(self, sql: str, ttl: int | None = 600, **kwargs):
         """Execute query with retry logic for connection and catalog errors."""
@@ -113,10 +119,11 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
 
         for attempt in range(max_retries):
             try:
-                # Ensure connection is valid before executing
-                self._ensure_connection()
+                # Check if connection is valid, reconnect if not
+                if not self._is_connection_valid():
+                    self._force_reconnect()
 
-                # Execute query
+                # Execute query - _instance will be recreated by parent if needed
                 result = self._instance.execute(sql).df()
                 return result
 
@@ -127,17 +134,12 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
                 # Check error types
                 is_connection_error = "connection" in error_msg and "closed" in error_msg
                 is_catalog_error = "catalog" in error_msg or "remote catalog has changed" in error_msg
+                is_setter_error = "no setter" in error_msg
 
                 if attempt < max_retries - 1:
-                    # For connection or catalog errors, force reconnection
-                    if is_connection_error or is_catalog_error:
-                        # Close existing connection
-                        if hasattr(self, '_instance') and self._instance:
-                            try:
-                                self._instance.close()
-                            except Exception:
-                                pass
-                            self._instance = None
+                    # For connection, catalog, or setter errors, force reconnection
+                    if is_connection_error or is_catalog_error or is_setter_error:
+                        self._force_reconnect()
 
                         # Clear streamlit caches
                         try:
