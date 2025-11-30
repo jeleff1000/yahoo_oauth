@@ -507,14 +507,13 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
         "Recaps",
     ]
 
-    # Get selected section from session state (set by unified hamburger menu in app_homepage.py)
-    selected_idx = st.session_state.get("active_home_subtab", 0)
-    selected_section = section_names[selected_idx] if selected_idx < len(section_names) else "Overview"
+    # Use native tabs for navigation
+    tabs = st.tabs(section_names)
 
     # ========================================
-    # SECTION: OVERVIEW (Revamped Landing Page)
+    # TAB 0: OVERVIEW (Revamped Landing Page)
     # ========================================
-    if selected_section == "Overview":
+    with tabs[0]:
         # Hero section with current season info
         _render_hero(summary)
 
@@ -531,9 +530,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
         _render_quick_tips()
 
     # ========================================
-    # SECTION: HALL OF FAME
+    # TAB 1: HALL OF FAME
     # ========================================
-    elif selected_section == "Hall of Fame":
+    with tabs[1]:
         if HALL_OF_FAME_AVAILABLE:
             try:
                 HallOfFameViewer(df_dict).display()
@@ -547,9 +546,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
                 st.code(HALL_OF_FAME_ERROR)
 
     # ========================================
-    # SECTION: STANDINGS
+    # TAB 2: STANDINGS
     # ========================================
-    elif selected_section == "Standings":
+    with tabs[2]:
         st.markdown("""
         <div class="section-header">
             <h3>Season Standings</h3>
@@ -575,9 +574,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
             display_season_standings(matchup_df, prefix="standings")
 
     # ========================================
-    # SECTION: SCHEDULES
+    # TAB 3: SCHEDULES
     # ========================================
-    elif selected_section == "Schedules":
+    with tabs[3]:
         st.markdown("""
         <div class="section-header">
             <h3>Team Schedules</h3>
@@ -586,9 +585,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
         display_schedules(df_dict, prefix="schedules")
 
     # ========================================
-    # SECTION: HEAD-TO-HEAD
+    # TAB 4: HEAD-TO-HEAD
     # ========================================
-    elif selected_section == "Head-to-Head":
+    with tabs[4]:
         st.markdown("""
         <div class="section-header">
             <h3>Head-to-Head Matchups</h3>
@@ -612,9 +611,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
             display_head_to_head(df_dict)
 
     # ========================================
-    # SECTION: RECAPS
+    # TAB 5: RECAPS
     # ========================================
-    elif selected_section == "Recaps":
+    with tabs[5]:
         st.markdown("""
         <div class="section-header">
             <h3>Weekly Team Recaps</h3>

@@ -173,21 +173,19 @@ def render_team_stats_tab():
 
 @st.fragment
 def render_players_tab():
-    """Render players tab with lazy-loaded subtabs - navigation handled by unified menu"""
+    """Render players tab with subtabs"""
     subtab_names = ["Weekly", "Season", "Career", "Visualize"]
 
-    # Get selected subtab from session state (set by unified hamburger menu)
-    selected_idx = st.session_state.get("active_players_subtab", 0)
-    selected_subtab = subtab_names[selected_idx] if selected_idx < len(subtab_names) else "Weekly"
+    # Use native Streamlit tabs for subtabs
+    tabs = st.tabs(subtab_names)
 
-    # Render ONLY the active subtab
-    if selected_subtab == "Weekly":
+    with tabs[0]:
         render_players_weekly()
-    elif selected_subtab == "Season":
+    with tabs[1]:
         render_players_season()
-    elif selected_subtab == "Career":
+    with tabs[2]:
         render_players_career()
-    elif selected_subtab == "Visualize":
+    with tabs[3]:
         render_players_visualize()
 
 
@@ -237,84 +235,71 @@ def render_players_career():
 
 @st.fragment
 def render_players_visualize():
-    """Player visualization graphs - navigation handled by unified menu"""
-    # Tab categories (must match main() config)
+    """Player visualization graphs with native tabs"""
     tab_names = ["Player Cards", "Player Analysis", "SPAR Efficiency", "League Trends"]
-
-    # Get selections from session state (set by unified hamburger menu)
-    selected_idx = st.session_state.get("active_players_viz_tab", 0)
-    selected_tab = tab_names[selected_idx] if selected_idx < len(tab_names) else tab_names[0]
-    selected_graph = st.session_state.get("selected_viz_graph", None)
+    tabs = st.tabs(tab_names)
 
     try:
         # Tab 1: Player Cards
-        if selected_tab == "Player Cards":
-            if selected_graph == "Player Card":
+        with tabs[0]:
+            graph_tabs = st.tabs(["Player Card", "Weekly Heatmap", "Scoring Trends"])
+            with graph_tabs[0]:
                 from tabs.player_stats.graphs.player_graphs.player_card import display_player_card
                 display_player_card(prefix="players_card")
-            elif selected_graph == "Weekly Heatmap":
+            with graph_tabs[1]:
                 from tabs.player_stats.graphs.player_graphs.weekly_heatmap import display_weekly_performance_heatmap
                 display_weekly_performance_heatmap(prefix="players_heatmap")
-            elif selected_graph == "Scoring Trends":
+            with graph_tabs[2]:
                 from tabs.player_stats.graphs.player_graphs.player_scoring_graph import display_player_scoring_graphs
                 display_player_scoring_graphs(prefix="players_player_scoring")
-            else:
-                from tabs.player_stats.graphs.player_graphs.player_card import display_player_card
-                display_player_card(prefix="players_card")
 
         # Tab 2: Player Analysis
-        elif selected_tab == "Player Analysis":
-            if selected_graph == "Consistency":
+        with tabs[1]:
+            graph_tabs = st.tabs(["Consistency", "Boom/Bust", "Radar Comparison"])
+            with graph_tabs[0]:
                 from tabs.player_stats.graphs.player_graphs.player_consistency import display_player_consistency_graph
                 display_player_consistency_graph(prefix="players_consistency")
-            elif selected_graph == "Boom/Bust":
+            with graph_tabs[1]:
                 from tabs.player_stats.graphs.player_graphs.boom_bust_distribution import display_boom_bust_distribution
                 display_boom_bust_distribution(prefix="players_boom_bust")
-            elif selected_graph == "Radar Comparison":
+            with graph_tabs[2]:
                 from tabs.player_stats.graphs.player_graphs.player_radar_comparison import display_player_radar_comparison
                 display_player_radar_comparison(prefix="players_radar")
-            else:
-                from tabs.player_stats.graphs.player_graphs.player_consistency import display_player_consistency_graph
-                display_player_consistency_graph(prefix="players_consistency")
 
         # Tab 3: SPAR Efficiency
-        elif selected_tab == "SPAR Efficiency":
-            if selected_graph == "Manager Capture Rate":
+        with tabs[2]:
+            graph_tabs = st.tabs(["Capture Rate", "Per Week", "Waterfall", "Scatter", "Cumulative", "vs PPG"])
+            with graph_tabs[0]:
                 from tabs.player_stats.graphs.spar_graphs.manager_capture_rate import display_manager_spar_capture_rate
                 display_manager_spar_capture_rate(prefix="spar_capture")
-            elif selected_graph == "SPAR per Week":
+            with graph_tabs[1]:
                 from tabs.player_stats.graphs.spar_graphs.spar_per_week import display_spar_per_week_played
                 display_spar_per_week_played(prefix="spar_week")
-            elif selected_graph == "Weekly Waterfall":
+            with graph_tabs[2]:
                 from tabs.player_stats.graphs.spar_graphs.weekly_spar_waterfall import display_weekly_spar_waterfall
                 display_weekly_spar_waterfall(prefix="spar_waterfall")
-            elif selected_graph == "Consistency Scatter":
+            with graph_tabs[3]:
                 from tabs.player_stats.graphs.spar_graphs.spar_consistency_scatter import display_spar_consistency_scatter
                 display_spar_consistency_scatter(prefix="spar_consistency")
-            elif selected_graph == "Cumulative SPAR":
+            with graph_tabs[4]:
                 from tabs.player_stats.graphs.spar_graphs.cumulative_spar import display_cumulative_spar_over_season
                 display_cumulative_spar_over_season(prefix="spar_cumulative")
-            elif selected_graph == "SPAR vs PPG":
+            with graph_tabs[5]:
                 from tabs.player_stats.graphs.spar_graphs.spar_vs_ppg_efficiency import display_spar_vs_ppg_efficiency
                 display_spar_vs_ppg_efficiency(prefix="spar_ppg")
-            else:
-                from tabs.player_stats.graphs.spar_graphs.manager_capture_rate import display_manager_spar_capture_rate
-                display_manager_spar_capture_rate(prefix="spar_capture")
 
         # Tab 4: League Trends
-        elif selected_tab == "League Trends":
-            if selected_graph == "Position Groups":
+        with tabs[3]:
+            graph_tabs = st.tabs(["Position Groups", "SPAR Distribution", "Leaderboard"])
+            with graph_tabs[0]:
                 from tabs.player_stats.graphs.league_graphs.position_group_scoring import display_position_group_scoring_graphs
                 display_position_group_scoring_graphs(prefix="league_pos_group")
-            elif selected_graph == "Position SPAR Distribution":
+            with graph_tabs[1]:
                 from tabs.player_stats.graphs.league_graphs.position_spar_boxplot import display_position_spar_boxplot
                 display_position_spar_boxplot(prefix="league_spar_box")
-            elif selected_graph == "Manager Leaderboard":
+            with graph_tabs[2]:
                 from tabs.player_stats.graphs.league_graphs.manager_spar_leaderboard import display_manager_spar_leaderboard
                 display_manager_spar_leaderboard(prefix="league_manager_board")
-            else:
-                from tabs.player_stats.graphs.league_graphs.position_group_scoring import display_position_group_scoring_graphs
-                display_position_group_scoring_graphs(prefix="league_pos_group")
 
     except Exception as e:
         st.warning(f"Player graphs unavailable: {e}")
@@ -363,15 +348,11 @@ def render_simulations_tab():
 
 @st.fragment
 def render_extras_tab():
-    """Render extras tab - navigation handled by unified menu"""
+    """Render extras tab with native tabs"""
     subtab_names = ["Keeper", "Team Names"]
+    tabs = st.tabs(subtab_names)
 
-    # Get selected subtab from session state (set by unified hamburger menu)
-    selected_idx = st.session_state.get("active_extras_subtab", 0)
-    selected_subtab = subtab_names[selected_idx] if selected_idx < len(subtab_names) else "Keeper"
-
-    # Render ONLY the active subtab
-    if selected_subtab == "Keeper":
+    with tabs[0]:
         from md.tab_data_access.keepers import load_optimized_keepers_data
         from tabs.keepers.keepers_home import KeeperDataViewer
 
@@ -382,7 +363,7 @@ def render_extras_tab():
             else:
                 render_empty_state("Failed to load keepers data")
 
-    elif selected_subtab == "Team Names":
+    with tabs[1]:
         from md.tab_data_access.team_names import load_optimized_team_names_data
         from tabs.team_names.team_names import display_team_names
 
@@ -420,61 +401,26 @@ def main():
     # Initialize session state
     _init_session_defaults()
 
-    # Navigation config
+    # Simple navigation - just main sections
     tab_names = ["Home", "Managers", "Team Stats", "Players", "Draft", "Transactions", "Simulations", "Extras"]
-    subtabs_config = {
-        "Home": ["Overview", "Hall of Fame", "Standings", "Schedules", "Head-to-Head", "Recaps"],
-        "Players": ["Weekly", "Season", "Career", "Visualize"],
-        "Extras": ["Keeper", "Team Names"],
-    }
-    viz_categories = ["Player Cards", "Player Analysis", "SPAR Efficiency", "League Trends"]
-    viz_graphs = {
-        "Player Cards": ["Player Card", "Weekly Heatmap", "Scoring Trends"],
-        "Player Analysis": ["Consistency", "Boom/Bust", "Radar Comparison"],
-        "SPAR Efficiency": ["Manager Capture Rate", "SPAR per Week", "Weekly Waterfall", "Consistency Scatter", "Cumulative SPAR", "SPAR vs PPG"],
-        "League Trends": ["Position Groups", "Position SPAR Distribution", "Manager Leaderboard"],
-    }
 
-    # Sidebar navigation
+    # Sidebar with clean navigation
     with st.sidebar:
-        st.markdown("### 🏈 KMFFL")
+        st.markdown("## 🏈 KMFFL")
+        st.markdown("---")
 
-        # Main section
-        selected_tab = st.selectbox(
-            "Section",
-            tab_names,
-            index=st.session_state.get("active_main_tab", 0),
-            key="main_tab_selector"
-        )
-        st.session_state["active_main_tab"] = tab_names.index(selected_tab)
+        # Main section buttons - one per line, clean look
+        for i, tab in enumerate(tab_names):
+            if st.button(
+                tab,
+                key=f"nav_{tab}",
+                use_container_width=True,
+                type="primary" if st.session_state.get("active_main_tab", 0) == i else "secondary"
+            ):
+                st.session_state["active_main_tab"] = i
+                st.rerun()
 
-        # Subtabs if applicable
-        if selected_tab in subtabs_config:
-            subtab_key = f"active_{selected_tab.lower()}_subtab"
-            selected_subtab = st.selectbox(
-                "View",
-                subtabs_config[selected_tab],
-                index=st.session_state.get(subtab_key, 0),
-                key=f"{selected_tab.lower()}_subtab_selector"
-            )
-            st.session_state[subtab_key] = subtabs_config[selected_tab].index(selected_subtab)
-
-            # Visualization drill-down
-            if selected_tab == "Players" and selected_subtab == "Visualize":
-                selected_viz_cat = st.selectbox(
-                    "Category",
-                    viz_categories,
-                    index=st.session_state.get("active_players_viz_tab", 0),
-                    key="viz_category_selector"
-                )
-                st.session_state["active_players_viz_tab"] = viz_categories.index(selected_viz_cat)
-
-                selected_graph = st.selectbox(
-                    "Graph",
-                    viz_graphs[selected_viz_cat],
-                    key="viz_graph_selector"
-                )
-                st.session_state["selected_viz_graph"] = selected_graph
+    selected_tab = tab_names[st.session_state.get("active_main_tab", 0)]
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":
