@@ -331,7 +331,8 @@ def calculate_additional_transaction_metrics(transactions_df: pd.DataFrame) -> p
 
         # Group and calculate net SPAR
         net_spar_by_transaction = transactions_df.groupby(['transaction_id', 'manager']).apply(
-            calculate_net_spar_for_group
+            calculate_net_spar_for_group,
+            include_groups=False  # Avoid FutureWarning about grouping columns
         ).reset_index()
 
         # Merge back to original dataframe so every row gets the same net SPAR values
