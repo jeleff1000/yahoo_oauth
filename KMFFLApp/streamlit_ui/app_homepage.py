@@ -403,21 +403,21 @@ def main():
 
     # Navigation options
     tab_names = ["Home", "Managers", "Team Stats", "Players", "Draft", "Transactions", "Simulations", "Extras"]
+    tab_icons = ["🏠", "⚔️", "📊", "👤", "🎯", "💼", "🔮", "⭐"]
 
-    # Compact top navigation - dropdown keeps lazy loading
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        selected_tab = st.selectbox(
-            "Navigate",
-            tab_names,
-            index=st.session_state.get("active_main_tab", 0),
-            key="main_nav_select",
-            label_visibility="collapsed"
-        )
-        # Update session state when selection changes
-        if tab_names.index(selected_tab) != st.session_state.get("active_main_tab", 0):
-            st.session_state["active_main_tab"] = tab_names.index(selected_tab)
-            st.rerun()
+    # Get current tab
+    current_idx = st.session_state.get("active_main_tab", 0)
+    selected_tab = tab_names[current_idx]
+
+    # Hamburger menu at top
+    with st.popover("☰ Menu"):
+        st.markdown("**Navigate to:**")
+        for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
+            # Highlight current selection
+            label = f"{icon} {name}" + (" ✓" if i == current_idx else "")
+            if st.button(label, key=f"nav_{name}", use_container_width=True):
+                st.session_state["active_main_tab"] = i
+                st.rerun()
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":
