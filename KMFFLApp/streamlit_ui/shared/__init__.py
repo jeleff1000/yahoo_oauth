@@ -10,9 +10,9 @@ Modules:
 
 from .themes import (
     get_theme_colors,
-    get_gradient,
     inject_theme_css,
-    detect_theme
+    detect_theme,
+    create_theme_toggle,
 )
 
 from .chart_themes import (
@@ -42,9 +42,9 @@ from .dataframe_utils import (
 __all__ = [
     # Theme functions
     'get_theme_colors',
-    'get_gradient',
     'inject_theme_css',
     'detect_theme',
+    'create_theme_toggle',
 
     # Chart theming
     'get_chart_theme',
