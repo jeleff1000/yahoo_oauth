@@ -1671,10 +1671,19 @@ def render_landing_page():
             existing_dbs = get_existing_league_databases()
 
         if existing_dbs:
+            def format_league_name(x: str) -> str:
+                """Format league name for display - strip 'l_' prefix added for digit-starting names."""
+                if x == "":
+                    return "-- Choose a league --"
+                # Strip the 'l_' prefix if it was added because name started with a digit
+                if x.startswith("l_") and len(x) > 2 and x[2].isdigit():
+                    return x[2:]
+                return x
+
             selected_db = st.selectbox(
                 "Select League:",
                 options=[""] + existing_dbs,
-                format_func=lambda x: "-- Choose a league --" if x == "" else x,
+                format_func=format_league_name,
                 key="league_selector"
             )
 
@@ -1778,6 +1787,7 @@ def run_register_flow():
     # Add back button
     if st.button("← Back to Home"):
         st.session_state.app_mode = "landing"
+        st.session_state.import_in_progress = False  # Reset import state when going back
         st.rerun()
 
     # Main application (original OAuth flow)
@@ -1861,7 +1871,12 @@ def run_register_flow():
                             col_start, col_advanced = st.columns(2)
 
                             with col_start:
-                                if st.button("Start Import Now", key="start_import_btn", type="primary", use_container_width=True):
+                                # Disable button if import already in progress
+                                import_in_progress = st.session_state.get("import_in_progress", False)
+                                if import_in_progress:
+                                    st.info("Import in progress...")
+                                if st.button("Start Import Now", key="start_import_btn", type="primary", use_container_width=True, disabled=import_in_progress):
+                                    st.session_state.import_in_progress = True
                                     # Quick start - no keeper rules
                                     league_info = {
                                         "league_key": selected_league.get("league_key"),
@@ -1916,8 +1931,10 @@ def run_register_flow():
 
                                 st.markdown("---")
 
-                                # Import button with advanced settings
-                                if st.button("Start Import with Settings", key="start_import_advanced_btn", type="primary", use_container_width=True):
+                                # Import button with advanced settings - disable if import already in progress
+                                import_in_progress = st.session_state.get("import_in_progress", False)
+                                if st.button("Start Import with Settings", key="start_import_advanced_btn", type="primary", use_container_width=True, disabled=import_in_progress):
+                                    st.session_state.import_in_progress = True
                                     league_info = {
                                         "league_key": selected_league.get("league_key"),
                                         "name": selected_league.get("name"),
@@ -2106,6 +2123,7 @@ def perform_import_flow(league_info: dict):
             if result['success']:
                 st.success("✅ Import Started Successfully!")
                 st.session_state.import_job_id = result['user_id']
+                st.session_state.import_in_progress = False  # Reset since workflow is now queued
 
                 st.markdown(f"""
                 ### 📊 Import Job Details
@@ -2127,15 +2145,18 @@ def perform_import_flow(league_info: dict):
                 return
             else:
                 st.error(f"❌ Failed to start import: {result.get('error', 'Unknown error')}")
+                st.session_state.import_in_progress = False  # Reset on failure
                 if 'details' in result:
                     with st.expander("Error Details"):
                         st.code(result['details'])
 
         except ImportError:
             st.error("❌ Workflow trigger helper not found. Please ensure streamlit_helpers/trigger_import_workflow.py exists.")
+            st.session_state.import_in_progress = False  # Reset on failure
 
     except Exception as e:
         st.error(f"Error starting workflow: {e}")
+        st.session_state.import_in_progress = False  # Reset on failure
         import traceback
         with st.expander("Full Error"):
             st.code(traceback.format_exc())
