@@ -403,7 +403,7 @@ def main():
             page_title="KMFFL Analytics",
             layout="wide",
             page_icon="🏈",
-            initial_sidebar_state="collapsed"
+            initial_sidebar_state="expanded"
         )
     except st.errors.StreamlitAPIException:
         # Page config already set by parent (main.py)
@@ -413,72 +413,6 @@ def main():
     from tabs.shared.modern_styles import apply_modern_styles
     apply_modern_styles()
 
-    # Clean navigation menu styling (override button styles inside popover)
-    st.markdown("""
-    <style>
-    /* Clean menu styling inside popovers */
-    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-        background: transparent;
-    }
-
-    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-        all: unset;
-        display: flex !important;
-        align-items: center !important;
-        padding: 0.6rem 1rem !important;
-        margin: 0 !important;
-        cursor: pointer !important;
-        border-radius: 6px !important;
-        font-size: 0.95rem !important;
-        font-weight: 400 !important;
-        color: inherit !important;
-        background: transparent !important;
-        border: none !important;
-        transition: background-color 0.15s ease !important;
-    }
-
-    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
-        background-color: rgba(128, 128, 128, 0.15) !important;
-    }
-
-    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
-        background-color: rgba(99, 102, 241, 0.15) !important;
-        color: rgb(99, 102, 241) !important;
-        font-weight: 600 !important;
-    }
-
-    /* Show radio circles in menu for clarity */
-    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
-        display: flex !important;
-        margin-right: 0.5rem !important;
-    }
-
-    /* Menu section labels */
-    [data-testid="stPopover"] div[data-testid="stRadio"] > label {
-        font-size: 0.75rem !important;
-        font-weight: 600 !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.5px !important;
-        color: rgba(128, 128, 128, 0.8) !important;
-        margin-bottom: 0.25rem !important;
-    }
-
-    /* Dividers in menu */
-    [data-testid="stPopover"] hr {
-        margin: 0.75rem 0 !important;
-        border-color: rgba(128, 128, 128, 0.2) !important;
-    }
-
-    /* Popover container */
-    [data-testid="stPopover"] > div {
-        min-width: 220px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     # Check connectivity
     if not _safe_boot():
         st.stop()
@@ -486,17 +420,13 @@ def main():
     # Initialize session state
     _init_session_defaults()
 
-    # Main navigation as unified hierarchical hamburger menu
+    # Navigation config
     tab_names = ["Home", "Managers", "Team Stats", "Players", "Draft", "Transactions", "Simulations", "Extras"]
-
-    # Define subtabs for tabs that have them
     subtabs_config = {
         "Home": ["Overview", "Hall of Fame", "Standings", "Schedules", "Head-to-Head", "Recaps"],
         "Players": ["Weekly", "Season", "Career", "Visualize"],
         "Extras": ["Keeper", "Team Names"],
     }
-
-    # Visualization subtabs (nested under Players > Visualize)
     viz_categories = ["Player Cards", "Player Analysis", "SPAR Efficiency", "League Trends"]
     viz_graphs = {
         "Player Cards": ["Player Card", "Weekly Heatmap", "Scoring Trends"],
@@ -505,35 +435,33 @@ def main():
         "League Trends": ["Position Groups", "Position SPAR Distribution", "Manager Leaderboard"],
     }
 
-    # Build current location display
-    current_location = selected_tab if "selected_tab" in dir() else tab_names[st.session_state.get("active_main_tab", 0)]
+    # Sidebar navigation
+    with st.sidebar:
+        st.markdown("### 🏈 KMFFL")
 
-    # Unified hamburger menu
-    with st.popover("☰ Menu", use_container_width=False):
-        # Main tab selection
-        selected_tab = st.radio(
+        # Main section
+        selected_tab = st.selectbox(
             "Section",
             tab_names,
             index=st.session_state.get("active_main_tab", 0),
             key="main_tab_selector"
         )
+        st.session_state["active_main_tab"] = tab_names.index(selected_tab)
 
-        # Show subtabs if the selected tab has them
+        # Subtabs if applicable
         if selected_tab in subtabs_config:
-            st.divider()
             subtab_key = f"active_{selected_tab.lower()}_subtab"
-            selected_subtab = st.radio(
-                f"{selected_tab}",
+            selected_subtab = st.selectbox(
+                "View",
                 subtabs_config[selected_tab],
                 index=st.session_state.get(subtab_key, 0),
                 key=f"{selected_tab.lower()}_subtab_selector"
             )
             st.session_state[subtab_key] = subtabs_config[selected_tab].index(selected_subtab)
 
-            # Show visualization options if Players > Visualize
+            # Visualization drill-down
             if selected_tab == "Players" and selected_subtab == "Visualize":
-                st.divider()
-                selected_viz_cat = st.radio(
+                selected_viz_cat = st.selectbox(
                     "Category",
                     viz_categories,
                     index=st.session_state.get("active_players_viz_tab", 0),
@@ -541,16 +469,12 @@ def main():
                 )
                 st.session_state["active_players_viz_tab"] = viz_categories.index(selected_viz_cat)
 
-                st.divider()
-                selected_graph = st.radio(
+                selected_graph = st.selectbox(
                     "Graph",
                     viz_graphs[selected_viz_cat],
                     key="viz_graph_selector"
                 )
                 st.session_state["selected_viz_graph"] = selected_graph
-
-    # Update active tab index
-    st.session_state["active_main_tab"] = tab_names.index(selected_tab)
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":
