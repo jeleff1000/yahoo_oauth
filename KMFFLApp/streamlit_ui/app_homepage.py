@@ -176,11 +176,10 @@ def render_players_tab():
     """Render players tab with lazy-loaded subtabs"""
     subtab_names = ["Weekly", "Season", "Career", "Visualize"]
 
-    # Subtab selector (will be styled as tabs by CSS)
-    selected_subtab = st.radio(
+    # Subtab selector as dropdown
+    selected_subtab = st.selectbox(
         "Player View",
         subtab_names,
-        horizontal=True,
         index=st.session_state.get("active_players_subtab", 0),
         key="players_subtab_selector",
         label_visibility="collapsed"
@@ -253,15 +252,14 @@ def render_players_visualize():
         "🌐 League Trends"
     ]
 
-    selected_tab = st.radio(
+    selected_tab = st.selectbox(
         "Visualization Category",
         tab_names,
-        horizontal=True,
+        index=st.session_state.get("active_players_viz_tab", 0),
         key="players_visualize_category_selector",
         label_visibility="collapsed"
     )
 
-    st.session_state.setdefault("active_players_viz_tab", 0)
     st.session_state["active_players_viz_tab"] = tab_names.index(selected_tab)
 
     try:
@@ -272,10 +270,9 @@ def render_players_visualize():
                 "🗓️ Weekly Heatmap",
                 "📈 Scoring Trends"
             ]
-            selected_graph = st.radio(
+            selected_graph = st.selectbox(
                 "Graph Type",
                 graph_names,
-                horizontal=True,
                 key="players_cards_graph_selector",
                 label_visibility="collapsed"
             )
@@ -297,10 +294,9 @@ def render_players_visualize():
                 "💥 Boom/Bust",
                 "🕸️ Radar Comparison"
             ]
-            selected_graph = st.radio(
+            selected_graph = st.selectbox(
                 "Graph Type",
                 graph_names,
-                horizontal=True,
                 key="players_analysis_graph_selector",
                 label_visibility="collapsed"
             )
@@ -325,10 +321,9 @@ def render_players_visualize():
                 "📉 Cumulative SPAR",
                 "⚡ SPAR vs PPG"
             ]
-            selected_graph = st.radio(
+            selected_graph = st.selectbox(
                 "Graph Type",
                 graph_names,
-                horizontal=True,
                 key="players_spar_graph_selector",
                 label_visibility="collapsed"
             )
@@ -359,10 +354,9 @@ def render_players_visualize():
                 "📦 Position SPAR Distribution",
                 "🏆 Manager Leaderboard"
             ]
-            selected_graph = st.radio(
+            selected_graph = st.selectbox(
                 "Graph Type",
                 graph_names,
-                horizontal=True,
                 key="players_league_graph_selector",
                 label_visibility="collapsed"
             )
@@ -427,11 +421,10 @@ def render_extras_tab():
     """Render extras tab with lazy-loaded subtabs"""
     subtab_names = ["Keeper", "Team Names"]
 
-    # Subtab selector (will be styled as tabs by CSS)
-    selected_subtab = st.radio(
+    # Subtab selector as dropdown
+    selected_subtab = st.selectbox(
         "Extras View",
         subtab_names,
-        horizontal=True,
         index=st.session_state.get("active_extras_subtab", 0),
         key="extras_subtab_selector",
         label_visibility="collapsed"
@@ -481,110 +474,6 @@ def main():
     from tabs.shared.modern_styles import apply_modern_styles
     apply_modern_styles()
 
-    # CSS to make radio buttons look exactly like native Streamlit tabs (light & dark mode)
-    st.markdown("""
-        <style>
-        /* Hide radio button circles */
-        div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
-            display: none;
-        }
-
-        /* Reset radio button default styles */
-        div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-            all: unset;
-        }
-
-        /* Style radio group container to match native tabs */
-        div[data-testid="stRadio"] > div[role="radiogroup"] {
-            display: flex;
-            gap: 0.5rem;
-            background-color: transparent;
-            padding: 0;
-            margin: 0;
-            flex-wrap: wrap;
-            width: 100%;
-        }
-
-        /* ============ BASE STYLES (Works for both light and dark) ============ */
-        /* Force visibility for ALL inactive tabs */
-        div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            background-color: rgb(70, 73, 80) !important;
-            border: 2px solid rgb(100, 103, 110) !important;
-            padding: 0.5rem 1rem !important;
-            border-radius: 0.5rem !important;
-            cursor: pointer !important;
-            transition: all 0.15s ease-in-out !important;
-            font-family: "Source Sans Pro", sans-serif !important;
-            font-size: 1rem !important;
-            font-weight: 500 !important;
-            color: rgb(255, 255, 255) !important;
-            line-height: 1.6 !important;
-            white-space: nowrap !important;
-            user-select: none !important;
-            box-sizing: border-box !important;
-        }
-
-        /* Force text color in ALL children */
-        div[data-testid="stRadio"] > div[role="radiogroup"] > label * {
-            color: rgb(255, 255, 255) !important;
-        }
-
-        /* Hover state for inactive tabs */
-        div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
-            border-color: rgb(103, 108, 245) !important;
-            background-color: rgb(80, 83, 90) !important;
-        }
-
-        /* Active/selected tab - bright purple, white text */
-        div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
-            background-color: rgb(103, 108, 245) !important;
-            border-color: rgb(103, 108, 245) !important;
-            color: rgb(255, 255, 255) !important;
-            font-weight: 600 !important;
-        }
-
-        /* Force active tab text color */
-        div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) * {
-            color: rgb(255, 255, 255) !important;
-        }
-
-
-        /* Remove default radio container padding */
-        div[data-testid="stRadio"] {
-            margin-bottom: 0.5rem;
-        }
-
-        /* Mobile optimization - tablet */
-        @media (max-width: 768px) {
-            div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-                padding: 0.375rem 0.625rem;
-                font-size: 0.9rem;
-            }
-
-            div[data-testid="stRadio"] > div[role="radiogroup"] {
-                gap: 0.375rem;
-            }
-        }
-
-        /* Mobile optimization - phone */
-        @media (max-width: 480px) {
-            div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-                padding: 0.3rem 0.5rem;
-                font-size: 0.85rem;
-                flex: 1 1 auto;
-                min-width: fit-content;
-            }
-
-            div[data-testid="stRadio"] > div[role="radiogroup"] {
-                gap: 0.25rem;
-            }
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
     # Check connectivity
     if not _safe_boot():
         st.stop()
@@ -592,17 +481,15 @@ def main():
     # Initialize session state
     _init_session_defaults()
 
-    # Main tabs with lazy loading via radio selection at top
+    # Main navigation as hamburger-style dropdown
     tab_names = ["Home", "Managers", "Team Stats", "Players", "Draft", "Transactions", "Simulations", "Extras"]
 
-    # Tab selector at the top (styled to look like tabs)
-    selected_tab = st.radio(
-        "Navigation",
+    # Main navigation dropdown with visible label
+    selected_tab = st.selectbox(
+        "📍 Navigate",
         tab_names,
-        horizontal=True,
         index=st.session_state.get("active_main_tab", 0),
-        key="main_tab_selector",
-        label_visibility="collapsed"
+        key="main_tab_selector"
     )
     # Update active tab index
     st.session_state["active_main_tab"] = tab_names.index(selected_tab)

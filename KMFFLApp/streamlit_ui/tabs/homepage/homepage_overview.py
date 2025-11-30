@@ -84,7 +84,7 @@ def _apply_homepage_styles():
     }
 
     /* ========================================
-       QUICK STATS ROW
+       QUICK STATS ROW (Static info cards)
        ======================================== */
     .stats-row {
         display: grid;
@@ -98,12 +98,6 @@ def _apply_homepage_styles():
         border-radius: 12px;
         padding: 1.25rem;
         text-align: center;
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .stat-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-        border-color: rgba(102,126,234,0.3);
     }
     .stat-value {
         font-size: 2rem;
@@ -119,7 +113,7 @@ def _apply_homepage_styles():
     }
 
     /* ========================================
-       NAVIGATION TILES
+       NAVIGATION TILES (Non-clickable info cards)
        ======================================== */
     .nav-grid {
         display: grid;
@@ -132,15 +126,9 @@ def _apply_homepage_styles():
         border: 1px solid rgba(255,255,255,0.08);
         border-radius: 12px;
         padding: 1.5rem;
-        cursor: pointer;
-        transition: all 0.25s ease;
+        cursor: default;
         text-decoration: none;
         display: block;
-    }
-    .nav-tile:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 12px 32px rgba(0,0,0,0.4);
-        border-color: rgba(102,126,234,0.4);
     }
     .nav-tile-icon {
         font-size: 2.5rem;
@@ -167,6 +155,21 @@ def _apply_homepage_styles():
         font-size: 0.75rem;
         font-weight: 600;
         margin-top: 0.75rem;
+    }
+
+    /* ========================================
+       HAMBURGER MENU DROPDOWN STYLES
+       ======================================== */
+    .section-dropdown {
+        margin-bottom: 1.5rem;
+    }
+    .section-dropdown .stSelectbox > div > div {
+        background: linear-gradient(145deg, #1e1e2f 0%, #252538 100%);
+        border: 2px solid rgba(102,126,234,0.4);
+        border-radius: 8px;
+    }
+    .section-dropdown .stSelectbox > div > div:hover {
+        border-color: rgba(102,126,234,0.6);
     }
 
     /* ========================================
@@ -219,9 +222,6 @@ def _apply_homepage_styles():
         .stat-card, .nav-tile, .info-card {
             background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
             border: 1px solid #e0e0e0;
-        }
-        .stat-card:hover, .nav-tile:hover {
-            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
         }
         .stat-value {
             color: #5c6bc0;
@@ -489,7 +489,7 @@ def _render_quick_tips() -> None:
 
 @st.fragment
 def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
-    """Homepage with tabs - revamped for visual appeal."""
+    """Homepage with hamburger menu navigation - revamped for visual appeal."""
     apply_modern_styles()
     _apply_homepage_styles()
 
@@ -497,8 +497,8 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
     summary = df_dict.get("summary", {})
     matchup_df = _get_matchup_df(df_dict)
 
-    # Tab names
-    tab_names = [
+    # Section names for dropdown menu
+    section_names = [
         "Overview",
         "Hall of Fame",
         "Standings",
@@ -506,12 +506,24 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
         "Head-to-Head",
         "Recaps",
     ]
-    tabs = st.tabs(tab_names)
+
+    # Initialize session state for selected section
+    if "homepage_section" not in st.session_state:
+        st.session_state["homepage_section"] = "Overview"
+
+    # Hamburger-style dropdown menu with visible label
+    selected_section = st.selectbox(
+        "📂 Section",
+        section_names,
+        index=section_names.index(st.session_state.get("homepage_section", "Overview")),
+        key="homepage_section_selector"
+    )
+    st.session_state["homepage_section"] = selected_section
 
     # ========================================
-    # TAB 0: OVERVIEW (Revamped Landing Page)
+    # SECTION: OVERVIEW (Revamped Landing Page)
     # ========================================
-    with tabs[0]:
+    if selected_section == "Overview":
         # Hero section with current season info
         _render_hero(summary)
 
@@ -528,9 +540,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
         _render_quick_tips()
 
     # ========================================
-    # TAB 1: HALL OF FAME
+    # SECTION: HALL OF FAME
     # ========================================
-    with tabs[1]:
+    elif selected_section == "Hall of Fame":
         if HALL_OF_FAME_AVAILABLE:
             try:
                 HallOfFameViewer(df_dict).display()
@@ -544,9 +556,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
                 st.code(HALL_OF_FAME_ERROR)
 
     # ========================================
-    # TAB 2: STANDINGS
+    # SECTION: STANDINGS
     # ========================================
-    with tabs[2]:
+    elif selected_section == "Standings":
         st.markdown("""
         <div class="section-header">
             <h3>Season Standings</h3>
@@ -572,9 +584,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
             display_season_standings(matchup_df, prefix="standings")
 
     # ========================================
-    # TAB 3: SCHEDULES
+    # SECTION: SCHEDULES
     # ========================================
-    with tabs[3]:
+    elif selected_section == "Schedules":
         st.markdown("""
         <div class="section-header">
             <h3>Team Schedules</h3>
@@ -583,9 +595,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
         display_schedules(df_dict, prefix="schedules")
 
     # ========================================
-    # TAB 4: HEAD-TO-HEAD
+    # SECTION: HEAD-TO-HEAD
     # ========================================
-    with tabs[4]:
+    elif selected_section == "Head-to-Head":
         st.markdown("""
         <div class="section-header">
             <h3>Head-to-Head Matchups</h3>
@@ -609,9 +621,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
             display_head_to_head(df_dict)
 
     # ========================================
-    # TAB 5: RECAPS
+    # SECTION: RECAPS
     # ========================================
-    with tabs[5]:
+    elif selected_section == "Recaps":
         st.markdown("""
         <div class="section-header">
             <h3>Weekly Team Recaps</h3>
