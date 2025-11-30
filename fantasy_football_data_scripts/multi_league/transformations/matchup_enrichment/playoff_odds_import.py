@@ -1594,6 +1594,8 @@ def process_parquet_files(ctx: LeagueContext):
 # -------------------------
 def main():
     """Main entry point with argument parsing."""
+    global N_SIMS  # Declare at top before any reference to N_SIMS
+
     parser = argparse.ArgumentParser(
         description="Calculate playoff odds and probabilities for fantasy football matchups",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1626,7 +1628,6 @@ Note:
     args = parser.parse_args()
 
     # Override N_SIMS if provided
-    global N_SIMS
     if args.n_sims is not None:
         N_SIMS = args.n_sims
         print(f"Using {N_SIMS} simulations (from --n-sims argument)")
