@@ -10,9 +10,20 @@ yahoo-fantasy-api>=2.8.0
 yahoo-oauth>=2.0
 
 # Data processing
-numpy>=1.24.0
+numpy>=1.24.0,<2
 lxml>=4.9.0
 polars>=0.20.0
+
+# Visualization (for KMFFLApp)
+plotly
+matplotlib
+scipy
+
+# Optimization (for KMFFLApp)
+pulp
+
+# Streamlit extras (for KMFFLApp)
+streamlit-aggrid>=1.0.0
 
 # Optional but recommended
 python-dotenv>=1.0.0
