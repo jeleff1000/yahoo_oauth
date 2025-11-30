@@ -3,8 +3,11 @@ import pandas as pd
 import sys
 from pathlib import Path
 
-# Add parent directory to path to import shared modules
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add streamlit_ui directory to path to import shared modules
+_streamlit_ui_dir = Path(__file__).parent.parent.parent.parent.resolve()
+if str(_streamlit_ui_dir) not in sys.path:
+    sys.path.insert(0, str(_streamlit_ui_dir))
+
 from shared.table_formatting import add_derived_metrics, enhance_table_data
 
 

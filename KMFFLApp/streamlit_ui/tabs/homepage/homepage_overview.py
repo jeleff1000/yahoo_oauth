@@ -12,6 +12,13 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 import pandas as pd
 import streamlit as st
+import sys
+from pathlib import Path
+
+# Ensure streamlit_ui directory is in path for imports
+_streamlit_ui_dir = Path(__file__).parent.parent.parent.resolve()
+if str(_streamlit_ui_dir) not in sys.path:
+    sys.path.insert(0, str(_streamlit_ui_dir))
 
 # Theme and styles
 from shared.themes import inject_theme_css
