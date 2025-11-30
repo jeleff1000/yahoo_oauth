@@ -419,64 +419,85 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Clean menu styling
+    # Hamburger menu styling - main tabs vs subtabs hierarchy
     st.markdown("""
     <style>
-    .menu-current-tab {
+    /* Current tab indicator */
+    .current-tab-label {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white !important;
         padding: 0.5rem 0.75rem;
         border-radius: 6px;
         margin: 0.25rem 0;
         font-weight: 600;
+        font-size: 0.95rem;
     }
-    .menu-current-tab * { color: white !important; }
-    .menu-subtab-active {
-        background: rgba(102, 126, 234, 0.15);
-        padding: 0.3rem 0.5rem;
-        border-radius: 4px;
-        margin-left: 1rem;
-        font-size: 0.85rem;
+
+    /* Active subtab indicator */
+    .active-subtab-label {
         color: #667eea;
+        font-size: 0.8rem;
+        padding: 0.2rem 0 0.2rem 1.5rem;
         font-weight: 500;
     }
-    .menu-subtab {
-        margin-left: 1rem;
-        font-size: 0.85rem;
-        color: #666;
-        padding: 0.2rem 0;
+
+    /* Subtab buttons - small, compact, indented */
+    .subtab-btn button {
+        font-size: 0.75rem !important;
+        padding: 0.15rem 0.5rem !important;
+        min-height: 1.5rem !important;
+        height: auto !important;
+        margin: 0.1rem 0 !important;
+        background: transparent !important;
+        border: none !important;
+        color: #888 !important;
+        text-align: left !important;
+        justify-content: flex-start !important;
+    }
+    .subtab-btn button:hover {
+        background: rgba(102, 126, 234, 0.1) !important;
+        color: #667eea !important;
+    }
+
+    /* Container to indent subtabs */
+    .subtab-container {
+        margin-left: 1.25rem;
+        padding-left: 0.5rem;
+        border-left: 2px solid rgba(102, 126, 234, 0.2);
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # Hamburger menu with proper hierarchy
+    # Hamburger menu
     with st.popover("☰ Menu"):
         for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
             is_current = (i == current_idx)
 
-            # Main tab item
             if is_current:
-                st.markdown(f'<div class="menu-current-tab">{icon} {name}</div>', unsafe_allow_html=True)
-            else:
-                if st.button(f"{icon} {name}", key=f"menu_main_{i}", use_container_width=True):
-                    st.session_state["active_main_tab"] = i
-                    st.session_state[f"subtab_{name}"] = 0
-                    st.rerun()
+                # Current tab - show as label with gradient
+                st.markdown(f'<div class="current-tab-label">{icon} {name}</div>', unsafe_allow_html=True)
 
-            # Subtabs for current section only
-            if is_current:
+                # Subtabs for current section
                 section_subtabs = subtabs.get(name)
                 if section_subtabs:
+                    st.markdown('<div class="subtab-container">', unsafe_allow_html=True)
                     for j, subtab_name in enumerate(section_subtabs):
                         is_active_sub = (j == current_subtab_idx)
                         if is_active_sub:
-                            st.markdown(f'<div class="menu-subtab-active">● {subtab_name}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="active-subtab-label">● {subtab_name}</div>', unsafe_allow_html=True)
                         else:
-                            st.markdown(f'<div class="menu-subtab">', unsafe_allow_html=True)
-                            if st.button(f"○ {subtab_name}", key=f"menu_sub_{i}_{j}"):
+                            st.markdown('<div class="subtab-btn">', unsafe_allow_html=True)
+                            if st.button(f"○ {subtab_name}", key=f"sub_{i}_{j}", use_container_width=True):
                                 st.session_state[f"subtab_{name}"] = j
                                 st.rerun()
                             st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                # Other tabs - clickable buttons
+                if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
+                    st.session_state["active_main_tab"] = i
+                    st.session_state[f"subtab_{name}"] = 0
+                    st.rerun()
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":
