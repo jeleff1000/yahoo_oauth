@@ -511,13 +511,14 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
     if "homepage_section" not in st.session_state:
         st.session_state["homepage_section"] = "Overview"
 
-    # Hamburger-style dropdown menu with visible label
-    selected_section = st.selectbox(
-        "📂 Section",
-        section_names,
-        index=section_names.index(st.session_state.get("homepage_section", "Overview")),
-        key="homepage_section_selector"
-    )
+    # Hamburger menu for section navigation
+    with st.popover("☰ Section", use_container_width=False):
+        selected_section = st.radio(
+            "Go to:",
+            section_names,
+            index=section_names.index(st.session_state.get("homepage_section", "Overview")),
+            key="homepage_section_selector"
+        )
     st.session_state["homepage_section"] = selected_section
 
     # ========================================

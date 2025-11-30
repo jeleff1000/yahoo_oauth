@@ -176,14 +176,14 @@ def render_players_tab():
     """Render players tab with lazy-loaded subtabs"""
     subtab_names = ["Weekly", "Season", "Career", "Visualize"]
 
-    # Subtab selector as dropdown
-    selected_subtab = st.selectbox(
-        "Player View",
-        subtab_names,
-        index=st.session_state.get("active_players_subtab", 0),
-        key="players_subtab_selector",
-        label_visibility="collapsed"
-    )
+    # Hamburger menu for player subtabs
+    with st.popover("☰ View", use_container_width=False):
+        selected_subtab = st.radio(
+            "Player stats:",
+            subtab_names,
+            index=st.session_state.get("active_players_subtab", 0),
+            key="players_subtab_selector"
+        )
     st.session_state["active_players_subtab"] = subtab_names.index(selected_subtab)
 
     # Render ONLY the active subtab
@@ -252,13 +252,14 @@ def render_players_visualize():
         "🌐 League Trends"
     ]
 
-    selected_tab = st.selectbox(
-        "Visualization Category",
-        tab_names,
-        index=st.session_state.get("active_players_viz_tab", 0),
-        key="players_visualize_category_selector",
-        label_visibility="collapsed"
-    )
+    # Hamburger menu for visualization category
+    with st.popover("☰ Category", use_container_width=False):
+        selected_tab = st.radio(
+            "Visualization:",
+            tab_names,
+            index=st.session_state.get("active_players_viz_tab", 0),
+            key="players_visualize_category_selector"
+        )
 
     st.session_state["active_players_viz_tab"] = tab_names.index(selected_tab)
 
@@ -270,12 +271,12 @@ def render_players_visualize():
                 "🗓️ Weekly Heatmap",
                 "📈 Scoring Trends"
             ]
-            selected_graph = st.selectbox(
-                "Graph Type",
-                graph_names,
-                key="players_cards_graph_selector",
-                label_visibility="collapsed"
-            )
+            with st.popover("☰ Graph", use_container_width=False):
+                selected_graph = st.radio(
+                    "Select graph:",
+                    graph_names,
+                    key="players_cards_graph_selector"
+                )
 
             if selected_graph == "🏈 Player Card":
                 from tabs.player_stats.graphs.player_graphs.player_card import display_player_card
@@ -294,12 +295,12 @@ def render_players_visualize():
                 "💥 Boom/Bust",
                 "🕸️ Radar Comparison"
             ]
-            selected_graph = st.selectbox(
-                "Graph Type",
-                graph_names,
-                key="players_analysis_graph_selector",
-                label_visibility="collapsed"
-            )
+            with st.popover("☰ Graph", use_container_width=False):
+                selected_graph = st.radio(
+                    "Select graph:",
+                    graph_names,
+                    key="players_analysis_graph_selector"
+                )
 
             if selected_graph == "🎯 Consistency":
                 from tabs.player_stats.graphs.player_graphs.player_consistency import display_player_consistency_graph
@@ -321,12 +322,12 @@ def render_players_visualize():
                 "📉 Cumulative SPAR",
                 "⚡ SPAR vs PPG"
             ]
-            selected_graph = st.selectbox(
-                "Graph Type",
-                graph_names,
-                key="players_spar_graph_selector",
-                label_visibility="collapsed"
-            )
+            with st.popover("☰ Graph", use_container_width=False):
+                selected_graph = st.radio(
+                    "Select graph:",
+                    graph_names,
+                    key="players_spar_graph_selector"
+                )
 
             if selected_graph == "📊 Manager Capture Rate":
                 from tabs.player_stats.graphs.spar_graphs.manager_capture_rate import display_manager_spar_capture_rate
@@ -354,12 +355,12 @@ def render_players_visualize():
                 "📦 Position SPAR Distribution",
                 "🏆 Manager Leaderboard"
             ]
-            selected_graph = st.selectbox(
-                "Graph Type",
-                graph_names,
-                key="players_league_graph_selector",
-                label_visibility="collapsed"
-            )
+            with st.popover("☰ Graph", use_container_width=False):
+                selected_graph = st.radio(
+                    "Select graph:",
+                    graph_names,
+                    key="players_league_graph_selector"
+                )
 
             if selected_graph == "📊 Position Groups":
                 from tabs.player_stats.graphs.league_graphs.position_group_scoring import display_position_group_scoring_graphs
@@ -421,14 +422,14 @@ def render_extras_tab():
     """Render extras tab with lazy-loaded subtabs"""
     subtab_names = ["Keeper", "Team Names"]
 
-    # Subtab selector as dropdown
-    selected_subtab = st.selectbox(
-        "Extras View",
-        subtab_names,
-        index=st.session_state.get("active_extras_subtab", 0),
-        key="extras_subtab_selector",
-        label_visibility="collapsed"
-    )
+    # Hamburger menu for extras subtabs
+    with st.popover("☰ View", use_container_width=False):
+        selected_subtab = st.radio(
+            "Select:",
+            subtab_names,
+            index=st.session_state.get("active_extras_subtab", 0),
+            key="extras_subtab_selector"
+        )
     st.session_state["active_extras_subtab"] = subtab_names.index(selected_subtab)
 
     # Render ONLY the active subtab
@@ -481,16 +482,17 @@ def main():
     # Initialize session state
     _init_session_defaults()
 
-    # Main navigation as hamburger-style dropdown
+    # Main navigation as hamburger menu
     tab_names = ["Home", "Managers", "Team Stats", "Players", "Draft", "Transactions", "Simulations", "Extras"]
 
-    # Main navigation dropdown with visible label
-    selected_tab = st.selectbox(
-        "📍 Navigate",
-        tab_names,
-        index=st.session_state.get("active_main_tab", 0),
-        key="main_tab_selector"
-    )
+    # Hamburger menu using popover
+    with st.popover("☰ Menu", use_container_width=False):
+        selected_tab = st.radio(
+            "Navigate to:",
+            tab_names,
+            index=st.session_state.get("active_main_tab", 0),
+            key="main_tab_selector"
+        )
     # Update active tab index
     st.session_state["active_main_tab"] = tab_names.index(selected_tab)
 
