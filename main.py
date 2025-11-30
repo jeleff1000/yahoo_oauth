@@ -981,7 +981,10 @@ def find_hidden_managers(teams: list[dict]) -> list[dict]:
 def render_hidden_manager_ui(hidden_teams: list[dict], all_teams: list[dict]) -> dict:
     """
     Render UI to identify hidden managers by their team names.
-    Returns dict mapping old manager names to new names.
+
+    Returns dict mapping team names (title case) to real manager names.
+    This allows the fetchers to identify hidden managers by their team name
+    since multiple managers can be --hidden-- but have unique team names.
     """
     # Group by unique team name to show years together
     unique_hidden = {}
@@ -992,7 +995,7 @@ def render_hidden_manager_ui(hidden_teams: list[dict], all_teams: list[dict]) ->
         if team.get("year"):
             unique_hidden[team_name].append(team["year"])
 
-    st.warning(f"Found {len(unique_hidden)} hidden manager(s). Please identify:")
+    st.warning(f"Found {len(unique_hidden)} hidden manager(s). Please identify by team name:")
 
     overrides = {}
 
@@ -1014,10 +1017,15 @@ def render_hidden_manager_ui(hidden_teams: list[dict], all_teams: list[dict]) ->
                 label_visibility="collapsed"
             )
             if new_name.strip():
-                overrides["--hidden--"] = new_name.strip()
+                # Use team name (title case) as the key since that's what
+                # the fetcher falls back to for --hidden-- managers
+                # This maps the team name to the real manager name
+                team_name_key = str(team_name).strip().title()
+                overrides[team_name_key] = new_name.strip()
 
     if overrides:
         st.success(f"Will rename {len(overrides)} manager(s)")
+        st.caption("Mapping team names to manager names: " + ", ".join(f"{k} → {v}" for k, v in overrides.items()))
 
     return overrides
 

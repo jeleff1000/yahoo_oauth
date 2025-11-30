@@ -106,6 +106,9 @@ class LeagueContext:
     created_at: Optional[str] = None        # ISO timestamp of context creation
     updated_at: Optional[str] = None        # ISO timestamp of last update
 
+    # === Validation Flags ===
+    require_oauth: bool = True              # If False, skip OAuth validation (for read-only operations)
+
     def __post_init__(self):
         """
         Initialize derived fields and validate configuration.
@@ -186,7 +189,8 @@ class LeagueContext:
             raise ValueError("league_name is required")
 
         # Validate OAuth configuration (need either file path or embedded credentials)
-        if not self.oauth_file_path and not self.oauth_credentials:
+        # Skip validation if require_oauth is False (for read-only operations like playoff odds)
+        if self.require_oauth and not self.oauth_file_path and not self.oauth_credentials:
             raise ValueError("Either oauth_file_path or oauth_credentials is required")
 
         # Validate OAuth file exists if file path provided
@@ -515,6 +519,34 @@ class LeagueContext:
 
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
+
+        return cls.from_dict(data)
+
+    @classmethod
+    def load_readonly(cls, path: Path) -> 'LeagueContext':
+        """
+        Load context from JSON file without OAuth validation.
+
+        Use this for read-only operations that don't need Yahoo API access,
+        such as playoff odds calculation, data analysis, or transformations
+        that only read from existing parquet files.
+
+        Args:
+            path: Path to league_context.json file
+
+        Returns:
+            LeagueContext instance (with require_oauth=False)
+        """
+        path = Path(path)
+
+        if not path.exists():
+            raise FileNotFoundError(f"League context file not found: {path}")
+
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # Skip OAuth validation for read-only operations
+        data['require_oauth'] = False
 
         return cls.from_dict(data)
 

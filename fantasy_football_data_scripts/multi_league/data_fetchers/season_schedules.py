@@ -80,26 +80,45 @@ REQ_COLUMNS = [
     "win", "loss",
 ]
 
-def norm_manager(nickname: str, overrides: dict = None) -> str:
+def norm_manager(nickname: str, overrides: dict = None, team_name_fallback: str = None) -> str:
     """
     Normalize manager name with optional overrides from context.
 
     Args:
         nickname: Raw manager nickname from Yahoo API
         overrides: Dictionary mapping old names to new names (from LeagueContext)
+        team_name_fallback: Team name to use if manager is hidden
 
     Returns:
         Normalized manager name
     """
     if not nickname:
+        if team_name_fallback:
+            fallback = str(team_name_fallback).strip().title()
+            if overrides and fallback in overrides:
+                return overrides[fallback]
+            return fallback
         return "N/A"
+
     s = str(nickname).strip()
 
     # Apply overrides if provided
-    if overrides and s in overrides:
-        return overrides[s]
+    if overrides:
+        if s in overrides:
+            return overrides[s]
+        if s.title() in overrides:
+            return overrides[s.title()]
 
-    return s
+    # Handle --hidden-- managers by using team name
+    if s == "--hidden--":
+        if team_name_fallback:
+            fallback = str(team_name_fallback).strip().title()
+            if overrides and fallback in overrides:
+                return overrides[fallback]
+            return fallback
+        return "Unknown"
+
+    return s.title()
 
 def safe_float(x, default=np.nan):
     try:
@@ -150,14 +169,18 @@ def league_weeks(league) -> list[int]:
     return list(range(start_week, end_week + 1))
 
 def extract_team(team_node: ET.Element, manager_overrides: dict = None) -> dict:
+    # Get team name first so it can be used as fallback for hidden managers
+    team_name_raw = team_node.findtext("name") or ""
+
     nickname = (
         team_node.findtext(".//managers/manager/nickname")
         or team_node.findtext(".//managers/manager/name")
         or team_node.findtext(".//managers/manager/guid")
         or ""
     )
-    manager = norm_manager(nickname, manager_overrides)
-    team_name = team_node.findtext("name") or manager
+    # Pass team_name as fallback for hidden managers
+    manager = norm_manager(nickname, manager_overrides, team_name_fallback=team_name_raw)
+    team_name = team_name_raw or manager
     points = safe_float(team_node.findtext("team_points/total"), 0.0)
     return {'manager': manager, 'team_name': team_name, 'team_points': points}
 

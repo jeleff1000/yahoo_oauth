@@ -106,7 +106,7 @@ def norm_manager(nickname: str, overrides: Dict[str, str] = None, team_name_fall
 
     Args:
         nickname: Raw manager nickname from Yahoo API
-        overrides: Dictionary mapping old names to new names
+        overrides: Dictionary mapping old names to new names (can map team names for hidden managers)
         team_name_fallback: Team name to use if manager name is hidden/unavailable
 
     Returns:
@@ -115,7 +115,11 @@ def norm_manager(nickname: str, overrides: Dict[str, str] = None, team_name_fall
     if not nickname:
         # Use team name as fallback if available
         if team_name_fallback:
-            return str(team_name_fallback).strip().title()
+            fallback = str(team_name_fallback).strip().title()
+            # Check if there's an override for this team name
+            if overrides and fallback in overrides:
+                return overrides[fallback]
+            return fallback
         return "N/A"
 
     s = str(nickname).strip()
@@ -132,7 +136,11 @@ def norm_manager(nickname: str, overrides: Dict[str, str] = None, team_name_fall
     # Default fallback for --hidden-- - use team name if available
     if s == "--hidden--":
         if team_name_fallback:
-            return str(team_name_fallback).strip().title()
+            fallback = str(team_name_fallback).strip().title()
+            # Check if there's an override for this team name (maps team name to real manager)
+            if overrides and fallback in overrides:
+                return overrides[fallback]
+            return fallback
         return "Unknown"
 
     # Normalize to title case for consistency (e.g., "ezra" -> "Ezra")

@@ -1642,7 +1642,8 @@ Note:
         sys.exit(1)
 
     try:
-        ctx = LeagueContext.load(str(args.context))
+        # Use load_readonly since playoff odds doesn't need Yahoo API access
+        ctx = LeagueContext.load_readonly(str(args.context))
         print(f"Loaded context for league: {ctx.league_name}")
     except Exception as e:
         print(f"ERROR: Failed to load league context: {e}")
