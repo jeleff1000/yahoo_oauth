@@ -492,9 +492,18 @@ def main():
             border-radius: 4px !important;
             cursor: pointer !important;
         }
-        /* Hide radio button circles */
-        .stRadio [data-baseweb="radio"] {
+        /* Hide radio button circles only */
+        .stRadio [data-baseweb="radio"] > div {
             display: none !important;
+        }
+        .stRadio input[type="radio"] {
+            display: none !important;
+        }
+        .stRadio [data-baseweb="radio"] {
+            width: 0 !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
         /* Selected item - light purple highlight */
         .stRadio > div > label:has(input:checked) {
