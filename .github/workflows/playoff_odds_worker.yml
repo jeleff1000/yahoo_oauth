@@ -1,0 +1,270 @@
+name: Playoff Odds Calculator
+
+# Separate workflow for playoff odds calculation with full Monte Carlo simulations
+# This runs AFTER the main import completes, using the existing parquet files
+
+on:
+  workflow_dispatch:
+    inputs:
+      database_name:
+        description: 'MotherDuck database name (e.g., kmffl_2025)'
+        required: true
+        type: string
+      n_sims:
+        description: 'Number of Monte Carlo simulations (default: 10000)'
+        required: false
+        default: '10000'
+        type: string
+      user_id:
+        description: 'User ID (for artifact naming)'
+        required: false
+        type: string
+
+jobs:
+  calculate-playoff-odds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180  # 3 hours for full simulations
+
+    env:
+      PYTHONUNBUFFERED: 1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download existing data from MotherDuck
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          DATABASE_NAME: ${{ github.event.inputs.database_name }}
+        run: |
+          echo "========================================"
+          echo "Downloading data from MotherDuck"
+          echo "Database: ${DATABASE_NAME}"
+          echo "========================================"
+
+          mkdir -p fantasy_football_data/league_settings
+
+          python - <<'PYEOF'
+          import duckdb
+          import os
+
+          db_name = os.environ['DATABASE_NAME']
+          token = os.environ['MOTHERDUCK_TOKEN']
+
+          # Connect to MotherDuck
+          conn = duckdb.connect(f'md:{db_name}?motherduck_token={token}')
+
+          # Download required tables
+          tables = ['matchup', 'schedule']
+
+          for table in tables:
+              print(f"Downloading {table}...")
+              try:
+                  df = conn.execute(f"SELECT * FROM {table}").fetchdf()
+                  df.to_parquet(f"fantasy_football_data/{table}.parquet", index=False)
+                  print(f"  ✓ {table}: {len(df):,} rows")
+              except Exception as e:
+                  print(f"  ✗ {table}: {e}")
+
+          # Download league settings and extract to JSON files
+          try:
+              # Check if league_settings table exists
+              result = conn.execute("SHOW TABLES").fetchall()
+              table_names = [r[0] for r in result]
+
+              if 'league_settings' in table_names:
+                  print("Downloading league_settings...")
+                  settings_df = conn.execute("SELECT * FROM league_settings").fetchdf()
+                  print(f"  ✓ league_settings: {len(settings_df):,} rows")
+
+                  # Extract each year's settings from the settings_json column
+                  import json
+                  from pathlib import Path
+
+                  settings_dir = Path("fantasy_football_data/league_settings")
+                  settings_dir.mkdir(parents=True, exist_ok=True)
+
+                  for _, row in settings_df.iterrows():
+                      year = row.get('year', 'unknown')
+                      league_key = row.get('league_key', 'unknown')
+                      settings_json = row.get('settings_json')
+
+                      if settings_json:
+                          try:
+                              settings_data = json.loads(settings_json)
+                              safe_key = str(league_key).replace(".", "_")
+                              output_file = settings_dir / f"league_settings_{year}_{safe_key}.json"
+                              with open(output_file, 'w', encoding='utf-8') as f:
+                                  json.dump(settings_data, f, indent=2)
+                              print(f"    ✓ Extracted settings for {year}")
+                          except json.JSONDecodeError as je:
+                              print(f"    ✗ Invalid JSON for {year}: {je}")
+                      else:
+                          print(f"    ⚠ No settings_json for {year}")
+              else:
+                  print("  ⚠ league_settings table not found - using defaults")
+          except Exception as e:
+              print(f"  Note: Could not download league_settings: {e}")
+
+          conn.close()
+          print("\n✓ Download complete")
+          PYEOF
+
+      - name: Create league context
+        env:
+          DATABASE_NAME: ${{ github.event.inputs.database_name }}
+        run: |
+          python - <<'PYEOF'
+          import json
+          import pandas as pd
+          from pathlib import Path
+          import os
+
+          # Read matchup data to infer context
+          matchup_df = pd.read_parquet("fantasy_football_data/matchup.parquet")
+
+          years = sorted(matchup_df['year'].unique())
+          managers = matchup_df['manager'].unique()
+
+          # Get league_id from data (use most recent year's league_id as primary)
+          league_id = 'unknown'
+          if 'league_id' in matchup_df.columns:
+              max_year = max(years)
+              max_year_data = matchup_df[matchup_df['year'] == max_year]
+              if not max_year_data.empty:
+                  league_id = max_year_data['league_id'].iloc[0]
+
+          # Build league_ids mapping (year -> league_id) for proper isolation
+          league_ids = {}
+          if 'league_id' in matchup_df.columns:
+              for year in years:
+                  year_data = matchup_df[matchup_df['year'] == year]
+                  if not year_data.empty:
+                      lid = year_data['league_id'].iloc[0]
+                      if pd.notna(lid):
+                          league_ids[str(int(year))] = str(lid)
+
+          context = {
+              "league_id": str(league_id),
+              "league_name": os.environ['DATABASE_NAME'].replace('_', ' ').title(),
+              "game_code": "nfl",
+              "start_year": int(min(years)),
+              "end_year": int(max(years)),
+              "num_teams": len(managers),
+              "data_directory": str(Path("fantasy_football_data").resolve()),
+              "league_ids": league_ids,
+          }
+
+          with open("league_context.json", 'w') as f:
+              json.dump(context, f, indent=2)
+
+          print("✓ League context created")
+          print(json.dumps(context, indent=2))
+          PYEOF
+
+      - name: Run Playoff Odds Calculator
+        env:
+          N_SIMS: ${{ github.event.inputs.n_sims }}
+        working-directory: fantasy_football_data_scripts
+        run: |
+          echo "========================================"
+          echo "Running Playoff Odds Calculator"
+          echo "Simulations: ${N_SIMS}"
+          echo "========================================"
+
+          python multi_league/transformations/matchup_enrichment/playoff_odds_import.py \
+            --context ../league_context.json \
+            --n-sims ${N_SIMS} \
+            2>&1 | tee ../playoff_odds.log
+
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "✓ Playoff odds calculation complete"
+          else
+            echo "✗ Playoff odds calculation failed"
+            tail -50 ../playoff_odds.log
+            exit $EXIT_CODE
+          fi
+
+      - name: Verify results
+        run: |
+          python - <<'PYEOF'
+          import pandas as pd
+
+          df = pd.read_parquet("fantasy_football_data/matchup.parquet")
+
+          # Check for playoff odds columns
+          playoff_cols = ['p_playoffs', 'p_bye', 'p_champ', 'avg_seed', 'p_semis', 'p_final']
+
+          print("Playoff odds columns check:")
+          for col in playoff_cols:
+              if col in df.columns:
+                  non_null = df[col].notna().sum()
+                  print(f"  ✓ {col}: {non_null:,} non-null values")
+              else:
+                  print(f"  ✗ {col}: MISSING")
+
+          print(f"\nTotal rows: {len(df):,}")
+          PYEOF
+
+      - name: Upload updated data to MotherDuck
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          DATABASE_NAME: ${{ github.event.inputs.database_name }}
+        run: |
+          echo "========================================"
+          echo "Uploading updated matchup data to MotherDuck"
+          echo "========================================"
+
+          cd fantasy_football_data
+          python motherduck_upload.py "${DATABASE_NAME}" . 2>&1 | tee ../motherduck_upload.log
+
+          if [ $? -eq 0 ]; then
+            echo "✓ MotherDuck upload complete"
+          else
+            echo "✗ MotherDuck upload failed"
+            exit 1
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playoff-odds-${{ github.event.inputs.user_id || github.event.inputs.database_name }}
+          path: |
+            playoff_odds.log
+            motherduck_upload.log
+            fantasy_football_data/matchup.parquet
+          retention-days: 7
+
+      - name: Create workflow summary
+        if: always()
+        run: |
+          echo "# Playoff Odds Calculation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Database**: ${{ github.event.inputs.database_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Simulations**: ${{ github.event.inputs.n_sims }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "fantasy_football_data/matchup.parquet" ]; then
+            echo "## ✅ Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Playoff odds columns have been calculated and uploaded to MotherDuck." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Status: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the logs for details." >> $GITHUB_STEP_SUMMARY
+          fi

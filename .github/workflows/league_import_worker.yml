@@ -356,6 +356,67 @@ jobs:
                   print(f"  {subdir}/: DIRECTORY NOT FOUND")
           PYEOF
 
+      - name: Consolidate league settings to parquet
+        if: steps.import.outputs.exit_code == '0'
+        run: |
+          echo "========================================"
+          echo "Consolidating league settings to parquet"
+          echo "========================================"
+          python - <<'PYEOF'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          settings_dir = Path("fantasy_football_data/league_settings")
+          output_file = Path("fantasy_football_data/league_settings.parquet")
+
+          if not settings_dir.exists():
+              print(f"⚠️  No league_settings directory found at {settings_dir}")
+              print("   Playoff odds will use default configuration")
+              exit(0)
+
+          settings_files = list(settings_dir.glob("league_settings_*.json"))
+
+          if not settings_files:
+              print(f"⚠️  No league settings JSON files found in {settings_dir}")
+              exit(0)
+
+          print(f"Found {len(settings_files)} league settings files")
+
+          rows = []
+          for sf in sorted(settings_files):
+              try:
+                  with open(sf, 'r', encoding='utf-8') as f:
+                      data = json.load(f)
+
+                  # Extract key fields for playoff odds calculation
+                  metadata = data.get('metadata', {})
+                  row = {
+                      'year': data.get('year'),
+                      'league_key': data.get('league_key'),
+                      'num_teams': metadata.get('num_teams'),
+                      'num_playoff_teams': metadata.get('num_playoff_teams') or metadata.get('playoff_teams'),
+                      'playoff_start_week': metadata.get('playoff_start_week'),
+                      'uses_playoff_reseeding': metadata.get('uses_playoff_reseeding'),
+                      'bye_teams': metadata.get('bye_teams'),
+                      'current_week': metadata.get('current_week'),
+                      'is_finished': metadata.get('is_finished'),
+                      # Store full settings as JSON string for flexibility
+                      'settings_json': json.dumps(data)
+                  }
+                  rows.append(row)
+                  print(f"  ✓ {sf.name}: year={row['year']}, playoff_teams={row['num_playoff_teams']}")
+              except Exception as e:
+                  print(f"  ✗ {sf.name}: {e}")
+
+          if rows:
+              df = pd.DataFrame(rows)
+              df.to_parquet(output_file, index=False)
+              print(f"\n✅ Created {output_file} with {len(rows)} years of settings")
+          else:
+              print("⚠️  No valid settings to save")
+          PYEOF
+
       - name: Upload to MotherDuck
         if: steps.import.outputs.exit_code == '0'
         id: motherduck
