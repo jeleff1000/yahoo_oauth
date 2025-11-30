@@ -693,6 +693,102 @@ def get_user_football_leagues(access_token: str, game_key: str):
     return yahoo_api_call(access_token, f"users;use_login=1/games;game_keys={game_key}/leagues?format=json")
 
 
+def get_league_teams(access_token: str, league_key: str) -> list[dict]:
+    """
+    Fetch all teams/managers for a league.
+    Returns list of dicts with team_name, manager_name, team_key.
+    """
+    try:
+        data = yahoo_api_call(access_token, f"league/{league_key}/teams?format=json")
+        teams = []
+
+        league_data = data.get("fantasy_content", {}).get("league", [])
+        if len(league_data) > 1:
+            teams_data = league_data[1].get("teams", {})
+            for key in teams_data:
+                if key == "count":
+                    continue
+                team_info = teams_data[key].get("team", [[]])[0]
+
+                # Parse team info (it's a list of dicts)
+                team_dict = {}
+                for item in team_info:
+                    if isinstance(item, dict):
+                        team_dict.update(item)
+                    elif isinstance(item, list):
+                        # Manager info is nested in a list
+                        for sub_item in item:
+                            if isinstance(sub_item, dict) and "managers" in sub_item:
+                                managers = sub_item["managers"]
+                                if managers:
+                                    mgr = managers[0].get("manager", {})
+                                    team_dict["manager_name"] = mgr.get("nickname", mgr.get("manager_id", "Unknown"))
+
+                teams.append({
+                    "team_key": team_dict.get("team_key", ""),
+                    "team_name": team_dict.get("name", "Unknown Team"),
+                    "manager_name": team_dict.get("manager_name", "Unknown"),
+                })
+
+        return teams
+    except Exception as e:
+        st.warning(f"Could not fetch team data: {e}")
+        return []
+
+
+def find_hidden_managers(teams: list[dict]) -> list[dict]:
+    """Find teams with hidden manager names (--hidden--, empty, etc.)"""
+    hidden_patterns = ["--hidden--", "hidden", "", "unknown", "private"]
+    hidden_teams = []
+
+    for team in teams:
+        mgr_name = (team.get("manager_name") or "").strip().lower()
+        if mgr_name in hidden_patterns or mgr_name.startswith("--"):
+            hidden_teams.append(team)
+
+    return hidden_teams
+
+
+def render_hidden_manager_ui(hidden_teams: list[dict], all_teams: list[dict]) -> dict:
+    """
+    Render UI to identify hidden managers by their team names.
+    Returns dict mapping old manager names to new names.
+    """
+    st.markdown("### Identify Hidden Managers")
+    st.warning(f"Found {len(hidden_teams)} manager(s) with hidden/private names. Please identify them:")
+
+    overrides = {}
+
+    for i, team in enumerate(hidden_teams):
+        col1, col2, col3 = st.columns([2, 1, 2])
+
+        with col1:
+            st.markdown(f"**Team Name:** {team['team_name']}")
+            st.caption(f"Current manager: `{team.get('manager_name', '--hidden--')}`")
+
+        with col2:
+            st.markdown("→")
+
+        with col3:
+            new_name = st.text_input(
+                "Real name:",
+                value="",
+                key=f"hidden_mgr_{i}",
+                placeholder="Enter manager's name"
+            )
+            if new_name.strip():
+                old_name = team.get("manager_name", "--hidden--")
+                overrides[old_name] = new_name.strip()
+
+    if overrides:
+        st.success(f"Will rename {len(overrides)} manager(s) during import")
+        with st.expander("Preview mappings"):
+            for old, new in overrides.items():
+                st.markdown(f"- `{old}` → **{new}**")
+
+    return overrides
+
+
 def extract_football_games(games_data):
     football_games = []
     try:
@@ -1544,6 +1640,31 @@ def run_register_flow():
                                 st.markdown("---")
                                 st.markdown("## Advanced Settings")
 
+                                # Hidden Manager Detection - Check automatically when opening advanced settings
+                                with st.expander("Identify Hidden Managers", expanded=True):
+                                    # Fetch teams if not already done
+                                    cache_key = f"teams_{selected_league.get('league_key')}"
+                                    if cache_key not in st.session_state:
+                                        with st.spinner("Checking for hidden managers..."):
+                                            teams = get_league_teams(st.session_state.access_token, selected_league.get("league_key"))
+                                            st.session_state[cache_key] = teams
+
+                                    teams = st.session_state.get(cache_key, [])
+                                    hidden_teams = find_hidden_managers(teams)
+
+                                    if hidden_teams:
+                                        manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
+                                        st.session_state.configured_manager_overrides = manager_overrides
+                                    else:
+                                        st.success("No hidden managers found! All managers have visible names.")
+                                        st.session_state.configured_manager_overrides = {}
+
+                                    # Show all teams for reference
+                                    if teams:
+                                        with st.expander("View All Teams"):
+                                            for team in teams:
+                                                st.markdown(f"- **{team['team_name']}** - {team['manager_name']}")
+
                                 # Keeper Rules Tab
                                 with st.expander("Keeper Rules", expanded=False):
                                     keeper_rules = render_keeper_rules_ui()
@@ -1565,6 +1686,7 @@ def run_register_flow():
                                         "num_teams": selected_league.get("num_teams"),
                                         "keeper_rules": st.session_state.get("configured_keeper_rules"),
                                         "external_data": st.session_state.get("configured_external_data"),
+                                        "manager_name_overrides": st.session_state.get("configured_manager_overrides", {}),
                                     }
                                     perform_import_flow(league_info)
 
@@ -1727,6 +1849,7 @@ def perform_import_flow(league_info: dict):
             "regular_season_weeks": 14,
             "keeper_rules": league_info.get("keeper_rules"),  # Pass keeper rules if configured
             "external_data": external_data,  # Pass external data files if uploaded
+            "manager_name_overrides": league_info.get("manager_name_overrides", {}),  # Pass hidden manager mappings
         }
 
         st.info(f"🚀 Starting import via GitHub Actions for {start_year}-{end_year}...")
