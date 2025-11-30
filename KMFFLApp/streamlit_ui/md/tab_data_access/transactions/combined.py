@@ -29,7 +29,7 @@ def load_optimized_transactions_data() -> Dict[str, Any]:
             * timing_category, pickup_type, result_emoji
         - Pre-aggregated summaries by year and manager
         - Uses generic table mapping for scalability
-        - Includes related player, injury, and draft data with limits
+        - Includes related player and draft data with limits
 
     Returns:
         Dict with keys:
@@ -37,7 +37,6 @@ def load_optimized_transactions_data() -> Dict[str, Any]:
             - "summary": Summary statistics by year (with grade distributions)
             - "manager_summary": Pre-aggregated manager stats for leaderboards
             - "player_data": Player stats (limited to 10,000 recent rows)
-            - "injury_data": Injury data (limited to 10,000 recent rows)
             - "draft_data": Draft data (limited to 1,000 recent rows)
             - "error": Error message (if any)
     """
@@ -61,7 +60,6 @@ def load_optimized_transactions_data() -> Dict[str, Any]:
         # Note: Using LIMIT here is acceptable as these are supporting datasets
         db = get_current_league_db()
         player_data = run_query(f"SELECT * FROM {db}.public.players_by_year ORDER BY year DESC, week DESC LIMIT 10000")
-        injury_data = run_query(f"SELECT * FROM {T['injury']} ORDER BY year DESC, week DESC LIMIT 10000")
         draft_data = run_query(f"SELECT * FROM {T['draft']} ORDER BY year DESC, round, pick LIMIT 1000")
 
         # Combine results
@@ -70,7 +68,6 @@ def load_optimized_transactions_data() -> Dict[str, Any]:
             "summary": summary_result["summary"],
             "manager_summary": manager_summary_result["manager_summary"],
             "player_data": player_data,
-            "injury_data": injury_data,
             "draft_data": draft_data,
         }
 

@@ -32,7 +32,6 @@ def load_homepage_summary_stats() -> Dict[str, Any]:
         - player_count: Total player records
         - draft_count: Total draft picks
         - transactions_count: Total transactions
-        - injuries_count: Total injury records (0 if table missing)
         - latest_year: Most recent season
         - latest_week: Most recent week
         - latest_games: Number of games in latest week
@@ -45,9 +44,6 @@ def load_homepage_summary_stats() -> Dict[str, Any]:
         player_count = _safe_count(f"{db}.public.players_by_year")
         draft_count = _safe_count(T['draft'])
         transactions_count = _safe_count(T['transactions'])
-
-        # Optional tables - may not exist in all leagues
-        injuries_count = _safe_count(T['injury'])
 
         # Get latest week info
         try:
@@ -77,7 +73,6 @@ def load_homepage_summary_stats() -> Dict[str, Any]:
             "player_count": player_count,
             "draft_count": draft_count,
             "transactions_count": transactions_count,
-            "injuries_count": injuries_count,
             "latest_year": latest_year,
             "latest_week": latest_week,
             "latest_games": latest_games,

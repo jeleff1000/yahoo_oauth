@@ -42,7 +42,6 @@ def get_table_dict() -> Dict[str, str]:
         "player_season": f"{db}.public.players_by_year",
         "players_by_year": f"{db}.public.players_by_year",
         "draft": f"{db}.public.draft",
-        "injury": f"{db}.public.injury",
         "schedule": f"{db}.public.schedule",
         "transactions": f"{db}.public.transactions",
     }
