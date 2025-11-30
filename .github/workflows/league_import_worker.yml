@@ -574,5 +574,29 @@ jobs:
             echo "Check the logs for details" >> $GITHUB_STEP_SUMMARY
           fi
 
+      - name: Trigger Playoff Odds Calculation
+        if: steps.motherduck.outputs.upload_success == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "========================================"
+          echo "Triggering Playoff Odds Calculator"
+          echo "========================================"
+
+          gh workflow run playoff_odds_worker.yml \
+            -f database_name="${{ steps.parse.outputs.database_name }}" \
+            -f n_sims="10000" \
+            -f user_id="${{ steps.parse.outputs.user_id }}"
+
+          if [ $? -eq 0 ]; then
+            echo "✅ Playoff odds workflow triggered successfully"
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Playoff Odds" >> $GITHUB_STEP_SUMMARY
+            echo "A separate workflow has been triggered to calculate playoff odds with 10,000 Monte Carlo simulations." >> $GITHUB_STEP_SUMMARY
+            echo "This may take up to 3 hours to complete." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Could not trigger playoff odds workflow"
+          fi
+
       # Note: Issue creation removed due to permission requirements
       # Failures are logged in workflow summary and artifacts instead
