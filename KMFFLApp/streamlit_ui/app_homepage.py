@@ -470,65 +470,22 @@ def main():
 
     # Hamburger menu
     with st.popover("☰ Menu"):
-        # Inject CSS inside popover for subtab styling (mobile + desktop)
+        # Simple subtab styling
         st.markdown("""
         <style>
         .stRadio > div {
             margin-left: 1rem !important;
             padding-left: 0.5rem !important;
             border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: flex-start !important;
         }
         .stRadio > div > label {
             font-size: 0.8rem !important;
-            padding: 6px 12px !important;
-            margin-bottom: 4px !important;
-            white-space: nowrap !important;
-            display: flex !important;
-            align-items: center !important;
-            min-height: 28px !important;
-            border-radius: 4px !important;
-            cursor: pointer !important;
-            color: #333 !important;
+            padding: 6px 10px !important;
+            margin-bottom: 2px !important;
         }
-        /* Dark mode text */
-        @media (prefers-color-scheme: dark) {
-            .stRadio > div > label {
-                color: #e0e0e0 !important;
-            }
-        }
-        /* Hide radio button circles only */
-        .stRadio [data-baseweb="radio"] > div {
-            display: none !important;
-        }
-        .stRadio input[type="radio"] {
-            display: none !important;
-        }
-        .stRadio [data-baseweb="radio"] {
-            width: 0 !important;
-            min-width: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        /* Selected item - light purple highlight */
-        .stRadio > div > label:has(input:checked) {
-            background: rgba(102, 126, 234, 0.15) !important;
-            color: #667eea !important;
-            font-weight: 500 !important;
-        }
-        /* Hover state */
-        .stRadio > div > label:hover {
-            background: rgba(102, 126, 234, 0.08) !important;
-        }
-        /* Mobile adjustments */
-        @media (max-width: 768px) {
-            .stRadio > div > label {
-                font-size: 0.85rem !important;
-                padding: 8px 14px !important;
-                min-height: 36px !important;
-            }
+        .stRadio > div > label > div:first-child {
+            transform: scale(0.7) !important;
+            margin-right: 4px !important;
         }
         </style>
         """, unsafe_allow_html=True)
