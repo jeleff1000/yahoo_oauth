@@ -14,10 +14,15 @@ from md.data_access import run_query, T
 from .table_styles import render_modern_table
 
 # Import chart theming for light/dark mode support
-try:
-    from streamlit_ui.shared.chart_themes import get_chart_theme, apply_chart_theme, get_chart_colors
-except ImportError:
-    from shared.chart_themes import get_chart_theme, apply_chart_theme, get_chart_colors
+import sys
+from pathlib import Path
+
+# Ensure streamlit_ui is in path for imports
+_streamlit_ui_dir = Path(__file__).parent.parent.parent.parent.resolve()
+if str(_streamlit_ui_dir) not in sys.path:
+    sys.path.insert(0, str(_streamlit_ui_dir))
+
+from shared.chart_themes import get_chart_theme, apply_chart_theme, get_chart_colors
 
 
 def _select_week_for_playoff(base_df: pd.DataFrame, prefix: str):
