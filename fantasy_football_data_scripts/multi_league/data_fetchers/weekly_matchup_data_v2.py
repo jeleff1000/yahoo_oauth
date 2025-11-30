@@ -702,40 +702,16 @@ def weekly_matchup_data(
             logger.start_step("get_league")
 
         gm = yfa.Game(oauth, 'nfl')
-        # Attempt to fetch league IDs with one retry after refreshing the token.
-        league_ids = None
-        for _attempt in (1, 2):
-            try:
-                league_ids = gm.league_ids(year=year)
-                if league_ids:
-                    break
-                else:
-                    raise RuntimeError(f"No leagues found for {year}")
-            except Exception as e:
-                # On first failure attempt to refresh access token and retry
-                if _attempt == 1 and hasattr(oauth, 'refresh_access_token'):
-                    try:
-                        oauth.refresh_access_token()
-                    except Exception:
-                        pass
-                    # Small backoff before retrying
-                    time.sleep(1)
-                    continue
-                # If second attempt fails, rethrow
-                raise RuntimeError(f"Failed to fetch league_ids for {year}: {e}")
 
-        if not league_ids:
-            raise RuntimeError(f"No leagues found for {year}")
-
-        # CRITICAL: Use specific league_id from context to avoid data mixing
-        # Priority: 1) ctx.get_league_id_for_year(), 2) league_key param, 3) league_ids[-1] (warn)
+        # CRITICAL: Check context FIRST to avoid calling restricted API endpoints
+        # Priority: 1) ctx.get_league_id_for_year(), 2) league_key param, 3) API discovery (last resort)
         yearid = None
 
-        # Debug: Show what league_ids are available
-        if ctx and hasattr(ctx, 'league_ids'):
+        # Debug: Show what league_ids are available in context
+        if ctx and hasattr(ctx, 'league_ids') and ctx.league_ids:
             print(f"[league] Context has {len(ctx.league_ids)} league_ids: {list(ctx.league_ids.keys())}")
 
-        # Try context first (safest - ensures league isolation)
+        # Try context first (safest - ensures league isolation AND avoids restricted API calls)
         if ctx and hasattr(ctx, 'get_league_id_for_year'):
             yearid = ctx.get_league_id_for_year(year)
             if yearid:
@@ -746,8 +722,33 @@ def weekly_matchup_data(
             yearid = league_key
             print(f"[league] Using explicit league_key parameter: {yearid}")
 
-        # Last resort: use API discovery (may mix leagues if user is in multiple!)
+        # Last resort: use API discovery (requires users;use_login=1 scope which some users don't have)
         if not yearid:
+            print(f"[league] No league_id in context for {year}, attempting API discovery...")
+            league_ids = None
+            for _attempt in (1, 2):
+                try:
+                    league_ids = gm.league_ids(year=year)
+                    if league_ids:
+                        break
+                    else:
+                        raise RuntimeError(f"No leagues found for {year}")
+                except Exception as e:
+                    # On first failure attempt to refresh access token and retry
+                    if _attempt == 1 and hasattr(oauth, 'refresh_access_token'):
+                        try:
+                            oauth.refresh_access_token()
+                        except Exception:
+                            pass
+                        # Small backoff before retrying
+                        time.sleep(1)
+                        continue
+                    # If second attempt fails, rethrow
+                    raise RuntimeError(f"Failed to fetch league_ids for {year}: {e}")
+
+            if not league_ids:
+                raise RuntimeError(f"No leagues found for {year}")
+
             if len(league_ids) > 1:
                 print(f"[league] WARNING: Multiple leagues found for {year}: {league_ids}")
                 print(f"[league] WARNING: Using last one ({league_ids[-1]}) - this may cause data mixing!")
