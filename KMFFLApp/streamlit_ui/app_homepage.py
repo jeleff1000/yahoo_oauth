@@ -470,6 +470,26 @@ def main():
 
     # Hamburger menu
     with st.popover("☰ Menu"):
+        # Inject CSS inside popover for subtab styling
+        st.markdown("""
+        <style>
+        .stRadio > div {
+            margin-left: 1.5rem !important;
+            padding-left: 0.75rem !important;
+            border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
+            gap: 2px !important;
+        }
+        .stRadio label, .stRadio p {
+            font-size: 0.75rem !important;
+            padding: 2px 8px !important;
+        }
+        .stRadio [data-baseweb="radio"] {
+            width: 14px !important;
+            height: 14px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
         for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
             is_current = (i == current_idx)
 
