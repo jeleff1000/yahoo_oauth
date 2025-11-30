@@ -1226,8 +1226,7 @@ def run_register_flow():
             if status_info.get("status") == "success":
                 st.success("🎉 Your data is ready in MotherDuck!")
                 league_info = st.session_state.get("league_info", {})
-                db_name = f"{league_info.get('name', 'league')}_{league_info.get('season', '')}".lower().replace(' ',
-                                                                                                                 '_')
+                db_name = league_info.get('name', 'league').lower().replace(' ', '_').replace('-', '_')
                 st.code(f"SELECT * FROM {db_name}.public.matchup LIMIT 10;", language="sql")
 
     else:
@@ -1414,24 +1413,18 @@ def run_local_import_fallback(league_info: dict):
                     if selected_season and selected_season not in season_list:
                         season_list.append(selected_season)
 
-                    dbs = [f"{league_name}_{season}" for season in sorted(set(s for s in season_list if s))]
-                    if not dbs:
-                        dbs = [league_name]
+                    # Use just the league name (no year suffix) - data contains all historical years
+                    db_name = league_name.lower().replace(' ', '_').replace('-', '_')
 
-                    overall_summary = []
-                    for db_name in dbs:
-                        st.write(f"**Database:** `{db_name}`")
-                        uploaded = upload_to_motherduck(files, db_name, MOTHERDUCK_TOKEN)
-                        if uploaded:
-                            overall_summary.append((db_name, uploaded))
+                    st.write(f"**Database:** `{db_name}`")
+                    uploaded = upload_to_motherduck(files, db_name, MOTHERDUCK_TOKEN)
 
-                    if overall_summary:
+                    if uploaded:
                         st.success("✅ Upload complete!")
                         with st.expander("📊 Upload Summary"):
-                            for db_name, items in overall_summary:
-                                st.write(f"**{db_name}**")
-                                for tbl, cnt in items:
-                                    st.write(f"- `public.{tbl}` → {cnt:,} rows")
+                            st.write(f"**{db_name}**")
+                            for tbl, cnt in uploaded:
+                                st.write(f"- `public.{tbl}` → {cnt:,} rows")
 
         # Reset UI state (clear query params) and rerun so UI refreshes
         st.query_params.clear()

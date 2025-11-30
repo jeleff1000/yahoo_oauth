@@ -140,8 +140,8 @@ jobs:
           print(f"   consumer_key present: {bool(oauth_data.get('consumer_key'))}")
           print(f"   token_time: {oauth_data.get('token_time')}")
 
-          # Create sanitized database name
-          db_name = f"{league_name}_{season}".lower().replace(' ', '_').replace('-', '_')
+          # Create sanitized database name (just league name, no year - data contains all historical years)
+          db_name = league_name.lower().replace(' ', '_').replace('-', '_')
           db_name = ''.join(c if c.isalnum() or c == '_' else '' for c in db_name)
 
           # Set outputs for next steps

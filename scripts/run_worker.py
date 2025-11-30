@@ -114,8 +114,8 @@ def process_import_job(job_data: dict) -> dict:
             os.environ["MOTHERDUCK_TOKEN"] = motherduck_token
             con = duckdb.connect("md:")
 
-            # Create database per league
-            db_name = f"{league_name}_{season}".lower().replace(' ', '_').replace('-', '_')
+            # Create database per league (just league name, no year - data contains all historical years)
+            db_name = league_name.lower().replace(' ', '_').replace('-', '_')
             con.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
             con.execute(f"USE {db_name}")
 
