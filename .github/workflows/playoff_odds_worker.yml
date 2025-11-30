@@ -58,15 +58,22 @@ jobs:
           python - <<'PYEOF'
           import duckdb
           import os
+          import sys
 
           db_name = os.environ['DATABASE_NAME']
           token = os.environ['MOTHERDUCK_TOKEN']
 
           # Connect to MotherDuck
-          conn = duckdb.connect(f'md:{db_name}?motherduck_token={token}')
+          print(f"Connecting to MotherDuck database: {db_name}")
+          try:
+              conn = duckdb.connect(f'md:{db_name}?motherduck_token={token}')
+          except Exception as e:
+              print(f"ERROR: Failed to connect to MotherDuck: {e}")
+              sys.exit(1)
 
           # Download required tables
           tables = ['matchup', 'schedule']
+          failed_tables = []
 
           for table in tables:
               print(f"Downloading {table}...")
@@ -76,6 +83,13 @@ jobs:
                   print(f"  ✓ {table}: {len(df):,} rows")
               except Exception as e:
                   print(f"  ✗ {table}: {e}")
+                  failed_tables.append(table)
+
+          # Exit if required tables failed
+          if 'matchup' in failed_tables:
+              print("\nERROR: Required table 'matchup' could not be downloaded!")
+              print("Make sure the main import has completed and uploaded data to MotherDuck.")
+              sys.exit(1)
 
           # Download league settings and extract to JSON files
           try:
