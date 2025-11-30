@@ -264,6 +264,175 @@ def render_keeper_rules_ui() -> Optional[dict]:
 
     return keeper_rules
 
+
+# =========================
+# External Data Files Configuration UI
+# =========================
+def get_data_templates() -> dict:
+    """Return template structures for each data type."""
+    return {
+        "matchup": {
+            "description": "Weekly matchup results (scores, wins/losses)",
+            "required_columns": ["week", "year", "manager", "team_name", "team_points", "opponent", "opponent_points", "win", "loss"],
+            "optional_columns": ["team_projected_points", "opponent_projected_points", "margin", "division_id", "is_playoffs", "is_consolation"],
+            "example_row": {
+                "week": 1, "year": 2013, "manager": "John", "team_name": "Team Awesome",
+                "team_points": 125.5, "opponent": "Jane", "opponent_points": 110.2,
+                "win": 1, "loss": 0, "division_id": "", "is_playoffs": 0, "is_consolation": 0
+            }
+        },
+        "player": {
+            "description": "Weekly player stats (points scored per player per week)",
+            "required_columns": ["year", "week", "manager", "player", "points"],
+            "optional_columns": ["nfl_position", "lineup_position", "nfl_team", "projected_points", "percent_started", "percent_owned"],
+            "example_row": {
+                "year": 2013, "week": 1, "manager": "John", "player": "Patrick Mahomes",
+                "points": 28.5, "nfl_position": "QB", "lineup_position": "QB", "nfl_team": "KC"
+            }
+        },
+        "draft": {
+            "description": "Draft results (picks and costs)",
+            "required_columns": ["year", "round", "pick", "manager", "player"],
+            "optional_columns": ["cost", "keeper", "draft_type"],
+            "example_row": {
+                "year": 2013, "round": 1, "pick": 1, "manager": "John",
+                "player": "Adrian Peterson", "cost": 65, "keeper": 0, "draft_type": "auction"
+            }
+        },
+        "transactions": {
+            "description": "Waiver/FA pickups, drops, and trades",
+            "required_columns": ["year", "week", "manager", "player", "transaction_type"],
+            "optional_columns": ["faab_bid", "source_type", "destination_type", "trade_partner"],
+            "example_row": {
+                "year": 2013, "week": 3, "manager": "John", "player": "Tyreek Hill",
+                "transaction_type": "add", "faab_bid": 15, "source_type": "waivers"
+            }
+        },
+        "schedule": {
+            "description": "Season schedule (who plays who each week)",
+            "required_columns": ["year", "week", "manager", "opponent"],
+            "optional_columns": ["is_playoffs", "is_consolation", "week_start", "week_end"],
+            "example_row": {
+                "year": 2013, "week": 1, "manager": "John", "opponent": "Jane",
+                "is_playoffs": 0, "is_consolation": 0
+            }
+        }
+    }
+
+
+def render_external_data_ui() -> Optional[dict]:
+    """
+    Render the external data files configuration UI.
+    Returns a dict with uploaded file data if any files uploaded.
+    """
+    import pandas as pd
+    import io
+
+    st.markdown("### Import Historical Data Files")
+    st.caption("Upload data from previous years, ESPN leagues, or other sources. Files are merged with Yahoo data.")
+
+    templates = get_data_templates()
+
+    # Template download section
+    with st.expander("Download Templates", expanded=False):
+        st.markdown("Download CSV templates for each data type:")
+
+        cols = st.columns(len(templates))
+        for i, (data_type, template) in enumerate(templates.items()):
+            with cols[i]:
+                # Create template CSV
+                all_cols = template["required_columns"] + template["optional_columns"]
+                template_df = pd.DataFrame([template["example_row"]])
+                # Ensure all columns exist
+                for col in all_cols:
+                    if col not in template_df.columns:
+                        template_df[col] = ""
+                template_df = template_df[all_cols]
+
+                csv_buffer = io.StringIO()
+                template_df.to_csv(csv_buffer, index=False)
+
+                st.download_button(
+                    f"{data_type.title()}",
+                    csv_buffer.getvalue(),
+                    file_name=f"{data_type}_template.csv",
+                    mime="text/csv",
+                    key=f"download_{data_type}_template",
+                    use_container_width=True
+                )
+                st.caption(template["description"])
+
+    st.markdown("---")
+
+    # File upload section
+    uploaded_files = {}
+
+    st.markdown("#### Upload Your Data Files")
+    st.caption("Supports CSV, Excel (.xlsx), and Parquet files. You can upload multiple files per category.")
+
+    for data_type, template in templates.items():
+        with st.expander(f"{data_type.title()} Data", expanded=False):
+            st.markdown(f"**{template['description']}**")
+            st.markdown(f"Required columns: `{', '.join(template['required_columns'])}`")
+
+            files = st.file_uploader(
+                f"Upload {data_type} files",
+                type=["csv", "xlsx", "parquet"],
+                accept_multiple_files=True,
+                key=f"upload_{data_type}",
+                label_visibility="collapsed"
+            )
+
+            if files:
+                uploaded_files[data_type] = []
+                for file in files:
+                    try:
+                        # Read file based on extension
+                        if file.name.endswith('.csv'):
+                            df = pd.read_csv(file)
+                        elif file.name.endswith('.xlsx'):
+                            df = pd.read_excel(file)
+                        elif file.name.endswith('.parquet'):
+                            df = pd.read_parquet(file)
+                        else:
+                            st.error(f"Unsupported file type: {file.name}")
+                            continue
+
+                        # Validate required columns
+                        missing_cols = set(template["required_columns"]) - set(df.columns)
+                        if missing_cols:
+                            st.warning(f"{file.name}: Missing columns: {missing_cols}")
+                        else:
+                            st.success(f"{file.name}: {len(df):,} rows loaded")
+
+                            # Show preview
+                            with st.expander(f"Preview: {file.name}"):
+                                st.dataframe(df.head(10), use_container_width=True)
+
+                            # Store as dict for JSON serialization
+                            uploaded_files[data_type].append({
+                                "filename": file.name,
+                                "data": df.to_dict(orient="records"),
+                                "columns": list(df.columns),
+                                "row_count": len(df)
+                            })
+
+                    except Exception as e:
+                        st.error(f"Error reading {file.name}: {e}")
+
+    # Summary
+    if uploaded_files:
+        st.markdown("---")
+        st.markdown("#### Upload Summary")
+        for data_type, files in uploaded_files.items():
+            total_rows = sum(f["row_count"] for f in files)
+            st.markdown(f"- **{data_type.title()}**: {len(files)} file(s), {total_rows:,} total rows")
+
+        return {"external_data": uploaded_files}
+
+    return None
+
+
 # =========================
 # Config / Secrets
 # =========================
@@ -1376,13 +1545,14 @@ def run_register_flow():
                                 st.markdown("## Advanced Settings")
 
                                 # Keeper Rules Tab
-                                with st.expander("Keeper Rules", expanded=True):
+                                with st.expander("Keeper Rules", expanded=False):
                                     keeper_rules = render_keeper_rules_ui()
                                     st.session_state.configured_keeper_rules = keeper_rules
 
-                                # Future: Add more advanced settings here
-                                # with st.expander("Scoring Settings"):
-                                #     pass
+                                # External Data Files Tab
+                                with st.expander("Import Historical Data (ESPN, other years, etc.)", expanded=False):
+                                    external_data = render_external_data_ui()
+                                    st.session_state.configured_external_data = external_data
 
                                 st.markdown("---")
 
@@ -1394,6 +1564,7 @@ def run_register_flow():
                                         "season": selected_league.get("season"),
                                         "num_teams": selected_league.get("num_teams"),
                                         "keeper_rules": st.session_state.get("configured_keeper_rules"),
+                                        "external_data": st.session_state.get("configured_external_data"),
                                     }
                                     perform_import_flow(league_info)
 
@@ -1529,6 +1700,22 @@ def perform_import_flow(league_info: dict):
             except Exception as e:
                 st.warning(f"Season discovery failed: {e}. Importing only {selected_season}")
 
+        # Check if external data extends the year range
+        external_data = league_info.get("external_data")
+        if external_data and "external_data" in external_data:
+            # Find min/max years from external data
+            for data_type, files in external_data["external_data"].items():
+                for file_info in files:
+                    for row in file_info.get("data", []):
+                        if "year" in row and row["year"]:
+                            try:
+                                year = int(row["year"])
+                                start_year = min(start_year, year)
+                                end_year = max(end_year, year)
+                            except (ValueError, TypeError):
+                                pass
+            st.info(f"Extended year range with external data: {start_year}-{end_year}")
+
         league_data = {
             "league_id": league_info.get("league_key") or league_info.get("league_id"),
             "league_name": league_name,
@@ -1539,6 +1726,7 @@ def perform_import_flow(league_info: dict):
             "playoff_teams": 6,
             "regular_season_weeks": 14,
             "keeper_rules": league_info.get("keeper_rules"),  # Pass keeper rules if configured
+            "external_data": external_data,  # Pass external data files if uploaded
         }
 
         st.info(f"🚀 Starting import via GitHub Actions for {start_year}-{end_year}...")
