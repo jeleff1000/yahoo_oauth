@@ -1751,6 +1751,9 @@ def main():
     validation_results = {}
     expected_league_id = ctx.league_id
 
+    # Get all valid league_ids (one per year) for multi-year validation
+    valid_league_ids = list(ctx.league_ids.values()) if ctx.league_ids else []
+
     # Define files to validate - use canonical paths (all in broader directory, not subdirectories)
     files_to_validate = {
         "player.parquet": ctx.canonical_player_file,
@@ -1763,7 +1766,7 @@ def main():
         try:
             if file_path.exists():
                 df = pd.read_parquet(file_path)
-                is_valid = validate_league_isolation(df, expected_league_id, file_name, log=log)
+                is_valid = validate_league_isolation(df, expected_league_id, file_name, log=log, valid_league_ids=valid_league_ids)
                 validation_results[file_name] = is_valid
             else:
                 log(f"[VALIDATION SKIP] {file_name}: File not found")

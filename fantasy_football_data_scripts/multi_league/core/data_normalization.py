@@ -210,19 +210,22 @@ def validate_league_isolation(
     df: pd.DataFrame,
     expected_league_id: Any,
     file_name: str = "unknown",
-    log: Any = None
+    log: Any = None,
+    valid_league_ids: Any = None
 ) -> bool:
     """
-    Validate that all rows in DataFrame belong to expected league.
+    Validate that all rows in DataFrame belong to expected league(s).
 
     Args:
         df: Input DataFrame
-        expected_league_id: Expected league ID
+        expected_league_id: Primary expected league ID (for single-year leagues)
         file_name: Name of file being validated (for logging)
         log: Optional logging function (defaults to print)
+        valid_league_ids: Collection of valid league IDs (for multi-year leagues)
+                         If provided, allows multiple league_ids as long as all are valid
 
     Returns:
-        True if all rows match expected league, False otherwise
+        True if all rows match expected league(s), False otherwise
     """
     # Use provided log function or fall back to print
     _log = log if log is not None else print
@@ -237,18 +240,23 @@ def validate_league_isolation(
         _log(f"  [{file_name}] WARNING: No league_id values found")
         return False
 
-    if len(unique_leagues) > 1:
-        _log(f"  [{file_name}] ERROR: Multiple league IDs found: {unique_leagues}")
+    # Build set of valid league IDs
+    valid_set = set()
+    if valid_league_ids:
+        valid_set = {str(lid) for lid in valid_league_ids}
+    if expected_league_id:
+        valid_set.add(str(expected_league_id))
+
+    # Check if all league_ids in data are valid
+    actual_set = {str(lid) for lid in unique_leagues}
+    invalid_leagues = actual_set - valid_set
+
+    if invalid_leagues:
+        _log(f"  [{file_name}] ERROR: Invalid league IDs found: {invalid_leagues}")
+        _log(f"  [{file_name}]        Valid league IDs: {valid_set}")
         return False
 
-    actual_league_id = str(unique_leagues[0])
-    expected_league_id = str(expected_league_id)
-
-    if actual_league_id != expected_league_id:
-        _log(f"  [{file_name}] ERROR: League ID mismatch - expected {expected_league_id}, got {actual_league_id}")
-        return False
-
-    _log(f"  [{file_name}] OK: League isolation validated")
+    _log(f"  [{file_name}] OK: League isolation validated ({len(actual_set)} league IDs across years)")
     return True
 
 
