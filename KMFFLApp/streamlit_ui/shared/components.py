@@ -332,7 +332,7 @@ def apply_all_styles() -> None:
     Call this once at the start of each page.
     """
     from .themes import inject_theme_css
-    from streamlit_ui.tabs.shared.modern_styles import apply_modern_styles
+    from tabs.shared.modern_styles import apply_modern_styles
 
     inject_theme_css()
     apply_modern_styles()

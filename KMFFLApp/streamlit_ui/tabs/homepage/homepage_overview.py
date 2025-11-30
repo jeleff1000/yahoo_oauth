@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 
 # Theme and styles
-from streamlit_ui.shared.themes import inject_theme_css
+from shared.themes import inject_theme_css
 from ..shared.modern_styles import apply_modern_styles
 
 # Data helpers
