@@ -474,18 +474,25 @@ def main():
         st.markdown("""
         <style>
         .stRadio > div {
-            margin-left: 1.5rem !important;
-            padding-left: 0.75rem !important;
+            margin-left: 1rem !important;
+            padding-left: 0.5rem !important;
             border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
             gap: 2px !important;
+            flex-direction: column !important;
         }
-        .stRadio label, .stRadio p {
-            font-size: 0.75rem !important;
-            padding: 2px 8px !important;
+        .stRadio > div > label {
+            font-size: 0.78rem !important;
+            padding: 3px 6px !important;
+            white-space: nowrap !important;
+            overflow: visible !important;
+            width: auto !important;
+            min-width: fit-content !important;
         }
         .stRadio [data-baseweb="radio"] {
             width: 14px !important;
             height: 14px !important;
+            min-width: 14px !important;
+            flex-shrink: 0 !important;
         }
         </style>
         """, unsafe_allow_html=True)
