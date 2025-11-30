@@ -384,7 +384,7 @@ def main():
             page_title="KMFFL Analytics",
             layout="wide",
             page_icon="🏈",
-            initial_sidebar_state="expanded"
+            initial_sidebar_state="collapsed"
         )
     except st.errors.StreamlitAPIException:
         # Page config already set by parent (main.py)
@@ -401,43 +401,28 @@ def main():
     # Initialize session state
     _init_session_defaults()
 
-    # Simple navigation - just main sections
+    # Top navigation using native tabs - always visible, no hidden sidebar
     tab_names = ["Home", "Managers", "Team Stats", "Players", "Draft", "Transactions", "Simulations", "Extras"]
 
-    # Sidebar with clean navigation
-    with st.sidebar:
-        st.markdown("## 🏈 KMFFL")
-        st.markdown("---")
+    # Create main navigation tabs at top of page
+    main_tabs = st.tabs(tab_names)
 
-        # Main section buttons - one per line, clean look
-        for i, tab in enumerate(tab_names):
-            if st.button(
-                tab,
-                key=f"nav_{tab}",
-                use_container_width=True,
-                type="primary" if st.session_state.get("active_main_tab", 0) == i else "secondary"
-            ):
-                st.session_state["active_main_tab"] = i
-                st.rerun()
-
-    selected_tab = tab_names[st.session_state.get("active_main_tab", 0)]
-
-    # Render ONLY the active tab (true lazy loading!)
-    if selected_tab == "Home":
+    # Render content within each tab
+    with main_tabs[0]:
         render_home_tab()
-    elif selected_tab == "Managers":
+    with main_tabs[1]:
         render_managers_tab()
-    elif selected_tab == "Team Stats":
+    with main_tabs[2]:
         render_team_stats_tab()
-    elif selected_tab == "Players":
+    with main_tabs[3]:
         render_players_tab()
-    elif selected_tab == "Draft":
+    with main_tabs[4]:
         render_draft_tab()
-    elif selected_tab == "Transactions":
+    with main_tabs[5]:
         render_transactions_tab()
-    elif selected_tab == "Simulations":
+    with main_tabs[6]:
         render_simulations_tab()
-    elif selected_tab == "Extras":
+    with main_tabs[7]:
         render_extras_tab()
 
 
