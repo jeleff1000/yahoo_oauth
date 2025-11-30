@@ -483,12 +483,12 @@ def main():
         }
         .stRadio > div > label {
             font-size: 0.8rem !important;
-            padding: 6px 8px !important;
-            margin-bottom: 4px !important;
+            padding: 8px 8px !important;
+            margin-bottom: 6px !important;
             white-space: nowrap !important;
             display: flex !important;
             align-items: center !important;
-            min-height: 28px !important;
+            min-height: 32px !important;
         }
         .stRadio [data-baseweb="radio"] {
             width: 16px !important;
