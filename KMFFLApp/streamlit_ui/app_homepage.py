@@ -419,42 +419,45 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Clean menu styling
+    # Clean menu styling - remove all button styling
     st.markdown("""
     <style>
-    /* Clean menu styling for popover */
-    [data-testid="stPopover"] [data-testid="stVerticalBlock"] button {
-        background: none !important;
+    /* Remove all button styling in popover */
+    [data-testid="stPopover"] button[kind="secondary"] {
+        background: transparent !important;
         border: none !important;
         box-shadow: none !important;
-        text-align: left !important;
-        padding: 0.4rem 0.75rem !important;
-        margin: 0 !important;
-        border-radius: 4px !important;
+        outline: none !important;
+        padding: 0.5rem 0 !important;
     }
-    [data-testid="stPopover"] [data-testid="stVerticalBlock"] button:hover {
-        background: rgba(128, 128, 128, 0.15) !important;
+    [data-testid="stPopover"] button[kind="secondary"]:hover {
+        background: transparent !important;
+        color: #667eea !important;
     }
-    [data-testid="stPopover"] [data-testid="stVerticalBlock"] button p {
-        margin: 0 !important;
+    [data-testid="stPopover"] button[kind="secondary"]:focus {
+        box-shadow: none !important;
+        outline: none !important;
     }
-    /* Subtab styling - smaller and indented */
-    .subtab-item {
-        font-size: 0.85rem !important;
-        padding-left: 1.5rem !important;
-        opacity: 0.85;
+    [data-testid="stPopover"] button[kind="secondary"] p {
+        font-weight: 500 !important;
+    }
+    /* Subtab items - smaller text */
+    .subtab-btn button[kind="secondary"] p {
+        font-size: 0.85em !important;
+        font-weight: 400 !important;
+        color: #666 !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
     # Hamburger menu at top with nested subtabs
-    with st.popover("☰ Menu"):
+    with st.popover("☰"):
         for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
             is_current = (i == current_idx)
-            label = f"{icon} {name}" + (" ✓" if is_current else "")
-            if st.button(label, key=f"nav_{name}", use_container_width=True):
+            label = f"{icon}  {name}" + ("  ✓" if is_current else "")
+            if st.button(label, key=f"nav_{name}"):
                 st.session_state["active_main_tab"] = i
-                st.session_state[f"subtab_{name}"] = 0  # Reset subtab when switching main tab
+                st.session_state[f"subtab_{name}"] = 0
                 st.rerun()
 
             # Show subtabs nested under current section
@@ -463,13 +466,13 @@ def main():
                 if section_subtabs:
                     for j, subtab_name in enumerate(section_subtabs):
                         is_active = (j == current_subtab_idx)
-                        marker = "●" if is_active else "○"
-                        # Use columns to create indent effect
-                        col1, col2 = st.columns([0.15, 0.85])
-                        with col2:
-                            if st.button(f"{marker} {subtab_name}", key=f"subtab_{name}_{subtab_name}", use_container_width=True):
+                        marker = "►" if is_active else "  "
+                        with st.container():
+                            st.markdown('<div class="subtab-btn">', unsafe_allow_html=True)
+                            if st.button(f"      {marker} {subtab_name}", key=f"subtab_{name}_{subtab_name}"):
                                 st.session_state[f"subtab_{name}"] = j
                                 st.rerun()
+                            st.markdown('</div>', unsafe_allow_html=True)
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":
