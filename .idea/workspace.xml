@@ -4,17 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
-      <change beforePath="$PROJECT_DIR$/KMFFLApp/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/KMFFLApp/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/app_homepage.py" beforeDir="false" afterPath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/app_homepage.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/md/data_access.py" beforeDir="false" afterPath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/md/data_access.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/md/motherduck_connection.py" beforeDir="false" afterPath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/md/motherduck_connection.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/md/tab_data_access/homepage/recaps_player_data.py" beforeDir="false" afterPath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/md/tab_data_access/homepage/recaps_player_data.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/md/tab_data_access/homepage/summary_stats.py" beforeDir="false" afterPath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/md/tab_data_access/homepage/summary_stats.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/md/tab_data_access/transactions/combined.py" beforeDir="false" afterPath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/md/tab_data_access/transactions/combined.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/tabs/homepage/schedules.py" beforeDir="false" afterPath="$PROJECT_DIR$/KMFFLApp/streamlit_ui/tabs/homepage/schedules.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-    </list>
+    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -69,22 +59,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1760740985328</updated>
-    </task>
-    <task id="LOCAL-00020" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760756437273</created>
-      <option name="number" value="00020" />
-      <option name="presentableId" value="LOCAL-00020" />
-      <option name="project" value="LOCAL" />
-      <updated>1760756437273</updated>
-    </task>
-    <task id="LOCAL-00021" summary="commit">
-      <option name="closed" value="true" />
-      <created>1760757315777</created>
-      <option name="number" value="00021" />
-      <option name="presentableId" value="LOCAL-00021" />
-      <option name="project" value="LOCAL" />
-      <updated>1760757315777</updated>
     </task>
     <task id="LOCAL-00022" summary="commit">
       <option name="closed" value="true" />
@@ -462,7 +436,23 @@
       <option name="project" value="LOCAL" />
       <updated>1764462717170</updated>
     </task>
-    <option name="localTasksCounter" value="69" />
+    <task id="LOCAL-00069" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
+      <option name="closed" value="true" />
+      <created>1764464069436</created>
+      <option name="number" value="00069" />
+      <option name="presentableId" value="LOCAL-00069" />
+      <option name="project" value="LOCAL" />
+      <updated>1764464069436</updated>
+    </task>
+    <task id="LOCAL-00070" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
+      <option name="closed" value="true" />
+      <created>1764465434867</created>
+      <option name="number" value="00070" />
+      <option name="presentableId" value="LOCAL-00070" />
+      <option name="project" value="LOCAL" />
+      <updated>1764465434869</updated>
+    </task>
+    <option name="localTasksCounter" value="71" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
