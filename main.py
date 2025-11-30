@@ -16,7 +16,8 @@ import re
 # Import LeagueContext for creating context files
 try:
     from fantasy_football_data_scripts.multi_league.core.league_context import LeagueContext
-except ImportError:
+except (ImportError, KeyError, ModuleNotFoundError):
+    # KeyError can occur during Streamlit's hot-reload due to sys.modules caching
     LeagueContext = None
 
 try:
