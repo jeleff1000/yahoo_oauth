@@ -990,14 +990,27 @@ Examples:
             sys.exit(1)
 
         # Use LeagueDiscovery to find league IDs for each year
-        # First check cache (discovered_leagues.json) to avoid redundant API calls
+        # PRIORITY ORDER:
+        # 1. Context league_ids (from Phase 0 discovery) - avoids restricted API calls
+        # 2. Cache file (discovered_leagues.json)
+        # 3. API discovery (LAST RESORT - uses restricted endpoint)
         league_dir = Path(ctx.data_directory).parent if ctx.data_directory else Path.cwd()
         discovered_file = league_dir / "discovered_leagues.json"
 
         year_to_league_id = {}
 
-        # Try to load from cache first
-        if discovered_file.exists():
+        # CRITICAL: Check context league_ids FIRST to avoid calling restricted API
+        # This mapping comes from Phase 0 (league settings discovery) which uses the
+        # renew/renewed chain instead of the restricted users/games/teams endpoint
+        if ctx.has_league_ids_mapping():
+            log(f"\n[CONTEXT] Using league_ids from context (avoids restricted API):")
+            for year_str, league_id in ctx.league_ids.items():
+                year_int = int(year_str)
+                year_to_league_id[year_int] = league_id
+                log(f"  {year_int}: {league_id}")
+            log(f"[CONTEXT] Loaded {len(year_to_league_id)} years from context")
+        # Try to load from cache as fallback
+        elif discovered_file.exists():
             log(f"\nLoading cached league IDs from {discovered_file.name}...")
             cached_leagues = load_discovered_leagues(league_dir, ctx.league_name)
 
@@ -1015,8 +1028,10 @@ Examples:
         end_year = ctx.end_year or current_year
 
         # Check if cache is missing years (either empty or outdated)
+        # BUT: If league_ids came from context, trust it completely (no discovery needed)
         cached_max_year = max(year_to_league_id.keys()) if year_to_league_id else 0
-        needs_discovery = not year_to_league_id or cached_max_year < current_year
+        from_context = ctx.has_league_ids_mapping()
+        needs_discovery = not from_context and (not year_to_league_id or cached_max_year < current_year)
 
         if needs_discovery:
             if year_to_league_id:
