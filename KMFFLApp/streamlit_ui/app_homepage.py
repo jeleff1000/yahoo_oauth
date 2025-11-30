@@ -173,18 +173,12 @@ def render_team_stats_tab():
 
 @st.fragment
 def render_players_tab():
-    """Render players tab with lazy-loaded subtabs"""
+    """Render players tab with lazy-loaded subtabs - navigation handled by unified menu"""
     subtab_names = ["Weekly", "Season", "Career", "Visualize"]
 
-    # Hamburger menu for player subtabs
-    with st.popover("☰ View", use_container_width=False):
-        selected_subtab = st.radio(
-            "Player stats:",
-            subtab_names,
-            index=st.session_state.get("active_players_subtab", 0),
-            key="players_subtab_selector"
-        )
-    st.session_state["active_players_subtab"] = subtab_names.index(selected_subtab)
+    # Get selected subtab from session state (set by unified hamburger menu)
+    selected_idx = st.session_state.get("active_players_subtab", 0)
+    selected_subtab = subtab_names[selected_idx] if selected_idx < len(subtab_names) else "Weekly"
 
     # Render ONLY the active subtab
     if selected_subtab == "Weekly":
@@ -243,7 +237,7 @@ def render_players_career():
 
 @st.fragment
 def render_players_visualize():
-    """Player visualization graphs with lazy loading - organized into 4 categories"""
+    """Player visualization graphs - navigation handled by unified menu"""
     # Tab categories
     tab_names = [
         "📋 Player Cards & Reports",
@@ -252,32 +246,14 @@ def render_players_visualize():
         "🌐 League Trends"
     ]
 
-    # Hamburger menu for visualization category
-    with st.popover("☰ Category", use_container_width=False):
-        selected_tab = st.radio(
-            "Visualization:",
-            tab_names,
-            index=st.session_state.get("active_players_viz_tab", 0),
-            key="players_visualize_category_selector"
-        )
-
-    st.session_state["active_players_viz_tab"] = tab_names.index(selected_tab)
+    # Get selections from session state (set by unified hamburger menu)
+    selected_idx = st.session_state.get("active_players_viz_tab", 0)
+    selected_tab = tab_names[selected_idx] if selected_idx < len(tab_names) else tab_names[0]
+    selected_graph = st.session_state.get("selected_viz_graph", None)
 
     try:
         # Tab 1: Player Cards & Reports
         if selected_tab == "📋 Player Cards & Reports":
-            graph_names = [
-                "🏈 Player Card",
-                "🗓️ Weekly Heatmap",
-                "📈 Scoring Trends"
-            ]
-            with st.popover("☰ Graph", use_container_width=False):
-                selected_graph = st.radio(
-                    "Select graph:",
-                    graph_names,
-                    key="players_cards_graph_selector"
-                )
-
             if selected_graph == "🏈 Player Card":
                 from tabs.player_stats.graphs.player_graphs.player_card import display_player_card
                 display_player_card(prefix="players_card")
@@ -287,21 +263,13 @@ def render_players_visualize():
             elif selected_graph == "📈 Scoring Trends":
                 from tabs.player_stats.graphs.player_graphs.player_scoring_graph import display_player_scoring_graphs
                 display_player_scoring_graphs(prefix="players_player_scoring")
+            else:
+                # Default to first graph
+                from tabs.player_stats.graphs.player_graphs.player_card import display_player_card
+                display_player_card(prefix="players_card")
 
         # Tab 2: Player Analysis
         elif selected_tab == "📊 Player Analysis":
-            graph_names = [
-                "🎯 Consistency",
-                "💥 Boom/Bust",
-                "🕸️ Radar Comparison"
-            ]
-            with st.popover("☰ Graph", use_container_width=False):
-                selected_graph = st.radio(
-                    "Select graph:",
-                    graph_names,
-                    key="players_analysis_graph_selector"
-                )
-
             if selected_graph == "🎯 Consistency":
                 from tabs.player_stats.graphs.player_graphs.player_consistency import display_player_consistency_graph
                 display_player_consistency_graph(prefix="players_consistency")
@@ -311,24 +279,12 @@ def render_players_visualize():
             elif selected_graph == "🕸️ Radar Comparison":
                 from tabs.player_stats.graphs.player_graphs.player_radar_comparison import display_player_radar_comparison
                 display_player_radar_comparison(prefix="players_radar")
+            else:
+                from tabs.player_stats.graphs.player_graphs.player_consistency import display_player_consistency_graph
+                display_player_consistency_graph(prefix="players_consistency")
 
         # Tab 3: SPAR Efficiency
         elif selected_tab == "⚡ SPAR Efficiency":
-            graph_names = [
-                "📊 Manager Capture Rate",
-                "📈 SPAR per Week",
-                "💧 Weekly Waterfall",
-                "🎯 Consistency Scatter",
-                "📉 Cumulative SPAR",
-                "⚡ SPAR vs PPG"
-            ]
-            with st.popover("☰ Graph", use_container_width=False):
-                selected_graph = st.radio(
-                    "Select graph:",
-                    graph_names,
-                    key="players_spar_graph_selector"
-                )
-
             if selected_graph == "📊 Manager Capture Rate":
                 from tabs.player_stats.graphs.spar_graphs.manager_capture_rate import display_manager_spar_capture_rate
                 display_manager_spar_capture_rate(prefix="spar_capture")
@@ -347,21 +303,12 @@ def render_players_visualize():
             elif selected_graph == "⚡ SPAR vs PPG":
                 from tabs.player_stats.graphs.spar_graphs.spar_vs_ppg_efficiency import display_spar_vs_ppg_efficiency
                 display_spar_vs_ppg_efficiency(prefix="spar_ppg")
+            else:
+                from tabs.player_stats.graphs.spar_graphs.manager_capture_rate import display_manager_spar_capture_rate
+                display_manager_spar_capture_rate(prefix="spar_capture")
 
         # Tab 4: League Trends
         elif selected_tab == "🌐 League Trends":
-            graph_names = [
-                "📊 Position Groups",
-                "📦 Position SPAR Distribution",
-                "🏆 Manager Leaderboard"
-            ]
-            with st.popover("☰ Graph", use_container_width=False):
-                selected_graph = st.radio(
-                    "Select graph:",
-                    graph_names,
-                    key="players_league_graph_selector"
-                )
-
             if selected_graph == "📊 Position Groups":
                 from tabs.player_stats.graphs.league_graphs.position_group_scoring import display_position_group_scoring_graphs
                 display_position_group_scoring_graphs(prefix="league_pos_group")
@@ -371,6 +318,9 @@ def render_players_visualize():
             elif selected_graph == "🏆 Manager Leaderboard":
                 from tabs.player_stats.graphs.league_graphs.manager_spar_leaderboard import display_manager_spar_leaderboard
                 display_manager_spar_leaderboard(prefix="league_manager_board")
+            else:
+                from tabs.player_stats.graphs.league_graphs.position_group_scoring import display_position_group_scoring_graphs
+                display_position_group_scoring_graphs(prefix="league_pos_group")
 
     except Exception as e:
         st.warning(f"Player graphs unavailable: {e}")
@@ -419,18 +369,12 @@ def render_simulations_tab():
 
 @st.fragment
 def render_extras_tab():
-    """Render extras tab with lazy-loaded subtabs"""
+    """Render extras tab - navigation handled by unified menu"""
     subtab_names = ["Keeper", "Team Names"]
 
-    # Hamburger menu for extras subtabs
-    with st.popover("☰ View", use_container_width=False):
-        selected_subtab = st.radio(
-            "Select:",
-            subtab_names,
-            index=st.session_state.get("active_extras_subtab", 0),
-            key="extras_subtab_selector"
-        )
-    st.session_state["active_extras_subtab"] = subtab_names.index(selected_subtab)
+    # Get selected subtab from session state (set by unified hamburger menu)
+    selected_idx = st.session_state.get("active_extras_subtab", 0)
+    selected_subtab = subtab_names[selected_idx] if selected_idx < len(subtab_names) else "Keeper"
 
     # Render ONLY the active subtab
     if selected_subtab == "Keeper":
@@ -482,17 +426,66 @@ def main():
     # Initialize session state
     _init_session_defaults()
 
-    # Main navigation as hamburger menu
+    # Main navigation as unified hierarchical hamburger menu
     tab_names = ["Home", "Managers", "Team Stats", "Players", "Draft", "Transactions", "Simulations", "Extras"]
 
-    # Hamburger menu using popover
-    with st.popover("☰ Menu", use_container_width=False):
+    # Define subtabs for tabs that have them
+    subtabs_config = {
+        "Home": ["Overview", "Hall of Fame", "Standings", "Schedules", "Head-to-Head", "Recaps"],
+        "Players": ["Weekly", "Season", "Career", "Visualize"],
+        "Extras": ["Keeper", "Team Names"],
+    }
+
+    # Visualization subtabs (nested under Players > Visualize)
+    viz_categories = ["📋 Player Cards & Reports", "📊 Player Analysis", "⚡ SPAR Efficiency", "🌐 League Trends"]
+    viz_graphs = {
+        "📋 Player Cards & Reports": ["🏈 Player Card", "🗓️ Weekly Heatmap", "📈 Scoring Trends"],
+        "📊 Player Analysis": ["🎯 Consistency", "💥 Boom/Bust", "🕸️ Radar Comparison"],
+        "⚡ SPAR Efficiency": ["📊 Manager Capture Rate", "📈 SPAR per Week", "💧 Weekly Waterfall", "🎯 Consistency Scatter", "📉 Cumulative SPAR", "⚡ SPAR vs PPG"],
+        "🌐 League Trends": ["📊 Position Groups", "📦 Position SPAR Distribution", "🏆 Manager Leaderboard"],
+    }
+
+    # Unified hamburger menu
+    with st.popover("☰ Navigate", use_container_width=False):
+        # Main tab selection
         selected_tab = st.radio(
-            "Navigate to:",
+            "📍 Main Section:",
             tab_names,
             index=st.session_state.get("active_main_tab", 0),
             key="main_tab_selector"
         )
+
+        # Show subtabs if the selected tab has them
+        if selected_tab in subtabs_config:
+            st.divider()
+            subtab_key = f"active_{selected_tab.lower()}_subtab"
+            selected_subtab = st.radio(
+                f"📂 {selected_tab} View:",
+                subtabs_config[selected_tab],
+                index=st.session_state.get(subtab_key, 0),
+                key=f"{selected_tab.lower()}_subtab_selector"
+            )
+            st.session_state[subtab_key] = subtabs_config[selected_tab].index(selected_subtab)
+
+            # Show visualization options if Players > Visualize
+            if selected_tab == "Players" and selected_subtab == "Visualize":
+                st.divider()
+                selected_viz_cat = st.radio(
+                    "📊 Visualization Category:",
+                    viz_categories,
+                    index=st.session_state.get("active_players_viz_tab", 0),
+                    key="viz_category_selector"
+                )
+                st.session_state["active_players_viz_tab"] = viz_categories.index(selected_viz_cat)
+
+                st.divider()
+                selected_graph = st.radio(
+                    "📈 Graph:",
+                    viz_graphs[selected_viz_cat],
+                    key="viz_graph_selector"
+                )
+                st.session_state["selected_viz_graph"] = selected_graph
+
     # Update active tab index
     st.session_state["active_main_tab"] = tab_names.index(selected_tab)
 

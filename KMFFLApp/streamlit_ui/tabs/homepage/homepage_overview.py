@@ -497,7 +497,7 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
     summary = df_dict.get("summary", {})
     matchup_df = _get_matchup_df(df_dict)
 
-    # Section names for dropdown menu
+    # Section names
     section_names = [
         "Overview",
         "Hall of Fame",
@@ -507,19 +507,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
         "Recaps",
     ]
 
-    # Initialize session state for selected section
-    if "homepage_section" not in st.session_state:
-        st.session_state["homepage_section"] = "Overview"
-
-    # Hamburger menu for section navigation
-    with st.popover("☰ Section", use_container_width=False):
-        selected_section = st.radio(
-            "Go to:",
-            section_names,
-            index=section_names.index(st.session_state.get("homepage_section", "Overview")),
-            key="homepage_section_selector"
-        )
-    st.session_state["homepage_section"] = selected_section
+    # Get selected section from session state (set by unified hamburger menu in app_homepage.py)
+    selected_idx = st.session_state.get("active_home_subtab", 0)
+    selected_section = section_names[selected_idx] if selected_idx < len(section_names) else "Overview"
 
     # ========================================
     # SECTION: OVERVIEW (Revamped Landing Page)
