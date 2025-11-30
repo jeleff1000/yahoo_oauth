@@ -121,6 +121,7 @@ def apply_modern_styles():
         border-radius: var(--radius-md, 8px);
         padding: var(--space-md, 1rem);
         margin: var(--space-sm, 0.5rem) 0;
+        color: var(--text-primary, #1F2937);
     }
     .success-box {
         background: var(--success-bg, rgba(16, 185, 129, 0.1));
@@ -128,6 +129,7 @@ def apply_modern_styles():
         border-radius: var(--radius-md, 8px);
         padding: var(--space-md, 1rem);
         margin: var(--space-sm, 0.5rem) 0;
+        color: var(--text-primary, #1F2937);
     }
     .warning-box {
         background: var(--warning-bg, rgba(245, 158, 11, 0.1));
@@ -135,6 +137,7 @@ def apply_modern_styles():
         border-radius: var(--radius-md, 8px);
         padding: var(--space-md, 1rem);
         margin: var(--space-sm, 0.5rem) 0;
+        color: var(--text-primary, #1F2937);
     }
     .error-box {
         background: var(--error-bg, rgba(239, 68, 68, 0.1));
@@ -142,6 +145,84 @@ def apply_modern_styles():
         border-radius: var(--radius-md, 8px);
         padding: var(--space-md, 1rem);
         margin: var(--space-sm, 0.5rem) 0;
+        color: var(--text-primary, #1F2937);
+    }
+
+    /* ===========================================
+       STREAMLIT NATIVE ALERTS (st.info, st.warning, etc.)
+       Override for better dark mode support
+       =========================================== */
+    /* Base alert styling */
+    .stAlert {
+        border-radius: var(--radius-md, 8px) !important;
+        border-width: 1px !important;
+        border-style: solid !important;
+    }
+
+    /* Info alert */
+    .stAlert[data-baseweb="notification"][kind="info"],
+    div[data-testid="stNotificationContentInfo"] {
+        background-color: var(--info-bg, rgba(59, 130, 246, 0.1)) !important;
+        border-color: var(--info, #3B82F6) !important;
+    }
+    .stAlert[data-baseweb="notification"][kind="info"] *,
+    div[data-testid="stNotificationContentInfo"] * {
+        color: var(--text-primary, #F9FAFB) !important;
+    }
+
+    /* Warning alert */
+    .stAlert[data-baseweb="notification"][kind="warning"],
+    div[data-testid="stNotificationContentWarning"] {
+        background-color: var(--warning-bg, rgba(245, 158, 11, 0.1)) !important;
+        border-color: var(--warning, #F59E0B) !important;
+    }
+    .stAlert[data-baseweb="notification"][kind="warning"] *,
+    div[data-testid="stNotificationContentWarning"] * {
+        color: var(--text-primary, #F9FAFB) !important;
+    }
+
+    /* Success alert */
+    .stAlert[data-baseweb="notification"][kind="positive"],
+    div[data-testid="stNotificationContentSuccess"] {
+        background-color: var(--success-bg, rgba(16, 185, 129, 0.1)) !important;
+        border-color: var(--success, #10B981) !important;
+    }
+    .stAlert[data-baseweb="notification"][kind="positive"] *,
+    div[data-testid="stNotificationContentSuccess"] * {
+        color: var(--text-primary, #F9FAFB) !important;
+    }
+
+    /* Error alert */
+    .stAlert[data-baseweb="notification"][kind="negative"],
+    div[data-testid="stNotificationContentError"] {
+        background-color: var(--error-bg, rgba(239, 68, 68, 0.1)) !important;
+        border-color: var(--error, #EF4444) !important;
+    }
+    .stAlert[data-baseweb="notification"][kind="negative"] *,
+    div[data-testid="stNotificationContentError"] * {
+        color: var(--text-primary, #F9FAFB) !important;
+    }
+
+    /* Generic Streamlit callout/alert overrides */
+    [data-testid="stAlert"],
+    .element-container .stAlert {
+        border-radius: var(--radius-md, 8px) !important;
+        padding: var(--space-md, 1rem) !important;
+        margin: var(--space-sm, 0.5rem) 0 !important;
+    }
+
+    /* Ensure text is readable in dark mode */
+    [data-testid="stAlert"] p,
+    [data-testid="stAlert"] span,
+    .stAlert p,
+    .stAlert span {
+        color: var(--text-primary, #F9FAFB) !important;
+    }
+
+    /* Remove heavy left border accent */
+    [data-testid="stAlert"]::before,
+    .stAlert > div:first-child {
+        display: none !important;
     }
 
     /* ===========================================
