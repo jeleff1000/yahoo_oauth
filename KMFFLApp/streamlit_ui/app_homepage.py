@@ -419,60 +419,54 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Clean menu styling - remove all button styling
-    st.markdown("""
-    <style>
-    /* Remove all button styling in popover */
-    [data-testid="stPopover"] button[kind="secondary"] {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-        padding: 0.5rem 0 !important;
-    }
-    [data-testid="stPopover"] button[kind="secondary"]:hover {
-        background: transparent !important;
-        color: #667eea !important;
-    }
-    [data-testid="stPopover"] button[kind="secondary"]:focus {
-        box-shadow: none !important;
-        outline: none !important;
-    }
-    [data-testid="stPopover"] button[kind="secondary"] p {
-        font-weight: 500 !important;
-    }
-    /* Subtab items - smaller text */
-    .subtab-btn button[kind="secondary"] p {
-        font-size: 0.85em !important;
-        font-weight: 400 !important;
-        color: #666 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    # Build menu options with hierarchy
+    menu_options = []
+    menu_mapping = {}  # Maps display string to (main_idx, subtab_idx or None)
 
-    # Hamburger menu at top with nested subtabs
+    for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
+        is_current = (i == current_idx)
+        label = f"{icon} {name}"
+        menu_options.append(label)
+        menu_mapping[label] = (i, None)
+
+        # Add subtabs for current section
+        if is_current:
+            section_subtabs = subtabs.get(name)
+            if section_subtabs:
+                for j, subtab_name in enumerate(section_subtabs):
+                    sub_label = f"    ∟ {subtab_name}"
+                    menu_options.append(sub_label)
+                    menu_mapping[sub_label] = (i, j)
+
+    # Find current selection in menu
+    current_main_label = f"{tab_icons[current_idx]} {tab_names[current_idx]}"
+    section_subtabs = subtabs.get(selected_tab)
+    if section_subtabs and current_subtab_idx < len(section_subtabs):
+        current_selection = f"    ∟ {section_subtabs[current_subtab_idx]}"
+    else:
+        current_selection = current_main_label
+
+    default_idx = menu_options.index(current_selection) if current_selection in menu_options else 0
+
+    # Hamburger menu with radio buttons
     with st.popover("☰"):
-        for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
-            is_current = (i == current_idx)
-            label = f"{icon}  {name}" + ("  ✓" if is_current else "")
-            if st.button(label, key=f"nav_{name}"):
-                st.session_state["active_main_tab"] = i
-                st.session_state[f"subtab_{name}"] = 0
-                st.rerun()
+        selection = st.radio(
+            "Navigate",
+            menu_options,
+            index=default_idx,
+            label_visibility="collapsed"
+        )
 
-            # Show subtabs nested under current section
-            if is_current:
-                section_subtabs = subtabs.get(name)
-                if section_subtabs:
-                    for j, subtab_name in enumerate(section_subtabs):
-                        is_active = (j == current_subtab_idx)
-                        marker = "►" if is_active else "  "
-                        with st.container():
-                            st.markdown('<div class="subtab-btn">', unsafe_allow_html=True)
-                            if st.button(f"      {marker} {subtab_name}", key=f"subtab_{name}_{subtab_name}"):
-                                st.session_state[f"subtab_{name}"] = j
-                                st.rerun()
-                            st.markdown('</div>', unsafe_allow_html=True)
+        # Handle selection
+        if selection in menu_mapping:
+            main_idx, sub_idx = menu_mapping[selection]
+            if main_idx != current_idx:
+                st.session_state["active_main_tab"] = main_idx
+                st.session_state[f"subtab_{tab_names[main_idx]}"] = 0
+                st.rerun()
+            elif sub_idx is not None and sub_idx != current_subtab_idx:
+                st.session_state[f"subtab_{selected_tab}"] = sub_idx
+                st.rerun()
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":
