@@ -728,7 +728,11 @@ def calculate_transaction_score(transactions_df: pd.DataFrame) -> pd.DataFrame:
     if weeks_col not in df.columns:
         weeks_col = 'weeks_rest_of_season'
 
-    weeks_held = pd.to_numeric(df.get(weeks_col, 0), errors='coerce').fillna(0)
+    # Handle case where weeks column doesn't exist (returns 0 Series instead of int)
+    if weeks_col in df.columns:
+        weeks_held = pd.to_numeric(df[weeks_col], errors='coerce').fillna(0)
+    else:
+        weeks_held = pd.Series(0, index=df.index)
     df['_hold_bonus'] = np.where(
         trans_type != 'drop',
         np.log(weeks_held + 1) * 3,
