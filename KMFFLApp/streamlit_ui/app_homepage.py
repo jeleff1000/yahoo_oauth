@@ -470,22 +470,43 @@ def main():
 
     # Hamburger menu
     with st.popover("☰ Menu"):
-        # Simple subtab styling
+        # Subtab styling (mobile + desktop)
         st.markdown("""
         <style>
         .stRadio > div {
             margin-left: 1rem !important;
             padding-left: 0.5rem !important;
             border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
         }
         .stRadio > div > label {
             font-size: 0.8rem !important;
-            padding: 6px 10px !important;
-            margin-bottom: 2px !important;
+            padding: 8px 8px !important;
+            margin-bottom: 6px !important;
+            white-space: nowrap !important;
+            display: flex !important;
+            align-items: center !important;
+            min-height: 32px !important;
         }
-        .stRadio > div > label > div:first-child {
-            transform: scale(0.7) !important;
-            margin-right: 4px !important;
+        .stRadio [data-baseweb="radio"] {
+            width: 16px !important;
+            height: 16px !important;
+            min-width: 16px !important;
+            min-height: 16px !important;
+            margin-right: 8px !important;
+        }
+        @media (max-width: 768px) {
+            .stRadio > div > label {
+                font-size: 0.85rem !important;
+                padding: 8px 10px !important;
+                min-height: 36px !important;
+            }
+            .stRadio [data-baseweb="radio"] {
+                width: 18px !important;
+                height: 18px !important;
+            }
         }
         </style>
         """, unsafe_allow_html=True)
