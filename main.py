@@ -699,7 +699,8 @@ def get_league_teams(access_token: str, league_key: str, year: int = None) -> li
     Returns list of dicts with team_name, manager_name, team_key, year.
     """
     try:
-        data = yahoo_api_call(access_token, f"league/{league_key}/teams?format=json")
+        # Request teams with managers sub-resource
+        data = yahoo_api_call(access_token, f"league/{league_key}/teams/managers?format=json")
         teams = []
 
         league_data = data.get("fantasy_content", {}).get("league", [])
@@ -708,26 +709,44 @@ def get_league_teams(access_token: str, league_key: str, year: int = None) -> li
             for key in teams_data:
                 if key == "count":
                     continue
-                team_info = teams_data[key].get("team", [[]])[0]
 
-                # Parse team info (it's a list of dicts)
-                team_dict = {}
-                for item in team_info:
-                    if isinstance(item, dict):
-                        team_dict.update(item)
-                    elif isinstance(item, list):
-                        # Manager info is nested in a list
-                        for sub_item in item:
-                            if isinstance(sub_item, dict) and "managers" in sub_item:
-                                managers = sub_item["managers"]
-                                if managers:
-                                    mgr = managers[0].get("manager", {})
-                                    team_dict["manager_name"] = mgr.get("nickname", mgr.get("manager_id", "Unknown"))
+                team_entry = teams_data[key].get("team", [])
+                team_name = "Unknown Team"
+                manager_name = None
 
+                # Parse team info - it's a nested structure
+                for part in team_entry:
+                    if isinstance(part, list):
+                        for item in part:
+                            if isinstance(item, dict):
+                                if "name" in item:
+                                    team_name = item["name"]
+                                if "managers" in item:
+                                    # Extract manager nickname
+                                    mgrs = item["managers"]
+                                    if isinstance(mgrs, list) and mgrs:
+                                        mgr_data = mgrs[0].get("manager", {})
+                                        manager_name = mgr_data.get("nickname") or mgr_data.get("manager_id")
+                                    elif isinstance(mgrs, dict):
+                                        for mk in mgrs:
+                                            if mk != "count":
+                                                mgr_data = mgrs[mk].get("manager", {})
+                                                manager_name = mgr_data.get("nickname") or mgr_data.get("manager_id")
+                                                break
+                    elif isinstance(part, dict):
+                        if "name" in part:
+                            team_name = part["name"]
+                        if "managers" in part:
+                            mgrs = part["managers"]
+                            if isinstance(mgrs, list) and mgrs:
+                                mgr_data = mgrs[0].get("manager", {})
+                                manager_name = mgr_data.get("nickname") or mgr_data.get("manager_id")
+
+                # Only add if we have a valid manager_name (could be --hidden-- or actual name)
                 teams.append({
-                    "team_key": team_dict.get("team_key", ""),
-                    "team_name": team_dict.get("name", "Unknown Team"),
-                    "manager_name": team_dict.get("manager_name", "Unknown"),
+                    "team_key": "",
+                    "team_name": team_name,
+                    "manager_name": manager_name if manager_name else "Unknown",
                     "year": year,
                 })
 
@@ -776,13 +795,13 @@ def get_league_teams_all_years(access_token: str, league_name: str, games_data: 
 
 
 def find_hidden_managers(teams: list[dict]) -> list[dict]:
-    """Find teams with hidden manager names (--hidden--, empty, etc.)"""
-    hidden_patterns = ["--hidden--", "hidden", "", "unknown", "private"]
+    """Find teams with hidden manager names (only --hidden-- pattern)"""
     hidden_teams = []
 
     for team in teams:
-        mgr_name = (team.get("manager_name") or "").strip().lower()
-        if mgr_name in hidden_patterns or mgr_name.startswith("--"):
+        mgr_name = (team.get("manager_name") or "").strip()
+        # Only flag actual "--hidden--" managers, not unknown/empty
+        if mgr_name == "--hidden--" or mgr_name.lower() == "hidden":
             hidden_teams.append(team)
 
     return hidden_teams
