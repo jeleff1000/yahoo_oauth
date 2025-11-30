@@ -917,8 +917,8 @@ def fetch_transactions(
     if not df.empty:
         df = process_transactions_chronologically(df)
 
-    # Add league_id for multi-league isolation
-    df["league_id"] = ctx.league_id
+    # Add league_id for multi-league isolation (use year-specific league_id)
+    df["league_id"] = league_key
 
     # Apply manager name overrides from context (e.g., "--hidden--" -> "Ilan")
     if ctx.manager_name_overrides and 'manager' in df.columns:

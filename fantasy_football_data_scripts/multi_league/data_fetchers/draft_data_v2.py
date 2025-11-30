@@ -682,9 +682,8 @@ def fetch_draft_data(
             except Exception:
                 final_df["yahoo_player_id"] = final_df["yahoo_player_id"].astype(str).astype("string")
 
-        # Add league_id for multi-league isolation
-        if ctx is not None:
-            final_df["league_id"] = ctx.league_id
+        # Add league_id for multi-league isolation (use year-specific league_id)
+        final_df["league_id"] = year_league_id
 
         # Save outputs
         if logger:

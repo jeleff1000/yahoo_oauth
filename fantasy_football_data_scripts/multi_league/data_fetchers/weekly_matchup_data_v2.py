@@ -843,9 +843,8 @@ def weekly_matchup_data(
 
         df = df[KEEP].copy()
 
-        # Add league_id for multi-league isolation
-        if ctx is not None:
-            df["league_id"] = ctx.league_id
+        # Add league_id for multi-league isolation (use year-specific league_id)
+        df["league_id"] = yearid
 
         # Save outputs
         if logger:
