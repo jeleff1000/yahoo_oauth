@@ -162,6 +162,12 @@ jobs:
           db_name = os.environ['DATABASE_NAME']
           data_dir = Path("fantasy_football_data")
 
+          # Format league name for display (strip l_ prefix if present for digit-starting names)
+          display_name = db_name
+          if db_name.startswith('l_') and len(db_name) > 2 and db_name[2].isdigit():
+              display_name = db_name[2:]  # Strip the l_ prefix
+          league_name = display_name.replace('_', ' ').title()
+
           # Try to read league info from league_settings.parquet
           settings_file = data_dir / "league_settings.parquet"
 
@@ -173,7 +179,7 @@ jobs:
 
                   context = {
                       "league_id": latest.get('league_key', db_name),
-                      "league_name": db_name.replace('_', ' ').title(),
+                      "league_name": league_name,
                       "oauth_file_path": str(Path("oauth/Oauth.json").resolve()),
                       "game_code": "nfl",
                       "start_year": int(df['year'].min()),
@@ -205,7 +211,7 @@ jobs:
           print(f"⚠️ Could not find league_settings.parquet, creating minimal context")
           context = {
               "league_id": db_name,
-              "league_name": db_name.replace('_', ' ').title(),
+              "league_name": league_name,  # Uses the display name computed above
               "oauth_file_path": str(Path("oauth/Oauth.json").resolve()),
               "game_code": "nfl",
               "start_year": 2020,

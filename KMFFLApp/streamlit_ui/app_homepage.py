@@ -419,51 +419,40 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Hamburger menu styling - main tabs vs subtabs hierarchy
+    # Hamburger menu styling
     st.markdown("""
     <style>
-    /* Current tab indicator */
-    .current-tab-label {
+    /* Current tab label */
+    .current-section {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white !important;
         padding: 0.5rem 0.75rem;
         border-radius: 6px;
         margin: 0.25rem 0;
         font-weight: 600;
-        font-size: 0.95rem;
     }
-
-    /* Active subtab indicator */
-    .active-subtab-label {
+    /* Active subtab */
+    .active-sub {
         color: #667eea;
-        font-size: 0.8rem;
-        padding: 0.2rem 0 0.2rem 1.5rem;
+        font-size: 0.78rem;
+        padding: 0.1rem 0;
         font-weight: 500;
     }
 
-    /* Subtab buttons - small, compact, indented */
-    .subtab-btn button {
+    /* Make subtab buttons small and subtle */
+    [data-testid="stPopover"] [data-testid="column"]:last-child button {
         font-size: 0.75rem !important;
-        padding: 0.15rem 0.5rem !important;
-        min-height: 1.5rem !important;
+        padding: 0.2rem 0.4rem !important;
+        min-height: unset !important;
         height: auto !important;
-        margin: 0.1rem 0 !important;
         background: transparent !important;
         border: none !important;
-        color: #888 !important;
-        text-align: left !important;
-        justify-content: flex-start !important;
+        color: #666 !important;
+        box-shadow: none !important;
     }
-    .subtab-btn button:hover {
-        background: rgba(102, 126, 234, 0.1) !important;
+    [data-testid="stPopover"] [data-testid="column"]:last-child button:hover {
         color: #667eea !important;
-    }
-
-    /* Container to indent subtabs */
-    .subtab-container {
-        margin-left: 1.25rem;
-        padding-left: 0.5rem;
-        border-left: 2px solid rgba(102, 126, 234, 0.2);
+        background: rgba(102, 126, 234, 0.08) !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -474,26 +463,23 @@ def main():
             is_current = (i == current_idx)
 
             if is_current:
-                # Current tab - show as label with gradient
-                st.markdown(f'<div class="current-tab-label">{icon} {name}</div>', unsafe_allow_html=True)
+                # Current tab header
+                st.markdown(f'<div class="current-section">{icon} {name}</div>', unsafe_allow_html=True)
 
-                # Subtabs for current section
+                # Subtabs
                 section_subtabs = subtabs.get(name)
                 if section_subtabs:
-                    st.markdown('<div class="subtab-container">', unsafe_allow_html=True)
-                    for j, subtab_name in enumerate(section_subtabs):
-                        is_active_sub = (j == current_subtab_idx)
-                        if is_active_sub:
-                            st.markdown(f'<div class="active-subtab-label">● {subtab_name}</div>', unsafe_allow_html=True)
-                        else:
-                            st.markdown('<div class="subtab-btn">', unsafe_allow_html=True)
-                            if st.button(f"○ {subtab_name}", key=f"sub_{i}_{j}", use_container_width=True):
-                                st.session_state[f"subtab_{name}"] = j
-                                st.rerun()
-                            st.markdown('</div>', unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    # Use columns for indentation: small spacer | subtab content
+                    spacer, content = st.columns([0.15, 0.85])
+                    with content:
+                        for j, subtab_name in enumerate(section_subtabs):
+                            if j == current_subtab_idx:
+                                st.markdown(f'<div class="active-sub">● {subtab_name}</div>', unsafe_allow_html=True)
+                            else:
+                                if st.button(f"○ {subtab_name}", key=f"sub_{i}_{j}"):
+                                    st.session_state[f"subtab_{name}"] = j
+                                    st.rerun()
             else:
-                # Other tabs - clickable buttons
                 if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
                     st.session_state["active_main_tab"] = i
                     st.session_state[f"subtab_{name}"] = 0
