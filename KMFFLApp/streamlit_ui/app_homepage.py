@@ -428,16 +428,21 @@ def main():
         border: none !important;
         box-shadow: none !important;
         text-align: left !important;
-        padding: 0.5rem 0.75rem !important;
+        padding: 0.4rem 0.75rem !important;
         margin: 0 !important;
         border-radius: 4px !important;
-        font-size: 0.95rem !important;
     }
     [data-testid="stPopover"] [data-testid="stVerticalBlock"] button:hover {
         background: rgba(128, 128, 128, 0.15) !important;
     }
     [data-testid="stPopover"] [data-testid="stVerticalBlock"] button p {
         margin: 0 !important;
+    }
+    /* Subtab styling - smaller and indented */
+    .subtab-item {
+        font-size: 0.85rem !important;
+        padding-left: 1.5rem !important;
+        opacity: 0.85;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -458,10 +463,13 @@ def main():
                 if section_subtabs:
                     for j, subtab_name in enumerate(section_subtabs):
                         is_active = (j == current_subtab_idx)
-                        sub_label = f"{'●' if is_active else '○'} {subtab_name}"
-                        if st.button(sub_label, key=f"subtab_{name}_{subtab_name}", use_container_width=True):
-                            st.session_state[f"subtab_{name}"] = j
-                            st.rerun()
+                        marker = "●" if is_active else "○"
+                        # Use columns to create indent effect
+                        col1, col2 = st.columns([0.15, 0.85])
+                        with col2:
+                            if st.button(f"{marker} {subtab_name}", key=f"subtab_{name}_{subtab_name}", use_container_width=True):
+                                st.session_state[f"subtab_{name}"] = j
+                                st.rerun()
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":
