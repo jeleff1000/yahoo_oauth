@@ -1,0 +1,11 @@
+[server]
+# Disable file watching to avoid inotify limit
+fileWatcherType = "none"
+
+# Optional: ignore heavy or unnecessary folders
+folderWatchBlacklist = [
+  ".git/**",
+  "fantasy_football_data/**",
+  "fantasy_football_data_downloads/**",
+  "**/__pycache__/**"
+]

@@ -55,11 +55,12 @@ def get_existing_league_databases() -> list[str]:
         con.close()
 
         # Filter out system databases and return sorted list
-        system_dbs = {"my_db", "sample_data", "secrets", "ops", "information_schema"}
+        system_dbs = {"my_db", "sample_data", "secrets", "ops", "information_schema", "md_information_schema"}
         league_dbs = [
             row[0] for row in result
             if row[0].lower() not in system_dbs
             and not row[0].startswith("_")
+            and not row[0].startswith("md_")  # Exclude MotherDuck system databases
         ]
 
         return sorted(league_dbs, key=str.lower)

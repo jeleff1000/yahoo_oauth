@@ -1,0 +1,2 @@
+cd C:\Users\joeye\OneDrive\Desktop\KMFFLApp\streamlit_ui
+streamlit run app_homepage_optimized.py

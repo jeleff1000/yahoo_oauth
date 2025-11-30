@@ -1,0 +1,12 @@
+streamlit
+pandas==2.2.2
+duckdb==1.3.2
+duckdb-engine==0.9.5
+numpy<2
+polars==1.6.0
+plotly
+pulp
+matplotlib
+scipy
+claude-agent-sdk==0.1.0
+streamlit-aggrid==1.2.0.post1

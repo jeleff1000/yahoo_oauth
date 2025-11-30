@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""
+predictive_record.py - Predicted final records visualization
+"""
+import re
+import pandas as pd
+import streamlit as st
+from .table_styles import render_modern_table
+
+
+def _select_week_for_record(base_df: pd.DataFrame):
+    """Week selection with auto-load option."""
+    mode = st.radio(
+        "Selection Mode",
+        ["Today's Date", "Specific Week"],
+        horizontal=True,
+        key="pred_mode_record",
+        index=0
+    )
+
+    if mode == "Today's Date":
+        year = int(base_df['year'].max())
+        week = int(base_df[base_df['year'] == year]['week'].max())
+        st.caption(f"📅 Auto-selected Year {year}, Week {week}")
+        return year, week, True
+    else:
+        years = sorted(base_df['year'].astype(int).unique())
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            year_choice = st.selectbox(
+                "Year",
+                ["Select Year"] + [str(y) for y in years],
+                key="pred_year_record"
+            )
+
+        if year_choice == "Select Year":
+            return None, None, False
+
+        year = int(year_choice)
+        weeks = sorted(base_df[base_df['year'] == year]['week'].astype(int).unique())
+
+        with col2:
+            week_choice = st.selectbox(
+                "Week",
+                ["Select Week"] + [str(w) for w in weeks],
+                key="pred_week_record"
+            )
+
+        if week_choice == "Select Week":
+            return None, None, False
+
+        week = int(week_choice)
+        return year, week, False
+
+
+@st.fragment
+def _render_expected_record(base_df: pd.DataFrame, year: int, week: int):
+    """Render predicted records table."""
+    week_slice = base_df[(base_df['year'] == year) & (base_df['week'] == week)]
+
+    if week_slice.empty:
+        st.info("No data available for selected year/week.")
+        return
+
+    # Find all xN_win columns
+    all_cols = week_slice.columns
+    win_meta = []
+    pattern = re.compile(r"x(\d+)_win")
+
+    for c in all_cols:
+        m = pattern.fullmatch(c)
+        if m:
+            win_meta.append((int(m.group(1)), c))
+
+    if not win_meta:
+        st.info("No predictive win columns found in data.")
+        return
+
+    season_len = max(k for k, _ in win_meta)
+    win_meta.sort(key=lambda t: t[0], reverse=True)
+    ordered_win_cols = [c for _, c in win_meta]
+
+    # Build dataframe
+    needed = ['manager'] + [c for c in ordered_win_cols if c in week_slice.columns]
+    df = (
+        week_slice[needed]
+        .drop_duplicates(subset=['manager'])
+        .set_index('manager')
+        .sort_index()
+    )
+
+    # Rename columns to W-L format (reversed so best records come first)
+    rename_map = {c: f"{k}-{season_len - k}" for k, c in win_meta}
+    df = df.rename(columns=rename_map)
+    df = df[list(rename_map.values())]
+
+    # Sort by total probability in best records (descending)
+    # Sum probabilities for top half of records
+    best_records = [col for col in df.columns if int(col.split('-')[0]) > season_len // 2]
+    if best_records:
+        df['_sort_prob'] = df[best_records].sum(axis=1)
+        df = df.sort_values('_sort_prob', ascending=False).drop(columns=['_sort_prob'])
+
+    st.markdown("---")
+    st.subheader("📊 Predicted Final Records")
+    st.caption(f"Season length: {season_len} games | Showing probability of each win-loss record")
+
+    # Identify numeric columns for gradient (all columns)
+    numeric_cols = list(df.columns)
+
+    # Create column rename map - just the record
+    column_names = {}
+
+    # Create format specs
+    format_specs = {c: "{:.1f}" for c in numeric_cols}
+
+    render_modern_table(
+        df,
+        title="",
+        color_columns=numeric_cols,
+        reverse_columns=[],
+        format_specs=format_specs,
+        column_names=column_names
+    )
+
+
+@st.fragment
+def display_predicted_record(matchup_data_df: pd.DataFrame):
+    """Main entry point for predicted records."""
+    if matchup_data_df is None or matchup_data_df.empty:
+        st.info("No data available")
+        return
+
+    # Filter to regular season only
+    base_df = matchup_data_df[
+        (matchup_data_df['is_playoffs'] == 0) &
+        (matchup_data_df['is_consolation'] == 0)
+        ].copy()
+
+    if base_df.empty:
+        st.info("No regular season data available")
+        return
+
+    # Type conversion
+    base_df['year'] = base_df['year'].astype(int)
+    base_df['week'] = base_df['week'].astype(int)
+
+    year, week, auto_display = _select_week_for_record(base_df)
+
+    if year is None or week is None:
+        return
+
+    # Auto-display or show button
+    if auto_display:
+        _render_expected_record(base_df, year, week)
+    else:
+        if st.button("Go", key="pred_record_go"):
+            _render_expected_record(base_df, year, week)
