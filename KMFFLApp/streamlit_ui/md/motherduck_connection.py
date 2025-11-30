@@ -81,8 +81,31 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
         except Exception as e:
             raise ConnectionError(f"Failed to connect to MotherDuck: {e}")
 
+    def _is_connection_valid(self) -> bool:
+        """Check if the current connection is still valid."""
+        if not hasattr(self, '_instance') or self._instance is None:
+            return False
+        try:
+            # Try a simple query to test connection
+            self._instance.execute("SELECT 1").fetchone()
+            return True
+        except Exception:
+            return False
+
+    def _ensure_connection(self):
+        """Ensure we have a valid connection, reconnecting if necessary."""
+        if not self._is_connection_valid():
+            # Close existing connection if any
+            if hasattr(self, '_instance') and self._instance:
+                try:
+                    self._instance.close()
+                except Exception:
+                    pass
+            # Create new connection
+            self._instance = self._connect()
+
     def query(self, sql: str, ttl: int | None = 600, **kwargs):
-        """Execute query with retry logic for catalog errors."""
+        """Execute query with retry logic for connection and catalog errors."""
         import time
 
         max_retries = 3
@@ -90,7 +113,10 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
 
         for attempt in range(max_retries):
             try:
-                # Execute directly without nested cache
+                # Ensure connection is valid before executing
+                self._ensure_connection()
+
+                # Execute query
                 result = self._instance.execute(sql).df()
                 return result
 
@@ -98,37 +124,32 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
                 last_error = e
                 error_msg = str(e).lower()
 
-                # Check if it's a catalog error
+                # Check error types
+                is_connection_error = "connection" in error_msg and "closed" in error_msg
                 is_catalog_error = "catalog" in error_msg or "remote catalog has changed" in error_msg
 
                 if attempt < max_retries - 1:
-                    # Clear streamlit caches
-                    st.cache_data.clear()
-                    st.cache_resource.clear()
-
-                    if is_catalog_error:
-                        # For catalog errors, force complete reconnection
+                    # For connection or catalog errors, force reconnection
+                    if is_connection_error or is_catalog_error:
+                        # Close existing connection
                         if hasattr(self, '_instance') and self._instance:
                             try:
                                 self._instance.close()
-                            except:
+                            except Exception:
                                 pass
+                            self._instance = None
 
-                        # Force recreation of connection
+                        # Clear streamlit caches
                         try:
-                            self._instance = self._connect()
-                        except Exception as conn_error:
-                            # If reconnection fails, try once more after a pause
-                            time.sleep(1)
-                            try:
-                                self._instance = self._connect()
-                            except:
-                                # If still failing, continue to next attempt
-                                pass
+                            st.cache_data.clear()
+                            st.cache_resource.clear()
+                        except Exception:
+                            pass
 
-                        time.sleep(0.5)
+                        # Wait before retry
+                        time.sleep(0.5 * (attempt + 1))
                     else:
-                        # For non-catalog errors, just wait and retry
+                        # For other errors, just wait and retry
                         time.sleep(0.3)
 
                     continue
