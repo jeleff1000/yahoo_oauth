@@ -156,8 +156,12 @@ def merge_matchups_to_parquet(
                 log(f"      [SKIP] {f.name} missing league_id column (old format) - skipping")
                 continue
 
-            # Filter to current league_id
-            df = df[df["league_id"] == ctx.league_id].copy()
+            # Filter to any of the linked league IDs (multi-year leagues have different IDs per year)
+            # Build set of all valid league IDs: from league_ids mapping + base league_id
+            valid_league_ids = set(ctx.league_ids.values()) if ctx.league_ids else set()
+            valid_league_ids.add(ctx.league_id)  # Always include the base league_id
+
+            df = df[df["league_id"].isin(valid_league_ids)].copy()
             if df.empty:
                 continue
 

@@ -793,51 +793,41 @@ def render_hidden_manager_ui(hidden_teams: list[dict], all_teams: list[dict]) ->
     Render UI to identify hidden managers by their team names.
     Returns dict mapping old manager names to new names.
     """
-    st.markdown("### Identify Hidden Managers")
-
-    # Group by unique team name + manager combo to avoid duplicates
+    # Group by unique team name to show years together
     unique_hidden = {}
     for team in hidden_teams:
-        key = (team.get("team_name", ""), team.get("manager_name", "--hidden--"))
-        if key not in unique_hidden:
-            unique_hidden[key] = {"team": team, "years": []}
+        team_name = team.get("team_name", "Unknown")
+        if team_name not in unique_hidden:
+            unique_hidden[team_name] = []
         if team.get("year"):
-            unique_hidden[key]["years"].append(team["year"])
+            unique_hidden[team_name].append(team["year"])
 
-    st.warning(f"Found {len(unique_hidden)} manager(s) with hidden/private names. Please identify them:")
+    st.warning(f"Found {len(unique_hidden)} hidden manager(s). Please identify:")
 
     overrides = {}
 
-    for i, (key, info) in enumerate(unique_hidden.items()):
-        team = info["team"]
-        years = sorted(set(info["years"])) if info["years"] else ["Unknown"]
+    for i, (team_name, years) in enumerate(unique_hidden.items()):
+        years_sorted = sorted(set(years), reverse=True) if years else []
+        years_str = ", ".join(str(y) for y in years_sorted) if years_sorted else "?"
 
-        col1, col2, col3 = st.columns([2, 1, 2])
+        col1, col2 = st.columns([1, 1])
 
         with col1:
-            st.markdown(f"**Team Name:** {team['team_name']}")
-            years_str = ", ".join(str(y) for y in years)
-            st.caption(f"Year(s): {years_str} | Manager: `{team.get('manager_name', '--hidden--')}`")
+            st.markdown(f"**{years_str}** - {team_name}")
 
         with col2:
-            st.markdown("→")
-
-        with col3:
             new_name = st.text_input(
-                "Real name:",
+                "Manager name:",
                 value="",
                 key=f"hidden_mgr_{i}",
-                placeholder="Enter manager's name"
+                placeholder="Enter name",
+                label_visibility="collapsed"
             )
             if new_name.strip():
-                old_name = team.get("manager_name", "--hidden--")
-                overrides[old_name] = new_name.strip()
+                overrides["--hidden--"] = new_name.strip()
 
     if overrides:
-        st.success(f"Will rename {len(overrides)} manager(s) during import")
-        with st.expander("Preview mappings"):
-            for old, new in overrides.items():
-                st.markdown(f"- `{old}` → **{new}**")
+        st.success(f"Will rename {len(overrides)} manager(s)")
 
     return overrides
 
@@ -1713,24 +1703,8 @@ def run_register_flow():
                                         manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
                                         st.session_state.configured_manager_overrides = manager_overrides
                                     else:
-                                        st.success("No hidden managers found! All managers have visible names.")
+                                        st.success("No hidden managers found!")
                                         st.session_state.configured_manager_overrides = {}
-
-                                    # Show all teams for reference grouped by year
-                                    if teams:
-                                        with st.expander("View All Teams by Year"):
-                                            # Group by year
-                                            by_year = {}
-                                            for team in teams:
-                                                year = team.get("year", "Unknown")
-                                                if year not in by_year:
-                                                    by_year[year] = []
-                                                by_year[year].append(team)
-
-                                            for year in sorted(by_year.keys(), reverse=True):
-                                                st.markdown(f"**{year}**")
-                                                for team in by_year[year]:
-                                                    st.markdown(f"  - {team['team_name']} - {team['manager_name']}")
 
                                 # Keeper Rules Tab
                                 with st.expander("Keeper Rules", expanded=False):
