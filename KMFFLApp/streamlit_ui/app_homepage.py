@@ -419,6 +419,34 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
+    # Override the tab-style radio buttons for popover only
+    st.markdown("""
+    <style>
+    /* Reset radio buttons in popover to normal style */
+    [data-testid="stPopover"] [role="radiogroup"] {
+        gap: 0 !important;
+        flex-direction: column !important;
+    }
+    [data-testid="stPopover"] [role="radiogroup"] label {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0.4rem 0.5rem !important;
+        margin: 0 !important;
+        justify-content: flex-start !important;
+    }
+    [data-testid="stPopover"] [role="radiogroup"] label:hover {
+        background: rgba(128,128,128,0.1) !important;
+    }
+    [data-testid="stPopover"] [role="radiogroup"] label[data-checked="true"] {
+        background: rgba(102,126,234,0.15) !important;
+    }
+    [data-testid="stPopover"] [role="radiogroup"] label div {
+        font-size: 0.9rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     # Build menu options with hierarchy
     menu_options = []
     menu_mapping = {}  # Maps display string to (main_idx, subtab_idx or None)
