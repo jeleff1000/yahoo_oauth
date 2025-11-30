@@ -220,20 +220,21 @@ def apply_modern_styles():
 
     /* ============================================
        RADIO BUTTON TABS (Subtabs throughout app)
+       EXCLUDES popovers - they use clean list style
        ============================================ */
 
-    /* Hide radio button circles */
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
+    /* Hide radio button circles - except in popovers */
+    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
         display: none;
     }
 
-    /* Reset radio button default styles */
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+    /* Reset radio button default styles - except in popovers */
+    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label {
         all: unset;
     }
 
-    /* Style radio group container */
-    div[data-testid="stRadio"] > div[role="radiogroup"] {
+    /* Style radio group container - except in popovers */
+    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] {
         display: flex;
         gap: 0.5rem;
         background-color: transparent;
@@ -243,8 +244,8 @@ def apply_modern_styles():
         width: 100%;
     }
 
-    /* Universal dark button style - works in both light and dark mode */
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+    /* Universal dark button style - except in popovers */
+    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label {
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -264,33 +265,60 @@ def apply_modern_styles():
         box-sizing: border-box !important;
     }
 
-    /* Force white text in all children */
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label * {
+    /* Force white text in all children - except in popovers */
+    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label * {
         color: rgb(255, 255, 255) !important;
     }
 
-    /* Hover state */
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
+    /* Hover state - except in popovers */
+    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
         border-color: rgb(103, 108, 245) !important;
         background-color: rgb(80, 83, 90) !important;
     }
 
-    /* Active/selected tab - bright purple */
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
+    /* Active/selected tab - bright purple - except in popovers */
+    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
         background-color: rgb(103, 108, 245) !important;
         border-color: rgb(103, 108, 245) !important;
         color: rgb(255, 255, 255) !important;
         font-weight: 600 !important;
     }
 
-    /* Force active tab text color */
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) * {
+    /* Force active tab text color - except in popovers */
+    :not([data-testid="stPopover"]) div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) * {
         color: rgb(255, 255, 255) !important;
     }
 
     /* Remove default radio container padding */
     div[data-testid="stRadio"] {
         margin-bottom: 0.5rem;
+    }
+
+    /* ============================================
+       POPOVER MENU - Clean list style
+       ============================================ */
+    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] {
+        flex-direction: column !important;
+        gap: 0 !important;
+    }
+    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 4px !important;
+        padding: 0.5rem 0.75rem !important;
+        justify-content: flex-start !important;
+        color: inherit !important;
+        font-weight: normal !important;
+    }
+    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label * {
+        color: inherit !important;
+    }
+    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
+        background: rgba(128, 128, 128, 0.15) !important;
+    }
+    [data-testid="stPopover"] div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
+        background: rgba(102, 126, 234, 0.2) !important;
+        font-weight: 500 !important;
     }
 
     /* Button Styling */
