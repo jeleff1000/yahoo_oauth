@@ -40,6 +40,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Python for discovery
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install duckdb
+        run: pip install duckdb
+
       - name: List registered leagues
         id: list
         env:
@@ -54,22 +62,54 @@ jobs:
             exit 0
           fi
 
-          # Otherwise, discover all databases from MotherDuck
-          # For now, use a static list of known databases
-          # TODO: Query MotherDuck to get list of fantasy football databases
+          # Query MotherDuck to discover all fantasy football databases
+          python - <<'PYEOF'
+          import duckdb
+          import os
+          import json
 
-          # Check for registered leagues file
-          if [ -f "registered_leagues.json" ]; then
-            LEAGUES=$(cat registered_leagues.json | jq -c '.leagues')
-            COUNT=$(cat registered_leagues.json | jq '.leagues | length')
-            echo "leagues=${LEAGUES}" >> $GITHUB_OUTPUT
-            echo "count=${COUNT}" >> $GITHUB_OUTPUT
-            echo "Found ${COUNT} registered leagues"
-          else
-            echo "leagues=[]" >> $GITHUB_OUTPUT
-            echo "count=0" >> $GITHUB_OUTPUT
-            echo "No registered_leagues.json found"
-          fi
+          token = os.environ.get('MOTHERDUCK_TOKEN', '')
+          if not token:
+              print("No MOTHERDUCK_TOKEN found")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write('leagues=[]\n')
+                  f.write('count=0\n')
+              exit(0)
+
+          try:
+              conn = duckdb.connect(f"md:?motherduck_token={token}")
+
+              # Get all databases
+              dbs = conn.execute("SELECT database_name FROM information_schema.schemata WHERE schema_name = 'public'").fetchall()
+              all_dbs = [row[0] for row in dbs]
+
+              # Filter to fantasy football databases (have matchup table)
+              fantasy_dbs = []
+              for db in all_dbs:
+                  if db in ('information_schema', 'my_db', 'sample_data'):
+                      continue
+                  try:
+                      # Check if this database has a matchup table (indicates fantasy football)
+                      conn.execute(f"SELECT 1 FROM {db}.public.matchup LIMIT 1")
+                      fantasy_dbs.append(db)
+                      print(f"  ✓ {db} - fantasy football database")
+                  except:
+                      print(f"  ✗ {db} - skipping (no matchup table)")
+
+              conn.close()
+
+              print(f"\nFound {len(fantasy_dbs)} fantasy football databases")
+
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f'leagues={json.dumps(fantasy_dbs)}\n')
+                  f.write(f'count={len(fantasy_dbs)}\n')
+
+          except Exception as e:
+              print(f"Error discovering databases: {e}")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write('leagues=[]\n')
+                  f.write('count=0\n')
+          PYEOF
 
   # Update each league
   update-league:

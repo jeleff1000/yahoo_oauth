@@ -431,17 +431,26 @@ def main():
         margin: 4px 0;
         font-weight: 600;
     }
-    /* Subtab radio - make it a simple small list */
+    /* Subtab radio - smaller, indented, clearly secondary */
     [data-testid="stPopover"] .stRadio > div {
-        margin-left: 20px;
+        margin-left: 1.5rem;
+        padding-left: 0.75rem;
+        border-left: 2px solid rgba(102, 126, 234, 0.3);
         gap: 0 !important;
     }
     [data-testid="stPopover"] .stRadio label {
-        font-size: 0.8rem !important;
-        padding: 2px 8px !important;
+        font-size: 0.72rem !important;
+        padding: 1px 6px !important;
         min-height: unset !important;
+        color: #666 !important;
+    }
+    [data-testid="stPopover"] .stRadio label:has(input:checked) {
+        color: #667eea !important;
+        font-weight: 500;
     }
     [data-testid="stPopover"] .stRadio [data-baseweb="radio"] {
+        width: 12px !important;
+        height: 12px !important;
         margin-right: 4px;
     }
     </style>
