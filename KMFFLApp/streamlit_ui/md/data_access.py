@@ -33,17 +33,18 @@ def get_table_dict() -> Dict[str, str]:
     """
     Get the table name dictionary with the current league database prefix.
     This is regenerated each time to ensure it uses the current database.
+    Tables are in the 'public' schema within each database.
     """
     db = get_current_league_db()
     return {
-        "matchup": f"{db}.matchup",
-        "player": f"{db}.player",
-        "player_season": f"{db}.players_by_year",
-        "players_by_year": f"{db}.players_by_year",
-        "draft": f"{db}.draft",
-        "injury": f"{db}.injury",
-        "schedule": f"{db}.schedule",
-        "transactions": f"{db}.transactions",
+        "matchup": f"{db}.public.matchup",
+        "player": f"{db}.public.player",
+        "player_season": f"{db}.public.players_by_year",
+        "players_by_year": f"{db}.public.players_by_year",
+        "draft": f"{db}.public.draft",
+        "injury": f"{db}.public.injury",
+        "schedule": f"{db}.public.schedule",
+        "transactions": f"{db}.public.transactions",
     }
 
 
@@ -330,13 +331,13 @@ def load_player_two_week_slice(year: int, week: int):
     cum_query = f"""
         WITH current_cum AS (
             SELECT DISTINCT cumulative_week
-            FROM {get_current_league_db()}.players_by_year
+            FROM {get_current_league_db()}.public.players_by_year
             WHERE year = {int(year)} AND week = {int(week)}
             LIMIT 1
         ),
         prev_cum AS (
             SELECT MAX(cumulative_week) AS prev_cumulative_week
-            FROM {get_current_league_db()}.players_by_year
+            FROM {get_current_league_db()}.public.players_by_year
             WHERE cumulative_week < (SELECT cumulative_week FROM current_cum)
         )
         SELECT 
@@ -348,7 +349,7 @@ def load_player_two_week_slice(year: int, week: int):
     if cum.empty or cum["current_cum"].isna().all():
         return run_query(f"""
             SELECT *
-            FROM {get_current_league_db()}.players_by_year
+            FROM {get_current_league_db()}.public.players_by_year
             WHERE year = {int(year)} AND week = {int(week)}
             ORDER BY points DESC NULLS LAST
         """)
@@ -359,14 +360,14 @@ def load_player_two_week_slice(year: int, week: int):
     if prev_cum is None or pd.isna(prev_cum):
         return run_query(f"""
             SELECT *
-            FROM {get_current_league_db()}.players_by_year
+            FROM {get_current_league_db()}.public.players_by_year
             WHERE year = {int(year)} AND week = {int(week)}
             ORDER BY points DESC NULLS LAST
         """)
 
     return run_query(f"""
         SELECT *
-        FROM {get_current_league_db()}.players_by_year
+        FROM {get_current_league_db()}.public.players_by_year
         WHERE cumulative_week IN ({float(prev_cum)}, {cur_cum})
         ORDER BY cumulative_week DESC, points DESC NULLS LAST
     """)
@@ -375,7 +376,7 @@ def load_player_two_week_slice(year: int, week: int):
 def list_optimal_seasons() -> list[int]:
     df = run_query(f"""
         SELECT DISTINCT year
-        FROM {get_current_league_db()}.players_by_year
+        FROM {get_current_league_db()}.public.players_by_year
         WHERE COALESCE(league_wide_optimal_player, 0) = 1
         ORDER BY year
     """)
@@ -385,7 +386,7 @@ def list_optimal_seasons() -> list[int]:
 def list_optimal_weeks(year: int) -> list[int]:
     df = run_query(f"""
         SELECT DISTINCT week
-        FROM {get_current_league_db()}.players_by_year
+        FROM {get_current_league_db()}.public.players_by_year
         WHERE year = {int(year)}
           AND COALESCE(league_wide_optimal_player, 0) = 1
         ORDER BY week
@@ -410,7 +411,7 @@ def load_homepage_data():
     try:
         summary = {}
         summary["matchup_count"] = run_query(f"SELECT COUNT(*) AS count FROM {T['matchup']}").iloc[0]["count"]
-        summary["player_count"] = run_query(f"SELECT COUNT(*) AS count FROM {get_current_league_db()}.players_by_year").iloc[0]["count"]
+        summary["player_count"] = run_query(f"SELECT COUNT(*) AS count FROM {get_current_league_db()}.public.players_by_year").iloc[0]["count"]
         summary["draft_count"] = run_query(f"SELECT COUNT(*) AS count FROM {T['draft']}").iloc[0]["count"]
         summary["transactions_count"] = run_query(f"SELECT COUNT(*) AS count FROM {T['transactions']}").iloc[0]["count"]
         summary["injuries_count"] = run_query(f"SELECT COUNT(*) AS count FROM {T['injury']}").iloc[0]["count"]
@@ -528,7 +529,7 @@ def get_season_query(
     return f"""
         WITH raw AS (
           SELECT *
-          FROM {get_current_league_db()}.players_by_year
+          FROM {get_current_league_db()}.public.players_by_year
           {where_sql}
         ),
         base AS (
@@ -865,7 +866,7 @@ def load_players_career_data(
     **_,
 ) -> pd.DataFrame:
     """
-    Career aggregates using {get_current_league_db()}.players_by_year.
+    Career aggregates using {get_current_league_db()}.public.players_by_year.
     IMPORTANT: Career groups across ALL seasons by player_key ONLY (no year).
 
     DEPRECATED: Import from md.tab_data_access.players instead:
@@ -1104,7 +1105,7 @@ def load_transactions_data(limit: Optional[int] = 1000):
         """)
 
         # Load related data with reasonable limits for performance
-        player_data = run_query(f"SELECT * FROM {get_current_league_db()}.players_by_year ORDER BY year DESC, week DESC LIMIT 10000")
+        player_data = run_query(f"SELECT * FROM {get_current_league_db()}.public.players_by_year ORDER BY year DESC, week DESC LIMIT 10000")
         injury_data = run_query(f"SELECT * FROM {T['injury']} ORDER BY year DESC, week DESC LIMIT 10000")
         # Limit draft data to recent years (last ~5 seasons assuming 10 teams x 18 rounds = 180 picks/year)
         draft_data = run_query(f"SELECT * FROM {T['draft']} ORDER BY year DESC, round, pick LIMIT 1000")
@@ -1141,7 +1142,7 @@ def load_simulations_data(include_all_years: bool = True, max_rows: int = None):
                     player, manager, nfl_position AS position, year,
                     AVG(points) AS avg_points, STDDEV(points) AS std_points,
                     COUNT(*) AS games_played
-                FROM {get_current_league_db()}.players_by_year
+                FROM {get_current_league_db()}.public.players_by_year
                 GROUP BY player, manager, nfl_position, year
                 HAVING COUNT(*) >= 3
                 ORDER BY year DESC, avg_points DESC
@@ -1153,7 +1154,7 @@ def load_simulations_data(include_all_years: bool = True, max_rows: int = None):
                     player, manager, nfl_position AS position,
                     AVG(points) AS avg_points, STDDEV(points) AS std_points,
                     COUNT(*) AS games_played
-                FROM {get_current_league_db()}.players_by_year
+                FROM {get_current_league_db()}.public.players_by_year
                 WHERE year = {int(current_year)}
                 GROUP BY player, manager, nfl_position
                 HAVING COUNT(*) >= 3

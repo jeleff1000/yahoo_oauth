@@ -86,7 +86,7 @@ def load_player_two_week_slice(year: int, week: int) -> pd.DataFrame:
     """
     try:
         db = get_current_league_db()
-        players_table = f"{db}.players_by_year"
+        players_table = f"{db}.public.players_by_year"
 
         # Build column list
         cols_str = ", ".join(RECAPS_PLAYER_COLUMNS)

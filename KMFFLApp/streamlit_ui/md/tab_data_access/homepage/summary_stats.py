@@ -39,7 +39,7 @@ def load_homepage_summary_stats() -> Dict[str, Any]:
             ),
             player_stats AS (
                 SELECT COUNT(*) AS player_count
-                FROM {db}.players_by_year
+                FROM {db}.public.players_by_year
             ),
             draft_stats AS (
                 SELECT COUNT(*) AS draft_count
