@@ -470,30 +470,44 @@ def main():
 
     # Hamburger menu
     with st.popover("☰ Menu"):
-        # Inject CSS inside popover for subtab styling
+        # Inject CSS inside popover for subtab styling (mobile + desktop)
         st.markdown("""
         <style>
         .stRadio > div {
             margin-left: 1rem !important;
             padding-left: 0.5rem !important;
             border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
-            gap: 6px !important;
+            display: flex !important;
             flex-direction: column !important;
+            align-items: flex-start !important;
         }
         .stRadio > div > label {
-            font-size: 0.78rem !important;
-            padding: 4px 6px !important;
+            font-size: 0.8rem !important;
+            padding: 6px 8px !important;
+            margin-bottom: 4px !important;
             white-space: nowrap !important;
-            overflow: visible !important;
-            width: auto !important;
-            min-width: fit-content !important;
-            line-height: 1.3 !important;
+            display: flex !important;
+            align-items: center !important;
+            min-height: 28px !important;
         }
         .stRadio [data-baseweb="radio"] {
-            width: 14px !important;
-            height: 14px !important;
-            min-width: 14px !important;
-            flex-shrink: 0 !important;
+            width: 16px !important;
+            height: 16px !important;
+            min-width: 16px !important;
+            min-height: 16px !important;
+            margin-right: 8px !important;
+        }
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            .stRadio > div > label {
+                font-size: 0.85rem !important;
+                padding: 8px 10px !important;
+                min-height: 36px !important;
+            }
+            .stRadio [data-baseweb="radio"] {
+                width: 18px !important;
+                height: 18px !important;
+            }
         }
         </style>
         """, unsafe_allow_html=True)
