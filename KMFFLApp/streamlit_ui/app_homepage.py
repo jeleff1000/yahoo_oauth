@@ -419,6 +419,36 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
+    # Clean menu styling
+    st.markdown("""
+    <style>
+    .menu-current-tab {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white !important;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        margin: 0.25rem 0;
+        font-weight: 600;
+    }
+    .menu-current-tab * { color: white !important; }
+    .menu-subtab-active {
+        background: rgba(102, 126, 234, 0.15);
+        padding: 0.3rem 0.5rem;
+        border-radius: 4px;
+        margin-left: 1rem;
+        font-size: 0.85rem;
+        color: #667eea;
+        font-weight: 500;
+    }
+    .menu-subtab {
+        margin-left: 1rem;
+        font-size: 0.85rem;
+        color: #666;
+        padding: 0.2rem 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     # Hamburger menu with proper hierarchy
     with st.popover("☰ Menu"):
         for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
@@ -426,7 +456,7 @@ def main():
 
             # Main tab item
             if is_current:
-                st.markdown(f"**{icon} {name}**")
+                st.markdown(f'<div class="menu-current-tab">{icon} {name}</div>', unsafe_allow_html=True)
             else:
                 if st.button(f"{icon} {name}", key=f"menu_main_{i}", use_container_width=True):
                     st.session_state["active_main_tab"] = i
@@ -439,15 +469,14 @@ def main():
                 if section_subtabs:
                     for j, subtab_name in enumerate(section_subtabs):
                         is_active_sub = (j == current_subtab_idx)
-                        # Smaller, indented subtab
-                        col1, col2 = st.columns([0.15, 0.85])
-                        with col2:
-                            if is_active_sub:
-                                st.markdown(f"<small>● **{subtab_name}**</small>", unsafe_allow_html=True)
-                            else:
-                                if st.button(f"○ {subtab_name}", key=f"menu_sub_{i}_{j}", use_container_width=True):
-                                    st.session_state[f"subtab_{name}"] = j
-                                    st.rerun()
+                        if is_active_sub:
+                            st.markdown(f'<div class="menu-subtab-active">● {subtab_name}</div>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<div class="menu-subtab">', unsafe_allow_html=True)
+                            if st.button(f"○ {subtab_name}", key=f"menu_sub_{i}_{j}"):
+                                st.session_state[f"subtab_{name}"] = j
+                                st.rerun()
+                            st.markdown('</div>', unsafe_allow_html=True)
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":

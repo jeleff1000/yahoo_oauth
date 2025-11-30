@@ -1046,6 +1046,7 @@ def render_hidden_manager_ui(hidden_teams: list[dict], all_teams: list[dict]) ->
 
 
 def extract_football_games(games_data):
+    """Extract NFL games from Yahoo API response, sorted by season descending (latest first)."""
     football_games = []
     try:
         games = games_data.get("fantasy_content", {}).get("users", {}).get("0", {}).get("user", [])[1].get("games", {})
@@ -1063,6 +1064,8 @@ def extract_football_games(games_data):
                 })
     except Exception:
         pass
+    # Sort by season descending so latest year appears first in dropdown
+    football_games.sort(key=lambda g: int(g.get("season", 0)), reverse=True)
     return football_games
 
 
