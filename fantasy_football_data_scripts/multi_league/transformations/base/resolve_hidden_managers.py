@@ -96,6 +96,11 @@ def update_manager_names(df: pd.DataFrame, guid_to_name: dict, table_name: str) 
     """
     Update manager names in a DataFrame using the guid mapping.
 
+    Updates:
+    - manager column (using guid)
+    - opponent column (by name matching, since opponent doesn't have guid)
+    - manager_year and manager_week composite keys
+
     Args:
         df: DataFrame with manager and manager_guid columns
         guid_to_name: Dict mapping guid -> unified manager name
@@ -111,8 +116,24 @@ def update_manager_names(df: pd.DataFrame, guid_to_name: dict, table_name: str) 
         return df, 0
 
     df = df.copy()
-    updates = 0
 
+    # Step 1: Build old_name -> new_name mapping from guid
+    old_to_new = {}
+    for idx, row in df.iterrows():
+        guid = row.get('manager_guid')
+        if guid and pd.notna(guid):
+            guid_str = str(guid)
+            if guid_str in guid_to_name:
+                old_name = row['manager']
+                new_name = guid_to_name[guid_str]
+                if old_name != new_name and old_name not in old_to_new:
+                    old_to_new[old_name] = new_name
+
+    if not old_to_new:
+        return df, 0
+
+    # Step 2: Update manager column using guid (most accurate)
+    updates = 0
     for idx, row in df.iterrows():
         guid = row.get('manager_guid')
         if guid and pd.notna(guid):
@@ -123,6 +144,29 @@ def update_manager_names(df: pd.DataFrame, guid_to_name: dict, table_name: str) 
                 if old_name != new_name:
                     df.at[idx, 'manager'] = new_name
                     updates += 1
+
+                    # Recalculate composite keys
+                    new_name_no_spaces = new_name.replace(" ", "")
+
+                    if 'manager_year' in df.columns and 'year' in df.columns:
+                        year_val = row.get('year')
+                        if pd.notna(year_val):
+                            df.at[idx, 'manager_year'] = f"{new_name_no_spaces}{int(year_val)}"
+
+                    if 'manager_week' in df.columns and 'cumulative_week' in df.columns:
+                        cw = row.get('cumulative_week')
+                        if pd.notna(cw):
+                            df.at[idx, 'manager_week'] = f"{new_name_no_spaces}{int(cw)}"
+
+    # Step 3: Update opponent column using old_to_new mapping
+    if 'opponent' in df.columns:
+        opponent_updates = 0
+        for old_name, new_name in old_to_new.items():
+            mask = df['opponent'] == old_name
+            opponent_updates += mask.sum()
+            df.loc[mask, 'opponent'] = new_name
+        if opponent_updates > 0:
+            print(f"    Also updated {opponent_updates} opponent references")
 
     return df, updates
 
