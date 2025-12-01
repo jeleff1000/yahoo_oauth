@@ -419,126 +419,125 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Simple hamburger menu - clean list style
+    # Clean hamburger menu - main sections only, subtabs shown as horizontal tabs in content
     st.markdown("""
     <style>
-    /* Current section header */
-    .menu-current {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white !important;
-        padding: 8px 12px;
-        border-radius: 6px;
-        margin: 4px 0;
-        font-weight: 600;
+    /* Wider popover */
+    [data-testid="stPopoverBody"] {
+        min-width: 200px !important;
     }
-    /* Subtab radio - force smaller and indented */
-    .stPopover .stRadio > div,
-    [data-testid="stPopoverBody"] .stRadio > div,
-    div[data-baseweb="popover"] .stRadio > div {
-        margin-left: 1.5rem !important;
-        padding-left: 0.75rem !important;
-        border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
-        gap: 0 !important;
+
+    /* Primary button (current section) - bright glow */
+    .stPopover button[kind="primary"],
+    [data-testid="stPopoverBody"] button[kind="primary"] {
+        background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%) !important;
+        border: none !important;
+        box-shadow: 0 0 12px rgba(129, 140, 248, 0.4) !important;
+        font-weight: 600 !important;
     }
-    .stPopover .stRadio label,
-    .stPopover .stRadio p,
-    [data-testid="stPopoverBody"] .stRadio label,
-    [data-testid="stPopoverBody"] .stRadio p,
-    div[data-baseweb="popover"] .stRadio label,
-    div[data-baseweb="popover"] .stRadio p {
-        font-size: 0.72rem !important;
-        padding: 1px 6px !important;
+    .stPopover button[kind="primary"]:hover,
+    [data-testid="stPopoverBody"] button[kind="primary"]:hover {
+        box-shadow: 0 0 18px rgba(129, 140, 248, 0.6) !important;
+    }
+
+    /* Secondary buttons (other sections) */
+    .stPopover button:not([kind="primary"]),
+    [data-testid="stPopoverBody"] button:not([kind="primary"]) {
+        background: transparent !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        color: rgba(255, 255, 255, 0.8) !important;
+    }
+    .stPopover button:not([kind="primary"]):hover,
+    [data-testid="stPopoverBody"] button:not([kind="primary"]):hover {
+        background: rgba(255, 255, 255, 0.08) !important;
+        border-color: rgba(129, 140, 248, 0.4) !important;
+    }
+
+    @media (max-width: 768px) {
+        [data-testid="stPopoverBody"] {
+            min-width: 180px !important;
+        }
+    }
+
+    /* Horizontal subtab buttons - compact tab style (not bulky pills) */
+    .stColumns button {
+        padding: 0.4rem 0.75rem !important;
         min-height: unset !important;
-        color: #666 !important;
+        height: auto !important;
+        font-size: 0.85rem !important;
+        border-radius: 6px 6px 0 0 !important;
+        margin-bottom: -1px !important;
     }
-    .stPopover .stRadio input:checked + div,
-    .stPopover .stRadio input:checked ~ label,
-    [data-testid="stPopoverBody"] .stRadio input:checked + div {
-        color: #667eea !important;
+    .stColumns button[kind="primary"] {
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid #818CF8 !important;
+        color: #A78BFA !important;
+        font-weight: 600 !important;
+        box-shadow: none !important;
+    }
+    .stColumns button[kind="secondary"],
+    .stColumns button:not([kind="primary"]) {
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        color: rgba(255, 255, 255, 0.5) !important;
         font-weight: 500 !important;
     }
-    .stPopover .stRadio [data-baseweb="radio"],
-    [data-testid="stPopoverBody"] .stRadio [data-baseweb="radio"],
-    div[data-baseweb="popover"] .stRadio [data-baseweb="radio"] {
-        width: 12px !important;
-        height: 12px !important;
-        min-width: 12px !important;
-        min-height: 12px !important;
+    .stColumns button[kind="secondary"]:hover,
+    .stColumns button:not([kind="primary"]):hover {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border-bottom: 2px solid rgba(129, 140, 248, 0.4) !important;
+        color: rgba(255, 255, 255, 0.85) !important;
+    }
+    /* Underline container for subtabs */
+    .stColumns {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 0.75rem !important;
+    }
+
+    /* Mobile: smaller text */
+    @media (max-width: 768px) {
+        .stColumns button {
+            font-size: 0.75rem !important;
+            padding: 0.35rem 0.5rem !important;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # Hamburger menu
+    # Simple hamburger menu - main sections only
     with st.popover("☰ Menu"):
-        # Subtab styling (mobile + desktop)
-        st.markdown("""
-        <style>
-        .stRadio > div {
-            margin-left: 1rem !important;
-            padding-left: 0.5rem !important;
-            border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: flex-start !important;
-        }
-        .stRadio > div > label {
-            font-size: 0.8rem !important;
-            padding: 8px 8px !important;
-            margin-bottom: 6px !important;
-            white-space: nowrap !important;
-            display: flex !important;
-            align-items: center !important;
-            min-height: 32px !important;
-        }
-        .stRadio [data-baseweb="radio"] {
-            width: 16px !important;
-            height: 16px !important;
-            min-width: 16px !important;
-            min-height: 16px !important;
-            margin-right: 8px !important;
-        }
-        @media (max-width: 768px) {
-            .stRadio > div > label {
-                font-size: 0.85rem !important;
-                padding: 8px 10px !important;
-                min-height: 36px !important;
-            }
-            .stRadio [data-baseweb="radio"] {
-                width: 18px !important;
-                height: 18px !important;
-            }
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
         for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
             is_current = (i == current_idx)
 
             if is_current:
-                # Current section - styled header
-                st.markdown(f'<div class="menu-current">{icon} {name}</div>', unsafe_allow_html=True)
-
-                # Subtabs as radio
-                section_subtabs = subtabs.get(name)
-                if section_subtabs:
-                    new_subtab = st.radio(
-                        "Subtab",
-                        options=section_subtabs,
-                        index=current_subtab_idx,
-                        key=f"radio_{name}",
-                        label_visibility="collapsed"
-                    )
-                    if section_subtabs.index(new_subtab) != current_subtab_idx:
-                        st.session_state[f"subtab_{name}"] = section_subtabs.index(new_subtab)
-                        st.rerun()
+                st.button(f"{icon} {name}", key=f"current_{name}", use_container_width=True, type="primary", disabled=True)
             else:
-                # Other sections - buttons
                 if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
                     st.session_state["active_main_tab"] = i
                     st.session_state[f"subtab_{name}"] = 0
                     st.rerun()
 
-    # Render ONLY the active tab (true lazy loading!)
+    # Get subtabs for current section
+    section_subtabs = subtabs.get(selected_tab)
+
+    # Show horizontal subtab navigation for sections that have subtabs
+    if section_subtabs:
+        # Create pill-style buttons for subtab navigation
+        cols = st.columns(len(section_subtabs))
+        for idx, (col, subtab_name) in enumerate(zip(cols, section_subtabs)):
+            with col:
+                is_active = (idx == current_subtab_idx)
+                btn_type = "primary" if is_active else "secondary"
+                if st.button(subtab_name, key=f"subtab_btn_{selected_tab}_{idx}", use_container_width=True, type=btn_type):
+                    if not is_active:
+                        st.session_state[f"subtab_{selected_tab}"] = idx
+                        st.rerun()
+
+        st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+
+    # Render the active section using existing render functions
     if selected_tab == "Home":
         render_home_tab()
     elif selected_tab == "Managers":
