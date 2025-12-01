@@ -459,64 +459,50 @@ def main():
         }
     }
 
-    /* Horizontal radio subtabs - compact chip style */
-    .stRadio > div {
-        flex-wrap: nowrap !important;
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-        gap: 0.5rem !important;
-        padding-bottom: 0.5rem !important;
+    /* Horizontal subtab buttons - compact tab style (not bulky pills) */
+    .stColumns button {
+        padding: 0.4rem 0.75rem !important;
+        min-height: unset !important;
+        height: auto !important;
+        font-size: 0.85rem !important;
+        border-radius: 6px 6px 0 0 !important;
+        margin-bottom: -1px !important;
+    }
+    .stColumns button[kind="primary"] {
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid #818CF8 !important;
+        color: #A78BFA !important;
+        font-weight: 600 !important;
+        box-shadow: none !important;
+    }
+    .stColumns button[kind="secondary"],
+    .stColumns button:not([kind="primary"]) {
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        color: rgba(255, 255, 255, 0.5) !important;
+        font-weight: 500 !important;
+    }
+    .stColumns button[kind="secondary"]:hover,
+    .stColumns button:not([kind="primary"]):hover {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border-bottom: 2px solid rgba(129, 140, 248, 0.4) !important;
+        color: rgba(255, 255, 255, 0.85) !important;
+    }
+    /* Underline container for subtabs */
+    .stColumns {
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         margin-bottom: 0.75rem !important;
     }
-    .stRadio > div::-webkit-scrollbar {
-        height: 0;
-    }
-    .stRadio label {
-        white-space: nowrap !important;
-        padding: 0.4rem 0.75rem !important;
-        border-radius: 16px !important;
-        font-size: 0.85rem !important;
-        font-weight: 500 !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        background: transparent !important;
-        color: rgba(255, 255, 255, 0.6) !important;
-        cursor: pointer !important;
-        transition: all 0.15s ease !important;
-    }
-    .stRadio label:hover {
-        background: rgba(255, 255, 255, 0.08) !important;
-        color: rgba(255, 255, 255, 0.9) !important;
-    }
-    .stRadio label[data-checked="true"],
-    .stRadio div[data-checked="true"] label {
-        background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%) !important;
-        border-color: transparent !important;
-        color: white !important;
-        font-weight: 600 !important;
-    }
-    /* Hide the actual radio circle */
-    .stRadio input[type="radio"] {
-        display: none !important;
-    }
-    .stRadio [data-baseweb="radio"] {
-        display: none !important;
-    }
 
-    /* Mobile: even smaller */
+    /* Mobile: smaller text */
     @media (max-width: 768px) {
-        .stRadio label {
-            padding: 0.35rem 0.6rem !important;
-            font-size: 0.8rem !important;
-        }
-    }
-    @media (max-width: 480px) {
-        .stRadio label {
-            padding: 0.3rem 0.5rem !important;
+        .stColumns button {
             font-size: 0.75rem !important;
+            padding: 0.35rem 0.5rem !important;
         }
     }
-
     </style>
     """, unsafe_allow_html=True)
 
@@ -536,24 +522,22 @@ def main():
     # Get subtabs for current section
     section_subtabs = subtabs.get(selected_tab)
 
-    # Show horizontal subtab navigation (uses native radio for mobile scroll)
+    # Show horizontal subtab navigation for sections that have subtabs
     if section_subtabs:
-        new_subtab = st.radio(
-            "Subtab",
-            options=section_subtabs,
-            index=current_subtab_idx,
-            horizontal=True,
-            key=f"subtab_radio_{selected_tab}",
-            label_visibility="collapsed"
-        )
-        # Update session state if changed
-        new_idx = section_subtabs.index(new_subtab)
-        if new_idx != current_subtab_idx:
-            st.session_state[f"subtab_{selected_tab}"] = new_idx
-            st.rerun()
+        # Create pill-style buttons for subtab navigation
+        cols = st.columns(len(section_subtabs))
+        for idx, (col, subtab_name) in enumerate(zip(cols, section_subtabs)):
+            with col:
+                is_active = (idx == current_subtab_idx)
+                btn_type = "primary" if is_active else "secondary"
+                if st.button(subtab_name, key=f"subtab_btn_{selected_tab}_{idx}", use_container_width=True, type=btn_type):
+                    if not is_active:
+                        st.session_state[f"subtab_{selected_tab}"] = idx
+                        st.rerun()
+
+        st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
 
     # Render the active section using existing render functions
-    # These already handle subtabs via session state
     if selected_tab == "Home":
         render_home_tab()
     elif selected_tab == "Managers":
