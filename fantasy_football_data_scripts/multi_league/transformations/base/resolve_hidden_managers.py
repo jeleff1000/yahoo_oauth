@@ -205,6 +205,28 @@ def update_manager_names(df: pd.DataFrame, guid_to_name: dict, table_name: str) 
                 if opponent_updates > 0:
                     print(f"    Fixed {opponent_updates} opponent references for hidden managers")
 
+    # Step 0b: Normalize opponent casing to match manager names
+    # Yahoo API sometimes returns opponents with different casing than manager names
+    # This breaks SQL joins (m1.opponent = m2.manager)
+    if 'opponent' in df.columns and 'manager' in df.columns:
+        # Build lowercase -> actual manager name mapping
+        manager_names = df['manager'].dropna().unique()
+        manager_case_map = {str(m).lower(): str(m) for m in manager_names}
+
+        # Fix opponent casing to match manager names
+        case_fixes = 0
+        for idx in df.index:
+            opp = df.at[idx, 'opponent']
+            if opp and pd.notna(opp):
+                opp_lower = str(opp).lower()
+                if opp_lower in manager_case_map:
+                    correct_name = manager_case_map[opp_lower]
+                    if str(opp) != correct_name:
+                        df.at[idx, 'opponent'] = correct_name
+                        case_fixes += 1
+        if case_fixes > 0:
+            print(f"    Fixed {case_fixes} opponent name casing issues")
+
     # Step 1: Build old_name -> new_name mapping from guid
     old_to_new = {}
     for idx, row in df.iterrows():
