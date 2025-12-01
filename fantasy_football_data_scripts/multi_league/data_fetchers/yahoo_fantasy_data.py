@@ -373,7 +373,8 @@ class YahooRosterFetcher:
         year: int,
         week: int,
         team_key: str,
-        manager_name: str
+        manager_name: str,
+        manager_guid: str = None
     ) -> List[Dict[str, Any]]:
         """
         Fetch roster for a specific team and week.
@@ -383,6 +384,7 @@ class YahooRosterFetcher:
             week: Week number
             team_key: Yahoo team key
             manager_name: Manager name
+            manager_guid: Yahoo user GUID (for cross-year identification)
 
         Returns:
             List of roster entries (one per player)
@@ -404,6 +406,7 @@ class YahooRosterFetcher:
                         'year': year,
                         'week': week,
                         'manager_name': manager_name,
+                        'manager_guid': manager_guid,
                         'team_key': team_key,
                     }
 
@@ -479,7 +482,7 @@ class YahooRosterFetcher:
         self,
         year: int,
         week: int,
-        teams: Dict[str, str]
+        teams: Dict[str, Dict[str, str]]
     ) -> pd.DataFrame:
         """
         Fetch all rosters for all teams for a specific week.
@@ -488,7 +491,7 @@ class YahooRosterFetcher:
         Args:
             year: Season year
             week: Week number
-            teams: Dict mapping team_key to manager_name
+            teams: Dict mapping team_key to dict with manager_name, manager_guid, team_name
 
         Returns:
             DataFrame with all roster data
@@ -502,7 +505,7 @@ class YahooRosterFetcher:
         self,
         year: int,
         week: int,
-        teams: Dict[str, str]
+        teams: Dict[str, Dict[str, str]]
     ) -> pd.DataFrame:
         """
         Fetch rosters individually for each team IN PARALLEL.
@@ -510,26 +513,30 @@ class YahooRosterFetcher:
         Args:
             year: Season year
             week: Week number
-            teams: Dict mapping team_key to manager_name
+            teams: Dict mapping team_key to dict with manager_name, manager_guid, team_name
 
         Returns:
             DataFrame with all roster data
         """
         all_rosters = []
 
-        def fetch_team_roster(team_key: str, manager_name: str):
+        def fetch_team_roster(team_key: str, team_info: Dict[str, str]):
             """Fetch roster for a single team (runs in parallel)"""
             try:
-                roster_data = self.fetch_roster_for_week(year, week, team_key, manager_name)
-                return (team_key, manager_name, True, roster_data)
+                roster_data = self.fetch_roster_for_week(
+                    year, week, team_key,
+                    team_info['manager_name'],
+                    team_info.get('manager_guid')
+                )
+                return (team_key, team_info['manager_name'], True, roster_data)
             except Exception as e:
-                return (team_key, manager_name, False, str(e))
+                return (team_key, team_info['manager_name'], False, str(e))
 
         # Parallel execution with max 3 workers (respects rate limiting with built-in _rate_limit_wait)
         with ThreadPoolExecutor(max_workers=3) as executor:
             future_to_team = {
-                executor.submit(fetch_team_roster, team_key, manager_name): (team_key, manager_name)
-                for team_key, manager_name in teams.items()
+                executor.submit(fetch_team_roster, team_key, team_info): (team_key, team_info['manager_name'])
+                for team_key, team_info in teams.items()
             }
 
             for future in as_completed(future_to_team):
@@ -596,7 +603,7 @@ class YahooRosterFetcher:
         self,
         year: int,
         weeks: List[int],
-        teams: Dict[str, str]
+        teams: Dict[str, Dict[str, str]]
     ) -> pd.DataFrame:
         """
         Fetch all weeks using optimized batch API calls.
@@ -642,7 +649,7 @@ class YahooRosterFetcher:
         self,
         year: int,
         weeks: List[int],
-        teams: Dict[str, str]
+        teams: Dict[str, Dict[str, str]]
     ) -> pd.DataFrame:
         """
         Fallback: Fetch rosters week by week using batch API for teams.

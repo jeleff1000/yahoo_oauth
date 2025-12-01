@@ -279,10 +279,13 @@ def extract_team(team_node: ET.Element, matchup_node: ET.Element = None, manager
     # Extract team_name first so it can be used as fallback for hidden managers
     team_name_raw = team_node.findtext("name") or ""
 
+    # Get manager guid (persistent identifier across years)
+    manager_guid = team_node.findtext(".//managers/manager/guid") or ""
+
     nickname = (
         team_node.findtext(".//managers/manager/nickname")
         or team_node.findtext(".//managers/manager/name")
-        or team_node.findtext(".//managers/manager/guid")
+        or manager_guid
         or ""
     )
     # Pass team_name as fallback for --hidden-- or missing manager names
@@ -348,6 +351,7 @@ def extract_team(team_node: ET.Element, matchup_node: ET.Element = None, manager
 
     return {
         'manager': manager,
+        'manager_guid': manager_guid,
         'team_name': team_name,
         'team_points': points,
         'team_projected_points': projected,

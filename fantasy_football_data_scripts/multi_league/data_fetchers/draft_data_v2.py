@@ -230,7 +230,7 @@ def fetch_team_and_player_mappings(
     league_id: str,
     timeout: int = 30,
     manager_name_overrides: Optional[Dict[str, str]] = None
-) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str]]:
+) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, str]]:
     """
     Fetch team and player mappings from Yahoo API.
 
@@ -241,9 +241,10 @@ def fetch_team_and_player_mappings(
         manager_name_overrides: Dict mapping team names/nicknames to real manager names
 
     Returns:
-        Tuple of (team_key_to_manager, player_id_to_name, player_id_to_team)
+        Tuple of (team_key_to_manager, team_key_to_guid, player_id_to_name, player_id_to_team)
     """
     team_key_to_manager = {}
+    team_key_to_guid = {}
     player_id_to_name = {}
     player_id_to_team = {}
 
@@ -266,6 +267,11 @@ def fetch_team_and_player_mappings(
             # Get raw nickname from manager element
             manager_elem = team_elem.find(".//manager/nickname")
             raw_nickname = manager_elem.text if manager_elem is not None else None
+
+            # Get manager guid (persistent identifier across years)
+            guid_elem = team_elem.find(".//manager/guid")
+            manager_guid = guid_elem.text if guid_elem is not None else None
+            team_key_to_guid[team_key] = manager_guid
 
             # Normalize manager name (handles --hidden-- with team_name fallback)
             manager_name = normalize_manager_name(
@@ -294,6 +300,7 @@ def fetch_team_and_player_mappings(
             raw_nickname = (root.findtext("team/managers/manager/nickname") or "").strip()
             team_name = (root.findtext("team/name") or "").strip()
             team_key = (root.findtext("team/team_key") or "").strip()
+            manager_guid = (root.findtext("team/managers/manager/guid") or "").strip()
 
             if team_key and team_key not in team_key_to_manager:
                 manager_name = normalize_manager_name(
@@ -302,6 +309,7 @@ def fetch_team_and_player_mappings(
                     team_name_fallback=team_name
                 )
                 team_key_to_manager[team_key] = manager_name
+                team_key_to_guid[team_key] = manager_guid if manager_guid else None
 
         players = root.findall("team/roster/players/player")
         player_ids = [p.findtext("player_id") for p in players if p.find("player_id") is not None]
@@ -336,7 +344,7 @@ def fetch_team_and_player_mappings(
 
         start += len(players)
 
-    return team_key_to_manager, player_id_to_name, player_id_to_team
+    return team_key_to_manager, team_key_to_guid, player_id_to_name, player_id_to_team
 
 
 def fetch_draft_analysis(oauth, league_id: str, year: int, timeout: int = 30) -> pd.DataFrame:
@@ -401,6 +409,7 @@ def merge_draft_data(
     picks: List[DraftPick],
     analysis_df: pd.DataFrame,
     team_key_to_manager: Dict[str, str],
+    team_key_to_guid: Dict[str, str],
     player_id_to_team: Dict[str, str],
     player_id_to_name: Dict[str, str],
     manager_name_overrides: Optional[Dict[str, str]] = None,
@@ -416,6 +425,7 @@ def merge_draft_data(
         picks: List of DraftPick objects
         analysis_df: DataFrame with draft analysis data
         team_key_to_manager: Dict mapping team keys to manager names
+        team_key_to_guid: Dict mapping team keys to manager GUIDs
         player_id_to_team: Dict mapping player IDs to NFL teams
         player_id_to_name: Dict mapping player IDs to player names
         manager_name_overrides: Optional dict to override manager names
@@ -428,6 +438,7 @@ def merge_draft_data(
 
     # Enrich picks with manager and team info
     picks_df['manager'] = picks_df['team_key'].map(team_key_to_manager).fillna("N/A")
+    picks_df['manager_guid'] = picks_df['team_key'].map(team_key_to_guid)
     picks_df['nfl_team'] = picks_df['yahoo_player_id'].map(player_id_to_team).fillna("N/A")
 
     # Backfill missing player names
@@ -488,7 +499,7 @@ def merge_draft_data(
 
     # Final column order (RAW DATA ONLY - no transformations)
     final_cols = [
-        'year', 'pick', 'round', 'team_key', 'manager', 'yahoo_player_id', 'cost',
+        'year', 'pick', 'round', 'team_key', 'manager', 'manager_guid', 'yahoo_player_id', 'cost',
         'player', 'yahoo_position', 'avg_pick', 'avg_round', 'avg_cost', 'percent_drafted',
         'preseason_avg_pick', 'preseason_avg_round', 'preseason_avg_cost', 'preseason_percent_drafted',
         'is_keeper_status', 'is_keeper_cost',
@@ -678,7 +689,7 @@ def fetch_draft_data(
         # Get manager_name_overrides from context (for --hidden-- fallback)
         manager_overrides = ctx.manager_name_overrides if ctx else {}
 
-        team_key_to_manager, player_id_to_name, player_id_to_team = \
+        team_key_to_manager, team_key_to_guid, player_id_to_name, player_id_to_team = \
             fetch_team_and_player_mappings(
                 oauth,
                 year_league_id,
@@ -723,6 +734,7 @@ def fetch_draft_data(
             picks,
             analysis_df,
             team_key_to_manager,
+            team_key_to_guid,
             player_id_to_team,
             player_id_to_name,
             manager_overrides,

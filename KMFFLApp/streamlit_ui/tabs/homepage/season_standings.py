@@ -86,81 +86,12 @@ class SeasonStandingsViewer:
                 border: none !important;
             }
 
-            /* Metric cards styling - static, no heavy shadows */
-            div[data-testid="stMetric"] {
-                background: var(--bg-secondary, #f8f9fa);
-                padding: var(--space-md, 1rem);
-                border-radius: var(--radius-md, 8px);
-                border: 1px solid var(--border, #e0e0e0);
-            }
-
-            /* Legend styling */
-            .standings-legend {
-                margin-top: var(--space-md, 1rem);
-                padding: var(--space-md, 1rem);
-                background: var(--bg-secondary, #f8f9fa);
-                border: 1px solid var(--border, #e0e0e0);
-                border-radius: var(--radius-md, 8px);
-            }
-
-            .legend-row {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin-top: var(--space-sm, 0.5rem);
-                align-items: center;
-            }
-
-            .legend-item {
-                padding: 4px 10px;
-                border-radius: var(--radius-sm, 4px);
-                font-size: 0.85rem;
-                font-weight: 500;
-                white-space: nowrap;
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-            }
-
-            .legend-label {
-                font-weight: 600;
-                margin-right: 8px;
-                color: var(--text-primary, #333333);
-            }
-
-            /* Mobile responsive legend */
-            @media (max-width: 768px) {
-                .legend-row {
-                    gap: 6px;
-                }
-                .legend-item {
-                    padding: 3px 8px;
-                    font-size: 0.75rem;
-                }
-                .legend-label {
-                    width: 100%;
-                    margin-bottom: 4px;
-                }
-            }
-
-            @media (max-width: 480px) {
-                .standings-legend {
-                    padding: var(--space-sm, 0.75rem);
-                }
-                .legend-item {
-                    padding: 2px 6px;
-                    font-size: 0.7rem;
-                }
-            }
             </style>
         """, unsafe_allow_html=True)
 
-        # Header row with toggle
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.markdown("### Current Standings")
-        with col2:
-            per_game = st.toggle("Per Game", value=False, key=f"{prefix}_aggregation_type")
+        # Header with inline controls
+        st.markdown("### Current Standings")
+        per_game = st.toggle("Per Game", value=False, key=f"{prefix}_aggregation_type")
 
         q = f"""
         WITH base AS (
@@ -294,23 +225,11 @@ class SeasonStandingsViewer:
             df_out = self.con.execute(q).fetchdf()
             years = sorted(df_out["Year"].unique())
 
-            # Year selector with better layout
-            col1, col2, col3 = st.columns([2, 2, 2])
-            with col1:
-                selected_year = st.selectbox(
-                    "Select Year", years, index=len(years)-1, key=f"{prefix}_year"
-                )
+            selected_year = st.selectbox(
+                "Year", years, index=len(years)-1, key=f"{prefix}_year"
+            )
 
             filtered = df_out[df_out["Year"] == selected_year]
-
-            # Add summary metrics
-            if not filtered.empty:
-                with col2:
-                    avg_pf = filtered["PF"].mean()
-                    st.metric("Avg Points For", f"{avg_pf:.1f}")
-                with col3:
-                    total_games = len(filtered)
-                    st.metric("Total Teams", total_games)
 
             if "Seed" in filtered.columns:
                 filtered = filtered.sort_values("Seed", ascending=True)
@@ -374,31 +293,18 @@ class SeasonStandingsViewer:
 
             st.dataframe(styled_df, use_container_width=True, hide_index=True, height=500)
 
-            # Theme-aware legend
-            st.markdown(f"""
-                <div class="standings-legend">
-                    <div class="legend-row">
-                        <span class="legend-label">Playoffs:</span>
-                        <span class="legend-item" style="background: {colors['gold']}; color: {colors['text_dark']};">Champion</span>
-                        <span class="legend-item" style="background: {colors['silver']}; color: {colors['text_dark']};">Runner-Up</span>
-                        <span class="legend-item" style="background: {colors['bronze']}; color: {colors['text_light']};">Lost Semis</span>
-                        <span class="legend-item" style="background: {colors['quarterfinal']}; color: {colors['text_light'] if is_dark else colors['text_dark']};">Lost Quarters</span>
+            # Compact legend
+            with st.expander("Legend", expanded=False):
+                st.markdown(f"""
+                    <div style='display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.8rem;'>
+                        <span style='background: {colors['gold']}; color: {colors['text_dark']}; padding: 2px 8px; border-radius: 4px;'>🏆 Champ</span>
+                        <span style='background: {colors['silver']}; color: {colors['text_dark']}; padding: 2px 8px; border-radius: 4px;'>2nd</span>
+                        <span style='background: {colors['bronze']}; color: {colors['text_light']}; padding: 2px 8px; border-radius: 4px;'>3rd/4th</span>
+                        <span style='background: {colors['green_1']}; color: {colors['text_dark']}; padding: 2px 8px; border-radius: 4px;'>Consolation W</span>
+                        <span style='background: {colors['gray_1']}; color: {colors['text_light']}; padding: 2px 8px; border-radius: 4px;'>Consolation L</span>
+                        <span style='background: {colors['sacko']}; color: {colors['text_light']}; padding: 2px 8px; border-radius: 4px;'>Sacko</span>
                     </div>
-                    <div class="legend-row">
-                        <span class="legend-label">Consolation:</span>
-                        <span class="legend-item" style="background: {colors['green_1']}; color: {colors['text_dark']};">3rd</span>
-                        <span class="legend-item" style="background: {colors['green_2']}; color: {colors['text_dark']};">5th</span>
-                        <span class="legend-item" style="background: {colors['green_3']}; color: {colors['text_dark']};">7th</span>
-                        <span class="legend-item" style="background: {colors['green_4']}; color: {colors['text_dark']};">9th</span>
-                    </div>
-                    <div class="legend-row">
-                        <span class="legend-label">Other:</span>
-                        <span class="legend-item" style="background: {colors['in_progress']}; color: {colors['text_light']};">In Progress</span>
-                        <span class="legend-item" style="background: {colors['missed']}; color: {colors['text_light']};">Missed Playoffs</span>
-                        <span class="legend-item" style="background: {colors['sacko']}; color: {colors['text_light']};">Sacko</span>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
         except Exception as e:
             st.error("Failed to build standings table from DuckDB.")
