@@ -397,41 +397,57 @@ def enrich_draft_with_player_stats(
         print(f"  Removing {len(cols_to_drop)} existing enrichment columns from previous run")
         draft_df = draft_df.drop(columns=cols_to_drop)
 
-    # CRITICAL: Filter player data to match draft league_id if present
-    # This prevents <NA> league_ids in metrics_df from blocking the merge
+    # CRITICAL: Determine if league_id should be used as a join key
+    # If player_df has ALL NA league_ids, we should NOT use it as a join key
+    # because it will cause dtype mismatches and failed joins
+    use_league_id_for_join = False
+
     if 'league_id' in draft_df.columns and 'league_id' in player_df.columns:
-        # Ensure league_id is string dtype (not Int64)
+        # Convert player league_id to string dtype (not Int64)
         if player_df['league_id'].dtype != 'string':
             player_df['league_id'] = player_df['league_id'].astype('string')
 
-        draft_league_id = draft_df['league_id'].iloc[0] if len(draft_df) > 0 else None
-        if draft_league_id and pd.notna(draft_league_id):
-            # Ensure draft_league_id is a string
-            draft_league_id = str(draft_league_id)
-            print(f"  Filtering player data to league: {draft_league_id}")
+        # Convert draft league_id to string dtype to match (CRITICAL for merge!)
+        if draft_df['league_id'].dtype != 'string':
+            draft_df['league_id'] = draft_df['league_id'].astype('string')
 
-            # Keep rows that either match the league_id OR have NA league_id (historical NFL data)
-            # Note: Check for both actual NA values AND the string '<NA>'
-            player_df = player_df[
-                (player_df['league_id'] == draft_league_id) |
-                (player_df['league_id'].isna()) |
-                (player_df['league_id'] == '<NA>')
-            ].copy()
-            # Fill NA league_ids (both actual NAs and '<NA>' strings) with the draft league_id
-            mask_na = player_df['league_id'].isna()
-            mask_str_na = player_df['league_id'] == '<NA>'
-            player_df.loc[mask_na | mask_str_na, 'league_id'] = draft_league_id
-            print(f"    Filtered to {len(player_df):,} player records")
+        # Check if player_df has ANY non-null league_ids
+        player_has_league_ids = player_df['league_id'].notna().any() and not (player_df['league_id'] == '<NA>').all()
 
-    # OPTIMIZED: Pre-aggregate player stats by (yahoo_player_id, year, league_id)
+        if player_has_league_ids:
+            # Player data has meaningful league_ids - use for filtering and joining
+            use_league_id_for_join = True
+            draft_league_id = draft_df['league_id'].iloc[0] if len(draft_df) > 0 else None
+            if draft_league_id and pd.notna(draft_league_id):
+                draft_league_id = str(draft_league_id)
+                print(f"  Filtering player data to league: {draft_league_id}")
+
+                # Keep rows that either match the league_id OR have NA league_id
+                player_df = player_df[
+                    (player_df['league_id'] == draft_league_id) |
+                    (player_df['league_id'].isna()) |
+                    (player_df['league_id'] == '<NA>')
+                ].copy()
+                # Fill NA league_ids with the draft league_id
+                mask_na = player_df['league_id'].isna()
+                mask_str_na = player_df['league_id'] == '<NA>'
+                player_df.loc[mask_na | mask_str_na, 'league_id'] = draft_league_id
+                print(f"    Filtered to {len(player_df):,} player records")
+        else:
+            # Player data has ALL NA league_ids - don't use for join
+            # This happens when player data is imported from NFL stats (not fantasy rosters)
+            print(f"  [INFO] Player data has all-NA league_ids - NOT using league_id for join")
+            use_league_id_for_join = False
+
+    # OPTIMIZED: Pre-aggregate player stats by (yahoo_player_id, year, [league_id])
     print("  Aggregating player stats by season...")
 
     # Determine points column
     points_col = 'fantasy_points' if 'fantasy_points' in player_df.columns else 'points'
 
-    # Group by keys (handle league_id if present)
+    # Group by keys (only include league_id if it has meaningful values)
     group_keys = ['yahoo_player_id', 'year']
-    if 'league_id' in player_df.columns:
+    if use_league_id_for_join:
         group_keys.append('league_id')
 
     # Aggregate stats
