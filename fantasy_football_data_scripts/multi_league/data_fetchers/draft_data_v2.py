@@ -247,7 +247,39 @@ def fetch_team_and_player_mappings(
     player_id_to_name = {}
     player_id_to_team = {}
 
-    # Fetch week 1 rosters for team/manager mappings
+    # Step 1: Fetch teams from /league/{league_id}/teams endpoint
+    # This endpoint reliably returns both team name and manager info
+    try:
+        teams_url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{league_id}/teams"
+        root = fetch_url(teams_url, oauth)
+
+        for team_elem in root.findall(".//team"):
+            team_key_elem = team_elem.find("team_key")
+            if team_key_elem is None:
+                continue
+            team_key = team_key_elem.text
+
+            # Get team name (used as fallback for --hidden-- managers)
+            team_name_elem = team_elem.find("name")
+            team_name = team_name_elem.text if team_name_elem is not None else None
+
+            # Get raw nickname from manager element
+            manager_elem = team_elem.find(".//manager/nickname")
+            raw_nickname = manager_elem.text if manager_elem is not None else None
+
+            # Normalize manager name (handles --hidden-- with team_name fallback)
+            manager_name = normalize_manager_name(
+                nickname=raw_nickname,
+                overrides=manager_name_overrides,
+                team_name_fallback=team_name
+            )
+            team_key_to_manager[team_key] = manager_name
+
+        print(f"[draft] Fetched {len(team_key_to_manager)} teams from /teams endpoint")
+    except (APITimeoutError, RecoverableAPIError) as e:
+        print(f"[draft] Warning: Could not fetch teams from /teams endpoint: {e}")
+
+    # Step 2: Fetch player mappings from week 1 rosters (for players on rosters)
     for i in range(1, 20):  # Support up to 20 teams
         try:
             root = fetch_url(
@@ -257,19 +289,19 @@ def fetch_team_and_player_mappings(
         except (APITimeoutError, RecoverableAPIError):
             continue
 
-        # Get raw nickname and team name
-        raw_nickname = (root.findtext("team/managers/manager/nickname") or "").strip()
-        team_name = (root.findtext("team/name") or "").strip()
-        team_key = (root.findtext("team/team_key") or "").strip()
+        # If we didn't get team mappings from /teams endpoint, try to get them here
+        if not team_key_to_manager:
+            raw_nickname = (root.findtext("team/managers/manager/nickname") or "").strip()
+            team_name = (root.findtext("team/name") or "").strip()
+            team_key = (root.findtext("team/team_key") or "").strip()
 
-        if team_key:
-            # Normalize manager name (handles --hidden-- with team_name fallback)
-            manager_name = normalize_manager_name(
-                nickname=raw_nickname if raw_nickname else None,
-                overrides=manager_name_overrides,
-                team_name_fallback=team_name
-            )
-            team_key_to_manager[team_key] = manager_name
+            if team_key and team_key not in team_key_to_manager:
+                manager_name = normalize_manager_name(
+                    nickname=raw_nickname if raw_nickname else None,
+                    overrides=manager_name_overrides,
+                    team_name_fallback=team_name
+                )
+                team_key_to_manager[team_key] = manager_name
 
         players = root.findall("team/roster/players/player")
         player_ids = [p.findtext("player_id") for p in players if p.find("player_id") is not None]
@@ -281,7 +313,7 @@ def fetch_team_and_player_mappings(
                 player_id_to_name[pid] = name
                 player_id_to_team[pid] = tabbr
 
-    # Fetch all players (paginated)
+    # Step 3: Fetch all players (paginated) for comprehensive player mapping
     start = 0
     while True:
         try:
