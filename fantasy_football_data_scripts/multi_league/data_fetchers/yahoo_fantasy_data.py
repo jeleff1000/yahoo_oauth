@@ -242,12 +242,15 @@ class YahooRosterFetcher:
 
         raise RuntimeError(f"Failed to fetch URL after {self.max_retries} attempts: {last_error}")
 
-    def fetch_teams(self) -> Dict[str, str]:
+    def fetch_teams(self) -> Dict[str, Dict[str, str]]:
         """
         Fetch all teams in the league.
 
         Returns:
-            Dict mapping team_key to normalized manager_name
+            Dict mapping team_key to dict with:
+                - manager_name: Normalized manager name
+                - manager_guid: Yahoo user GUID (for cross-year identification)
+                - team_name: Raw team name
         """
         url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{self.league_id}/teams"
 
@@ -268,6 +271,10 @@ class YahooRosterFetcher:
                 manager_elem = team_elem.find(".//manager/nickname")
                 raw_nickname = manager_elem.text if manager_elem is not None else None
 
+                # Get manager GUID (persistent identifier across years)
+                guid_elem = team_elem.find(".//manager/guid")
+                manager_guid = guid_elem.text if guid_elem is not None else None
+
                 # Get team name (used as fallback for --hidden-- managers)
                 name_elem = team_elem.find("name")
                 team_name = name_elem.text if name_elem is not None else None
@@ -279,11 +286,15 @@ class YahooRosterFetcher:
                     team_name_fallback=team_name
                 )
 
-                teams[team_key] = manager_name
+                teams[team_key] = {
+                    'manager_name': manager_name,
+                    'manager_guid': manager_guid,
+                    'team_name': team_name
+                }
 
             log(f"Found {len(teams)} teams")
-            for team_key, manager_name in teams.items():
-                log(f"  {team_key}: {manager_name}")
+            for team_key, info in teams.items():
+                log(f"  {team_key}: {info['manager_name']} (guid: {info['manager_guid'][:8] if info['manager_guid'] else 'N/A'}...)")
 
             return teams
 

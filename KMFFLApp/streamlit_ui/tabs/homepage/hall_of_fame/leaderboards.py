@@ -69,33 +69,19 @@ class LeaderboardsViewer:
                 st.info("No career data available")
                 return
 
-            # Top 3 with big cards
-            st.markdown("#### 🏆 Top 3 All-Time")
+            # Top 3 compact
             cols = st.columns(3)
+            medals = ["🥇", "🥈", "🥉"]
             for i, col in enumerate(cols):
                 if i < len(leaders):
                     row = leaders.iloc[i]
-                    if i == 0:
-                        border = "#FFD700"
-                        medal = "🥇"
-                    elif i == 1:
-                        border = "#C0C0C0"
-                        medal = "🥈"
-                    else:
-                        border = "#CD7F32"
-                        medal = "🥉"
-
+                    rings = "🏆" * int(row['championships']) if row['championships'] > 0 else ""
                     with col:
                         st.markdown(f"""
-                            <div class='hof-leader-card' style='border: 2px solid {border};'>
-                                <div class='leader-medal'>{medal}</div>
-                                <div class='leader-name'>{row['manager']}</div>
-                                <div class='leader-score'>{row['total_points']:,.0f}</div>
-                                <div class='leader-label'>Total Points</div>
-                                <div style='font-size: 0.7rem; margin-top: 0.25rem; color: var(--text-muted);'>
-                                    PPG: <b>{row['ppg']:.1f}</b> · Win%: <b>{row['win_pct']:.0f}%</b><br>
-                                    Rings: <b>{int(row['championships'])}</b> · Games: <b>{int(row['total_games'])}</b>
-                                </div>
+                            <div style='text-align: center; padding: 0.5rem;'>
+                                <div style='font-size: 1.1rem;'>{medals[i]} <b>{row['manager']}</b></div>
+                                <div style='color: var(--success); font-weight: 700;'>{row['total_points']:,.0f} pts</div>
+                                <div style='font-size: 0.75rem; color: var(--text-muted);'>{row['ppg']:.1f} PPG · {row['win_pct']:.0f}% {rings}</div>
                             </div>
                         """, unsafe_allow_html=True)
 
