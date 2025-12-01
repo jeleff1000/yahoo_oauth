@@ -220,6 +220,17 @@ def main(args):
     # =========================================================================
     print("\n[SPAR] Adding SPAR columns to player.parquet...")
 
+    # Drop any existing SPAR-related columns from player_df
+    # (player_stats_v2.py adds placeholder columns when replacement_levels.parquet doesn't exist)
+    spar_cols_to_drop = [
+        'replacement_ppg', 'replacement_ppg_season',
+        'player_spar', 'manager_spar', 'spar_season'
+    ]
+    existing_spar_cols = [c for c in spar_cols_to_drop if c in player_df.columns]
+    if existing_spar_cols:
+        print(f"   Dropping existing SPAR placeholder columns: {existing_spar_cols}")
+        player_df = player_df.drop(columns=existing_spar_cols)
+
     # Merge weekly replacement levels to player data
     player_with_spar = player_df.merge(
         combined_df[['year', 'week', 'position', 'replacement_ppg', 'replacement_ppg_season']],
