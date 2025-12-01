@@ -13,81 +13,113 @@ import streamlit as st
 
 
 def load_custom_css():
-    """Load custom CSS styles for the application."""
+    """Load custom CSS styles for the application (supports light/dark mode and mobile)."""
     st.markdown("""
     <style>
     /* Import Google Fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+    /* CSS Variables for theming - adapts to Streamlit's theme */
+    :root {
+        --card-bg: rgba(255, 255, 255, 0.95);
+        --card-border: rgba(0, 0, 0, 0.1);
+        --text-primary: inherit;
+        --text-secondary: rgba(0, 0, 0, 0.6);
+        --accent-color: #667eea;
+        --accent-light: rgba(102, 126, 234, 0.1);
+    }
+
+    /* Dark mode overrides - detect via Streamlit's data-theme or prefers-color-scheme */
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --card-bg: rgba(30, 30, 30, 0.95);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-primary: inherit;
+            --text-secondary: rgba(255, 255, 255, 0.6);
+            --accent-light: rgba(102, 126, 234, 0.2);
+        }
+    }
+
+    /* Streamlit dark theme detection */
+    [data-testid="stAppViewContainer"][data-theme="dark"],
+    .stApp[data-theme="dark"] {
+        --card-bg: rgba(30, 30, 30, 0.95);
+        --card-border: rgba(255, 255, 255, 0.1);
+        --text-secondary: rgba(255, 255, 255, 0.6);
+        --accent-light: rgba(102, 126, 234, 0.2);
+    }
+
     /* Global styles */
     .main {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
     /* Hero section */
     .hero {
         text-align: center;
-        padding: 3rem 1rem;
+        padding: 2rem 1rem;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 1rem;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
         color: white;
     }
 
     .hero h1 {
-        font-size: 3rem;
+        font-size: clamp(1.75rem, 5vw, 3rem);
         font-weight: 700;
-        margin-bottom: 1rem;
+        margin-bottom: 0.75rem;
         text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        line-height: 1.2;
     }
 
     .hero p {
-        font-size: 1.2rem;
+        font-size: clamp(0.95rem, 2.5vw, 1.2rem);
         opacity: 0.95;
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
     }
 
-    /* Feature cards */
+    /* Feature cards - theme aware */
     .feature-card {
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
         border-radius: 0.75rem;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
+        padding: 1.25rem;
+        margin-bottom: 0.75rem;
         transition: all 0.3s ease;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
     .feature-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        border-color: #667eea;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-color: var(--accent-color);
     }
 
     .feature-icon {
-        font-size: 2rem;
+        font-size: 1.75rem;
         margin-bottom: 0.5rem;
     }
 
     .feature-title {
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 600;
         margin-bottom: 0.5rem;
-        color: #1a202c;
+        color: var(--text-primary);
     }
 
     .feature-desc {
-        color: #718096;
-        font-size: 0.9rem;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        line-height: 1.4;
     }
 
-    /* Status badge */
+    /* Status badge - consistent colors for visibility */
     .status-badge {
         display: inline-block;
         padding: 0.25rem 0.75rem;
         border-radius: 9999px;
-        font-size: 0.875rem;
-        font-weight: 500;
+        font-size: 0.8rem;
+        font-weight: 600;
         margin: 0.25rem;
     }
 
@@ -111,60 +143,70 @@ def load_custom_css():
         color: #991b1b;
     }
 
-    /* Job card */
+    /* Job card - theme aware */
     .job-card {
-        background: linear-gradient(135deg, #f6f8fc 0%, #ffffff 100%);
-        border-left: 4px solid #667eea;
+        background: var(--card-bg);
+        border-left: 4px solid var(--accent-color);
         border-radius: 0.5rem;
-        padding: 1.5rem;
+        padding: 1.25rem;
         margin: 1rem 0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .job-card h3 {
+        color: var(--text-primary);
+        margin-bottom: 0.75rem;
+    }
+
+    .job-card p {
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
     }
 
     .job-id {
         font-family: 'Courier New', monospace;
-        background: #f1f5f9;
+        background: var(--accent-light);
         padding: 0.25rem 0.5rem;
         border-radius: 0.25rem;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
     }
 
-    /* Stats grid */
+    /* Stats grid - responsive */
     .stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin: 1.5rem 0;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 0.75rem;
+        margin: 1rem 0;
     }
 
     .stat-card {
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
         border-radius: 0.5rem;
-        padding: 1.25rem;
+        padding: 1rem;
         text-align: center;
     }
 
     .stat-value {
-        font-size: 2rem;
+        font-size: clamp(1.5rem, 4vw, 2rem);
         font-weight: 700;
-        color: #667eea;
+        color: var(--accent-color);
         margin-bottom: 0.25rem;
     }
 
     .stat-label {
-        color: #718096;
-        font-size: 0.9rem;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
 
-    /* Timeline */
+    /* Timeline - theme aware */
     .timeline-item {
         position: relative;
         padding-left: 2rem;
-        padding-bottom: 1.5rem;
-        border-left: 2px solid #e2e8f0;
+        padding-bottom: 1.25rem;
+        border-left: 2px solid var(--card-border);
     }
 
     .timeline-item:last-child {
@@ -177,13 +219,23 @@ def load_custom_css():
         width: 1rem;
         height: 1rem;
         border-radius: 50%;
-        background: #667eea;
-        border: 2px solid white;
-        box-shadow: 0 0 0 3px #e2e8f0;
+        background: var(--accent-color);
+        border: 2px solid var(--card-bg);
+        box-shadow: 0 0 0 2px var(--card-border);
     }
 
     .timeline-content {
         margin-top: -0.25rem;
+    }
+
+    .timeline-content strong {
+        color: var(--text-primary);
+    }
+
+    .timeline-content p {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        margin-top: 0.25rem;
     }
 
     /* Button enhancements */
@@ -206,6 +258,47 @@ def load_custom_css():
 
     .loading {
         animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    /* Mobile-specific adjustments */
+    @media (max-width: 768px) {
+        .hero {
+            padding: 1.5rem 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card {
+            padding: 1rem;
+        }
+
+        .feature-icon {
+            font-size: 1.5rem;
+        }
+
+        .job-card {
+            padding: 1rem;
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .timeline-item {
+            padding-left: 1.5rem;
+        }
+    }
+
+    /* Extra small screens */
+    @media (max-width: 480px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.5rem;
+        }
     }
 
     /* Hide Streamlit branding */
@@ -262,33 +355,33 @@ def render_job_card(job_id: str, league_name: str, status: str):
 def render_timeline():
     """Render a timeline showing the import process steps."""
     st.markdown("""
-    <div style="margin: 2rem 0;">
+    <div style="margin: 1.5rem 0;">
         <div class="timeline-item">
             <div class="timeline-dot"></div>
             <div class="timeline-content">
                 <strong>Step 1: Connect</strong>
-                <p style="color: #718096; font-size: 0.9rem;">Authenticate with your Yahoo account</p>
+                <p>Authenticate with your Yahoo account</p>
             </div>
         </div>
         <div class="timeline-item">
             <div class="timeline-dot"></div>
             <div class="timeline-content">
                 <strong>Step 2: Select</strong>
-                <p style="color: #718096; font-size: 0.9rem;">Choose your league and season</p>
+                <p>Choose your league and season</p>
             </div>
         </div>
         <div class="timeline-item">
             <div class="timeline-dot"></div>
             <div class="timeline-content">
                 <strong>Step 3: Import</strong>
-                <p style="color: #718096; font-size: 0.9rem;">Queue your data for processing</p>
+                <p>Queue your data for processing</p>
             </div>
         </div>
         <div class="timeline-item">
             <div class="timeline-dot"></div>
             <div class="timeline-content">
                 <strong>Step 4: Analyze</strong>
-                <p style="color: #718096; font-size: 0.9rem;">Query your data from anywhere</p>
+                <p>Query your data from anywhere</p>
             </div>
         </div>
     </div>
