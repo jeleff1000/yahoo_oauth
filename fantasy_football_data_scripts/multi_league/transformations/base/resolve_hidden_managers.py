@@ -349,7 +349,7 @@ def resolve_hidden_managers(ctx: LeagueContext, dry_run: bool = False) -> dict:
                 print(f"  {table_name}: {potential_updates:,} potential updates")
         return stats
 
-    # Update each table
+    # Update each table with GUID-based name resolution
     print("\n[Updating] Manager names in each table...")
     for table_name, df in dataframes.items():
         if df is None:
@@ -358,16 +358,71 @@ def resolve_hidden_managers(ctx: LeagueContext, dry_run: bool = False) -> dict:
         updated_df, num_updates = update_manager_names(df, guid_to_name, table_name)
         stats['tables_updated'][table_name] = num_updates
         stats['total_updates'] += num_updates
+        dataframes[table_name] = updated_df  # Keep updated df for canonical name building
 
-        if num_updates > 0:
-            # Save updated table
+    # Build canonical manager name list from matchup (has correct casing from team_name)
+    # Then apply to ALL tables to ensure consistency
+    print("\n[Normalizing] Manager/opponent casing across all tables...")
+    canonical_names = {}  # lowercase -> canonical name
+    if 'matchup' in dataframes and dataframes['matchup'] is not None:
+        matchup_df = dataframes['matchup']
+        if 'manager' in matchup_df.columns:
+            for name in matchup_df['manager'].dropna().unique():
+                canonical_names[str(name).lower()] = str(name)
+            print(f"  Built canonical name list from matchup: {len(canonical_names)} names")
+
+    # Apply canonical names to all tables
+    if canonical_names:
+        for table_name, df in dataframes.items():
+            if df is None:
+                continue
+
+            table_fixes = 0
+
+            # Fix manager column
+            if 'manager' in df.columns:
+                for idx in df.index:
+                    mgr = df.at[idx, 'manager']
+                    if mgr and pd.notna(mgr):
+                        mgr_lower = str(mgr).lower()
+                        if mgr_lower in canonical_names and str(mgr) != canonical_names[mgr_lower]:
+                            df.at[idx, 'manager'] = canonical_names[mgr_lower]
+                            table_fixes += 1
+
+            # Fix opponent column
+            if 'opponent' in df.columns:
+                for idx in df.index:
+                    opp = df.at[idx, 'opponent']
+                    if opp and pd.notna(opp):
+                        opp_lower = str(opp).lower()
+                        if opp_lower in canonical_names and str(opp) != canonical_names[opp_lower]:
+                            df.at[idx, 'opponent'] = canonical_names[opp_lower]
+                            table_fixes += 1
+
+            if table_fixes > 0:
+                print(f"    {table_name}: fixed {table_fixes} name casing issues")
+                dataframes[table_name] = df
+                stats['tables_updated'][table_name] = stats['tables_updated'].get(table_name, 0) + table_fixes
+                stats['total_updates'] += table_fixes
+
+    # Save all updated tables
+    print("\n[Saving] Updated tables...")
+    for table_name, df in dataframes.items():
+        if df is None:
+            continue
+
+        total_updates = stats['tables_updated'].get(table_name, 0)
+        if total_updates > 0:
             file_path = tables[table_name]
-            updated_df.to_parquet(file_path, index=False)
-            print(f"  {table_name}: Updated {num_updates:,} rows -> {file_path.name}")
+            df.to_parquet(file_path, index=False)
+            print(f"  {table_name}: Saved {total_updates:,} updates -> {file_path.name}")
 
             # Also save CSV version
             csv_path = file_path.with_suffix('.csv')
-            updated_df.to_csv(csv_path, index=False)
+            try:
+                df.to_csv(csv_path, index=False)
+            except Exception:
+                pass  # CSV save is optional
         else:
             print(f"  {table_name}: No updates needed")
 
