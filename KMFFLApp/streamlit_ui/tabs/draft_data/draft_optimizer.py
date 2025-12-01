@@ -17,6 +17,27 @@ from scipy import stats as scipy_stats
 from md.data_access import run_query, T, detect_roster_structure
 from typing import Dict, Optional
 
+# League Intelligence imports
+try:
+    from .league_intelligence import LeagueIntelligence
+    from .optimizer_ui_enhancements import (
+        render_league_insights_panel,
+        render_position_efficiency_badges,
+        enhance_bench_recommendations
+    )
+    LEAGUE_INTELLIGENCE_AVAILABLE = True
+except ImportError:
+    try:
+        from league_intelligence import LeagueIntelligence
+        from optimizer_ui_enhancements import (
+            render_league_insights_panel,
+            render_position_efficiency_badges,
+            enhance_bench_recommendations
+        )
+        LEAGUE_INTELLIGENCE_AVAILABLE = True
+    except ImportError:
+        LEAGUE_INTELLIGENCE_AVAILABLE = False
+
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def detect_roster_config() -> dict:
@@ -1436,6 +1457,13 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
     st.header("🔧 Draft Optimizer")
     st.caption("Build your optimal roster using historical performance data.")
 
+    # === LEAGUE INTELLIGENCE PANEL ===
+    league_insights = None
+    if LEAGUE_INTELLIGENCE_AVAILABLE:
+        league_insights = render_league_insights_panel(draft_history)
+        if league_insights:
+            st.markdown("---")
+
     # Validate data
     required_cols = ["yahoo_position", "cost_bucket", "year", "cost", "season_ppg"]
     missing = [col for col in required_cols if col not in draft_history.columns]
@@ -2051,6 +2079,18 @@ def display_draft_tracker(optimal_draft, budget, remaining_budget, filled_picks,
     slots_filled = len(filled_picks)
     slots_remaining = total_slots - slots_filled
 
+    # === VISUAL PROGRESS ===
+    progress_pct = slots_filled / total_slots if total_slots > 0 else 0
+    budget_pct = total_spent / budget if budget > 0 else 0
+    expected_budget_pct = slots_filled / total_slots if total_slots > 0 else 0
+
+    if budget_pct > expected_budget_pct + 0.15:
+        st.warning(f"⚠️ Spending ahead of pace ({budget_pct:.0%} budget, {progress_pct:.0%} picks)")
+    elif budget_pct < expected_budget_pct - 0.15 and slots_filled > 2:
+        st.info(f"💰 Budget available ({budget_pct:.0%} spent, {progress_pct:.0%} picks)")
+
+    st.progress(progress_pct, text=f"Draft Progress: {slots_filled}/{total_slots} picks")
+
     # === COMPACT STATUS BAR ===
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -2117,8 +2157,8 @@ def display_draft_tracker(optimal_draft, budget, remaining_budget, filled_picks,
                 position_cap = caps[slot_num]
                 max_cost = min(max_cost, position_cap)
 
-    # Compact add pick row
-    col1, col2, col3 = st.columns([3, 2, 1])
+    # Compact add pick row with player name
+    col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
 
     with col1:
         if available_slots:
@@ -2128,13 +2168,16 @@ def display_draft_tracker(optimal_draft, budget, remaining_budget, filled_picks,
 
     with col2:
         if available_slots:
-            cap_hint = f"max ${position_cap}" if position_cap and position_cap < 100 else f"max ${max_cost}"
-            cost_input = st.number_input(cap_hint, min_value=1, max_value=max(1, max_cost), value=min(1, max_cost), key="add_cost", label_visibility="collapsed")
+            player_name = st.text_input("Player", "", key="player_name", placeholder="e.g. Josh Allen", label_visibility="collapsed")
 
     with col3:
         if available_slots:
+            cost_input = st.number_input(f"${max_cost}", min_value=1, max_value=max(1, max_cost), value=min(1, max_cost), key="add_cost", label_visibility="collapsed")
+
+    with col4:
+        if available_slots:
             add_disabled = cost_input > max_cost or max_cost < 1
-            if st.button("➕ Add", type="primary", disabled=add_disabled, key="add_pick_btn", use_container_width=True):
+            if st.button("➕", type="primary", disabled=add_disabled, key="add_pick_btn", use_container_width=True, help="Add pick"):
                 if slot_choice:
                     if slot_choice.startswith('FLEX'):
                         position = slot_choice.split('(')[1].replace(')', '')
@@ -2154,6 +2197,7 @@ def display_draft_tracker(optimal_draft, budget, remaining_budget, filled_picks,
                         'slot_type': slot_type,
                         'is_flex': is_flex,
                         'cost': cost_input,
+                        'player': player_name if 'player_name' in dir() and player_name else None,
                     }
                     st.session_state.draft_tracker['filled_picks'].append(new_pick)
                     st.rerun(scope="fragment")
@@ -2163,31 +2207,62 @@ def display_draft_tracker(optimal_draft, budget, remaining_budget, filled_picks,
         st.markdown("---")
         st.subheader("✅ Filled Picks")
 
-        filled_df = pd.DataFrame([
-            {
-                '#': i + 1,
-                'Slot': f"FLEX ({p['position']})" if p.get('is_flex') else f"BN ({p['position']})" if p['slot_type'] == 'bench' else p['position'],
-                'Cost': f"${p['cost']:.0f}",
-            }
-            for i, p in enumerate(filled_picks)
-        ])
+        for i, p in enumerate(filled_picks):
+            slot_label = (f"FLEX ({p['position']})" if p.get('is_flex')
+                         else f"BN ({p['position']})" if p['slot_type'] == 'bench'
+                         else p['position'])
+            player_label = p.get('player', '') or ''
 
-        col1, col2 = st.columns([4, 1])
-        with col1:
-            st.dataframe(filled_df, hide_index=True, use_container_width=True)
-        with col2:
-            if st.button("🗑️ Remove Last", key="remove_last"):
-                if st.session_state.draft_tracker['filled_picks']:
-                    st.session_state.draft_tracker['filled_picks'].pop()
+            col1, col2, col3, col4 = st.columns([1, 2, 1, 0.5])
+            with col1:
+                st.write(f"**{slot_label}**")
+            with col2:
+                st.write(player_label if player_label else "—")
+            with col3:
+                st.write(f"${p['cost']:.0f}")
+            with col4:
+                if st.button("🗑️", key=f"del_{i}", help="Remove this pick"):
+                    st.session_state.draft_tracker['filled_picks'].pop(i)
                     st.rerun(scope="fragment")
-            if st.button("🔄 Reset All", key="reset_all"):
-                st.session_state.draft_tracker['filled_picks'] = []
-                st.rerun(scope="fragment")
+
+        picks_total = sum(p['cost'] for p in filled_picks)
+        st.caption(f"**Total: ${picks_total:.0f}** ({len(filled_picks)} picks)")
+
+        if st.button("🔄 Reset All Picks", key="reset_all"):
+            st.session_state.draft_tracker['filled_picks'] = []
+            st.rerun(scope="fragment")
 
     # === OPTIMAL PLAN ===
     st.markdown("---")
 
     if optimal_draft is not None and len(optimal_draft) > 0:
+        # Highlight NEXT recommended pick
+        next_row = optimal_draft.iloc[0]
+        next_pos = next_row['yahoo_position']
+        next_cost = next_row['avg_cost']
+        next_spar = next_row.get('median_spar', 0) if 'median_spar' in optimal_draft.columns else 0
+
+        is_bench = next_row.get('is_bench', False) if 'is_bench' in optimal_draft.columns else False
+        is_flex = next_row.get('is_flex', False) if 'is_flex' in optimal_draft.columns else False
+
+        if is_bench:
+            next_label = f"BN ({next_pos})"
+        elif is_flex:
+            next_label = f"FLEX ({next_pos})"
+        else:
+            next_label = next_pos
+
+        st.markdown("### 🎯 Next Pick")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Position", next_label)
+        with col2:
+            st.metric("Target", f"${next_cost:.0f}")
+        with col3:
+            st.metric("Exp. SPAR", f"{next_spar:.1f}")
+
+        st.markdown("---")
+
         st.markdown(f"**Optimal Plan** — {slots_remaining} slots, ${remaining_budget:.0f} remaining")
 
         # Build display dataframe
@@ -2208,6 +2283,7 @@ def display_draft_tracker(optimal_draft, budget, remaining_budget, filled_picks,
             rows.append({
                 'Slot': slot_label,
                 'Target': f"${row['avg_cost']:.0f}",
+                'SPAR': round(row.get("median_spar", 0), 1),
                 'PPG': round(row.get("median_ppg", 0), 1),
             })
 
@@ -2219,7 +2295,46 @@ def display_draft_tracker(optimal_draft, budget, remaining_budget, filled_picks,
 
     elif slots_remaining == 0:
         st.success("🎉 Draft Complete! All slots filled.")
-        st.metric("Total Spent", f"${total_spent:.0f}")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Spent", f"${total_spent:.0f}")
+        with col2:
+            st.metric("Remaining", f"${budget - total_spent:.0f}")
+        with col3:
+            st.metric("Picks", f"{len(filled_picks)}")
+
+        st.markdown("---")
+        st.subheader("📥 Export Your Draft")
+
+        export_df = pd.DataFrame([
+            {
+                'Pick': i + 1,
+                'Slot': (f"FLEX ({p['position']})" if p.get('is_flex')
+                        else f"BN ({p['position']})" if p['slot_type'] == 'bench'
+                        else p['position']),
+                'Player': p.get('player', '') or '',
+                'Cost': p['cost'],
+            }
+            for i, p in enumerate(filled_picks)
+        ])
+
+        col1, col2 = st.columns(2)
+        with col1:
+            csv_data = export_df.to_csv(index=False)
+            st.download_button(
+                "📄 Download CSV",
+                csv_data,
+                file_name="my_draft.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        with col2:
+            text_format = "\n".join([
+                f"{r['Slot']}: {r['Player'] or '(unnamed)'} - ${r['Cost']}"
+                for _, r in export_df.iterrows()
+            ])
+            st.text_area("Copy Draft", text_format, height=150)
     else:
         st.warning("No optimization result - check constraints.")
 
