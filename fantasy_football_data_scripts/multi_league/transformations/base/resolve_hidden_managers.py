@@ -127,6 +127,9 @@ def update_manager_names(df: pd.DataFrame, guid_to_name: dict, table_name: str) 
     - opponent column (by name matching, since opponent doesn't have guid)
     - manager_year and manager_week composite keys
 
+    For hidden managers (GUID = '--'), uses team_name as manager name to keep
+    them as separate individuals.
+
     Args:
         df: DataFrame with manager and manager_guid columns
         guid_to_name: Dict mapping guid -> unified manager name
@@ -142,6 +145,65 @@ def update_manager_names(df: pd.DataFrame, guid_to_name: dict, table_name: str) 
         return df, 0
 
     df = df.copy()
+    hidden_updates = 0  # Track hidden manager fixes
+
+    # Step 0: Fix hidden managers - use team_name as manager name
+    # This keeps different hidden managers as separate people
+    if 'team_name' in df.columns:
+        hidden_mask = df['manager_guid'] == '--'
+        for idx in df.index[hidden_mask]:
+            team_name = df.at[idx, 'team_name']
+            old_name = df.at[idx, 'manager']
+            if team_name and pd.notna(team_name) and str(team_name).strip():
+                new_name = str(team_name).strip()
+                if old_name != new_name:
+                    df.at[idx, 'manager'] = new_name
+                    hidden_updates += 1
+
+                    # Recalculate composite keys
+                    new_name_no_spaces = new_name.replace(" ", "")
+
+                    if 'manager_year' in df.columns and 'year' in df.columns:
+                        year_val = df.at[idx, 'year']
+                        if pd.notna(year_val):
+                            df.at[idx, 'manager_year'] = f"{new_name_no_spaces}{int(year_val)}"
+
+                    if 'manager_week' in df.columns and 'cumulative_week' in df.columns:
+                        cw = df.at[idx, 'cumulative_week']
+                        if pd.notna(cw):
+                            df.at[idx, 'manager_week'] = f"{new_name_no_spaces}{int(cw)}"
+
+        if hidden_updates > 0:
+            print(f"    Fixed {hidden_updates} hidden manager names using team_name")
+
+            # Build mapping of hidden manager old names to new names for opponent updates
+            # Multiple hidden managers may share the same old name, so we need per-row matching
+            # Create lookup: (year, week, old_manager_name, team_points) -> new_name
+            hidden_lookup = {}
+            for idx in df.index[hidden_mask]:
+                team_name = df.at[idx, 'team_name']
+                if team_name and pd.notna(team_name) and str(team_name).strip():
+                    # Use combination of identifying fields to uniquely identify
+                    year = df.at[idx, 'year'] if 'year' in df.columns else None
+                    week = df.at[idx, 'week'] if 'week' in df.columns else None
+                    pts = df.at[idx, 'team_points'] if 'team_points' in df.columns else None
+                    hidden_lookup[(year, week, pts)] = str(team_name).strip()
+
+            # Update opponent names for hidden managers
+            if 'opponent' in df.columns and 'opponent_points' in df.columns:
+                opponent_updates = 0
+                for idx in df.index:
+                    opp = df.at[idx, 'opponent']
+                    if opp == 'I Like Ceeeereal':  # Only fix the conflated name
+                        year = df.at[idx, 'year'] if 'year' in df.columns else None
+                        week = df.at[idx, 'week'] if 'week' in df.columns else None
+                        opp_pts = df.at[idx, 'opponent_points']
+                        # Opponent's team_points = our opponent_points
+                        if (year, week, opp_pts) in hidden_lookup:
+                            df.at[idx, 'opponent'] = hidden_lookup[(year, week, opp_pts)]
+                            opponent_updates += 1
+                if opponent_updates > 0:
+                    print(f"    Fixed {opponent_updates} opponent references for hidden managers")
 
     # Step 1: Build old_name -> new_name mapping from guid
     old_to_new = {}
@@ -157,11 +219,8 @@ def update_manager_names(df: pd.DataFrame, guid_to_name: dict, table_name: str) 
             if old_name != new_name and old_name not in old_to_new:
                 old_to_new[old_name] = new_name
 
-    if not old_to_new:
-        return df, 0
-
     # Step 2: Update manager column using guid (most accurate)
-    updates = 0
+    updates = hidden_updates  # Start with hidden manager fixes
     for idx, row in df.iterrows():
         guid = row.get('manager_guid')
         # Skip invalid GUIDs - don't unify hidden managers
