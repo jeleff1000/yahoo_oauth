@@ -857,7 +857,7 @@ class H2HViewer:
             .h2h-points-cell {
                 font-weight: bold;
                 font-size: 1.15em;
-                color: white;
+                color: #1a1a1a;
             }
 
             .h2h-pos-badge {
@@ -1054,8 +1054,10 @@ class H2HViewer:
                 if color_coding:
                     c1 = heat(float(row.get("margin_1", 0) or 0))
                     c2 = heat(float(row.get("margin_2", 0) or 0))
+                    text_color = "#1a1a1a"  # Dark text on light backgrounds
                 else:
-                    c1 = c2 = "white"
+                    c1 = c2 = "transparent"
+                    text_color = "white"  # White text on dark backgrounds
 
                 html.append("<tr>")
 
@@ -1071,7 +1073,7 @@ class H2HViewer:
                 html.append("</td>")
 
                 # Team 1 points cell
-                html.append(f"<td style='background-color:{c1}; width:12%;'><div class='h2h-points-cell'>{pts1:,.2f}</div></td>")
+                html.append(f"<td style='background-color:{c1}; width:12%;'><div class='h2h-points-cell' style='color:{text_color};'>{pts1:,.2f}</div></td>")
 
                 # Position badge with color coding
                 html.append("<td>")
@@ -1080,7 +1082,7 @@ class H2HViewer:
                 html.append("</td>")
 
                 # Team 2 points cell
-                html.append(f"<td style='background-color:{c2}; width:12%;'><div class='h2h-points-cell'>{pts2:,.2f}</div></td>")
+                html.append(f"<td style='background-color:{c2}; width:12%;'><div class='h2h-points-cell' style='color:{text_color};'>{pts2:,.2f}</div></td>")
 
                 # Team 2 player cell: photo on top, name below
                 html.append("<td style='width:30%;'>")

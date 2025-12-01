@@ -36,7 +36,7 @@ def display_head_to_head(df_dict: Dict[str, Any]):
     # but we’ll use it to help infer available seasons/weeks if needed.
     mdf = get_matchup_df(df_dict)
 
-    st.header("Head-to-Head")
+    st.markdown("### Head-to-Head")
 
     # ----- Build full season list (include earliest like 1999) -----
     seasons_opt = list_optimal_seasons() or []
@@ -53,39 +53,60 @@ def display_head_to_head(df_dict: Dict[str, Any]):
         return
 
     default_year = max(all_seasons)
-    sel_year = st.selectbox(
-        "Year",
-        all_seasons,
-        index=all_seasons.index(default_year),
-        key="home_h2h_year",  # unique keys to avoid DuplicateWidgetID
-    )
 
-    # ----- All weeks for selected year (from both optimal + player tables; fallback to matchup df) -----
-    weeks_opt = list_optimal_weeks(int(sel_year)) or []
-    weeks_player = list_player_weeks(int(sel_year)) or []
+    # ----- All weeks for default year first (to populate week dropdown) -----
+    weeks_opt = list_optimal_weeks(int(default_year)) or []
+    weeks_player = list_player_weeks(int(default_year)) or []
     weeks_from_mdf = []
     if mdf is not None and not mdf.empty and {"year", "week"}.issubset(mdf.columns):
         try:
             weeks_from_mdf = (
-                mdf.loc[pd.to_numeric(mdf["year"], errors="coerce") == int(sel_year), "week"]
+                mdf.loc[pd.to_numeric(mdf["year"], errors="coerce") == int(default_year), "week"]
                 .pipe(pd.to_numeric, errors="coerce")
                 .dropna().astype(int).unique().tolist()
             )
         except Exception:
             weeks_from_mdf = []
-
     all_weeks = sorted(set(map(int, weeks_opt + weeks_player + weeks_from_mdf)))
+
+    # Year and Week on one row
+    col1, col2 = st.columns(2)
+    with col1:
+        sel_year = st.selectbox(
+            "Year",
+            all_seasons,
+            index=all_seasons.index(default_year),
+            key="home_h2h_year",
+        )
+
+    # Refresh weeks for selected year
+    if sel_year != default_year:
+        weeks_opt = list_optimal_weeks(int(sel_year)) or []
+        weeks_player = list_player_weeks(int(sel_year)) or []
+        weeks_from_mdf = []
+        if mdf is not None and not mdf.empty and {"year", "week"}.issubset(mdf.columns):
+            try:
+                weeks_from_mdf = (
+                    mdf.loc[pd.to_numeric(mdf["year"], errors="coerce") == int(sel_year), "week"]
+                    .pipe(pd.to_numeric, errors="coerce")
+                    .dropna().astype(int).unique().tolist()
+                )
+            except Exception:
+                weeks_from_mdf = []
+        all_weeks = sorted(set(map(int, weeks_opt + weeks_player + weeks_from_mdf)))
+
     if not all_weeks:
         st.error("No weeks available for the selected year.")
         return
 
     default_week = max(all_weeks)
-    sel_week = st.selectbox(
-        "Week",
-        all_weeks,
-        index=all_weeks.index(default_week),
-        key="home_h2h_week",
-    )
+    with col2:
+        sel_week = st.selectbox(
+            "Week",
+            all_weeks,
+            index=all_weeks.index(default_week),
+            key="home_h2h_week",
+        )
 
     # ----- Load both data views for the chosen Year/Week -----
     optimal_df = load_optimal_week(int(sel_year), int(sel_week))
@@ -128,4 +149,29 @@ def display_head_to_head(df_dict: Dict[str, Any]):
         if player_week_df is None or player_week_df.empty:
             st.warning("No Head-to-Head data available for this Week/Year.")
         else:
+            # Calculate and show score summary
+            raw_matchup = sel_matchup.replace(" vs ", "__vs__")
+            matchup_data = player_week_df[player_week_df["matchup_name"] == raw_matchup]
+            if not matchup_data.empty and "team_1" in matchup_data.columns and "team_2" in matchup_data.columns:
+                team_1 = matchup_data["team_1"].dropna().iloc[0] if matchup_data["team_1"].notna().any() else "Team 1"
+                team_2 = matchup_data["team_2"].dropna().iloc[0] if matchup_data["team_2"].notna().any() else "Team 2"
+
+                # Get starting lineup points only (exclude BN, IR)
+                if "lineup_position" in matchup_data.columns:
+                    starters = matchup_data[~matchup_data["lineup_position"].astype(str).str.startswith(("BN", "IR"))]
+                else:
+                    starters = matchup_data
+
+                team_1_pts = starters[starters["manager"] == team_1]["points"].sum() if "points" in starters.columns else 0
+                team_2_pts = starters[starters["manager"] == team_2]["points"].sum() if "points" in starters.columns else 0
+
+                # Score summary
+                col1, col2, col3 = st.columns([2, 1, 2])
+                with col1:
+                    st.markdown(f"<div style='text-align: center; font-size: 1.3rem;'><b>{team_1}</b><br><span style='font-size: 2rem; color: {'#4ade80' if team_1_pts > team_2_pts else '#f87171' if team_1_pts < team_2_pts else 'white'};'>{team_1_pts:.2f}</span></div>", unsafe_allow_html=True)
+                with col2:
+                    st.markdown("<div style='text-align: center; font-size: 1.5rem; padding-top: 1rem;'>vs</div>", unsafe_allow_html=True)
+                with col3:
+                    st.markdown(f"<div style='text-align: center; font-size: 1.3rem;'><b>{team_2}</b><br><span style='font-size: 2rem; color: {'#4ade80' if team_2_pts > team_1_pts else '#f87171' if team_2_pts < team_1_pts else 'white'};'>{team_2_pts:.2f}</span></div>", unsafe_allow_html=True)
+
             H2HViewer(player_week_df).display(prefix="home_h2h", matchup_name=sel_matchup)

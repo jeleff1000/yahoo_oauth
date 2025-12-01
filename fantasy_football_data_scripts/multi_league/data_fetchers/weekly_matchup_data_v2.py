@@ -295,22 +295,25 @@ def extract_team(team_node: ET.Element, matchup_node: ET.Element = None, manager
     points = safe_float(team_node.findtext("team_points/total"), 0.0)
     projected = safe_float(team_node.findtext("team_projected_points/total"), np.nan)
 
-    # Try to find grade in multiple locations
-    grade = ""
-    if matchup_node is not None:
-        # Check matchup_grades at matchup level
-        grade = _first_text(matchup_node, [
-            ".//matchup_grades/matchup_grade/grade",
-            "matchup_grades/matchup_grade/grade",
-        ])
+    # Get team_key to match grades correctly
+    team_key = team_node.findtext("team_key") or ""
 
-    # If not found at matchup level, try team level
+    # Try to find grade - MUST match by team_key to avoid mixing up grades between teams
+    grade = ""
+
+    # First try: Look in matchup_grades at matchup level, match by team_key
+    if matchup_node is not None and team_key:
+        for mg in matchup_node.findall(".//matchup_grades/matchup_grade"):
+            mg_team_key = mg.findtext("team_key") or ""
+            if mg_team_key == team_key:
+                grade = mg.findtext("grade") or ""
+                break
+
+    # Second try: Look directly within the team node
     if not grade:
         grade = _first_text(team_node, [
             ".//matchup_grade/grade",
             "matchup_grade/grade",
-            ".//matchup_grades/matchup_grade/grade",
-            "matchup_grades/matchup_grade/grade",
             "grade",
         ])
 
