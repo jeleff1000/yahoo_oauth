@@ -37,6 +37,59 @@ def apply_hall_of_fame_styles():
         }
 
         /* ========================================
+           Gradient Headers - Colored section headers
+           ======================================== */
+        .hof-gradient-header {
+            padding: var(--space-md, 1rem) var(--space-lg, 1.5rem);
+            border-radius: var(--radius-md, 8px);
+            margin-bottom: var(--space-md, 1rem);
+            text-align: center;
+        }
+        .hof-gradient-header h2 {
+            margin: 0;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text-primary, #1F2937) !important;
+        }
+        .hof-gradient-header p {
+            margin: 0.25rem 0 0 0;
+            font-size: 0.95rem;
+            color: var(--text-secondary, #6B7280) !important;
+        }
+        .hof-header-gold {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 193, 7, 0.08) 100%);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
+        .hof-header-purple {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(124, 58, 237, 0.08) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        .hof-header-blue {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.08) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        .hof-header-green {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.08) 100%);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .hof-header-orange {
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(234, 88, 12, 0.08) 100%);
+            border: 1px solid rgba(249, 115, 22, 0.3);
+        }
+        .hof-header-red {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.08) 100%);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .hof-header-fire {
+            background: linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(249, 115, 22, 0.08) 100%);
+            border: 1px solid rgba(251, 146, 60, 0.3);
+        }
+        .hof-header-violet {
+            background: linear-gradient(135deg, rgba(167, 139, 250, 0.15) 0%, rgba(139, 92, 246, 0.08) 100%);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+        }
+
+        /* ========================================
            Section Headers - Clean accent underline
            ======================================== */
         .hof-section-header {
@@ -132,28 +185,28 @@ def apply_hall_of_fame_styles():
         }
 
         /* ========================================
-           Timeline Cards - Static display
+           Timeline Cards - Compact display
            ======================================== */
         .hof-timeline-card {
             background: var(--bg-secondary, #F8F9FA);
             border: 1px solid var(--border, #E5E7EB);
             border-left: 3px solid var(--accent, #667eea);
-            border-radius: var(--radius-md, 8px);
-            padding: var(--space-md, 1rem);
-            margin-bottom: var(--space-sm, 0.5rem);
+            border-radius: var(--radius-sm, 6px);
+            padding: 0.5rem 0.75rem;
+            margin-bottom: var(--space-xs, 0.25rem);
         }
         .hof-timeline-card .timeline-year {
             font-weight: 600;
             color: var(--accent, #667eea);
-            font-size: 0.9rem;
+            font-size: 0.8rem;
         }
         .hof-timeline-card .timeline-winner {
-            font-size: 1rem;
+            font-size: 0.9rem;
             font-weight: 600;
             color: var(--text-primary, #1F2937);
         }
         .hof-timeline-card .timeline-details {
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             color: var(--text-secondary, #6B7280);
         }
 
@@ -184,31 +237,31 @@ def apply_hall_of_fame_styles():
         }
 
         /* ========================================
-           Leader Cards - Static display
+           Leader Cards - Compact display
            ======================================== */
         .hof-leader-card {
             background: var(--bg-secondary, #F8F9FA);
             border: 1px solid var(--border, #E5E7EB);
-            border-radius: var(--radius-md, 8px);
-            padding: var(--space-md, 1rem);
+            border-radius: var(--radius-sm, 6px);
+            padding: 0.5rem 0.75rem;
             text-align: center;
         }
         .hof-leader-card .leader-medal {
-            font-size: 2rem;
-            margin-bottom: var(--space-xs, 0.25rem);
+            font-size: 1.2rem;
+            margin-bottom: 0.1rem;
         }
         .hof-leader-card .leader-name {
-            font-size: 1.1rem;
+            font-size: 0.9rem;
             font-weight: 600;
             color: var(--text-primary, #1F2937);
         }
         .hof-leader-card .leader-score {
-            font-size: 1.5rem;
+            font-size: 1.1rem;
             font-weight: 700;
             color: var(--success, #10B981);
         }
         .hof-leader-card .leader-label {
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             color: var(--text-muted, #9CA3AF);
         }
 
@@ -239,18 +292,18 @@ def apply_hall_of_fame_styles():
         }
 
         /* ========================================
-           Championship Badges - Keep some color
+           Championship Badges - Compact colored cards
            ======================================== */
         .hof-champ-badge {
-            padding: var(--space-md, 1rem);
-            border-radius: var(--radius-md, 8px);
+            padding: 0.5rem 0.75rem;
+            border-radius: var(--radius-sm, 6px);
             text-align: center;
-            margin-bottom: var(--space-sm, 0.5rem);
+            margin-bottom: var(--space-xs, 0.25rem);
         }
-        .hof-champ-badge .badge-icon { font-size: 1.5rem; }
-        .hof-champ-badge .badge-name { font-weight: 600; }
-        .hof-champ-badge .badge-count { font-size: 1.2rem; font-weight: 700; }
-        .hof-champ-badge .badge-label { font-size: 0.75rem; }
+        .hof-champ-badge .badge-icon { font-size: 1.1rem; margin-bottom: 0.1rem; }
+        .hof-champ-badge .badge-name { font-weight: 600; font-size: 0.85rem; }
+        .hof-champ-badge .badge-count { font-size: 0.95rem; font-weight: 700; }
+        .hof-champ-badge .badge-label { font-size: 0.7rem; opacity: 0.9; }
 
         .hof-champ-badge-gold {
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
@@ -345,6 +398,91 @@ def apply_hall_of_fame_styles():
         }
 
         /* ========================================
+           Narrative Callouts
+           ======================================== */
+        .hof-narrative-callout {
+            background: linear-gradient(135deg,
+                var(--accent-subtle, rgba(102, 126, 234, 0.1)) 0%,
+                var(--bg-secondary, #F8F9FA) 100%);
+            border: 1px solid var(--accent, #667eea);
+            border-left: 4px solid var(--accent, #667eea);
+            border-radius: var(--radius-md, 8px);
+            padding: var(--space-md, 1rem);
+            margin: var(--space-md, 1rem) 0;
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-sm, 0.5rem);
+        }
+        .hof-narrative-callout .callout-emoji {
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+        .hof-narrative-callout .callout-text {
+            color: var(--text-primary, #1F2937);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        /* ========================================
+           Rivalry Cards
+           ======================================== */
+        .hof-rivalry-card {
+            background: var(--bg-secondary, #F8F9FA);
+            border: 1px solid var(--border, #E5E7EB);
+            border-radius: var(--radius-md, 8px);
+            padding: var(--space-md, 1rem);
+            margin-bottom: var(--space-sm, 0.5rem);
+        }
+        .hof-rivalry-card .rivalry-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-sm, 0.5rem);
+        }
+        .hof-rivalry-card .rivalry-teams {
+            font-weight: 600;
+            color: var(--text-primary, #1F2937);
+        }
+        .hof-rivalry-card .rivalry-games {
+            color: var(--text-muted, #9CA3AF);
+            font-size: 0.85rem;
+        }
+        .hof-rivalry-card .rivalry-stats {
+            display: flex;
+            gap: var(--space-md, 1rem);
+            font-size: 0.9rem;
+            color: var(--text-secondary, #6B7280);
+        }
+        .hof-rivalry-card .rivalry-stats b {
+            color: var(--text-primary, #1F2937);
+        }
+
+        /* ========================================
+           Bracket Container (scrollable)
+           ======================================== */
+        .bracket-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: var(--space-sm, 0.5rem);
+            min-width: 100%;
+        }
+        .bracket-scroll-hint {
+            display: none;
+            text-align: center;
+            padding: var(--space-xs, 0.25rem) var(--space-sm, 0.5rem);
+            margin-bottom: var(--space-sm, 0.5rem);
+            background: var(--bg-secondary, #F8F9FA);
+            border-radius: var(--radius-sm, 4px);
+            font-size: 0.85rem;
+            color: var(--text-muted, #9CA3AF);
+        }
+        @media (max-width: 768px) {
+            .bracket-scroll-hint {
+                display: block;
+            }
+        }
+
+        /* ========================================
            Responsive Design
            ======================================== */
         @media (max-width: 768px) {
@@ -358,11 +496,23 @@ def apply_hall_of_fame_styles():
 
             .hof-game-card,
             .hof-season-card,
-            .hof-timeline-card {
+            .hof-timeline-card,
+            .hof-rivalry-card {
                 padding: var(--space-sm, 0.5rem);
             }
 
             .stat-box .value { font-size: 1.5rem; }
+
+            /* Two-column layouts become single column */
+            .two-col-layout {
+                flex-direction: column;
+            }
+
+            /* Rivalry stats wrap */
+            .hof-rivalry-card .rivalry-stats {
+                flex-wrap: wrap;
+                gap: var(--space-sm, 0.5rem);
+            }
         }
 
         @media (max-width: 480px) {
@@ -372,6 +522,10 @@ def apply_hall_of_fame_styles():
             .hof-game-card .game-header {
                 flex-direction: column;
                 gap: 0.15rem;
+            }
+
+            .hof-narrative-callout {
+                padding: var(--space-sm, 0.5rem);
             }
         }
         </style>

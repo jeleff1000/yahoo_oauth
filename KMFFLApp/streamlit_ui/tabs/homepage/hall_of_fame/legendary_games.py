@@ -2,6 +2,8 @@
 import streamlit as st
 import duckdb
 
+from .components import game_card, upset_card, rivalry_card, narrative_callout
+
 
 class LegendaryGamesViewer:
     def __init__(self, df):
@@ -58,9 +60,19 @@ class LegendaryGamesViewer:
     def _display_highest_scoring(self):
         st.markdown("### 🔥 Extreme Scoring Games")
 
+        # Mobile-friendly toggle
+        game_type = st.radio(
+            "",
+            ["Regular Season", "Playoffs"],
+            horizontal=True,
+            key="extreme_scoring_game_type"
+        )
+
+        is_playoff = 1 if game_type == "Playoffs" else 0
+
         try:
-            # Base dedupe query (used as a CTE in each per-category query)
-            base_cte = """
+            # Query for highest scoring
+            high_query = f"""
                 WITH unique_games AS (
                     SELECT
                         CAST(year AS INT) as year,
@@ -89,130 +101,92 @@ class LegendaryGamesViewer:
                 )
                 SELECT year, week, winner, loser, winner_score, loser_score, combined_score, is_playoffs
                 FROM deduped
-                WHERE rn = 1
+                WHERE rn = 1 AND is_playoffs = {is_playoff}
+                ORDER BY combined_score DESC
+                LIMIT 10
             """
 
-            # Per-category queries (limit 5 each)
-            # Append additional filter using AND because base_cte ends with WHERE rn = 1
-            high_reg_query = base_cte + "\nAND is_playoffs = 0\nORDER BY combined_score DESC\nLIMIT 5"
-            high_playoff_query = base_cte + "\nAND is_playoffs = 1\nORDER BY combined_score DESC\nLIMIT 5"
-            low_reg_query = base_cte + "\nAND is_playoffs = 0\nORDER BY combined_score ASC\nLIMIT 5"
-            low_playoff_query = base_cte + "\nAND is_playoffs = 1\nORDER BY combined_score ASC\nLIMIT 5"
+            low_query = f"""
+                WITH unique_games AS (
+                    SELECT
+                        CAST(year AS INT) as year,
+                        CAST(week AS INT) as week,
+                        manager,
+                        opponent,
+                        CAST(team_points AS DOUBLE) as team_pts,
+                        CAST(opponent_points AS DOUBLE) as opp_pts,
+                        CAST(is_playoffs AS INT) as is_playoffs,
+                        CASE
+                            WHEN manager < opponent THEN manager || '|' || opponent
+                            ELSE opponent || '|' || manager
+                        END as match_key
+                    FROM matchups
+                    WHERE COALESCE(is_consolation, 0) = 0
+                ),
+                deduped AS (
+                    SELECT *,
+                        team_pts + opp_pts as combined_score,
+                        CASE WHEN team_pts > opp_pts THEN manager ELSE opponent END as winner,
+                        CASE WHEN team_pts > opp_pts THEN opponent ELSE manager END as loser,
+                        CASE WHEN team_pts > opp_pts THEN team_pts ELSE opp_pts END as winner_score,
+                        CASE WHEN team_pts > opp_pts THEN opp_pts ELSE team_pts END as loser_score,
+                        ROW_NUMBER() OVER (PARTITION BY year, week, match_key ORDER BY team_pts DESC) as rn
+                    FROM unique_games
+                )
+                SELECT year, week, winner, loser, winner_score, loser_score, combined_score, is_playoffs
+                FROM deduped
+                WHERE rn = 1 AND is_playoffs = {is_playoff}
+                ORDER BY combined_score ASC
+                LIMIT 10
+            """
 
-            # Execute queries (use try/except separately to avoid one failure blocking others)
-            high_reg = self.con.execute(high_reg_query).fetchdf()
-            high_playoff = self.con.execute(high_playoff_query).fetchdf()
-            low_reg = self.con.execute(low_reg_query).fetchdf()
-            low_playoff = self.con.execute(low_playoff_query).fetchdf()
+            high_games = self.con.execute(high_query).fetchdf()
+            low_games = self.con.execute(low_query).fetchdf()
 
-            # Display highest / extreme scoring
-            col1, col2 = st.columns(2)
+            # Highest scoring section
+            st.markdown(f"#### 🔥 Highest Scoring ({game_type})")
 
-            with col1:
-                st.markdown("#### 🏈 Regular Season")
-                if high_reg is not None and not high_reg.empty:
-                    for i, row in high_reg.iterrows():
-                        st.markdown(f"""
-                            <div class='hof-game-card'>
-                                <div class='game-header'>
-                                    <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: var(--success, #059669);'>{row['combined_score']:.1f} Total</span>
-                                </div>
-                                <div style='font-size: 0.95rem;'>
-                                    <div style='margin-bottom: 0.2rem;'>
-                                        <span class='team-name'>✅ {row['winner']}</span>
-                                        <span style='float: right;' class='team-score'>{row['winner_score']:.1f}</span>
-                                    </div>
-                                    <div>
-                                        <span class='loser-name'>❌ {row['loser']}</span>
-                                        <span style='float: right;' class='loser-score'>{row['loser_score']:.1f}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.info("No regular season games found")
+            if high_games is not None and not high_games.empty:
+                # Narrative callout
+                top = high_games.iloc[0]
+                st.markdown(narrative_callout(
+                    f"The highest scoring {game_type.lower()} game ever: {top['winner']} vs {top['loser']} "
+                    f"combined for {top['combined_score']:.1f} points in Week {int(top['week'])}, {int(top['year'])}!",
+                    "🔥"
+                ), unsafe_allow_html=True)
 
-            with col2:
-                st.markdown("#### 🏆 Playoffs")
-                if high_playoff is not None and not high_playoff.empty:
-                    for i, row in high_playoff.iterrows():
-                        st.markdown(f"""
-                            <div class='hof-game-card hof-game-card-playoff'>
-                                <div class='game-header'>
-                                    <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: var(--success, #059669);'>{row['combined_score']:.1f} Total</span>
-                                </div>
-                                <div style='font-size: 0.95rem;'>
-                                    <div style='margin-bottom: 0.2rem;'>
-                                        <span class='team-name'>✅ {row['winner']}</span>
-                                        <span style='float: right;' class='team-score'>{row['winner_score']:.1f}</span>
-                                    </div>
-                                    <div>
-                                        <span class='loser-name'>❌ {row['loser']}</span>
-                                        <span style='float: right;' class='loser-score'>{row['loser_score']:.1f}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.info("No playoff games found")
+                for _, row in high_games.iterrows():
+                    st.markdown(game_card(
+                        winner=row['winner'],
+                        loser=row['loser'],
+                        winner_pts=row['winner_score'],
+                        loser_pts=row['loser_score'],
+                        year=int(row['year']),
+                        week=int(row['week']),
+                        is_playoff=(is_playoff == 1),
+                        highlight_stat=f"{row['combined_score']:.1f} Total"
+                    ), unsafe_allow_html=True)
+            else:
+                st.info(f"No {game_type.lower()} games found")
 
-            # Lowest scoring section (ice cube emoji)
+            # Lowest scoring section
             st.markdown("---")
-            st.markdown("### 🧊 Lowest Scoring Games")
+            st.markdown(f"#### 🧊 Lowest Scoring ({game_type})")
 
-            col3, col4 = st.columns(2)
-
-            with col3:
-                st.markdown("#### 🏈 Regular Season")
-                if low_reg is not None and not low_reg.empty:
-                    for i, row in low_reg.iterrows():
-                        st.markdown(f"""
-                            <div class='hof-game-card'>
-                                <div class='game-header'>
-                                    <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: var(--success, #059669);'>{row['combined_score']:.1f} Total</span>
-                                </div>
-                                <div style='font-size: 0.95rem;'>
-                                    <div style='margin-bottom: 0.2rem;'>
-                                        <span class='team-name'>✅ {row['winner']}</span>
-                                        <span style='float: right;' class='team-score'>{row['winner_score']:.1f}</span>
-                                    </div>
-                                    <div>
-                                        <span class='loser-name'>❌ {row['loser']}</span>
-                                        <span style='float: right;' class='loser-score'>{row['loser_score']:.1f}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.info("No regular season games found")
-
-            with col4:
-                st.markdown("#### 🏆 Playoffs")
-                if low_playoff is not None and not low_playoff.empty:
-                    for i, row in low_playoff.iterrows():
-                        st.markdown(f"""
-                            <div class='hof-game-card hof-game-card-playoff'>
-                                <div class='game-header'>
-                                    <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: var(--success, #059669);'>{row['combined_score']:.1f} Total</span>
-                                </div>
-                                <div style='font-size: 0.95rem;'>
-                                    <div style='margin-bottom: 0.2rem;'>
-                                        <span class='team-name'>✅ {row['winner']}</span>
-                                        <span style='float: right;' class='team-score'>{row['winner_score']:.1f}</span>
-                                    </div>
-                                    <div>
-                                        <span class='loser-name'>❌ {row['loser']}</span>
-                                        <span style='float: right;' class='loser-score'>{row['loser_score']:.1f}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.info("No playoff games found")
+            if low_games is not None and not low_games.empty:
+                for _, row in low_games.iterrows():
+                    st.markdown(game_card(
+                        winner=row['winner'],
+                        loser=row['loser'],
+                        winner_pts=row['winner_score'],
+                        loser_pts=row['loser_score'],
+                        year=int(row['year']),
+                        week=int(row['week']),
+                        is_playoff=(is_playoff == 1),
+                        highlight_stat=f"{row['combined_score']:.1f} Total"
+                    ), unsafe_allow_html=True)
+            else:
+                st.info(f"No {game_type.lower()} games found")
 
         except Exception as e:
             st.error(f"Error loading highest scoring games: {e}")
@@ -223,8 +197,18 @@ class LegendaryGamesViewer:
     def _display_closest_games(self):
         st.markdown("### 😱 Nail-Biters: Closest Games Ever")
 
+        # Mobile-friendly toggle
+        game_type = st.radio(
+            "",
+            ["Regular Season", "Playoffs"],
+            horizontal=True,
+            key="closest_games_game_type"
+        )
+
+        is_playoff = 1 if game_type == "Playoffs" else 0
+
         try:
-            query = """
+            query = f"""
                 WITH unique_games AS (
                     SELECT
                         CAST(year AS INT) as year,
@@ -253,64 +237,35 @@ class LegendaryGamesViewer:
                 )
                 SELECT year, week, winner, loser, winner_score, loser_score, margin, is_playoffs
                 FROM deduped
-                WHERE rn = 1
+                WHERE rn = 1 AND is_playoffs = {is_playoff}
                 ORDER BY margin ASC
-                LIMIT 30
+                LIMIT 10
             """
 
             games = self.con.execute(query).fetchdf()
 
             if not games.empty:
-                col1, col2 = st.columns(2)
+                # Narrative callout
+                top = games.iloc[0]
+                st.markdown(narrative_callout(
+                    f"The closest {game_type.lower()} game ever: {top['winner']} beat {top['loser']} by just "
+                    f"{top['margin']:.2f} points in Week {int(top['week'])}, {int(top['year'])}!",
+                    "😱"
+                ), unsafe_allow_html=True)
 
-                with col1:
-                    st.markdown("#### 🏈 Regular Season")
-                    reg = games[games['is_playoffs'] == 0].head(10)
-                    for i, row in reg.iterrows():
-                        st.markdown(f"""
-                            <div class='hof-game-card' style='border-left: 3px solid var(--error, #EF4444);'>
-                                <div class='game-header'>
-                                    <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: var(--error, #EF4444);'>±{row['margin']:.2f}</span>
-                                </div>
-                                <div style='font-size: 0.95rem;'>
-                                    <div style='margin-bottom: 0.2rem;'>
-                                        <span class='team-name'>✅ {row['winner']}</span>
-                                        <span style='float: right;' class='team-score'>{row['winner_score']:.1f}</span>
-                                    </div>
-                                    <div>
-                                        <span class='loser-name'>❌ {row['loser']}</span>
-                                        <span style='float: right;' class='loser-score'>{row['loser_score']:.1f}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-
-                with col2:
-                    st.markdown("#### 🏆 Playoffs")
-                    playoff = games[games['is_playoffs'] == 1].head(10)
-                    if not playoff.empty:
-                        for i, row in playoff.iterrows():
-                            st.markdown(f"""
-                                <div class='hof-game-card hof-game-card-playoff' style='border-left: 3px solid var(--error, #EF4444);'>
-                                    <div class='game-header'>
-                                        <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                        <span class='game-stat' style='color: var(--error, #EF4444);'>±{row['margin']:.2f}</span>
-                                    </div>
-                                    <div style='font-size: 0.95rem;'>
-                                        <div style='margin-bottom: 0.2rem;'>
-                                            <span class='team-name'>✅ {row['winner']}</span>
-                                            <span style='float: right;' class='team-score'>{row['winner_score']:.1f}</span>
-                                        </div>
-                                        <div>
-                                            <span class='loser-name'>❌ {row['loser']}</span>
-                                            <span style='float: right;' class='loser-score'>{row['loser_score']:.1f}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-                    else:
-                        st.info("No playoff games in top 30")
+                for _, row in games.iterrows():
+                    st.markdown(game_card(
+                        winner=row['winner'],
+                        loser=row['loser'],
+                        winner_pts=row['winner_score'],
+                        loser_pts=row['loser_score'],
+                        year=int(row['year']),
+                        week=int(row['week']),
+                        is_playoff=(is_playoff == 1),
+                        highlight_stat=f"±{row['margin']:.2f}"
+                    ), unsafe_allow_html=True)
+            else:
+                st.info(f"No {game_type.lower()} games found")
 
         except Exception as e:
             st.error(f"Error loading closest games: {e}")
@@ -322,11 +277,21 @@ class LegendaryGamesViewer:
         st.markdown("### 🎯 Greatest Upsets")
 
         if 'manager_proj_score' not in self.df.columns or 'opponent_proj_score' not in self.df.columns:
-            st.warning("💡 Upset detection requires projected points data")
+            st.warning("Upset detection requires projected points data")
             return
 
+        # Mobile-friendly toggle
+        game_type = st.radio(
+            "",
+            ["Regular Season", "Playoffs"],
+            horizontal=True,
+            key="upsets_game_type"
+        )
+
+        is_playoff = 1 if game_type == "Playoffs" else 0
+
         try:
-            query = """
+            query = f"""
                 WITH unique_games AS (
                     SELECT
                         CAST(year AS INT) as year,
@@ -364,6 +329,7 @@ class LegendaryGamesViewer:
                         ABS(team_proj - opp_proj) as proj_diff
                     FROM deduped
                     WHERE rn = 1
+                        AND is_playoffs = {is_playoff}
                         AND (
                             (team_proj > opp_proj AND team_pts < opp_pts) OR
                             (team_proj < opp_proj AND team_pts > opp_pts)
@@ -374,80 +340,35 @@ class LegendaryGamesViewer:
                        favored_actual, underdog_actual, proj_diff, is_playoffs
                 FROM upsets
                 ORDER BY proj_diff DESC
-                LIMIT 30
+                LIMIT 10
             """
 
             upsets = self.con.execute(query).fetchdf()
 
             if not upsets.empty:
-                col1, col2 = st.columns(2)
+                # Narrative callout
+                top = upsets.iloc[0]
+                st.markdown(narrative_callout(
+                    f"Biggest {game_type.lower()} upset: {top['underdog']} was projected to lose by {top['proj_diff']:.1f} points "
+                    f"to {top['favored']} in Week {int(top['week'])}, {int(top['year'])} - but pulled off the win!",
+                    "🎯"
+                ), unsafe_allow_html=True)
 
-                with col1:
-                    st.markdown("#### 🏈 Regular Season")
-                    reg = upsets[upsets['is_playoffs'] == 0].head(10)
-                    for i, row in reg.iterrows():
-                        st.markdown(f"""
-                            <div class='hof-game-card' style='border-left: 3px solid var(--accent, #8B5CF6);'>
-                                <div class='game-header'>
-                                    <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                    <span class='game-stat' style='color: var(--accent, #8B5CF6);'>Upset by {row['proj_diff']:.1f}</span>
-                                </div>
-                                <div style='font-size: 0.9rem;'>
-                                    <div style='margin-bottom: 0.3rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.2);'>
-                                        <div class='loser-name' style='font-size: 0.8rem; margin-bottom: 0.2rem;'>Favored (Lost)</div>
-                                        <span class='team-name'>{row['favored']}</span>
-                                        <span style='float: right;'>
-                                            <span class='loser-score' style='font-size: 0.85rem;'>Proj: {row['favored_proj']:.1f}</span>
-                                            <span class='team-score' style='margin-left: 0.5rem;'>{row['favored_actual']:.1f}</span>
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <div style='color: var(--success, #059669); font-size: 0.8rem; margin-bottom: 0.2rem;'>Underdog (Won)</div>
-                                        <span class='team-name' style='color: var(--success, #059669);'>{row['underdog']}</span>
-                                        <span style='float: right;'>
-                                            <span class='loser-score' style='font-size: 0.85rem;'>Proj: {row['underdog_proj']:.1f}</span>
-                                            <span style='margin-left: 0.5rem; color: var(--success, #059669); font-weight: bold;'>{row['underdog_actual']:.1f}</span>
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-
-                with col2:
-                    st.markdown("#### 🏆 Playoffs")
-                    playoff = upsets[upsets['is_playoffs'] == 1].head(10)
-                    if not playoff.empty:
-                        for i, row in playoff.iterrows():
-                            st.markdown(f"""
-                                <div class='hof-game-card hof-game-card-playoff' style='border-left: 3px solid var(--accent, #8B5CF6);'>
-                                    <div class='game-header'>
-                                        <span class='game-date'>{int(row['year'])} Week {int(row['week'])}</span>
-                                        <span class='game-stat' style='color: var(--accent, #8B5CF6);'>Upset by {row['proj_diff']:.1f}</span>
-                                    </div>
-                                    <div style='font-size: 0.9rem;'>
-                                        <div style='margin-bottom: 0.3rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.2);'>
-                                            <div class='loser-name' style='font-size: 0.8rem; margin-bottom: 0.2rem;'>Favored (Lost)</div>
-                                            <span class='team-name'>{row['favored']}</span>
-                                            <span style='float: right;'>
-                                                <span class='loser-score' style='font-size: 0.85rem;'>Proj: {row['favored_proj']:.1f}</span>
-                                                <span class='team-score' style='margin-left: 0.5rem;'>{row['favored_actual']:.1f}</span>
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <div style='color: var(--success, #059669); font-size: 0.8rem; margin-bottom: 0.2rem;'>Underdog (Won)</div>
-                                            <span class='team-name' style='color: var(--success, #059669);'>{row['underdog']}</span>
-                                            <span style='float: right;'>
-                                                <span class='loser-score' style='font-size: 0.85rem;'>Proj: {row['underdog_proj']:.1f}</span>
-                                                <span style='margin-left: 0.5rem; color: var(--success, #059669); font-weight: bold;'>{row['underdog_actual']:.1f}</span>
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-                    else:
-                        st.info("No playoff upsets in top 30")
+                for _, row in upsets.iterrows():
+                    st.markdown(upset_card(
+                        favored=row['favored'],
+                        underdog=row['underdog'],
+                        favored_pts=row['favored_actual'],
+                        underdog_pts=row['underdog_actual'],
+                        favored_proj=row['favored_proj'],
+                        underdog_proj=row['underdog_proj'],
+                        year=int(row['year']),
+                        week=int(row['week']),
+                        proj_diff=row['proj_diff'],
+                        is_playoff=(is_playoff == 1)
+                    ), unsafe_allow_html=True)
             else:
-                st.info("No major upsets found (requiring 5+ point projection difference)")
+                st.info(f"No major {game_type.lower()} upsets found (requiring 5+ point projection difference)")
 
         except Exception as e:
             st.error(f"Error loading upsets: {e}")
@@ -457,10 +378,19 @@ class LegendaryGamesViewer:
     @st.fragment
     def _display_rivalries(self):
         st.markdown("### ⚔️ Classic Rivalry Matchups")
-        st.info("💡 Most frequently played matchups with win/loss records")
+
+        # Mobile-friendly toggle
+        game_type = st.radio(
+            "",
+            ["Regular Season", "Playoffs"],
+            horizontal=True,
+            key="rivalries_game_type"
+        )
+
+        is_playoff = 1 if game_type == "Playoffs" else 0
 
         try:
-            query = """
+            query = f"""
                 WITH unique_games AS (
                     SELECT
                         CAST(year AS INT) as year,
@@ -502,7 +432,7 @@ class LegendaryGamesViewer:
                             THEN 1 ELSE 0 END) as team_a_wins,
                         ROUND(AVG(team_pts + opp_pts), 1) as avg_combined_score
                     FROM deduped
-                    WHERE rn = 1
+                    WHERE rn = 1 AND is_playoffs = {is_playoff}
                     GROUP BY team_a, team_b, is_playoffs
                     HAVING COUNT(*) >= 2
                 )
@@ -510,56 +440,33 @@ class LegendaryGamesViewer:
                        total_games - team_a_wins as team_b_wins,
                        avg_combined_score, is_playoffs
                 FROM rivalry_stats
-                ORDER BY is_playoffs DESC, total_games DESC, avg_combined_score DESC
-                LIMIT 30
+                ORDER BY total_games DESC, avg_combined_score DESC
+                LIMIT 10
             """
 
             rivalries = self.con.execute(query).fetchdf()
 
             if not rivalries.empty:
-                col1, col2 = st.columns(2)
+                # Narrative callout for top rivalry
+                top = rivalries.iloc[0]
+                st.markdown(narrative_callout(
+                    f"The most frequent {game_type.lower()} matchup: {top['team_a']} vs {top['team_b']} "
+                    f"have played {int(top['total_games'])} times! Current record: {int(top['team_a_wins'])}-{int(top['team_b_wins'])}",
+                    "⚔️"
+                ), unsafe_allow_html=True)
 
-                with col1:
-                    st.markdown("#### 🏈 Regular Season Rivalries")
-                    reg = rivalries[rivalries['is_playoffs'] == 0].head(10)
-                    if not reg.empty:
-                        for i, row in reg.iterrows():
-                            st.markdown(f"""
-                                <div class='hof-rivalry-card'>
-                                    <div class='rivalry-header'>
-                                        <span class='rivalry-teams'>{row['team_a']} vs {row['team_b']}</span>
-                                        <span class='rivalry-games'>{int(row['total_games'])} games</span>
-                                    </div>
-                                    <div class='rivalry-stats'>
-                                        <span>{row['team_a']}: <b>{int(row['team_a_wins'])}</b></span>
-                                        <span>{row['team_b']}: <b>{int(row['team_b_wins'])}</b></span>
-                                        <span style='color: var(--text-muted, #a5f3fc);'>Avg: {row['avg_combined_score']:.1f}</span>
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-                    else:
-                        st.info("No regular season rivalries found (min 2 games)")
-
-                with col2:
-                    st.markdown("#### 🏆 Playoff Rivalries")
-                    playoff = rivalries[rivalries['is_playoffs'] == 1].head(10)
-                    if not playoff.empty:
-                        for i, row in playoff.iterrows():
-                            st.markdown(f"""
-                                <div class='hof-rivalry-card hof-game-card-playoff'>
-                                    <div class='rivalry-header'>
-                                        <span class='rivalry-teams'>{row['team_a']} vs {row['team_b']}</span>
-                                        <span class='rivalry-games'>{int(row['total_games'])} games</span>
-                                    </div>
-                                    <div class='rivalry-stats'>
-                                        <span>{row['team_a']}: <b>{int(row['team_a_wins'])}</b></span>
-                                        <span>{row['team_b']}: <b>{int(row['team_b_wins'])}</b></span>
-                                        <span style='color: var(--text-muted, #a5f3fc);'>Avg: {row['avg_combined_score']:.1f}</span>
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-                    else:
-                        st.info("No playoff rivalries found (min 2 games)")
+                for _, row in rivalries.iterrows():
+                    st.markdown(rivalry_card(
+                        team_a=row['team_a'],
+                        team_b=row['team_b'],
+                        team_a_wins=int(row['team_a_wins']),
+                        team_b_wins=int(row['team_b_wins']),
+                        total_games=int(row['total_games']),
+                        avg_combined=row['avg_combined_score'],
+                        is_playoff=(is_playoff == 1)
+                    ), unsafe_allow_html=True)
+            else:
+                st.info(f"No {game_type.lower()} rivalries found (min 2 games)")
 
         except Exception as e:
             st.error(f"Error loading rivalries: {e}")

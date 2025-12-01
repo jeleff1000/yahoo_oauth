@@ -17,27 +17,10 @@ if str(_streamlit_ui_dir) not in sys.path:
 from shared.dataframe_utils import as_dataframe, get_matchup_df
 
 # Import all Hall of Fame modules
-from .top_teams import TopTeamsViewer
 from .playoff_brackets import PlayoffBracketsViewer
-# TopPlayersViewer may be defined in either a module file `top_players.py` or a package `top_players`.
-try:
-    from .top_players import TopPlayersViewer
-except Exception:
-    try:
-        top_players_path = Path(__file__).parent / "top_players.py"
-        if top_players_path.exists():
-            spec = importlib.util.spec_from_file_location("tabs.hall_of_fame._top_players_impl", str(top_players_path))
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[spec.name] = module
-            assert spec.loader is not None
-            spec.loader.exec_module(module)  # type: ignore
-            TopPlayersViewer = getattr(module, "TopPlayersViewer")
-        else:
-            raise
-    except Exception:
-        raise
 from .legendary_games import LegendaryGamesViewer
 from .records import RecordsViewer
+from .leaderboards import LeaderboardsViewer
 from .styles import apply_hall_of_fame_styles
 
 _FALLBACK_CSV = "matchup.csv"
@@ -403,10 +386,6 @@ class HallOfFameViewer:
             st.info("No championship rows found.")
             return
 
-        # KPIs at the top
-        self._render_playoff_kpis(champs)
-        st.markdown("<br>", unsafe_allow_html=True)
-
         # Dynasty badges - enhanced styling
         counts = champs["winner"].value_counts().sort_values(ascending=False)
         if len(counts) > 0:
@@ -569,13 +548,12 @@ class HallOfFameViewer:
             st.error("📊 Matchup Data not available.")
             return
 
-        # ===== Single top-level Playoffs tab + the rest =====
+        # ===== 4 main tabs (merged Top Teams + Top Players into Leaderboards) =====
         tabs = st.tabs([
-            "🏆 Playoffs",       # everything playoffs lives here
-            "⭐ Top Teams",
-            "👑 Top Players",
+            "🏆 Playoffs",
             "🎮 Legendary Games",
             "📊 Records",
+            "👑 Leaderboards",
         ])
 
         # ------------------- PLAYOFFS TAB -------------------
@@ -626,10 +604,8 @@ class HallOfFameViewer:
 
         # ------------------- OTHER TABS -------------------
         with tabs[1]:
-            TopTeamsViewer(self.df).display()
-        with tabs[2]:
-            TopPlayersViewer(self.df).display()
-        with tabs[3]:
             LegendaryGamesViewer(self.df).display()
-        with tabs[4]:
+        with tabs[2]:
             RecordsViewer(self.df).display()
+        with tabs[3]:
+            LeaderboardsViewer(self.df).display()

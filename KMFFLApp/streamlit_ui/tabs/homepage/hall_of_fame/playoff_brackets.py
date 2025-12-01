@@ -576,9 +576,9 @@ class PlayoffBracketsViewer:
 
     @st.fragment
     def display(self):
-        """Display playoff brackets with modern UI."""
+        """Display playoff brackets with modern UI and mobile responsiveness."""
         st.markdown("""
-            <div class="hof-bracket-header">
+            <div class='hof-gradient-header hof-header-gold'>
                 <h2>🏆 Playoff Brackets</h2>
                 <p>Interactive tournament bracket with playoff seeding</p>
             </div>
@@ -600,75 +600,80 @@ class PlayoffBracketsViewer:
 
         years = sorted(playoff_df['year'].unique(), reverse=True)
 
-        # Year selector with better styling
-        col1, col2 = st.columns([2, 1])
+        # Year selector
+        selected_year = st.selectbox(
+            "Select Season",
+            years,
+            key="bracket_year",
+            help="Choose a playoff season to view the bracket"
+        )
 
+        # Show playoff format info
+        year_playoffs = playoff_df[playoff_df['year'] == selected_year]
+        num_teams = year_playoffs['final_playoff_seed'].nunique()
+
+        col1, col2, col3 = st.columns(3)
         with col1:
-            selected_year = st.selectbox(
-                "Select Season",
-                years,
-                key="bracket_year",
-                help="Choose a playoff season to view the bracket"
-            )
-
-        with col2:
-            # Show playoff format info
-            year_playoffs = playoff_df[playoff_df['year'] == selected_year]
-            num_teams = year_playoffs['final_playoff_seed'].nunique()
             st.metric("Playoff Teams", num_teams)
+        with col2:
+            total_games = len(year_playoffs) // 2
+            st.metric("Total Games", total_games)
+        with col3:
+            avg_score = year_playoffs['team_points'].mean()
+            st.metric("Avg Score", f"{avg_score:.1f}")
 
-        # Create and display bracket
+        # Create bracket
         fig = self.create_bracket(selected_year)
 
         if not fig.data and not fig.layout.shapes:
             st.warning(f"No playoff bracket data available for {selected_year}")
             return
 
+        # Mobile-responsive scrollable container with hint
+        st.markdown("""
+            <div class='bracket-scroll-hint'>
+                <span>👆 Swipe or scroll horizontally to see full bracket</span>
+            </div>
+            <div class='bracket-container'>
+        """, unsafe_allow_html=True)
+
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-        # Playoff statistics
-        st.markdown("---")
-        st.markdown("### 📊 Playoff Statistics")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        year_playoffs = playoff_df[playoff_df['year'] == selected_year]
+        # Additional playoff statistics
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("#### 📊 Scoring Highlights")
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2 = st.columns(2)
 
         with col1:
-            total_games = len(year_playoffs) // 2
-            st.metric("Total Games", total_games)
-
-        with col2:
-            avg_score = year_playoffs['team_points'].mean()
-            st.metric("Avg Score", f"{avg_score:.1f}")
-
-        with col3:
             high_score = year_playoffs['team_points'].max()
             high_scorer = year_playoffs.loc[year_playoffs['team_points'].idxmax(), 'manager']
             st.metric("Highest Score", f"{high_score:.1f}", delta=high_scorer, delta_color="off")
 
-        with col4:
+        with col2:
+            year_playoffs = year_playoffs.copy()
             year_playoffs['margin'] = abs(
                 year_playoffs['team_points'] - year_playoffs['opponent_points']
             )
-            avg_margin = year_playoffs['margin'].mean()
             closest = year_playoffs['margin'].min()
-            st.metric("Avg Margin", f"{avg_margin:.1f}", delta=f"Closest: {closest:.1f}", delta_color="off")
+            closest_game = year_playoffs.loc[year_playoffs['margin'].idxmin()]
+            st.metric("Closest Game", f"{closest:.1f} pts", delta_color="off")
 
-        # Seed legend
+        # Seed legend (simplified)
         with st.expander("🎯 Seed Legend", expanded=False):
             st.markdown("""
-                Playoff seeds are assigned at the end of the regular season based on standings.
-                Lower seed numbers indicate better regular season performance:
+                Seeds indicate regular season finish - lower = better.
             """)
-
             legend_cols = st.columns(4)
             for i, col in enumerate(legend_cols, 1):
-                if i <= 8:
+                if i <= 4:
                     color = PlayoffBracketsViewer.SEED_COLORS.get(i, '#9E9E9E')
                     col.markdown(f"""
-                        <div class='hof-champ-badge' style='background: {color}; color: white;
-                                    border-radius: 8px; text-align: center; font-weight: bold;'>
-                            Seed {i}
+                        <div style='background: {color}; color: white;
+                                    border-radius: 8px; text-align: center;
+                                    font-weight: bold; padding: 0.5rem;'>
+                            #{i}
                         </div>
                     """, unsafe_allow_html=True)
