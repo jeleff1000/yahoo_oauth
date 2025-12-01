@@ -14,6 +14,68 @@ import pandas as pd
 
 _SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
 
+
+def normalize_manager_name(
+    nickname: str,
+    overrides: dict = None,
+    team_name_fallback: str = None
+) -> str:
+    """
+    Normalize manager name with optional overrides and team_name fallback.
+
+    This function handles:
+    1. Empty/None nicknames → use team_name_fallback
+    2. --hidden-- managers → use team_name_fallback
+    3. Overrides from LeagueContext (e.g., {"Team Name": "Real Name"})
+    4. Title case normalization
+
+    Args:
+        nickname: Raw manager nickname from Yahoo API
+        overrides: Dict mapping old names to new names (from LeagueContext.manager_name_overrides)
+        team_name_fallback: Team name to use if manager is hidden/unavailable
+
+    Returns:
+        Normalized manager name
+
+    Example:
+        >>> normalize_manager_name("--hidden--", {"You Are A Pirate": "Ezra"}, "You Are A Pirate")
+        'Ezra'
+        >>> normalize_manager_name("--hidden--", None, "My Team Name")
+        'My Team Name'
+        >>> normalize_manager_name("JohnDoe", {"JohnDoe": "John Doe"}, None)
+        'John Doe'
+    """
+    # Handle empty/None nickname
+    if not nickname:
+        if team_name_fallback:
+            fallback = str(team_name_fallback).strip().title()
+            if overrides and fallback in overrides:
+                return overrides[fallback]
+            return fallback
+        return "Unknown"
+
+    s = str(nickname).strip()
+
+    # Check overrides for exact match first
+    if overrides:
+        if s in overrides:
+            return overrides[s]
+        if s.title() in overrides:
+            return overrides[s.title()]
+
+    # Handle --hidden-- managers by using team name fallback
+    if s == "--hidden--":
+        if team_name_fallback:
+            fallback = str(team_name_fallback).strip().title()
+            if overrides and fallback in overrides:
+                return overrides[fallback]
+            return fallback
+        return "Unknown"
+
+    # Return title case if no override applies
+    return s.title()
+
+
 def normalize_name(name):
     """Remove punctuation, suffixes, and normalize spacing."""
     if not name or pd.isna(name):

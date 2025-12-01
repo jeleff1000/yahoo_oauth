@@ -35,19 +35,13 @@ class RecordsViewer:
             st.info("📊 No data available")
             return
 
-        # Mobile-friendly radio toggle instead of tabs
-        view = st.radio(
-            "",
-            ["🏆 All-Time", "🎯 Streaks", "📉 Tough Luck"],
-            horizontal=True,
-            key="records_view"
-        )
+        tabs = st.tabs(["🏆 All-Time", "🎯 Streaks", "📉 Tough Luck"])
 
-        if view == "🏆 All-Time":
+        with tabs[0]:
             self._display_all_time_records()
-        elif view == "🎯 Streaks":
+        with tabs[1]:
             self._display_streaks()
-        else:
+        with tabs[2]:
             self._display_tough_luck()
 
     @st.fragment
@@ -279,21 +273,15 @@ class RecordsViewer:
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # Toggle between win/loss streak leaderboards
-            streak_type = st.radio(
-                "",
-                ["🏆 Win Streaks", "📉 Loss Streaks"],
-                horizontal=True,
-                key="streak_type"
-            )
-
-            if streak_type == "🏆 Win Streaks":
-                st.markdown("#### Top 10 Longest Win Streaks")
+            # Show both streak tables side by side
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("#### 🏆 Win Streaks")
                 win_streaks = streak_df.nlargest(10, 'win_streak')[['manager', 'win_streak']].copy()
                 win_streaks.columns = ['Manager', 'Streak']
                 st.dataframe(win_streaks, use_container_width=True, hide_index=True)
-            else:
-                st.markdown("#### Top 10 Longest Loss Streaks")
+            with col2:
+                st.markdown("#### 📉 Loss Streaks")
                 loss_streaks = streak_df.nlargest(10, 'loss_streak')[['manager', 'loss_streak']].copy()
                 loss_streaks.columns = ['Manager', 'Streak']
                 st.dataframe(loss_streaks, use_container_width=True, hide_index=True)

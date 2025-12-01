@@ -42,6 +42,12 @@ import requests
 import yahoo_fantasy_api as yfa
 from yahoo_oauth import OAuth2
 
+# Import shared name normalization
+try:
+    from .clean_names import normalize_manager_name
+except ImportError:
+    from clean_names import normalize_manager_name
+
 # Add paths for imports
 _script_file = Path(__file__).resolve()
 _multi_league_dir = _script_file.parent.parent  # multi_league directory
@@ -219,13 +225,20 @@ def fetch_draft_picks(oauth, league_id: str, year: int) -> List[DraftPick]:
     return picks
 
 
-def fetch_team_and_player_mappings(oauth, league_id: str, timeout: int = 30) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str]]:
+def fetch_team_and_player_mappings(
+    oauth,
+    league_id: str,
+    timeout: int = 30,
+    manager_name_overrides: Optional[Dict[str, str]] = None
+) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str]]:
     """
     Fetch team and player mappings from Yahoo API.
 
     Args:
         oauth: OAuth2 session
         league_id: Yahoo league key
+        timeout: Request timeout in seconds
+        manager_name_overrides: Dict mapping team names/nicknames to real manager names
 
     Returns:
         Tuple of (team_key_to_manager, player_id_to_name, player_id_to_team)
@@ -244,10 +257,19 @@ def fetch_team_and_player_mappings(oauth, league_id: str, timeout: int = 30) -> 
         except (APITimeoutError, RecoverableAPIError):
             continue
 
-        nickname = (root.findtext("team/managers/manager/nickname") or "unknown").strip()
+        # Get raw nickname and team name
+        raw_nickname = (root.findtext("team/managers/manager/nickname") or "").strip()
+        team_name = (root.findtext("team/name") or "").strip()
         team_key = (root.findtext("team/team_key") or "").strip()
+
         if team_key:
-            team_key_to_manager[team_key] = nickname
+            # Normalize manager name (handles --hidden-- with team_name fallback)
+            manager_name = normalize_manager_name(
+                nickname=raw_nickname if raw_nickname else None,
+                overrides=manager_name_overrides,
+                team_name_fallback=team_name
+            )
+            team_key_to_manager[team_key] = manager_name
 
         players = root.findall("team/roster/players/player")
         player_ids = [p.findtext("player_id") for p in players if p.find("player_id") is not None]
@@ -621,8 +643,16 @@ def fetch_draft_data(
         if logger:
             logger.start_step("fetch_mappings")
 
+        # Get manager_name_overrides from context (for --hidden-- fallback)
+        manager_overrides = ctx.manager_name_overrides if ctx else {}
+
         team_key_to_manager, player_id_to_name, player_id_to_team = \
-            fetch_team_and_player_mappings(oauth, year_league_id, timeout=timeout)
+            fetch_team_and_player_mappings(
+                oauth,
+                year_league_id,
+                timeout=timeout,
+                manager_name_overrides=manager_overrides
+            )
 
         print(f"[draft] Fetched {len(team_key_to_manager)} teams, {len(player_id_to_name)} players")
 

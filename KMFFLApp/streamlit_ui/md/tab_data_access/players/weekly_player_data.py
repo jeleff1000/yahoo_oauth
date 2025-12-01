@@ -330,7 +330,12 @@ def load_filtered_weekly_player_data(
         for col in ["manager", "nfl_position", "fantasy_position", "nfl_team", "opponent_nfl_team"]:
             vals = filters.get(col) or []
             if vals:
-                where.append(f"{col} IN ({sql_in_list(vals)})")
+                if col == "manager":
+                    # Case-insensitive manager comparison (matchup table has different case than player)
+                    lower_vals = [v.lower() for v in vals]
+                    where.append(f"LOWER({col}) IN ({sql_in_list(lower_vals)})")
+                else:
+                    where.append(f"{col} IN ({sql_in_list(vals)})")
 
         if filters.get("opp_manager"):
             vals = filters.get("opp_manager")

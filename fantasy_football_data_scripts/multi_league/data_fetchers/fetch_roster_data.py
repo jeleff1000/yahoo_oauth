@@ -26,6 +26,12 @@ from typing import Dict, List, Any, Optional
 
 import pandas as pd
 
+# Import shared name normalization
+try:
+    from .clean_names import normalize_manager_name
+except ImportError:
+    from clean_names import normalize_manager_name
+
 # Try to import Yahoo OAuth
 try:
     from yahoo_oauth import OAuth2
@@ -57,7 +63,8 @@ class YahooRosterFetcher:
         league_id: str,
         rate_limit: float = 2.0,
         max_retries: int = 5,
-        output_dir: Optional[Path] = None
+        output_dir: Optional[Path] = None,
+        manager_name_overrides: Optional[Dict[str, str]] = None
     ):
         """
         Initialize the roster fetcher.
@@ -68,12 +75,14 @@ class YahooRosterFetcher:
             rate_limit: Max requests per second
             max_retries: Max retry attempts
             output_dir: Directory to save output files
+            manager_name_overrides: Dict mapping team names/nicknames to real manager names
         """
         self.league_id = league_id
         self.rate_limit = rate_limit
         self.max_retries = max_retries
         self.output_dir = Path(output_dir) if output_dir else Path.cwd()
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.manager_name_overrides = manager_name_overrides or {}
 
         # Initialize OAuth
         self.oauth = self._initialize_oauth(oauth_file)
@@ -165,7 +174,7 @@ class YahooRosterFetcher:
         Fetch all teams in the league.
 
         Returns:
-            Dict mapping team_key to manager_name
+            Dict mapping team_key to manager_name (normalized)
         """
         url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{self.league_id}/teams"
 
@@ -183,18 +192,22 @@ class YahooRosterFetcher:
                 if manager_elem is None:
                     manager_elem = team_elem.find(".//manager/guid")
 
-                # Fallback to team name
+                # Get team name (used as fallback for --hidden-- managers)
                 name_elem = team_elem.find("name")
+                team_name = name_elem.text if name_elem is not None else None
 
                 if team_key_elem is not None:
                     team_key = team_key_elem.text
 
-                    if manager_elem is not None:
-                        manager_name = manager_elem.text
-                    elif name_elem is not None:
-                        manager_name = name_elem.text
-                    else:
-                        manager_name = f"Team {team_key}"
+                    # Get raw nickname from Yahoo
+                    raw_nickname = manager_elem.text if manager_elem is not None else None
+
+                    # Normalize manager name (handles --hidden-- with team_name fallback)
+                    manager_name = normalize_manager_name(
+                        nickname=raw_nickname,
+                        overrides=self.manager_name_overrides,
+                        team_name_fallback=team_name
+                    )
 
                     teams[team_key] = manager_name
 

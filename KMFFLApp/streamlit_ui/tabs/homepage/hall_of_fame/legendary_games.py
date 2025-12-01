@@ -60,15 +60,16 @@ class LegendaryGamesViewer:
     def _display_highest_scoring(self):
         st.markdown("### 🔥 Extreme Scoring Games")
 
-        # Mobile-friendly toggle
-        game_type = st.radio(
-            "",
-            ["Regular Season", "Playoffs"],
-            horizontal=True,
-            key="extreme_scoring_game_type"
-        )
+        scoring_tabs = st.tabs(["Regular Season", "Playoffs"])
 
-        is_playoff = 1 if game_type == "Playoffs" else 0
+        for tab_idx, tab in enumerate(scoring_tabs):
+            with tab:
+                self._render_scoring_content(tab_idx)
+
+    def _render_scoring_content(self, tab_idx):
+        """Render scoring content for given tab index."""
+        is_playoff = tab_idx
+        game_type = "Playoffs" if is_playoff else "Regular Season"
 
         try:
             # Query for highest scoring
@@ -197,15 +198,16 @@ class LegendaryGamesViewer:
     def _display_closest_games(self):
         st.markdown("### 😱 Nail-Biters: Closest Games Ever")
 
-        # Mobile-friendly toggle
-        game_type = st.radio(
-            "",
-            ["Regular Season", "Playoffs"],
-            horizontal=True,
-            key="closest_games_game_type"
-        )
+        closest_tabs = st.tabs(["Regular Season", "Playoffs"])
 
-        is_playoff = 1 if game_type == "Playoffs" else 0
+        for tab_idx, tab in enumerate(closest_tabs):
+            with tab:
+                self._render_closest_content(tab_idx)
+
+    def _render_closest_content(self, tab_idx):
+        """Render closest games content for given tab index."""
+        is_playoff = tab_idx
+        game_type = "Playoffs" if is_playoff else "Regular Season"
 
         try:
             query = f"""
@@ -280,15 +282,16 @@ class LegendaryGamesViewer:
             st.warning("Upset detection requires projected points data")
             return
 
-        # Mobile-friendly toggle
-        game_type = st.radio(
-            "",
-            ["Regular Season", "Playoffs"],
-            horizontal=True,
-            key="upsets_game_type"
-        )
+        upsets_tabs = st.tabs(["Regular Season", "Playoffs"])
 
-        is_playoff = 1 if game_type == "Playoffs" else 0
+        for tab_idx, tab in enumerate(upsets_tabs):
+            with tab:
+                self._render_upsets_content(tab_idx)
+
+    def _render_upsets_content(self, tab_idx):
+        """Render upsets content for given tab index."""
+        is_playoff = tab_idx
+        game_type = "Playoffs" if is_playoff else "Regular Season"
 
         try:
             query = f"""
@@ -379,15 +382,16 @@ class LegendaryGamesViewer:
     def _display_rivalries(self):
         st.markdown("### ⚔️ Classic Rivalry Matchups")
 
-        # Mobile-friendly toggle
-        game_type = st.radio(
-            "",
-            ["Regular Season", "Playoffs"],
-            horizontal=True,
-            key="rivalries_game_type"
-        )
+        rivalry_tabs = st.tabs(["Regular Season", "Playoffs"])
 
-        is_playoff = 1 if game_type == "Playoffs" else 0
+        for tab_idx, tab in enumerate(rivalry_tabs):
+            with tab:
+                self._render_rivalries_content(tab_idx)
+
+    def _render_rivalries_content(self, tab_idx):
+        """Render rivalries content for given tab index."""
+        is_playoff = tab_idx
+        game_type = "Playoffs" if is_playoff else "Regular Season"
 
         try:
             query = f"""

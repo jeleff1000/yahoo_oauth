@@ -36,19 +36,13 @@ class LeaderboardsViewer:
             st.info("📊 No data available")
             return
 
-        # Toggle between views
-        view = st.radio(
-            "",
-            ["🏅 Career", "📈 Seasons", "⚡ Weeks"],
-            horizontal=True,
-            key="leaderboards_view"
-        )
+        tabs = st.tabs(["🏅 Career", "📈 Seasons", "⚡ Weeks"])
 
-        if view == "🏅 Career":
+        with tabs[0]:
             self._display_career_leaders()
-        elif view == "📈 Seasons":
+        with tabs[1]:
             self._display_top_seasons()
-        else:
+        with tabs[2]:
             self._display_top_weeks()
 
     @st.fragment
@@ -134,21 +128,22 @@ class LeaderboardsViewer:
     def _display_top_seasons(self):
         st.markdown("### 📈 Greatest Seasons")
 
-        # Filter controls
-        game_type = st.radio(
-            "",
-            ["Regular Season", "Playoffs", "All Games"],
-            horizontal=True,
-            key="top_seasons_game_type"
-        )
+        # Filter tabs
+        season_tabs = st.tabs(["Regular Season", "Playoffs", "All Games"])
 
+        for tab_idx, tab in enumerate(season_tabs):
+            with tab:
+                self._render_seasons_content(tab_idx)
+
+    def _render_seasons_content(self, tab_idx):
+        """Render seasons content for given tab index."""
         try:
-            # Build WHERE clause
-            if game_type == "Regular Season":
+            # Build WHERE clause based on tab
+            if tab_idx == 0:  # Regular Season
                 where_clause = "is_playoffs = 0 AND COALESCE(is_consolation, 0) = 0"
-            elif game_type == "Playoffs":
+            elif tab_idx == 1:  # Playoffs
                 where_clause = "is_playoffs = 1"
-            else:
+            else:  # All Games
                 where_clause = "COALESCE(is_consolation, 0) = 0"
 
             query = f"""
@@ -234,16 +229,18 @@ class LeaderboardsViewer:
     def _display_top_weeks(self):
         st.markdown("### ⚡ Highest Single-Week Performances")
 
-        # Toggle Regular Season vs Playoffs
-        game_type = st.radio(
-            "",
-            ["Regular Season", "Playoffs"],
-            horizontal=True,
-            key="top_weeks_game_type"
-        )
+        # Filter tabs
+        week_tabs = st.tabs(["Regular Season", "Playoffs"])
 
+        for tab_idx, tab in enumerate(week_tabs):
+            with tab:
+                self._render_weeks_content(tab_idx)
+
+    def _render_weeks_content(self, tab_idx):
+        """Render weeks content for given tab index."""
         try:
-            is_playoff = 1 if game_type == "Playoffs" else 0
+            is_playoff = tab_idx  # 0 = Regular Season, 1 = Playoffs
+            game_type = "playoffs" if is_playoff else "regular season"
 
             query = f"""
                 SELECT
@@ -263,14 +260,14 @@ class LeaderboardsViewer:
             weeks = self.con.execute(query).fetchdf()
 
             if weeks.empty:
-                st.info(f"No {game_type.lower()} weeks available")
+                st.info(f"No {game_type} weeks available")
                 return
 
             # Narrative for top week
             top = weeks.iloc[0]
             result_text = "won" if top['result'] == 'W' else "lost"
             st.markdown(narrative_callout(
-                f"The highest {game_type.lower()} score ever: {top['manager']} dropped {top['points']:.1f} points "
+                f"The highest {game_type} score ever: {top['manager']} dropped {top['points']:.1f} points "
                 f"in Week {int(top['week'])}, {int(top['year'])} and {result_text} against {top['opponent']}!",
                 "🔥"
             ), unsafe_allow_html=True)
