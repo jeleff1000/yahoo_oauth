@@ -528,42 +528,43 @@ def main():
         color: rgba(255, 255, 255, 0.95);
     }
 
-    /* Subtab radio buttons - cleaner styling */
-    .stPopover .stRadio > div,
-    [data-testid="stPopoverBody"] .stRadio > div {
+    /* Primary button (current section) styling */
+    .stPopover button[kind="primary"],
+    [data-testid="stPopoverBody"] button[kind="primary"] {
+        background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%) !important;
+        border: none !important;
+        box-shadow: 0 0 12px rgba(129, 140, 248, 0.4) !important;
+    }
+    .stPopover button[kind="primary"]:hover,
+    [data-testid="stPopoverBody"] button[kind="primary"]:hover {
+        box-shadow: 0 0 16px rgba(129, 140, 248, 0.5) !important;
+    }
+
+    /* Secondary buttons (other sections) */
+    .stPopover button[kind="secondary"],
+    .stPopover button:not([kind="primary"]),
+    [data-testid="stPopoverBody"] button[kind="secondary"],
+    [data-testid="stPopoverBody"] button:not([kind="primary"]) {
+        background: transparent !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        color: rgba(255, 255, 255, 0.8) !important;
+    }
+    .stPopover button[kind="secondary"]:hover,
+    .stPopover button:not([kind="primary"]):hover,
+    [data-testid="stPopoverBody"] button[kind="secondary"]:hover,
+    [data-testid="stPopoverBody"] button:not([kind="primary"]):hover {
+        background: rgba(255, 255, 255, 0.08) !important;
+        border-color: rgba(129, 140, 248, 0.4) !important;
+    }
+
+    /* Subtab buttons - indented and smaller */
+    .stPopover button[key^="sub_"],
+    [data-testid="stPopoverBody"] button[key^="sub_"] {
         margin-left: 1rem !important;
-        padding-left: 0.75rem !important;
-        border-left: 2px solid rgba(129, 140, 248, 0.4) !important;
-        gap: 2px !important;
-        flex-direction: column !important;
-    }
-    .stPopover .stRadio label,
-    [data-testid="stPopoverBody"] .stRadio label {
-        font-size: 0.82rem !important;
+        font-size: 0.85rem !important;
         padding: 6px 10px !important;
-        min-height: unset !important;
-        color: rgba(255, 255, 255, 0.7) !important;
-        border-radius: 6px !important;
-    }
-    .stPopover .stRadio label:hover,
-    [data-testid="stPopoverBody"] .stRadio label:hover {
-        background: rgba(129, 140, 248, 0.15) !important;
-        color: rgba(255, 255, 255, 0.95) !important;
-    }
-    .stPopover .stRadio input:checked + div,
-    .stPopover .stRadio input:checked ~ label,
-    [data-testid="stPopoverBody"] .stRadio input:checked + div,
-    [data-testid="stPopoverBody"] .stRadio input:checked ~ label {
-        color: #A78BFA !important;
-        font-weight: 500 !important;
-        background: rgba(129, 140, 248, 0.25) !important;
-    }
-    .stPopover .stRadio [data-baseweb="radio"],
-    [data-testid="stPopoverBody"] .stRadio [data-baseweb="radio"] {
-        width: 10px !important;
-        height: 10px !important;
-        min-width: 10px !important;
-        min-height: 10px !important;
+        border-left: 2px solid rgba(129, 140, 248, 0.4) !important;
+        border-radius: 0 6px 6px 0 !important;
     }
 
     @media (max-width: 768px) {
@@ -614,32 +615,22 @@ def main():
                 is_expanded = st.session_state.get("menu_expanded") == name
 
                 if is_current:
-                    # Current section - bright header with optional chevron
-                    chevron = "▼" if is_expanded else "▶" if has_subtabs else ""
-                    chevron_class = "expanded" if is_expanded else ""
-
-                    # Clickable header to toggle expansion
-                    col1, col2 = st.columns([0.85, 0.15])
-                    with col1:
-                        st.markdown(f'<div class="menu-current">{icon} {name}</div>', unsafe_allow_html=True)
-                    with col2:
+                    # Current section - clicking toggles expansion if has subtabs
+                    chevron = " ▼" if is_expanded and has_subtabs else " ▶" if has_subtabs else ""
+                    if st.button(f"{icon} {name}{chevron}", key=f"current_{name}", use_container_width=True, type="primary"):
                         if has_subtabs:
-                            if st.button("▼" if is_expanded else "▶", key=f"toggle_{name}", help="Toggle subtabs"):
-                                st.session_state["menu_expanded"] = None if is_expanded else name
-                                st.rerun()
-
-                    # Subtabs as radio (only if expanded)
-                    if has_subtabs and is_expanded:
-                        new_subtab = st.radio(
-                            "Subtab",
-                            options=section_subtabs,
-                            index=current_subtab_idx,
-                            key=f"radio_{name}",
-                            label_visibility="collapsed"
-                        )
-                        if section_subtabs.index(new_subtab) != current_subtab_idx:
-                            st.session_state[f"subtab_{name}"] = section_subtabs.index(new_subtab)
+                            st.session_state["menu_expanded"] = None if is_expanded else name
                             st.rerun()
+
+                    # Subtabs as buttons (only if expanded)
+                    if has_subtabs and is_expanded:
+                        for sub_idx, sub_name in enumerate(section_subtabs):
+                            is_active_sub = (sub_idx == current_subtab_idx)
+                            # Use markdown for subtab items with custom styling
+                            sub_class = "subtab-active" if is_active_sub else "subtab-item"
+                            if st.button(f"  {'●' if is_active_sub else '○'} {sub_name}", key=f"sub_{name}_{sub_idx}", use_container_width=True):
+                                st.session_state[f"subtab_{name}"] = sub_idx
+                                st.rerun()
                 else:
                     # Other sections - buttons
                     if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
