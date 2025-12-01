@@ -411,31 +411,29 @@ def enrich_draft_with_player_stats(
         if draft_df['league_id'].dtype != 'string':
             draft_df['league_id'] = draft_df['league_id'].astype('string')
 
-        # Check if player_df has ANY non-null league_ids
-        player_has_league_ids = player_df['league_id'].notna().any() and not (player_df['league_id'] == '<NA>').all()
+        # Get unique league_ids from draft (the leagues we need to match)
+        draft_leagues = set(draft_df['league_id'].dropna().unique()) - {'<NA>'}
 
-        if player_has_league_ids:
-            # Player data has meaningful league_ids - use for filtering and joining
+        # Get unique non-NA league_ids from player data
+        player_leagues = set(player_df['league_id'].dropna().unique()) - {'<NA>'}
+
+        print(f"  Draft leagues: {draft_leagues}")
+        print(f"  Player leagues with data: {player_leagues}")
+
+        # Check if player data covers ALL draft leagues
+        if player_leagues and draft_leagues.issubset(player_leagues):
+            # Player data covers all draft leagues - safe to use league_id for join
             use_league_id_for_join = True
-            draft_league_id = draft_df['league_id'].iloc[0] if len(draft_df) > 0 else None
-            if draft_league_id and pd.notna(draft_league_id):
-                draft_league_id = str(draft_league_id)
-                print(f"  Filtering player data to league: {draft_league_id}")
-
-                # Keep rows that either match the league_id OR have NA league_id
-                player_df = player_df[
-                    (player_df['league_id'] == draft_league_id) |
-                    (player_df['league_id'].isna()) |
-                    (player_df['league_id'] == '<NA>')
-                ].copy()
-                # Fill NA league_ids with the draft league_id
-                mask_na = player_df['league_id'].isna()
-                mask_str_na = player_df['league_id'] == '<NA>'
-                player_df.loc[mask_na | mask_str_na, 'league_id'] = draft_league_id
-                print(f"    Filtered to {len(player_df):,} player records")
+            print(f"  [INFO] Player data covers all draft leagues - using league_id for join")
+        elif player_leagues:
+            # Player data has SOME league_ids but not all - DON'T use league_id for join
+            # This would cause 0 matches for leagues not in player data
+            missing = draft_leagues - player_leagues
+            print(f"  [WARNING] Player data missing leagues: {missing}")
+            print(f"  [INFO] Using yahoo_player_id + year ONLY for join (ignoring league_id)")
+            use_league_id_for_join = False
         else:
             # Player data has ALL NA league_ids - don't use for join
-            # This happens when player data is imported from NFL stats (not fantasy rosters)
             print(f"  [INFO] Player data has all-NA league_ids - NOT using league_id for join")
             use_league_id_for_join = False
 
