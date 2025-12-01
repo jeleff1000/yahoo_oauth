@@ -105,9 +105,25 @@ def render_filter_ui(
     Returns:
         Dictionary with filter selections
     """
-    # Compact filter expander - collapsed by default to reduce clutter
+    # Compact filter expander with tighter spacing
+    st.markdown("""
+    <style>
+    /* Tighter filter spacing */
+    [data-testid="stExpander"] .stMultiSelect,
+    [data-testid="stExpander"] .stCheckbox,
+    [data-testid="stExpander"] .stSelectbox {
+        margin-bottom: 0.25rem !important;
+    }
+    [data-testid="stExpander"] [data-testid="column"] {
+        padding: 0 0.25rem !important;
+    }
+    [data-testid="stExpander"] .stMarkdown p {
+        margin-bottom: 0.25rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     with st.expander("🔎 Filters", expanded=False):
-        # Row 1: Main entity filters (2 columns on mobile, 4 on desktop)
         col1, col2 = st.columns(2)
 
         with col1:
@@ -237,7 +253,7 @@ def apply_filters_with_loading(
     Returns:
         Filtered DataFrame
     """
-    filtered_df = filter_matchup_data(
+    return filter_matchup_data(
         _cache_key=None,
         df=df,
         selected_managers=filters['managers'],
@@ -250,12 +266,3 @@ def apply_filters_with_loading(
         consolation=filters['consolation'],
         result_filter=filters.get('result_filter', 'All'),
     )
-
-    # Only show count if filters are active (not showing all data)
-    total_rows = len(df)
-    filtered_rows = len(filtered_df)
-
-    if filtered_rows < total_rows:
-        st.caption(f"Showing {filtered_rows:,} of {total_rows:,} matchups")
-
-    return filtered_df

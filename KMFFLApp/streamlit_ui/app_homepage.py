@@ -459,33 +459,48 @@ def main():
         }
     }
 
-    /* Horizontal subtab buttons - pill style */
+    /* Horizontal subtab buttons - compact tab style (not bulky pills) */
+    .stColumns button {
+        padding: 0.4rem 0.75rem !important;
+        min-height: unset !important;
+        height: auto !important;
+        font-size: 0.85rem !important;
+        border-radius: 6px 6px 0 0 !important;
+        margin-bottom: -1px !important;
+    }
     .stColumns button[kind="primary"] {
-        background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%) !important;
+        background: transparent !important;
         border: none !important;
-        border-radius: 20px !important;
+        border-bottom: 2px solid #818CF8 !important;
+        color: #A78BFA !important;
         font-weight: 600 !important;
-        box-shadow: 0 2px 8px rgba(129, 140, 248, 0.3) !important;
+        box-shadow: none !important;
     }
     .stColumns button[kind="secondary"],
     .stColumns button:not([kind="primary"]) {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        border-radius: 20px !important;
-        color: rgba(255, 255, 255, 0.7) !important;
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        color: rgba(255, 255, 255, 0.5) !important;
+        font-weight: 500 !important;
     }
     .stColumns button[kind="secondary"]:hover,
     .stColumns button:not([kind="primary"]):hover {
-        background: rgba(255, 255, 255, 0.1) !important;
-        border-color: rgba(129, 140, 248, 0.5) !important;
-        color: rgba(255, 255, 255, 0.9) !important;
+        background: rgba(255, 255, 255, 0.05) !important;
+        border-bottom: 2px solid rgba(129, 140, 248, 0.4) !important;
+        color: rgba(255, 255, 255, 0.85) !important;
+    }
+    /* Underline container for subtabs */
+    .stColumns {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 0.75rem !important;
     }
 
-    /* Mobile: stack subtabs or scroll */
+    /* Mobile: smaller text */
     @media (max-width: 768px) {
         .stColumns button {
-            font-size: 0.8rem !important;
-            padding: 0.4rem 0.6rem !important;
+            font-size: 0.75rem !important;
+            padding: 0.35rem 0.5rem !important;
         }
     }
     </style>
