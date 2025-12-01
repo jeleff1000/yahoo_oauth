@@ -440,24 +440,9 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
                 st.code(HALL_OF_FAME_ERROR)
 
     elif section_name == "Standings":
-        st.markdown('<div class="section-header"><h3>Season Standings</h3></div>', unsafe_allow_html=True)
-
         if matchup_df is None or matchup_df.empty:
             st.info("Season Standings will appear once game data is loaded.")
         else:
-            try:
-                total_teams = matchup_df['manager'].nunique()
-                current_week = int(matchup_df['week'].max())
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Teams", total_teams)
-                with col2:
-                    st.metric("Current Week", current_week)
-                with col3:
-                    st.metric("Games Played", len(matchup_df))
-            except Exception:
-                pass
-
             display_season_standings(matchup_df, prefix="standings")
 
     elif section_name == "Schedules":

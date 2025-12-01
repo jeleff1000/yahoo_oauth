@@ -608,19 +608,7 @@ class PlayoffBracketsViewer:
             help="Choose a playoff season to view the bracket"
         )
 
-        # Show playoff format info
         year_playoffs = playoff_df[playoff_df['year'] == selected_year]
-        num_teams = year_playoffs['final_playoff_seed'].nunique()
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Playoff Teams", num_teams)
-        with col2:
-            total_games = len(year_playoffs) // 2
-            st.metric("Total Games", total_games)
-        with col3:
-            avg_score = year_playoffs['team_points'].mean()
-            st.metric("Avg Score", f"{avg_score:.1f}")
 
         # Create bracket
         fig = self.create_bracket(selected_year)
@@ -640,26 +628,6 @@ class PlayoffBracketsViewer:
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
         st.markdown("</div>", unsafe_allow_html=True)
-
-        # Additional playoff statistics
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("#### 📊 Scoring Highlights")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            high_score = year_playoffs['team_points'].max()
-            high_scorer = year_playoffs.loc[year_playoffs['team_points'].idxmax(), 'manager']
-            st.metric("Highest Score", f"{high_score:.1f}", delta=high_scorer, delta_color="off")
-
-        with col2:
-            year_playoffs = year_playoffs.copy()
-            year_playoffs['margin'] = abs(
-                year_playoffs['team_points'] - year_playoffs['opponent_points']
-            )
-            closest = year_playoffs['margin'].min()
-            closest_game = year_playoffs.loc[year_playoffs['margin'].idxmin()]
-            st.metric("Closest Game", f"{closest:.1f} pts", delta_color="off")
 
         # Seed legend (simplified)
         with st.expander("🎯 Seed Legend", expanded=False):
