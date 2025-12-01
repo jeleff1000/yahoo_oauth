@@ -58,221 +58,152 @@ class LegendaryGamesViewer:
 
     @st.fragment
     def _display_highest_scoring(self):
-        st.markdown("### 🔥 Extreme Scoring Games")
-
-        scoring_tabs = st.tabs(["Regular Season", "Playoffs"])
-
-        for tab_idx, tab in enumerate(scoring_tabs):
-            with tab:
-                self._render_scoring_content(tab_idx)
-
-    def _render_scoring_content(self, tab_idx):
-        """Render scoring content for given tab index."""
-        is_playoff = tab_idx
-        game_type = "Playoffs" if is_playoff else "Regular Season"
+        st.markdown("### 🔥 Highest Scoring Games")
 
         try:
-            # Query for highest scoring
-            high_query = f"""
-                WITH unique_games AS (
-                    SELECT
-                        CAST(year AS INT) as year,
-                        CAST(week AS INT) as week,
-                        manager,
-                        opponent,
-                        CAST(team_points AS DOUBLE) as team_pts,
-                        CAST(opponent_points AS DOUBLE) as opp_pts,
-                        CAST(is_playoffs AS INT) as is_playoffs,
-                        CASE
-                            WHEN manager < opponent THEN manager || '|' || opponent
-                            ELSE opponent || '|' || manager
-                        END as match_key
-                    FROM matchups
-                    WHERE COALESCE(is_consolation, 0) = 0
-                ),
-                deduped AS (
-                    SELECT *,
-                        team_pts + opp_pts as combined_score,
-                        CASE WHEN team_pts > opp_pts THEN manager ELSE opponent END as winner,
-                        CASE WHEN team_pts > opp_pts THEN opponent ELSE manager END as loser,
-                        CASE WHEN team_pts > opp_pts THEN team_pts ELSE opp_pts END as winner_score,
-                        CASE WHEN team_pts > opp_pts THEN opp_pts ELSE team_pts END as loser_score,
-                        ROW_NUMBER() OVER (PARTITION BY year, week, match_key ORDER BY team_pts DESC) as rn
-                    FROM unique_games
-                )
-                SELECT year, week, winner, loser, winner_score, loser_score, combined_score, is_playoffs
-                FROM deduped
-                WHERE rn = 1 AND is_playoffs = {is_playoff}
-                ORDER BY combined_score DESC
-                LIMIT 10
-            """
+            # Query for both regular season and playoffs
+            def get_high_games(is_playoff):
+                query = f"""
+                    WITH unique_games AS (
+                        SELECT
+                            CAST(year AS INT) as year,
+                            CAST(week AS INT) as week,
+                            manager, opponent,
+                            CAST(team_points AS DOUBLE) as team_pts,
+                            CAST(opponent_points AS DOUBLE) as opp_pts,
+                            CASE WHEN manager < opponent THEN manager || '|' || opponent
+                                 ELSE opponent || '|' || manager END as match_key
+                        FROM matchups
+                        WHERE COALESCE(is_consolation, 0) = 0 AND CAST(is_playoffs AS INT) = {is_playoff}
+                    ),
+                    deduped AS (
+                        SELECT *, team_pts + opp_pts as combined,
+                            CASE WHEN team_pts > opp_pts THEN manager ELSE opponent END as winner,
+                            CASE WHEN team_pts > opp_pts THEN opponent ELSE manager END as loser,
+                            CASE WHEN team_pts > opp_pts THEN team_pts ELSE opp_pts END as win_pts,
+                            CASE WHEN team_pts > opp_pts THEN opp_pts ELSE team_pts END as lose_pts,
+                            ROW_NUMBER() OVER (PARTITION BY year, week, match_key ORDER BY team_pts DESC) as rn
+                        FROM unique_games
+                    )
+                    SELECT year, week, winner, loser, win_pts, lose_pts, combined
+                    FROM deduped WHERE rn = 1 ORDER BY combined DESC LIMIT 5
+                """
+                return self.con.execute(query).fetchdf()
 
-            low_query = f"""
-                WITH unique_games AS (
-                    SELECT
-                        CAST(year AS INT) as year,
-                        CAST(week AS INT) as week,
-                        manager,
-                        opponent,
-                        CAST(team_points AS DOUBLE) as team_pts,
-                        CAST(opponent_points AS DOUBLE) as opp_pts,
-                        CAST(is_playoffs AS INT) as is_playoffs,
-                        CASE
-                            WHEN manager < opponent THEN manager || '|' || opponent
-                            ELSE opponent || '|' || manager
-                        END as match_key
-                    FROM matchups
-                    WHERE COALESCE(is_consolation, 0) = 0
-                ),
-                deduped AS (
-                    SELECT *,
-                        team_pts + opp_pts as combined_score,
-                        CASE WHEN team_pts > opp_pts THEN manager ELSE opponent END as winner,
-                        CASE WHEN team_pts > opp_pts THEN opponent ELSE manager END as loser,
-                        CASE WHEN team_pts > opp_pts THEN team_pts ELSE opp_pts END as winner_score,
-                        CASE WHEN team_pts > opp_pts THEN opp_pts ELSE team_pts END as loser_score,
-                        ROW_NUMBER() OVER (PARTITION BY year, week, match_key ORDER BY team_pts DESC) as rn
-                    FROM unique_games
-                )
-                SELECT year, week, winner, loser, winner_score, loser_score, combined_score, is_playoffs
-                FROM deduped
-                WHERE rn = 1 AND is_playoffs = {is_playoff}
-                ORDER BY combined_score ASC
-                LIMIT 10
-            """
+            reg_games = get_high_games(0)
+            playoff_games = get_high_games(1)
 
-            high_games = self.con.execute(high_query).fetchdf()
-            low_games = self.con.execute(low_query).fetchdf()
+            col1, col2 = st.columns(2)
 
-            # Highest scoring section
-            st.markdown(f"#### 🔥 Highest Scoring ({game_type})")
+            with col1:
+                st.markdown("#### Regular Season")
+                if not reg_games.empty:
+                    for _, row in reg_games.iterrows():
+                        st.markdown(f"""
+                            <div class='hof-game-card'>
+                                <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
+                                <span class='game-stat' style='color: var(--success);'>{row['combined']:.1f}</span></div>
+                                <div style='font-size: 0.9rem;'>
+                                    <div>✅ {row['winner']} <span style='float:right;'>{row['win_pts']:.1f}</span></div>
+                                    <div style='color: var(--text-muted);'>❌ {row['loser']} <span style='float:right;'>{row['lose_pts']:.1f}</span></div>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No games found")
 
-            if high_games is not None and not high_games.empty:
-                # Narrative callout
-                top = high_games.iloc[0]
-                st.markdown(narrative_callout(
-                    f"The highest scoring {game_type.lower()} game ever: {top['winner']} vs {top['loser']} "
-                    f"combined for {top['combined_score']:.1f} points in Week {int(top['week'])}, {int(top['year'])}!",
-                    "🔥"
-                ), unsafe_allow_html=True)
-
-                for _, row in high_games.iterrows():
-                    st.markdown(game_card(
-                        winner=row['winner'],
-                        loser=row['loser'],
-                        winner_pts=row['winner_score'],
-                        loser_pts=row['loser_score'],
-                        year=int(row['year']),
-                        week=int(row['week']),
-                        is_playoff=(is_playoff == 1),
-                        highlight_stat=f"{row['combined_score']:.1f} Total"
-                    ), unsafe_allow_html=True)
-            else:
-                st.info(f"No {game_type.lower()} games found")
-
-            # Lowest scoring section
-            st.markdown("---")
-            st.markdown(f"#### 🧊 Lowest Scoring ({game_type})")
-
-            if low_games is not None and not low_games.empty:
-                for _, row in low_games.iterrows():
-                    st.markdown(game_card(
-                        winner=row['winner'],
-                        loser=row['loser'],
-                        winner_pts=row['winner_score'],
-                        loser_pts=row['loser_score'],
-                        year=int(row['year']),
-                        week=int(row['week']),
-                        is_playoff=(is_playoff == 1),
-                        highlight_stat=f"{row['combined_score']:.1f} Total"
-                    ), unsafe_allow_html=True)
-            else:
-                st.info(f"No {game_type.lower()} games found")
+            with col2:
+                st.markdown("#### Playoffs")
+                if not playoff_games.empty:
+                    for _, row in playoff_games.iterrows():
+                        st.markdown(f"""
+                            <div class='hof-game-card hof-game-card-playoff'>
+                                <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
+                                <span class='game-stat' style='color: var(--success);'>{row['combined']:.1f}</span></div>
+                                <div style='font-size: 0.9rem;'>
+                                    <div>✅ {row['winner']} <span style='float:right;'>{row['win_pts']:.1f}</span></div>
+                                    <div style='color: var(--text-muted);'>❌ {row['loser']} <span style='float:right;'>{row['lose_pts']:.1f}</span></div>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No playoff games found")
 
         except Exception as e:
             st.error(f"Error loading highest scoring games: {e}")
-            import traceback
-            st.code(traceback.format_exc())
 
     @st.fragment
     def _display_closest_games(self):
-        st.markdown("### 😱 Nail-Biters: Closest Games Ever")
-
-        closest_tabs = st.tabs(["Regular Season", "Playoffs"])
-
-        for tab_idx, tab in enumerate(closest_tabs):
-            with tab:
-                self._render_closest_content(tab_idx)
-
-    def _render_closest_content(self, tab_idx):
-        """Render closest games content for given tab index."""
-        is_playoff = tab_idx
-        game_type = "Playoffs" if is_playoff else "Regular Season"
+        st.markdown("### 😱 Closest Games")
 
         try:
-            query = f"""
-                WITH unique_games AS (
-                    SELECT
-                        CAST(year AS INT) as year,
-                        CAST(week AS INT) as week,
-                        manager,
-                        opponent,
-                        CAST(team_points AS DOUBLE) as team_pts,
-                        CAST(opponent_points AS DOUBLE) as opp_pts,
-                        CAST(is_playoffs AS INT) as is_playoffs,
-                        CASE
-                            WHEN manager < opponent THEN manager || '|' || opponent
-                            ELSE opponent || '|' || manager
-                        END as match_key
-                    FROM matchups
-                    WHERE COALESCE(is_consolation, 0) = 0
-                ),
-                deduped AS (
-                    SELECT *,
-                        ABS(team_pts - opp_pts) as margin,
-                        CASE WHEN team_pts > opp_pts THEN manager ELSE opponent END as winner,
-                        CASE WHEN team_pts > opp_pts THEN opponent ELSE manager END as loser,
-                        CASE WHEN team_pts > opp_pts THEN team_pts ELSE opp_pts END as winner_score,
-                        CASE WHEN team_pts > opp_pts THEN opp_pts ELSE team_pts END as loser_score,
-                        ROW_NUMBER() OVER (PARTITION BY year, week, match_key ORDER BY team_pts DESC) as rn
-                    FROM unique_games
-                )
-                SELECT year, week, winner, loser, winner_score, loser_score, margin, is_playoffs
-                FROM deduped
-                WHERE rn = 1 AND is_playoffs = {is_playoff}
-                ORDER BY margin ASC
-                LIMIT 10
-            """
+            def get_closest_games(is_playoff):
+                query = f"""
+                    WITH unique_games AS (
+                        SELECT CAST(year AS INT) as year, CAST(week AS INT) as week,
+                            manager, opponent,
+                            CAST(team_points AS DOUBLE) as team_pts,
+                            CAST(opponent_points AS DOUBLE) as opp_pts,
+                            CASE WHEN manager < opponent THEN manager || '|' || opponent
+                                 ELSE opponent || '|' || manager END as match_key
+                        FROM matchups
+                        WHERE COALESCE(is_consolation, 0) = 0 AND CAST(is_playoffs AS INT) = {is_playoff}
+                    ),
+                    deduped AS (
+                        SELECT *, ABS(team_pts - opp_pts) as margin,
+                            CASE WHEN team_pts > opp_pts THEN manager ELSE opponent END as winner,
+                            CASE WHEN team_pts > opp_pts THEN opponent ELSE manager END as loser,
+                            CASE WHEN team_pts > opp_pts THEN team_pts ELSE opp_pts END as win_pts,
+                            CASE WHEN team_pts > opp_pts THEN opp_pts ELSE team_pts END as lose_pts,
+                            ROW_NUMBER() OVER (PARTITION BY year, week, match_key ORDER BY team_pts DESC) as rn
+                        FROM unique_games
+                    )
+                    SELECT year, week, winner, loser, win_pts, lose_pts, margin
+                    FROM deduped WHERE rn = 1 ORDER BY margin ASC LIMIT 5
+                """
+                return self.con.execute(query).fetchdf()
 
-            games = self.con.execute(query).fetchdf()
+            reg_games = get_closest_games(0)
+            playoff_games = get_closest_games(1)
 
-            if not games.empty:
-                # Narrative callout
-                top = games.iloc[0]
-                st.markdown(narrative_callout(
-                    f"The closest {game_type.lower()} game ever: {top['winner']} beat {top['loser']} by just "
-                    f"{top['margin']:.2f} points in Week {int(top['week'])}, {int(top['year'])}!",
-                    "😱"
-                ), unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
 
-                for _, row in games.iterrows():
-                    st.markdown(game_card(
-                        winner=row['winner'],
-                        loser=row['loser'],
-                        winner_pts=row['winner_score'],
-                        loser_pts=row['loser_score'],
-                        year=int(row['year']),
-                        week=int(row['week']),
-                        is_playoff=(is_playoff == 1),
-                        highlight_stat=f"±{row['margin']:.2f}"
-                    ), unsafe_allow_html=True)
-            else:
-                st.info(f"No {game_type.lower()} games found")
+            with col1:
+                st.markdown("#### Regular Season")
+                if not reg_games.empty:
+                    for _, row in reg_games.iterrows():
+                        st.markdown(f"""
+                            <div class='hof-game-card'>
+                                <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
+                                <span class='game-stat' style='color: var(--accent);'>±{row['margin']:.2f}</span></div>
+                                <div style='font-size: 0.9rem;'>
+                                    <div>✅ {row['winner']} <span style='float:right;'>{row['win_pts']:.1f}</span></div>
+                                    <div style='color: var(--text-muted);'>❌ {row['loser']} <span style='float:right;'>{row['lose_pts']:.1f}</span></div>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No games found")
+
+            with col2:
+                st.markdown("#### Playoffs")
+                if not playoff_games.empty:
+                    for _, row in playoff_games.iterrows():
+                        st.markdown(f"""
+                            <div class='hof-game-card hof-game-card-playoff'>
+                                <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
+                                <span class='game-stat' style='color: var(--accent);'>±{row['margin']:.2f}</span></div>
+                                <div style='font-size: 0.9rem;'>
+                                    <div>✅ {row['winner']} <span style='float:right;'>{row['win_pts']:.1f}</span></div>
+                                    <div style='color: var(--text-muted);'>❌ {row['loser']} <span style='float:right;'>{row['lose_pts']:.1f}</span></div>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No playoff games found")
 
         except Exception as e:
             st.error(f"Error loading closest games: {e}")
-            import traceback
-            st.code(traceback.format_exc())
 
     @st.fragment
     def _display_upsets(self):
@@ -282,197 +213,156 @@ class LegendaryGamesViewer:
             st.warning("Upset detection requires projected points data")
             return
 
-        upsets_tabs = st.tabs(["Regular Season", "Playoffs"])
-
-        for tab_idx, tab in enumerate(upsets_tabs):
-            with tab:
-                self._render_upsets_content(tab_idx)
-
-    def _render_upsets_content(self, tab_idx):
-        """Render upsets content for given tab index."""
-        is_playoff = tab_idx
-        game_type = "Playoffs" if is_playoff else "Regular Season"
-
         try:
-            query = f"""
-                WITH unique_games AS (
-                    SELECT
-                        CAST(year AS INT) as year,
-                        CAST(week AS INT) as week,
-                        manager,
-                        opponent,
-                        CAST(team_points AS DOUBLE) as team_pts,
-                        CAST(opponent_points AS DOUBLE) as opp_pts,
-                        CAST(manager_proj_score AS DOUBLE) as team_proj,
-                        CAST(opponent_proj_score AS DOUBLE) as opp_proj,
-                        CAST(is_playoffs AS INT) as is_playoffs,
-                        CAST(win AS INT) as win,
-                        CASE
-                            WHEN manager < opponent THEN manager || '|' || opponent
-                            ELSE opponent || '|' || manager
-                        END as match_key
-                    FROM matchups
-                    WHERE COALESCE(is_consolation, 0) = 0
-                        AND manager_proj_score IS NOT NULL
-                        AND opponent_proj_score IS NOT NULL
-                ),
-                deduped AS (
-                    SELECT *,
-                        ROW_NUMBER() OVER (PARTITION BY year, week, match_key ORDER BY team_pts DESC) as rn
-                    FROM unique_games
-                ),
-                upsets AS (
-                    SELECT *,
-                        CASE WHEN team_proj > opp_proj THEN manager ELSE opponent END as favored,
-                        CASE WHEN team_proj > opp_proj THEN opponent ELSE manager END as underdog,
-                        CASE WHEN team_proj > opp_proj THEN team_proj ELSE opp_proj END as favored_proj,
-                        CASE WHEN team_proj > opp_proj THEN opp_proj ELSE team_proj END as underdog_proj,
-                        CASE WHEN team_proj > opp_proj THEN team_pts ELSE opp_pts END as favored_actual,
-                        CASE WHEN team_proj > opp_proj THEN opp_pts ELSE team_pts END as underdog_actual,
-                        ABS(team_proj - opp_proj) as proj_diff
-                    FROM deduped
-                    WHERE rn = 1
-                        AND is_playoffs = {is_playoff}
-                        AND (
-                            (team_proj > opp_proj AND team_pts < opp_pts) OR
-                            (team_proj < opp_proj AND team_pts > opp_pts)
-                        )
-                        AND ABS(team_proj - opp_proj) > 5
-                )
-                SELECT year, week, favored, underdog, favored_proj, underdog_proj,
-                       favored_actual, underdog_actual, proj_diff, is_playoffs
-                FROM upsets
-                ORDER BY proj_diff DESC
-                LIMIT 10
-            """
+            def get_upsets(is_playoff):
+                query = f"""
+                    WITH unique_games AS (
+                        SELECT CAST(year AS INT) as year, CAST(week AS INT) as week,
+                            manager, opponent,
+                            CAST(team_points AS DOUBLE) as team_pts,
+                            CAST(opponent_points AS DOUBLE) as opp_pts,
+                            CAST(manager_proj_score AS DOUBLE) as team_proj,
+                            CAST(opponent_proj_score AS DOUBLE) as opp_proj,
+                            CASE WHEN manager < opponent THEN manager || '|' || opponent
+                                 ELSE opponent || '|' || manager END as match_key
+                        FROM matchups
+                        WHERE COALESCE(is_consolation, 0) = 0 AND CAST(is_playoffs AS INT) = {is_playoff}
+                            AND manager_proj_score IS NOT NULL AND opponent_proj_score IS NOT NULL
+                    ),
+                    deduped AS (
+                        SELECT *, ROW_NUMBER() OVER (PARTITION BY year, week, match_key ORDER BY team_pts DESC) as rn
+                        FROM unique_games
+                    ),
+                    upsets AS (
+                        SELECT *,
+                            CASE WHEN team_proj > opp_proj THEN manager ELSE opponent END as favored,
+                            CASE WHEN team_proj > opp_proj THEN opponent ELSE manager END as underdog,
+                            CASE WHEN team_proj > opp_proj THEN opp_pts ELSE team_pts END as underdog_pts,
+                            ABS(team_proj - opp_proj) as proj_diff
+                        FROM deduped
+                        WHERE rn = 1 AND ABS(team_proj - opp_proj) > 5
+                            AND ((team_proj > opp_proj AND team_pts < opp_pts) OR (team_proj < opp_proj AND team_pts > opp_pts))
+                    )
+                    SELECT year, week, favored, underdog, underdog_pts, proj_diff
+                    FROM upsets ORDER BY proj_diff DESC LIMIT 5
+                """
+                return self.con.execute(query).fetchdf()
 
-            upsets = self.con.execute(query).fetchdf()
+            reg_upsets = get_upsets(0)
+            playoff_upsets = get_upsets(1)
 
-            if not upsets.empty:
-                # Narrative callout
-                top = upsets.iloc[0]
-                st.markdown(narrative_callout(
-                    f"Biggest {game_type.lower()} upset: {top['underdog']} was projected to lose by {top['proj_diff']:.1f} points "
-                    f"to {top['favored']} in Week {int(top['week'])}, {int(top['year'])} - but pulled off the win!",
-                    "🎯"
-                ), unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
 
-                for _, row in upsets.iterrows():
-                    st.markdown(upset_card(
-                        favored=row['favored'],
-                        underdog=row['underdog'],
-                        favored_pts=row['favored_actual'],
-                        underdog_pts=row['underdog_actual'],
-                        favored_proj=row['favored_proj'],
-                        underdog_proj=row['underdog_proj'],
-                        year=int(row['year']),
-                        week=int(row['week']),
-                        proj_diff=row['proj_diff'],
-                        is_playoff=(is_playoff == 1)
-                    ), unsafe_allow_html=True)
-            else:
-                st.info(f"No major {game_type.lower()} upsets found (requiring 5+ point projection difference)")
+            with col1:
+                st.markdown("#### Regular Season")
+                if not reg_upsets.empty:
+                    for _, row in reg_upsets.iterrows():
+                        st.markdown(f"""
+                            <div class='hof-game-card' style='border-left: 3px solid var(--accent);'>
+                                <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
+                                <span class='game-stat' style='color: var(--accent);'>+{row['proj_diff']:.1f} upset</span></div>
+                                <div style='font-size: 0.9rem;'>
+                                    <div style='color: var(--success);'>🏆 {row['underdog']} <span style='float:right;'>{row['underdog_pts']:.1f}</span></div>
+                                    <div style='color: var(--text-muted);'>📉 {row['favored']} (favored)</div>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No major upsets found")
+
+            with col2:
+                st.markdown("#### Playoffs")
+                if not playoff_upsets.empty:
+                    for _, row in playoff_upsets.iterrows():
+                        st.markdown(f"""
+                            <div class='hof-game-card hof-game-card-playoff' style='border-left: 3px solid var(--accent);'>
+                                <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
+                                <span class='game-stat' style='color: var(--accent);'>+{row['proj_diff']:.1f} upset</span></div>
+                                <div style='font-size: 0.9rem;'>
+                                    <div style='color: var(--success);'>🏆 {row['underdog']} <span style='float:right;'>{row['underdog_pts']:.1f}</span></div>
+                                    <div style='color: var(--text-muted);'>📉 {row['favored']} (favored)</div>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No playoff upsets found")
 
         except Exception as e:
             st.error(f"Error loading upsets: {e}")
-            import traceback
-            st.code(traceback.format_exc())
 
     @st.fragment
     def _display_rivalries(self):
-        st.markdown("### ⚔️ Classic Rivalry Matchups")
-
-        rivalry_tabs = st.tabs(["Regular Season", "Playoffs"])
-
-        for tab_idx, tab in enumerate(rivalry_tabs):
-            with tab:
-                self._render_rivalries_content(tab_idx)
-
-    def _render_rivalries_content(self, tab_idx):
-        """Render rivalries content for given tab index."""
-        is_playoff = tab_idx
-        game_type = "Playoffs" if is_playoff else "Regular Season"
+        st.markdown("### ⚔️ Top Rivalries")
 
         try:
-            query = f"""
-                WITH unique_games AS (
-                    SELECT
-                        CAST(year AS INT) as year,
-                        CAST(week AS INT) as week,
-                        manager,
-                        opponent,
-                        CAST(team_points AS DOUBLE) as team_pts,
-                        CAST(opponent_points AS DOUBLE) as opp_pts,
-                        CAST(is_playoffs AS INT) as is_playoffs,
-                        CASE
-                            WHEN LOWER(manager) < LOWER(opponent) THEN LOWER(manager) || '|' || LOWER(opponent)
-                            ELSE LOWER(opponent) || '|' || LOWER(manager)
-                        END as match_key,
-                        CASE
-                            WHEN LOWER(manager) < LOWER(opponent) THEN manager
-                            ELSE opponent
-                        END as team_a,
-                        CASE
-                            WHEN LOWER(manager) < LOWER(opponent) THEN opponent
-                            ELSE manager
-                        END as team_b
-                    FROM matchups
-                    WHERE COALESCE(is_consolation, 0) = 0
-                ),
-                deduped AS (
-                    SELECT *,
-                        ROW_NUMBER() OVER (PARTITION BY year, week, match_key ORDER BY team_pts DESC) as rn
-                    FROM unique_games
-                ),
-                rivalry_stats AS (
-                    SELECT
-                        team_a,
-                        team_b,
-                        is_playoffs,
-                        COUNT(*) as total_games,
-                        SUM(CASE
-                            WHEN (LOWER(manager) = LOWER(team_a) AND team_pts > opp_pts) OR
-                                 (LOWER(opponent) = LOWER(team_a) AND opp_pts > team_pts)
-                            THEN 1 ELSE 0 END) as team_a_wins,
-                        ROUND(AVG(team_pts + opp_pts), 1) as avg_combined_score
-                    FROM deduped
-                    WHERE rn = 1 AND is_playoffs = {is_playoff}
-                    GROUP BY team_a, team_b, is_playoffs
-                    HAVING COUNT(*) >= 2
-                )
-                SELECT team_a, team_b, total_games, team_a_wins,
-                       total_games - team_a_wins as team_b_wins,
-                       avg_combined_score, is_playoffs
-                FROM rivalry_stats
-                ORDER BY total_games DESC, avg_combined_score DESC
-                LIMIT 10
-            """
+            def get_rivalries(is_playoff):
+                query = f"""
+                    WITH unique_games AS (
+                        SELECT CAST(year AS INT) as year, CAST(week AS INT) as week,
+                            manager, opponent,
+                            CAST(team_points AS DOUBLE) as team_pts,
+                            CAST(opponent_points AS DOUBLE) as opp_pts,
+                            CASE WHEN LOWER(manager) < LOWER(opponent) THEN manager ELSE opponent END as team_a,
+                            CASE WHEN LOWER(manager) < LOWER(opponent) THEN opponent ELSE manager END as team_b,
+                            CASE WHEN LOWER(manager) < LOWER(opponent) THEN LOWER(manager) || '|' || LOWER(opponent)
+                                 ELSE LOWER(opponent) || '|' || LOWER(manager) END as match_key
+                        FROM matchups
+                        WHERE COALESCE(is_consolation, 0) = 0 AND CAST(is_playoffs AS INT) = {is_playoff}
+                    ),
+                    deduped AS (
+                        SELECT *, ROW_NUMBER() OVER (PARTITION BY year, week, match_key ORDER BY team_pts DESC) as rn
+                        FROM unique_games
+                    ),
+                    rivalry_stats AS (
+                        SELECT team_a, team_b, COUNT(*) as games,
+                            SUM(CASE WHEN (LOWER(manager) = LOWER(team_a) AND team_pts > opp_pts) OR
+                                         (LOWER(opponent) = LOWER(team_a) AND opp_pts > team_pts)
+                                THEN 1 ELSE 0 END) as a_wins
+                        FROM deduped WHERE rn = 1 GROUP BY team_a, team_b HAVING COUNT(*) >= 2
+                    )
+                    SELECT team_a, team_b, games, a_wins, games - a_wins as b_wins
+                    FROM rivalry_stats ORDER BY games DESC LIMIT 5
+                """
+                return self.con.execute(query).fetchdf()
 
-            rivalries = self.con.execute(query).fetchdf()
+            reg_rivals = get_rivalries(0)
+            playoff_rivals = get_rivalries(1)
 
-            if not rivalries.empty:
-                # Narrative callout for top rivalry
-                top = rivalries.iloc[0]
-                st.markdown(narrative_callout(
-                    f"The most frequent {game_type.lower()} matchup: {top['team_a']} vs {top['team_b']} "
-                    f"have played {int(top['total_games'])} times! Current record: {int(top['team_a_wins'])}-{int(top['team_b_wins'])}",
-                    "⚔️"
-                ), unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
 
-                for _, row in rivalries.iterrows():
-                    st.markdown(rivalry_card(
-                        team_a=row['team_a'],
-                        team_b=row['team_b'],
-                        team_a_wins=int(row['team_a_wins']),
-                        team_b_wins=int(row['team_b_wins']),
-                        total_games=int(row['total_games']),
-                        avg_combined=row['avg_combined_score'],
-                        is_playoff=(is_playoff == 1)
-                    ), unsafe_allow_html=True)
-            else:
-                st.info(f"No {game_type.lower()} rivalries found (min 2 games)")
+            with col1:
+                st.markdown("#### Regular Season")
+                if not reg_rivals.empty:
+                    for _, row in reg_rivals.iterrows():
+                        st.markdown(f"""
+                            <div class='hof-game-card'>
+                                <div class='game-header'><span class='game-date'>{row['team_a']} vs {row['team_b']}</span>
+                                <span class='game-stat'>{int(row['games'])} games</span></div>
+                                <div style='font-size: 0.9rem;'>
+                                    <span>{row['team_a']}: <b>{int(row['a_wins'])}</b></span> ·
+                                    <span>{row['team_b']}: <b>{int(row['b_wins'])}</b></span>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No rivalries found")
+
+            with col2:
+                st.markdown("#### Playoffs")
+                if not playoff_rivals.empty:
+                    for _, row in playoff_rivals.iterrows():
+                        st.markdown(f"""
+                            <div class='hof-game-card hof-game-card-playoff'>
+                                <div class='game-header'><span class='game-date'>{row['team_a']} vs {row['team_b']}</span>
+                                <span class='game-stat'>{int(row['games'])} games</span></div>
+                                <div style='font-size: 0.9rem;'>
+                                    <span>{row['team_a']}: <b>{int(row['a_wins'])}</b></span> ·
+                                    <span>{row['team_b']}: <b>{int(row['b_wins'])}</b></span>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No playoff rivalries found")
 
         except Exception as e:
             st.error(f"Error loading rivalries: {e}")
-            import traceback
-            st.code(traceback.format_exc())
