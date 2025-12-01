@@ -1371,6 +1371,7 @@ def run_register_flow():
                                             "keeper_rules": None,
                                         }
                                         perform_import_flow(league_info)
+                                        return  # Don't continue rendering - import flow handles display
 
                                 with col_advanced:
                                     if st.button("Advanced Settings", key="advanced_settings_btn", type="secondary", use_container_width=True):
@@ -1434,6 +1435,7 @@ def run_register_flow():
                                         "manager_name_overrides": st.session_state.get("configured_manager_overrides", {}),
                                     }
                                     perform_import_flow(league_info)
+                                    return  # Don't continue rendering - import flow handles display
 
                     except Exception as e:
                         st.error(f"Error: {e}")
