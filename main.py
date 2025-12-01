@@ -1,9 +1,22 @@
 #!/usr/bin/env python3
+"""
+Fantasy Football Analytics - Main Streamlit Application
+
+This is the main entry point for the Streamlit app. It handles:
+- Page routing (landing, analytics, register)
+- OAuth callbacks
+- Session state management
+
+Most functionality is now modularized into streamlit_helpers/:
+- auth.py: OAuth authentication
+- yahoo_api.py: Yahoo Fantasy API calls
+- database.py: MotherDuck operations
+- import_flow.py: Import management
+- ui_components.py: Reusable UI components
+"""
 from __future__ import annotations
 
 import os
-import urllib.parse
-import base64
 import json
 from pathlib import Path
 from datetime import datetime, timezone
@@ -17,7 +30,6 @@ import re
 try:
     from fantasy_football_data_scripts.multi_league.core.league_context import LeagueContext
 except (ImportError, KeyError, ModuleNotFoundError):
-    # KeyError can occur during Streamlit's hot-reload due to sys.modules caching
     LeagueContext = None
 
 try:
@@ -35,112 +47,70 @@ try:
 except ImportError as e:
     raise ImportError("Missing dependency: duckdb. Install with `pip install duckdb`") from e
 
+# Import modularized helpers
+from streamlit_helpers.auth import (
+    build_authorize_url,
+    exchange_code_for_tokens,
+    save_oauth_token,
+    save_token_to_motherduck,
+    CLIENT_ID,
+    CLIENT_SECRET,
+    OAUTH_DIR,
+)
+from streamlit_helpers.yahoo_api import (
+    yahoo_api_call,
+    get_user_games,
+    get_user_football_leagues,
+    get_league_teams,
+    get_league_teams_all_years,
+    find_hidden_managers,
+    extract_football_games,
+    seasons_for_league_name,
+)
+from streamlit_helpers.database import (
+    format_league_display_name,
+    get_existing_league_databases,
+    validate_league_database,
+    create_import_job_in_motherduck,
+    get_job_status,
+    get_motherduck_progress,
+)
+from streamlit_helpers.import_flow import (
+    can_start_import as _can_start_import,
+    mark_import_started as _mark_import_started,
+    get_data_templates,
+)
+from streamlit_helpers.ui_components import (
+    load_custom_css,
+    render_hero,
+    render_feature_card,
+    render_status_badge,
+    render_job_card,
+    render_timeline,
+)
+
 
 # =========================
-# Import Protection (prevent double-clicks)
+# Import Protection (wrappers for session state)
 # =========================
 def can_start_import() -> tuple[bool, str]:
-    """
-    Check if a new import can be started.
-    Returns (can_start, reason_if_blocked).
-    """
-    import time
-
-    # Check if import is flagged as in progress
-    if st.session_state.get("import_in_progress", False):
-        return False, "Import already in progress"
-
-    # Check cooldown - prevent rapid clicks (30 second cooldown)
-    last_import_time = st.session_state.get("last_import_triggered_at", 0)
-    elapsed = time.time() - last_import_time
-    if elapsed < 30:
-        remaining = int(30 - elapsed)
-        return False, f"Please wait {remaining}s before starting another import"
-
-    # Check if we already have a job for this league
-    if st.session_state.get("import_job_id"):
-        return False, "An import job was already started. Check the status below."
-
-    return True, ""
+    """Check if a new import can be started. Wrapper for session state."""
+    return _can_start_import(st.session_state)
 
 
 def mark_import_started():
-    """Mark that an import has been started (for cooldown tracking)."""
-    import time
-    st.session_state.import_in_progress = True
-    st.session_state.last_import_triggered_at = time.time()
+    """Mark that an import has been started. Wrapper for session state."""
+    _mark_import_started(st.session_state)
 
 
 # =========================
-# MotherDuck Database Discovery
+# Constants and Paths
 # =========================
-def format_league_display_name(db_name: str) -> str:
-    """
-    Format league database name for display.
-    Strips 'l_' prefix that was added for digit-starting names.
-
-    Example: 'l_5townsfootball' -> '5townsfootball'
-    """
-    if not db_name:
-        return db_name
-    # Strip the 'l_' prefix if it was added because name started with a digit
-    if db_name.startswith("l_") and len(db_name) > 2 and db_name[2].isdigit():
-        return db_name[2:]
-    return db_name
-
-
-def get_existing_league_databases() -> list[str]:
-    """
-    Discover existing league databases in MotherDuck.
-    Returns a sorted list of database names (excluding system databases).
-    """
-    if not MOTHERDUCK_TOKEN:
-        return []
-
-    try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
-
-        # Query all databases
-        result = con.execute("SHOW DATABASES").fetchall()
-        con.close()
-
-        # Filter out system databases and return sorted list
-        system_dbs = {"my_db", "sample_data", "secrets", "ops", "information_schema", "md_information_schema"}
-        league_dbs = [
-            row[0] for row in result
-            if row[0].lower() not in system_dbs
-            and not row[0].startswith("_")
-            and not row[0].startswith("md_")  # Exclude MotherDuck system databases
-        ]
-
-        return sorted(league_dbs, key=str.lower)
-    except Exception as e:
-        st.warning(f"Could not discover databases: {e}")
-        return []
-
-
-def validate_league_database(db_name: str) -> bool:
-    """
-    Validate that a database has the expected league tables (matchup, player, etc.).
-    """
-    if not MOTHERDUCK_TOKEN or not db_name:
-        return False
-
-    try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
-
-        # Check if required tables exist
-        result = con.execute(f"SHOW TABLES IN {db_name}").fetchall()
-        con.close()
-
-        tables = {row[0].lower() for row in result}
-        required_tables = {"matchup", "player"}
-
-        return required_tables.issubset(tables)
-    except Exception:
-        return False
+MOTHERDUCK_TOKEN = os.environ.get("MOTHERDUCK_TOKEN") or st.secrets.get("MOTHERDUCK_TOKEN", "")
+ROOT_DIR = Path(__file__).parent.resolve()
+DATA_DIR = ROOT_DIR / "fantasy_football_data"
+SCRIPTS_DIR = ROOT_DIR / "fantasy_football_data_scripts"
+INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import_v2.py"
 
 
 # =========================
@@ -599,58 +569,6 @@ def render_keeper_rules_ui() -> Optional[dict]:
 # =========================
 # External Data Files Configuration UI
 # =========================
-def get_data_templates() -> dict:
-    """Return template structures for each data type."""
-    return {
-        "matchup": {
-            "description": "Weekly matchup results (scores, wins/losses)",
-            "required_columns": ["week", "year", "manager", "team_name", "team_points", "opponent", "opponent_points", "win", "loss"],
-            "optional_columns": ["team_projected_points", "opponent_projected_points", "margin", "division_id", "is_playoffs", "is_consolation"],
-            "example_row": {
-                "week": 1, "year": 2013, "manager": "John", "team_name": "Team Awesome",
-                "team_points": 125.5, "opponent": "Jane", "opponent_points": 110.2,
-                "win": 1, "loss": 0, "division_id": "", "is_playoffs": 0, "is_consolation": 0
-            }
-        },
-        "player": {
-            "description": "Weekly player stats (points scored per player per week)",
-            "required_columns": ["year", "week", "manager", "player", "points"],
-            "optional_columns": ["nfl_position", "lineup_position", "nfl_team", "projected_points", "percent_started", "percent_owned"],
-            "example_row": {
-                "year": 2013, "week": 1, "manager": "John", "player": "Patrick Mahomes",
-                "points": 28.5, "nfl_position": "QB", "lineup_position": "QB", "nfl_team": "KC"
-            }
-        },
-        "draft": {
-            "description": "Draft results (picks and costs)",
-            "required_columns": ["year", "round", "pick", "manager", "player"],
-            "optional_columns": ["cost", "keeper", "draft_type"],
-            "example_row": {
-                "year": 2013, "round": 1, "pick": 1, "manager": "John",
-                "player": "Adrian Peterson", "cost": 65, "keeper": 0, "draft_type": "auction"
-            }
-        },
-        "transactions": {
-            "description": "Waiver/FA pickups, drops, and trades",
-            "required_columns": ["year", "week", "manager", "player", "transaction_type"],
-            "optional_columns": ["faab_bid", "source_type", "destination_type", "trade_partner"],
-            "example_row": {
-                "year": 2013, "week": 3, "manager": "John", "player": "Tyreek Hill",
-                "transaction_type": "add", "faab_bid": 15, "source_type": "waivers"
-            }
-        },
-        "schedule": {
-            "description": "Season schedule (who plays who each week)",
-            "required_columns": ["year", "week", "manager", "opponent"],
-            "optional_columns": ["is_playoffs", "is_consolation", "week_start", "week_end"],
-            "example_row": {
-                "year": 2013, "week": 1, "manager": "John", "opponent": "Jane",
-                "is_playoffs": 0, "is_consolation": 0
-            }
-        }
-    }
-
-
 def render_external_data_ui() -> Optional[dict]:
     """
     Render the external data files configuration UI.
@@ -765,379 +683,8 @@ def render_external_data_ui() -> Optional[dict]:
 
 
 # =========================
-# Config / Secrets
+# Hidden Manager UI (must stay in main.py due to session state)
 # =========================
-CLIENT_ID = os.environ.get("YAHOO_CLIENT_ID") or st.secrets.get("YAHOO_CLIENT_ID", None)
-CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET") or st.secrets.get("YAHOO_CLIENT_SECRET", None)
-MOTHERDUCK_TOKEN = os.environ.get("MOTHERDUCK_TOKEN") or st.secrets.get("MOTHERDUCK_TOKEN", "")
-REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://leaguehistory.streamlit.app")
-
-AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
-TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
-
-ROOT_DIR = Path(__file__).parent.resolve()
-OAUTH_DIR = ROOT_DIR / "oauth"
-
-
-# =========================
-# Custom CSS
-# =========================
-def load_custom_css():
-    st.markdown("""
-    <style>
-    /* Import Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-    /* Global styles */
-    .main {
-        font-family: 'Inter', sans-serif;
-    }
-
-    /* Hero section */
-    .hero {
-        text-align: center;
-        padding: 3rem 1rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 1rem;
-        margin-bottom: 2rem;
-        color: white;
-    }
-
-    .hero h1 {
-        font-size: 3rem;
-        font-weight: 700;
-        margin-bottom: 1rem;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    .hero p {
-        font-size: 1.2rem;
-        opacity: 0.95;
-        margin-bottom: 2rem;
-    }
-
-    /* Feature cards */
-    .feature-card {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 0.75rem;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-
-    .feature-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        border-color: #667eea;
-    }
-
-    .feature-icon {
-        font-size: 2rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .feature-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-        color: #1a202c;
-    }
-
-    .feature-desc {
-        color: #718096;
-        font-size: 0.9rem;
-    }
-
-    /* Status badge */
-    .status-badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px;
-        font-size: 0.875rem;
-        font-weight: 500;
-        margin: 0.25rem;
-    }
-
-    .status-queued {
-        background: #fef3c7;
-        color: #92400e;
-    }
-
-    .status-running {
-        background: #dbeafe;
-        color: #1e40af;
-    }
-
-    .status-success {
-        background: #d1fae5;
-        color: #065f46;
-    }
-
-    .status-failed {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    /* Job card */
-    .job-card {
-        background: linear-gradient(135deg, #f6f8fc 0%, #ffffff 100%);
-        border-left: 4px solid #667eea;
-        border-radius: 0.5rem;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
-
-    .job-id {
-        font-family: 'Courier New', monospace;
-        background: #f1f5f9;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.25rem;
-        font-size: 0.85rem;
-    }
-
-    /* Stats grid */
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin: 1.5rem 0;
-    }
-
-    .stat-card {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 0.5rem;
-        padding: 1.25rem;
-        text-align: center;
-    }
-
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #667eea;
-        margin-bottom: 0.25rem;
-    }
-
-    .stat-label {
-        color: #718096;
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    /* Timeline */
-    .timeline-item {
-        position: relative;
-        padding-left: 2rem;
-        padding-bottom: 1.5rem;
-        border-left: 2px solid #e2e8f0;
-    }
-
-    .timeline-item:last-child {
-        border-left: 2px solid transparent;
-    }
-
-    .timeline-dot {
-        position: absolute;
-        left: -0.5rem;
-        width: 1rem;
-        height: 1rem;
-        border-radius: 50%;
-        background: #667eea;
-        border: 2px solid white;
-        box-shadow: 0 0 0 3px #e2e8f0;
-    }
-
-    .timeline-content {
-        margin-top: -0.25rem;
-    }
-
-    /* Button enhancements */
-    .stButton > button {
-        border-radius: 0.5rem;
-        font-weight: 500;
-        transition: all 0.2s ease;
-    }
-
-    .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-
-    /* Loading animation */
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-
-    .loading {
-        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    /* Hide Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
-
-
-# =========================
-# OAuth Helpers (same as before)
-# =========================
-def get_auth_header() -> str:
-    credentials = f"{CLIENT_ID}:{CLIENT_SECRET}"
-    encoded = base64.b64encode(credentials.encode()).decode()
-    return f"Basic {encoded}"
-
-
-def build_authorize_url(state: str | None = None) -> str:
-    params = {"client_id": CLIENT_ID, "redirect_uri": REDIRECT_URI, "response_type": "code"}
-    if state:
-        params["state"] = state
-    return AUTH_URL + "?" + urllib.parse.urlencode(params)
-
-
-def exchange_code_for_tokens(code: str) -> dict:
-    headers = {"Authorization": get_auth_header(), "Content-Type": "application/x-www-form-urlencoded"}
-    data = {"grant_type": "authorization_code", "redirect_uri": REDIRECT_URI, "code": code}
-    resp = requests.post(TOKEN_URL, headers=headers, data=data)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def yahoo_api_call(access_token: str, endpoint: str):
-    headers = {"Authorization": f"Bearer {access_token}"}
-    url = f"https://fantasysports.yahooapis.com/fantasy/v2/{endpoint}"
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def get_user_games(access_token: str):
-    return yahoo_api_call(access_token, "users;use_login=1/games?format=json")
-
-
-def get_user_football_leagues(access_token: str, game_key: str):
-    return yahoo_api_call(access_token, f"users;use_login=1/games;game_keys={game_key}/leagues?format=json")
-
-
-def get_league_teams(access_token: str, league_key: str, year: int = None) -> list[dict]:
-    """
-    Fetch all teams/managers for a league.
-    Returns list of dicts with team_name, manager_name, team_key, year.
-    """
-    try:
-        # Request teams with managers sub-resource
-        data = yahoo_api_call(access_token, f"league/{league_key}/teams/managers?format=json")
-        teams = []
-
-        league_data = data.get("fantasy_content", {}).get("league", [])
-        if len(league_data) > 1:
-            teams_data = league_data[1].get("teams", {})
-            for key in teams_data:
-                if key == "count":
-                    continue
-
-                team_entry = teams_data[key].get("team", [])
-                team_name = "Unknown Team"
-                manager_name = None
-
-                # Parse team info - it's a nested structure
-                for part in team_entry:
-                    if isinstance(part, list):
-                        for item in part:
-                            if isinstance(item, dict):
-                                if "name" in item:
-                                    team_name = item["name"]
-                                if "managers" in item:
-                                    # Extract manager nickname
-                                    mgrs = item["managers"]
-                                    if isinstance(mgrs, list) and mgrs:
-                                        mgr_data = mgrs[0].get("manager", {})
-                                        manager_name = mgr_data.get("nickname") or mgr_data.get("manager_id")
-                                    elif isinstance(mgrs, dict):
-                                        for mk in mgrs:
-                                            if mk != "count":
-                                                mgr_data = mgrs[mk].get("manager", {})
-                                                manager_name = mgr_data.get("nickname") or mgr_data.get("manager_id")
-                                                break
-                    elif isinstance(part, dict):
-                        if "name" in part:
-                            team_name = part["name"]
-                        if "managers" in part:
-                            mgrs = part["managers"]
-                            if isinstance(mgrs, list) and mgrs:
-                                mgr_data = mgrs[0].get("manager", {})
-                                manager_name = mgr_data.get("nickname") or mgr_data.get("manager_id")
-
-                # Only add if we have a valid manager_name (could be --hidden-- or actual name)
-                teams.append({
-                    "team_key": "",
-                    "team_name": team_name,
-                    "manager_name": manager_name if manager_name else "Unknown",
-                    "year": year,
-                })
-
-        return teams
-    except Exception as e:
-        # Don't warn for old years that might not exist
-        return []
-
-
-def get_league_teams_all_years(access_token: str, league_name: str, games_data: dict) -> list[dict]:
-    """
-    Fetch teams/managers across all years for a league.
-    Returns list of dicts with team_name, manager_name, team_key, year.
-    """
-    all_teams = []
-    football_games = extract_football_games(games_data)
-
-    for game in football_games:
-        game_key = game.get("game_key")
-        year = game.get("season")
-
-        try:
-            # Get leagues for this game/year
-            leagues_data = get_user_football_leagues(access_token, game_key)
-            leagues = (
-                leagues_data.get("fantasy_content", {})
-                .get("users", {}).get("0", {}).get("user", [])[1]
-                .get("games", {}).get("0", {}).get("game", [])[1]
-                .get("leagues", {})
-            )
-
-            for key in leagues:
-                if key == "count":
-                    continue
-                league = leagues[key].get("league", [])[0]
-                if league.get("name") == league_name:
-                    league_key = league.get("league_key")
-                    teams = get_league_teams(access_token, league_key, year)
-                    all_teams.extend(teams)
-                    break
-
-        except Exception:
-            continue
-
-    return all_teams
-
-
-def find_hidden_managers(teams: list[dict]) -> list[dict]:
-    """Find teams with hidden manager names (only --hidden-- pattern)"""
-    hidden_teams = []
-
-    for team in teams:
-        mgr_name = (team.get("manager_name") or "").strip()
-        # Only flag actual "--hidden--" managers, not unknown/empty
-        if mgr_name == "--hidden--" or mgr_name.lower() == "hidden":
-            hidden_teams.append(team)
-
-    return hidden_teams
-
-
 def render_hidden_manager_ui(hidden_teams: list[dict], all_teams: list[dict]) -> dict:
     """
     Render UI to identify hidden managers by their team names.
@@ -1190,175 +737,8 @@ def render_hidden_manager_ui(hidden_teams: list[dict], all_teams: list[dict]) ->
     return overrides
 
 
-def extract_football_games(games_data):
-    """Extract NFL games from Yahoo API response, sorted by season descending (latest first)."""
-    football_games = []
-    try:
-        games = games_data.get("fantasy_content", {}).get("users", {}).get("0", {}).get("user", [])[1].get("games", {})
-        for key in games:
-            if key == "count":
-                continue
-            game = games[key].get("game")
-            if isinstance(game, list):
-                game = game[0]
-            if game and game.get("code") == "nfl":
-                football_games.append({
-                    "game_key": game.get("game_key"),
-                    "season": game.get("season"),
-                    "name": game.get("name"),
-                })
-    except Exception:
-        pass
-    # Sort by season descending so latest year appears first in dropdown
-    football_games.sort(key=lambda g: int(g.get("season", 0)), reverse=True)
-    return football_games
-
-
-def save_oauth_token(token_data: dict, league_info: dict | None = None) -> Path:
-    """
-    Save OAuth token. Behavior:
-    - Always write a global token-only file at oauth/Oauth.json (no league_info) for yahoo-oauth compatibility.
-    - If `league_info` is provided, also write a per-league file named oauth/Oauth_<league_key>.json that includes league_info.
-    Returns the Path to the file written (per-league file when league_info provided, otherwise global file).
-    """
-    OAUTH_DIR.mkdir(parents=True, exist_ok=True)
-    oauth_file = OAUTH_DIR / "Oauth.json"
-
-    # Token data (keeps global file free of league metadata)
-    oauth_data = {
-        "access_token": token_data.get("access_token"),
-        "refresh_token": token_data.get("refresh_token"),
-        "consumer_key": CLIENT_ID,
-        "consumer_secret": CLIENT_SECRET,
-        "token_type": token_data.get("token_type", "bearer"),
-        "expires_in": token_data.get("expires_in", 3600),
-        "token_time": datetime.now(timezone.utc).timestamp(),
-        "guid": token_data.get("xoauth_yahoo_guid"),
-        "timestamp": datetime.now().isoformat(),
-    }
-
-    # Write the global token-only file. For Streamlit Cloud behavior we want
-    # the global oauth/Oauth.json to reflect the token for the league being
-    # imported so library code reading the default path picks it up. We'll
-    # write atomically to avoid partial files.
-    def _atomic_write(path: Path, data: dict):
-        tmp = path.with_name(f".{path.name}.tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-        try:
-            tmp.replace(path)
-        except Exception:
-            # best-effort fallback
-            tmp.rename(path)
-
-    try:
-        # Always ensure a global token exists (overwrite when saving per-league)
-        _atomic_write(oauth_file, oauth_data)
-    except Exception:
-        # If writing global file fails, continue — per-league file (below) may still be written
-        pass
-
-    # If league_info provided, write a per-league file so selecting a league doesn't overwrite the global token file
-    if league_info:
-        league_key = league_info.get("league_key") or league_info.get("league_id") or "unknown"
-        # sanitize league_key for filename
-        safe_key = re.sub(r"[^a-zA-Z0-9_-]", "_", str(league_key))
-        per_file = OAUTH_DIR / f"Oauth_{safe_key}.json"
-        per_data = oauth_data.copy()
-        per_data["league_info"] = league_info
-        try:
-            # Write per-league file atomically as well
-            tmp = per_file.with_name(f".{per_file.name}.tmp")
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(per_data, f, indent=2)
-            try:
-                tmp.replace(per_file)
-            except Exception:
-                tmp.rename(per_file)
-            return per_file
-        except Exception:
-            # fallback to returning global file when per-league write fails
-            return oauth_file
-
-    return oauth_file
-
-
-def save_token_to_motherduck(token_data: dict, league_info: Optional[dict] = None) -> Optional[str]:
-    try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS secrets.yahoo_oauth_tokens (
-                id TEXT, league_key TEXT, token_json TEXT, updated_at TIMESTAMP
-            )
-        """)
-        row_id = str(uuid.uuid4())
-        league_key = league_info.get("league_key") if league_info else None
-        token_for_storage = {
-            "access_token": token_data.get("access_token"),
-            "refresh_token": token_data.get("refresh_token"),
-            "consumer_key": CLIENT_ID,
-            "consumer_secret": CLIENT_SECRET,
-            "token_type": token_data.get("token_type", "bearer"),
-            "expires_in": token_data.get("expires_in", 3600),
-            "token_time": datetime.now(timezone.utc).timestamp(),
-            "guid": token_data.get("xoauth_yahoo_guid"),
-            "league_info": league_info,
-        }
-        token_json = json.dumps(token_for_storage)
-        con.execute("INSERT INTO secrets.yahoo_oauth_tokens VALUES (?,?,?,?)",
-                    [row_id, league_key, token_json, datetime.now()])
-        con.close()
-        return row_id
-    except Exception:
-        return None
-
-
-def create_import_job_in_motherduck(league_info: dict) -> Optional[str]:
-    try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS ops.import_status (
-                job_id TEXT, league_key TEXT, league_name TEXT, season TEXT,
-                status TEXT, created_at TIMESTAMP, updated_at TIMESTAMP
-            )
-        """)
-        job_id = str(uuid.uuid4())
-        now = datetime.now()
-        con.execute("INSERT INTO ops.import_status VALUES (?,?,?,?,?,?,?)",
-                    [job_id, league_info.get("league_key"), league_info.get("name"),
-                     str(league_info.get("season", "")), "queued", now, now])
-        con.close()
-        return job_id
-    except Exception:
-        return None
-
-
-def get_job_status(job_id: str) -> dict:
-    try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
-        result = con.execute(
-            "SELECT status, updated_at FROM ops.import_status WHERE job_id = ?",
-            [job_id]
-        ).fetchone()
-        con.close()
-        if result:
-            return {"status": result[0], "updated_at": result[1]}
-        return {"status": "not_found"}
-    except Exception:
-        return {"status": "error"}
-
-
-# Paths used by the import runner
-DATA_DIR = ROOT_DIR / "fantasy_football_data"
-SCRIPTS_DIR = ROOT_DIR / "fantasy_football_data_scripts"
-INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import_v2.py"
-
-
 # =========================
-# Simplified File Collection
+# Streamlit-Aware File Collection (with session state handling)
 # =========================
 def collect_parquet_files(base_dir: Optional[Path] = None) -> list[Path]:
     """
@@ -1466,38 +846,6 @@ def upload_to_motherduck(files: list[Path], db_name: str, token: str) -> list[tu
 
     con.close()
     return results
-
-
-# =========================
-# Season Discovery
-# =========================
-def seasons_for_league_name(access_token: str, all_games: list[dict], target_league_name: str) -> list[str]:
-    """Find all seasons where this league exists"""
-    seasons = set()
-    for g in all_games:
-        game_key = g.get("game_key")
-        season = str(g.get("season", "")).strip()
-        if not game_key or not season:
-            continue
-        try:
-            leagues_data = get_user_football_leagues(access_token, game_key)
-            leagues = (
-                leagues_data.get("fantasy_content", {})
-                .get("users", {}).get("0", {}).get("user", [])[1]
-                .get("games", {}).get("0", {}).get("game", [])[1]
-                .get("leagues", {})
-            )
-            for key in leagues:
-                if key == "count":
-                    continue
-                league = leagues[key].get("league", [])[0]
-                name = league.get("name")
-                if name == target_league_name:
-                    seasons.add(season)
-                    break
-        except Exception:
-            pass
-    return sorted(seasons)
 
 
 # =========================
@@ -1682,92 +1030,8 @@ def run_initial_import() -> bool:
 
 
 # =========================
-# UI Components
+# UI Components (session state aware - not in ui_components.py)
 # =========================
-def render_hero():
-    st.markdown("""
-    <div class="hero">
-        <h1>🏈 Fantasy Football Analytics</h1>
-        <p>Transform your Yahoo Fantasy Football data into powerful insights</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def render_feature_card(icon: str, title: str, description: str):
-    st.markdown(f"""
-    <div class="feature-card">
-        <div class="feature-icon">{icon}</div>
-        <div class="feature-title">{title}</div>
-        <div class="feature-desc">{description}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def render_status_badge(status: str) -> str:
-    status_map = {
-        "queued": ("⏳", "status-queued", "Queued"),
-        "running": ("🔄", "status-running", "Running"),
-        "success": ("✅", "status-success", "Complete"),
-        "failed": ("❌", "status-failed", "Failed"),
-    }
-    icon, css_class, label = status_map.get(status, ("", "status-queued", status))
-    return f'<span class="status-badge {css_class}">{icon} {label}</span>'
-
-
-def render_job_card(job_id: str, league_name: str, status: str):
-    st.markdown(f"""
-    <div class="job-card">
-        <h3>🎯 {league_name}</h3>
-        <p><strong>Job ID:</strong> <span class="job-id">{job_id}</span></p>
-        <p><strong>Status:</strong> {render_status_badge(status)}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def get_motherduck_progress(job_id: str) -> Optional[dict]:
-    """
-    Query MotherDuck for import progress.
-    Returns progress dict or None if not available.
-    """
-    motherduck_token = os.environ.get("MOTHERDUCK_TOKEN")
-    if not motherduck_token or not job_id:
-        return None
-
-    try:
-        import duckdb
-        con = duckdb.connect("md:")
-
-        result = con.execute("""
-            SELECT job_id, league_name, phase, stage, stage_detail,
-                   current_step, total_steps, overall_pct, status,
-                   error_message, started_at, updated_at
-            FROM ops.import_progress
-            WHERE job_id = ?
-        """, [job_id]).fetchone()
-
-        con.close()
-
-        if result:
-            return {
-                "job_id": result[0],
-                "league_name": result[1],
-                "phase": result[2],
-                "stage": result[3],
-                "stage_detail": result[4],
-                "current_step": result[5],
-                "total_steps": result[6],
-                "overall_pct": result[7] or 0,
-                "status": result[8],
-                "error_message": result[9],
-                "started_at": result[10],
-                "updated_at": result[11],
-            }
-        return None
-    except Exception as e:
-        # Table might not exist yet
-        return None
-
-
 def render_import_progress():
     """
     Render the import progress tracker.
@@ -1913,41 +1177,6 @@ def render_import_progress():
             st.warning(f"Error fetching progress: {e}")
     else:
         st.info("Waiting for progress data... The import script will report progress once it starts.")
-
-
-def render_timeline():
-    st.markdown("""
-    <div style="margin: 2rem 0;">
-        <div class="timeline-item">
-            <div class="timeline-dot"></div>
-            <div class="timeline-content">
-                <strong>Step 1: Connect</strong>
-                <p style="color: #718096; font-size: 0.9rem;">Authenticate with your Yahoo account</p>
-            </div>
-        </div>
-        <div class="timeline-item">
-            <div class="timeline-dot"></div>
-            <div class="timeline-content">
-                <strong>Step 2: Select</strong>
-                <p style="color: #718096; font-size: 0.9rem;">Choose your league and season</p>
-            </div>
-        </div>
-        <div class="timeline-item">
-            <div class="timeline-dot"></div>
-            <div class="timeline-content">
-                <strong>Step 3: Import</strong>
-                <p style="color: #718096; font-size: 0.9rem;">Queue your data for processing</p>
-            </div>
-        </div>
-        <div class="timeline-item">
-            <div class="timeline-dot"></div>
-            <div class="timeline-content">
-                <strong>Step 4: Analyze</strong>
-                <p style="color: #718096; font-size: 0.9rem;">Query your data from anywhere</p>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
 
 # =========================
