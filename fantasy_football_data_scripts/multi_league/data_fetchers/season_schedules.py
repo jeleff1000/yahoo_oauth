@@ -72,7 +72,7 @@ gm = None  # Will be initialized in main() with proper oauth
 # =============================================================================
 REQ_COLUMNS = [
     "is_playoffs", "is_consolation",
-    "manager", "team_name",
+    "manager", "manager_guid", "team_name",
     "cumulative_week", "manager_week", "manager_year",
     "opponent", "opponent_week", "opponent_year",
     "week", "year",
