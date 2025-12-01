@@ -427,20 +427,6 @@ def main():
         min-width: 200px !important;
     }
 
-    /* Category separator */
-    .menu-separator {
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        margin: 10px 0 6px 0;
-        padding-top: 6px;
-    }
-    .menu-separator-label {
-        font-size: 0.65rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: rgba(255, 255, 255, 0.4);
-        margin-bottom: 4px;
-    }
-
     /* Primary button (current section) - bright glow */
     .stPopover button[kind="primary"],
     [data-testid="stPopoverBody"] button[kind="primary"] {
@@ -505,36 +491,18 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Define category groups for visual organization
-    category_groups = [
-        {"label": None, "items": ["Home"]},
-        {"label": "Data", "items": ["Managers", "Team Stats", "Players"]},
-        {"label": "History", "items": ["Draft", "Transactions"]},
-        {"label": "Tools", "items": ["Simulations", "Extras"]},
-    ]
-
     # Simple hamburger menu - main sections only
     with st.popover("☰ Menu"):
-        for group in category_groups:
-            if group["label"]:
-                st.markdown(f'''
-                <div class="menu-separator">
-                    <div class="menu-separator-label">{group["label"]}</div>
-                </div>
-                ''', unsafe_allow_html=True)
+        for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
+            is_current = (i == current_idx)
 
-            for name in group["items"]:
-                i = tab_names.index(name)
-                icon = tab_icons[i]
-                is_current = (i == current_idx)
-
-                if is_current:
-                    st.button(f"{icon} {name}", key=f"current_{name}", use_container_width=True, type="primary", disabled=True)
-                else:
-                    if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
-                        st.session_state["active_main_tab"] = i
-                        st.session_state[f"subtab_{name}"] = 0
-                        st.rerun()
+            if is_current:
+                st.button(f"{icon} {name}", key=f"current_{name}", use_container_width=True, type="primary", disabled=True)
+            else:
+                if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
+                    st.session_state["active_main_tab"] = i
+                    st.session_state[f"subtab_{name}"] = 0
+                    st.rerun()
 
     # Get subtabs for current section
     section_subtabs = subtabs.get(selected_tab)
