@@ -37,6 +37,41 @@ except ImportError as e:
 
 
 # =========================
+# Import Protection (prevent double-clicks)
+# =========================
+def can_start_import() -> tuple[bool, str]:
+    """
+    Check if a new import can be started.
+    Returns (can_start, reason_if_blocked).
+    """
+    import time
+
+    # Check if import is flagged as in progress
+    if st.session_state.get("import_in_progress", False):
+        return False, "Import already in progress"
+
+    # Check cooldown - prevent rapid clicks (30 second cooldown)
+    last_import_time = st.session_state.get("last_import_triggered_at", 0)
+    elapsed = time.time() - last_import_time
+    if elapsed < 30:
+        remaining = int(30 - elapsed)
+        return False, f"Please wait {remaining}s before starting another import"
+
+    # Check if we already have a job for this league
+    if st.session_state.get("import_job_id"):
+        return False, "An import job was already started. Check the status below."
+
+    return True, ""
+
+
+def mark_import_started():
+    """Mark that an import has been started (for cooldown tracking)."""
+    import time
+    st.session_state.import_in_progress = True
+    st.session_state.last_import_triggered_at = time.time()
+
+
+# =========================
 # MotherDuck Database Discovery
 # =========================
 def format_league_display_name(db_name: str) -> str:
@@ -115,6 +150,10 @@ def render_keeper_rules_ui() -> Optional[dict]:
     """
     Render the keeper rules configuration UI.
     Returns a keeper_rules dict if configured, None if keepers are disabled.
+
+    Supports formula-based keeper price calculations matching LeagueContext schema:
+    - formulas_by_keeper_year: {"1": {...}, "2+": {...}}
+    - base_cost_rules: {"auction": {...}, "faab_only": {...}, "free_agent": {...}}
     """
     st.markdown("### Keeper League Settings")
 
@@ -136,7 +175,7 @@ def render_keeper_rules_ui() -> Optional[dict]:
     # Step 1: Basic Settings
     st.markdown("#### 1. Basic Settings")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         max_keepers = st.number_input(
             "Maximum keepers per team",
@@ -151,245 +190,249 @@ def render_keeper_rules_ui() -> Optional[dict]:
             key="max_keeper_years",
             help="How many consecutive years can you keep the same player? (1 = can keep once, then must release)"
         )
+    with col3:
+        budget = st.number_input(
+            "Auction budget",
+            min_value=50, max_value=1000, value=200,
+            key="keeper_budget",
+            help="Total auction dollars each team has"
+        )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        min_price = st.number_input(
+            "Minimum keeper price",
+            min_value=0, max_value=50, value=1,
+            key="min_keeper_price",
+            help="Lowest cost a keeper can be"
+        )
+    with col2:
+        max_price = st.number_input(
+            "Maximum keeper price",
+            min_value=0, max_value=500, value=0,
+            key="max_keeper_price",
+            help="Highest cost a keeper can be (0 = no limit)"
+        )
+    with col3:
+        round_to_integer = st.checkbox(
+            "Round prices to whole dollars",
+            value=True,
+            key="round_to_integer",
+            help="Round calculated keeper prices to nearest dollar"
+        )
 
     st.markdown("---")
 
-    # Step 2: Draft Type
-    st.markdown("#### 2. Draft Type")
+    # Step 2: Base Cost Rules (How original cost is determined)
+    st.markdown("#### 2. Base Cost Rules")
+    st.caption("How is the original keeper cost determined based on how you acquired the player?")
 
-    draft_type = st.radio(
-        "What type of draft does your league use?",
-        ["Auction ($$)", "Snake (Rounds)", "Both (Hybrid)"],
+    # Acquisition type selector
+    acquisition_types_info = {
+        "auction": "Players drafted in an auction (you paid $X)",
+        "snake": "Players drafted in a snake draft (you used a round pick)",
+        "faab_only": "Players picked up via FAAB waivers only (no draft cost)",
+        "free_agent": "Players picked up as free agents ($0 FAAB)"
+    }
+
+    base_cost_rules = {}
+
+    for acq_type, description in acquisition_types_info.items():
+        with st.expander(f"**{acq_type.replace('_', ' ').title()}** - {description}", expanded=(acq_type == "auction")):
+
+            source_options = {
+                "auction": ["Draft price paid", "Draft price + flat adjustment", "Draft price × multiplier", "Custom formula"],
+                "snake": ["Round number as dollars", "Fixed cost per round", "Custom formula"],
+                "faab_only": ["FAAB bid amount", "FAAB × multiplier", "Fixed cost", "FAAB + flat adjustment", "Custom formula"],
+                "free_agent": ["Fixed cost", "Custom formula"]
+            }
+
+            source = st.selectbox(
+                "Base cost calculation:",
+                source_options[acq_type],
+                key=f"base_cost_source_{acq_type}"
+            )
+
+            rule = {"source": source}
+
+            if "flat adjustment" in source.lower():
+                rule["adjustment"] = st.number_input(
+                    "Adjustment ($)",
+                    min_value=-100, max_value=100, value=0,
+                    key=f"base_cost_adj_{acq_type}",
+                    help="Amount to add to the base cost (can be negative)"
+                )
+
+            if "multiplier" in source.lower():
+                rule["multiplier"] = st.number_input(
+                    "Multiplier",
+                    min_value=0.1, max_value=5.0, value=1.0, step=0.1,
+                    key=f"base_cost_mult_{acq_type}",
+                    help="Multiply the base cost by this factor (e.g., 0.5 = half)"
+                )
+
+            if "fixed" in source.lower():
+                rule["value"] = st.number_input(
+                    "Fixed cost ($)",
+                    min_value=0, max_value=100, value=5 if acq_type != "free_agent" else 1,
+                    key=f"base_cost_fixed_{acq_type}"
+                )
+
+            if "per round" in source.lower():
+                rule["dollars_per_round"] = st.number_input(
+                    "Dollars per round",
+                    min_value=1, max_value=50, value=10,
+                    key=f"base_cost_per_round_{acq_type}",
+                    help="e.g., Round 3 pick = 3 × $10 = $30"
+                )
+
+            if "custom formula" in source.lower():
+                st.markdown("**Custom Formula Variables:**")
+                st.caption("`draft_price`, `faab_bid`, `round`, `keeper_year`")
+                rule["formula"] = st.text_input(
+                    "Formula expression:",
+                    value="draft_price + 5" if acq_type == "auction" else "faab_bid * 0.5" if acq_type == "faab_only" else "5",
+                    key=f"base_cost_formula_{acq_type}",
+                    help="Python-style expression. Example: draft_price * 1.2 + 5"
+                )
+                rule["description"] = st.text_input(
+                    "Description (for display):",
+                    value="",
+                    key=f"base_cost_desc_{acq_type}",
+                    placeholder="e.g., Draft price plus $5"
+                )
+
+            base_cost_rules[acq_type] = rule
+
+    st.markdown("---")
+
+    # Step 3: Year-over-Year Escalation (Formulas by Keeper Year)
+    st.markdown("#### 3. Keeper Price Escalation")
+    st.caption("How do keeper costs change when you keep a player for multiple years?")
+
+    escalation_mode = st.radio(
+        "Escalation method:",
+        [
+            "Simple (same rule every year)",
+            "Per-year formulas (different rules for Year 1, Year 2+, etc.)"
+        ],
         horizontal=True,
-        key="keeper_draft_type",
-        help="This determines how keeper costs are calculated"
+        key="escalation_mode"
     )
 
-    is_auction = draft_type in ["Auction ($$)", "Both (Hybrid)"]
-    is_snake = draft_type in ["Snake (Rounds)", "Both (Hybrid)"]
+    formulas_by_keeper_year = {}
 
-    # Auction-specific settings
-    if is_auction:
-        st.markdown("---")
-        st.markdown("#### 3. Auction Keeper Costs")
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            budget = st.number_input(
-                "Auction budget",
-                min_value=50, max_value=1000, value=200,
-                key="keeper_budget",
-                help="Total auction dollars each team has"
-            )
-        with col2:
-            min_price = st.number_input(
-                "Minimum keeper price",
-                min_value=0, max_value=50, value=1,
-                key="min_keeper_price",
-                help="Lowest cost a keeper can be"
-            )
-        with col3:
-            max_price = st.number_input(
-                "Maximum keeper price",
-                min_value=0, max_value=500, value=0,
-                key="max_keeper_price",
-                help="Highest cost a keeper can be (0 = no limit)"
-            )
-
-        st.markdown("##### How do keeper costs increase each year?")
-
-        escalation_type = st.selectbox(
-            "Cost escalation method",
+    if escalation_mode == "Simple (same rule every year)":
+        simple_escalation = st.selectbox(
+            "How does cost change each year kept?",
             [
-                "No increase (same cost each year)",
-                "Flat increase (e.g., +$5 each year)",
-                "Percentage increase (e.g., +20% each year)",
-                "Custom per year"
+                "No change (same as base cost)",
+                "Flat increase per year (e.g., +$5)",
+                "Percentage increase per year (e.g., +20%)",
+                "Multiplier per year (e.g., ×1.2)"
             ],
-            key="escalation_type",
-            help="How does the keeper cost change from year to year?"
+            key="simple_escalation_type"
         )
 
-        # Collect escalation details based on type
-        year_costs = []  # Will hold (year, cost_increase, description) tuples
-
-        if escalation_type == "No increase (same cost each year)":
-            for yr in range(1, max_years + 1):
-                year_costs.append({"year": yr, "increase": 0, "increase_type": "flat"})
-
-        elif escalation_type == "Flat increase (e.g., +$5 each year)":
-            col1, col2 = st.columns(2)
-            with col1:
-                flat_increase = st.number_input(
-                    "Dollar increase per year",
-                    min_value=0, max_value=100, value=5,
-                    key="flat_increase",
-                    help="How much does the cost go up each year?"
-                )
-            with col2:
-                first_year_free = st.checkbox(
-                    "First year at original cost (no increase)",
-                    value=True,
-                    key="first_year_free",
-                    help="If checked, Year 1 = original cost, increases start in Year 2"
-                )
-
-            for yr in range(1, max_years + 1):
-                if first_year_free and yr == 1:
-                    year_costs.append({"year": yr, "increase": 0, "increase_type": "flat"})
-                else:
-                    years_of_increase = yr - 1 if first_year_free else yr
-                    year_costs.append({"year": yr, "increase": flat_increase * years_of_increase, "increase_type": "flat"})
-
-        elif escalation_type == "Percentage increase (e.g., +20% each year)":
-            col1, col2 = st.columns(2)
-            with col1:
-                pct_increase = st.number_input(
-                    "Percentage increase per year",
-                    min_value=0, max_value=200, value=20,
-                    key="pct_increase",
-                    help="What percentage does the cost increase each year?"
-                )
-            with col2:
-                pct_first_year_free = st.checkbox(
-                    "First year at original cost",
-                    value=True,
-                    key="pct_first_year_free"
-                )
-
-            for yr in range(1, max_years + 1):
-                if pct_first_year_free and yr == 1:
-                    # First year = original cost (multiplier of 1.0)
-                    year_costs.append({"year": yr, "increase": 1.0, "increase_type": "percentage_multiplier"})
-                else:
-                    years_of_increase = yr - 1 if pct_first_year_free else yr
-                    # Compound percentage: (1 + pct/100)^years
-                    multiplier = (1 + pct_increase / 100) ** years_of_increase
-                    year_costs.append({"year": yr, "increase": multiplier, "increase_type": "percentage_multiplier"})
-
-        else:  # Custom per year
-            st.markdown("Enter the cost increase for each keeper year:")
-            for yr in range(1, max_years + 1):
-                col1, col2 = st.columns([1, 3])
-                with col1:
-                    st.markdown(f"**Year {yr}:**")
-                with col2:
-                    custom_increase = st.number_input(
-                        f"Add to original cost",
-                        min_value=0, max_value=200,
-                        value=0 if yr == 1 else (yr - 1) * 5,
-                        key=f"custom_yr_{yr}",
-                        label_visibility="collapsed"
-                    )
-                    year_costs.append({"year": yr, "increase": custom_increase, "increase_type": "flat"})
-
-        # Base cost rules for different acquisition types
-        st.markdown("##### How is the original keeper cost determined?")
-
-        with st.expander("Base Cost Rules (click to customize)", expanded=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Drafted players**")
-                auction_base = st.selectbox(
-                    "Base cost:",
-                    ["Draft price paid", "Draft price + adjustment"],
-                    key="auction_base_rule"
-                )
-                auction_adjustment = 0
-                if auction_base == "Draft price + adjustment":
-                    auction_adjustment = st.number_input(
-                        "Adjustment ($)",
-                        min_value=-50, max_value=50, value=0,
-                        key="auction_adjustment"
-                    )
-
-            with col2:
-                st.markdown("**FAAB pickups**")
-                faab_base = st.selectbox(
-                    "Base cost:",
-                    ["FAAB price paid", "Half of FAAB price", "Fixed cost"],
-                    key="faab_base_rule"
-                )
-                faab_fixed = None
-                if faab_base == "Fixed cost":
-                    faab_fixed = st.number_input(
-                        "Fixed cost ($)",
-                        min_value=0, max_value=50, value=5,
-                        key="faab_fixed"
-                    )
-
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Free agent pickups ($0 FAAB)**")
-                fa_cost = st.number_input(
-                    "Keeper cost ($)",
-                    min_value=0, max_value=50, value=1,
-                    key="fa_keeper_cost",
-                    help="What's the keeper cost for players picked up for free?"
-                )
-            with col2:
-                st.markdown("**Undrafted players**")
-                undrafted_cost = st.number_input(
-                    "Keeper cost ($)",
-                    min_value=0, max_value=50, value=1,
-                    key="undrafted_keeper_cost",
-                    help="What's the keeper cost for players not drafted?"
-                )
-
-        # Build base rules
-        base_rules = {
-            "auction": {
-                "source": "draft_price",
-                "adjustment": auction_adjustment if auction_base == "Draft price + adjustment" else 0
-            },
-            "faab": {
-                "source": "faab_price" if faab_base == "FAAB price paid" else ("half_faab" if faab_base == "Half of FAAB price" else "fixed"),
-                "value": faab_fixed if faab_base == "Fixed cost" else None
-            },
-            "free_agent": {"source": "fixed", "value": fa_cost},
-            "undrafted": {"source": "fixed", "value": undrafted_cost}
-        }
-
-        # Preview section
-        st.markdown("---")
-        st.markdown("#### Cost Preview")
-
-        preview_col1, preview_col2 = st.columns(2)
-        with preview_col1:
-            preview_cost = st.number_input(
-                "Enter a sample draft price to preview:",
-                min_value=1, max_value=200, value=25,
-                key="preview_cost"
+        if "flat increase" in simple_escalation.lower():
+            flat_inc = st.number_input(
+                "Dollar increase per keeper year",
+                min_value=0, max_value=100, value=5,
+                key="simple_flat_increase"
             )
+            for yr in range(1, max_years + 1):
+                formulas_by_keeper_year[str(yr)] = {
+                    "expression": f"base_cost + {flat_inc * (yr - 1)}",
+                    "description": f"Base cost + ${flat_inc * (yr - 1)}"
+                }
 
-        # Calculate and display preview
-        preview_data = []
-        for yc in year_costs:
-            yr = yc["year"]
-            if yc["increase_type"] == "flat":
-                cost = preview_cost + yc["increase"]
-            elif yc["increase_type"] == "percentage_multiplier":
-                cost = preview_cost * yc["increase"]
-            else:
-                cost = preview_cost
+        elif "percentage increase" in simple_escalation.lower():
+            pct_inc = st.number_input(
+                "Percentage increase per year",
+                min_value=0, max_value=200, value=20,
+                key="simple_pct_increase"
+            )
+            for yr in range(1, max_years + 1):
+                mult = (1 + pct_inc / 100) ** (yr - 1)
+                formulas_by_keeper_year[str(yr)] = {
+                    "expression": f"base_cost * {mult:.4f}",
+                    "description": f"Base cost × {mult:.2f} ({pct_inc}% compound for {yr - 1} years)"
+                }
 
-            # Apply min/max
-            cost = max(min_price, cost)
-            if max_price > 0:
-                cost = min(max_price, cost)
+        elif "multiplier" in simple_escalation.lower():
+            mult_per_year = st.number_input(
+                "Multiplier per year",
+                min_value=1.0, max_value=3.0, value=1.2, step=0.1,
+                key="simple_multiplier"
+            )
+            for yr in range(1, max_years + 1):
+                total_mult = mult_per_year ** (yr - 1)
+                formulas_by_keeper_year[str(yr)] = {
+                    "expression": f"base_cost * {total_mult:.4f}",
+                    "description": f"Base cost × {total_mult:.2f}"
+                }
 
-            preview_data.append({"Year Kept": yr, "Keeper Cost": f"${cost:.0f}"})
+        else:  # No change
+            for yr in range(1, max_years + 1):
+                formulas_by_keeper_year[str(yr)] = {
+                    "expression": "base_cost",
+                    "description": "Same as base cost"
+                }
 
-        with preview_col2:
-            st.markdown(f"**Player drafted for ${preview_cost}:**")
-            for row in preview_data:
-                st.markdown(f"- Year {row['Year Kept']}: {row['Keeper Cost']}")
+    else:  # Per-year formulas
+        st.markdown("**Define formula for each keeper year:**")
+        st.caption("Use variables: `base_cost`, `draft_price`, `faab_bid`, `keeper_year`")
 
-    # Snake draft settings
-    if is_snake:
-        st.markdown("---")
-        st.markdown("#### Snake Draft Keeper Rules")
+        # Allow wildcard years like "2+"
+        use_wildcard = st.checkbox(
+            "Use '2+' wildcard for years 2 and beyond",
+            value=True,
+            key="use_wildcard_years",
+            help="Instead of defining Year 2, Year 3, etc. separately, use '2+' to apply the same formula to all years 2+"
+        )
 
+        if use_wildcard:
+            years_to_configure = ["1", "2+"]
+        else:
+            years_to_configure = [str(yr) for yr in range(1, max_years + 1)]
+
+        for yr_key in years_to_configure:
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                st.markdown(f"**Year {yr_key}:**")
+            with col2:
+                default_formula = "base_cost" if yr_key == "1" else "base_cost * 1.2 + 5"
+                formula_expr = st.text_input(
+                    f"Formula for year {yr_key}",
+                    value=default_formula,
+                    key=f"formula_year_{yr_key}",
+                    label_visibility="collapsed"
+                )
+                formula_desc = st.text_input(
+                    f"Description for year {yr_key}",
+                    value="",
+                    key=f"formula_desc_{yr_key}",
+                    placeholder="e.g., 20% increase + $5",
+                    label_visibility="collapsed"
+                )
+                formulas_by_keeper_year[yr_key] = {
+                    "expression": formula_expr,
+                    "description": formula_desc or formula_expr
+                }
+
+    st.markdown("---")
+
+    # Step 4: Snake Draft Settings (if applicable)
+    st.markdown("#### 4. Snake Draft Keeper Rules (Optional)")
+
+    has_snake = st.checkbox(
+        "League uses snake draft (configure round penalties)",
+        value=False,
+        key="has_snake_draft"
+    )
+
+    snake_rules = None
+    if has_snake:
         snake_penalty_type = st.selectbox(
             "How are keeper rounds determined?",
             [
@@ -414,7 +457,6 @@ def render_keeper_rules_ui() -> Optional[dict]:
                 "Lose 2 rounds per year kept": 2
             }.get(snake_penalty_type, 0)
 
-        st.markdown("##### Undrafted player keeper rules")
         undrafted_round = st.number_input(
             "Undrafted players kept at round:",
             min_value=1, max_value=20, value=10,
@@ -422,31 +464,134 @@ def render_keeper_rules_ui() -> Optional[dict]:
             help="What round pick does it cost to keep an undrafted player?"
         )
 
+        snake_rules = {
+            "penalty_per_year": snake_penalty,
+            "undrafted_round": undrafted_round
+        }
+
     st.markdown("---")
 
-    # Build keeper_rules dict
+    # Step 5: Preview Section
+    st.markdown("#### 5. Cost Preview")
+
+    preview_col1, preview_col2, preview_col3 = st.columns(3)
+    with preview_col1:
+        preview_acq_type = st.selectbox(
+            "Acquisition type:",
+            list(base_cost_rules.keys()),
+            format_func=lambda x: x.replace("_", " ").title(),
+            key="preview_acq_type"
+        )
+    with preview_col2:
+        preview_draft_price = st.number_input(
+            "Draft price / FAAB bid ($):",
+            min_value=0, max_value=200, value=25,
+            key="preview_draft_price"
+        )
+    with preview_col3:
+        preview_round = st.number_input(
+            "Draft round (if snake):",
+            min_value=1, max_value=20, value=5,
+            key="preview_round"
+        )
+
+    # Calculate and display preview
+    def evaluate_formula(expr: str, context: dict) -> float:
+        """Safely evaluate a formula expression with given context."""
+        try:
+            # Only allow specific operations
+            allowed_names = {"base_cost", "draft_price", "faab_bid", "round", "keeper_year"}
+            # Simple expression evaluation
+            result = eval(expr, {"__builtins__": {}}, context)
+            return float(result)
+        except Exception:
+            return 0.0
+
+    def calculate_base_cost(rule: dict, draft_price: float, faab_bid: float, round_num: int) -> float:
+        """Calculate base cost from acquisition rule."""
+        source = rule.get("source", "").lower()
+
+        if "draft price paid" in source or "draft price" == source:
+            base = draft_price
+        elif "faab" in source and "amount" in source:
+            base = faab_bid
+        elif "round number" in source:
+            base = round_num
+        elif "fixed" in source:
+            base = rule.get("value", 1)
+        elif "custom" in source:
+            context = {"draft_price": draft_price, "faab_bid": faab_bid, "round": round_num, "keeper_year": 1}
+            base = evaluate_formula(rule.get("formula", "0"), context)
+        else:
+            base = draft_price
+
+        # Apply adjustments
+        if "adjustment" in rule:
+            base += rule["adjustment"]
+        if "multiplier" in rule:
+            base *= rule["multiplier"]
+        if "dollars_per_round" in rule:
+            base = round_num * rule["dollars_per_round"]
+
+        return base
+
+    # Calculate base cost for preview
+    acq_rule = base_cost_rules.get(preview_acq_type, {})
+    base_cost = calculate_base_cost(acq_rule, preview_draft_price, preview_draft_price, preview_round)
+
+    st.markdown(f"**Base cost for {preview_acq_type.replace('_', ' ')}: ${base_cost:.0f}**")
+
+    # Show year-by-year preview
+    st.markdown("**Keeper cost by year:**")
+    preview_results = []
+    for yr in range(1, max_years + 1):
+        yr_key = str(yr)
+        if yr_key not in formulas_by_keeper_year:
+            # Check for wildcard
+            if "2+" in formulas_by_keeper_year and yr >= 2:
+                yr_key = "2+"
+            else:
+                continue
+
+        formula = formulas_by_keeper_year[yr_key]
+        context = {
+            "base_cost": base_cost,
+            "draft_price": preview_draft_price,
+            "faab_bid": preview_draft_price,
+            "round": preview_round,
+            "keeper_year": yr
+        }
+        cost = evaluate_formula(formula["expression"], context)
+
+        # Apply min/max
+        cost = max(min_price, cost)
+        if max_price > 0:
+            cost = min(max_price, cost)
+        if round_to_integer:
+            cost = round(cost)
+
+        preview_results.append({"year": yr, "cost": cost, "desc": formula.get("description", "")})
+
+    for res in preview_results:
+        st.markdown(f"- **Year {res['year']}**: ${res['cost']:.0f}" + (f" ({res['desc']})" if res['desc'] else ""))
+
+    st.markdown("---")
+
+    # Build keeper_rules dict matching LeagueContext schema
     keeper_rules = {
         "enabled": True,
         "max_keepers": max_keepers,
         "max_years": max_years,
-        "draft_type": draft_type,
+        "budget": budget,
+        "min_price": min_price,
+        "max_price": max_price if max_price > 0 else None,
+        "round_to_integer": round_to_integer,
+        "formulas_by_keeper_year": formulas_by_keeper_year,
+        "base_cost_rules": base_cost_rules,
     }
 
-    if is_auction:
-        keeper_rules["auction"] = {
-            "budget": budget,
-            "min_price": min_price,
-            "max_price": max_price if max_price > 0 else None,
-            "escalation_type": escalation_type,
-            "year_costs": year_costs,
-            "base_rules": base_rules
-        }
-
-    if is_snake:
-        keeper_rules["snake"] = {
-            "penalty_per_year": snake_penalty,
-            "undrafted_round": undrafted_round
-        }
+    if snake_rules:
+        keeper_rules["snake"] = snake_rules
 
     return keeper_rules
 
@@ -1579,6 +1724,197 @@ def render_job_card(job_id: str, league_name: str, status: str):
     """, unsafe_allow_html=True)
 
 
+def get_motherduck_progress(job_id: str) -> Optional[dict]:
+    """
+    Query MotherDuck for import progress.
+    Returns progress dict or None if not available.
+    """
+    motherduck_token = os.environ.get("MOTHERDUCK_TOKEN")
+    if not motherduck_token or not job_id:
+        return None
+
+    try:
+        import duckdb
+        con = duckdb.connect("md:")
+
+        result = con.execute("""
+            SELECT job_id, league_name, phase, stage, stage_detail,
+                   current_step, total_steps, overall_pct, status,
+                   error_message, started_at, updated_at
+            FROM ops.import_progress
+            WHERE job_id = ?
+        """, [job_id]).fetchone()
+
+        con.close()
+
+        if result:
+            return {
+                "job_id": result[0],
+                "league_name": result[1],
+                "phase": result[2],
+                "stage": result[3],
+                "stage_detail": result[4],
+                "current_step": result[5],
+                "total_steps": result[6],
+                "overall_pct": result[7] or 0,
+                "status": result[8],
+                "error_message": result[9],
+                "started_at": result[10],
+                "updated_at": result[11],
+            }
+        return None
+    except Exception as e:
+        # Table might not exist yet
+        return None
+
+
+def render_import_progress():
+    """
+    Render the import progress tracker.
+    Polls MotherDuck for detailed progress, falls back to GitHub API for workflow status.
+    Shows a progress bar and step-by-step status.
+    """
+    job_id = st.session_state.get("import_job_id")
+    run_id = st.session_state.get("workflow_run_id")
+    github_token = st.session_state.get("github_token_for_status")
+    league_name = st.session_state.get("import_league_name", "League")
+
+    if not job_id:
+        st.info("Progress tracking unavailable. Check the workflow link above.")
+        return
+
+    # Add a refresh button and auto-refresh option
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        st.markdown(f"**Importing: {league_name}**")
+    with col2:
+        if st.button("🔄 Refresh", key="refresh_progress"):
+            st.rerun()
+    with col3:
+        auto_refresh = st.checkbox("Auto-refresh", value=False, key="auto_refresh")
+
+    # Try to get detailed progress from MotherDuck first
+    md_progress = get_motherduck_progress(job_id)
+
+    if md_progress:
+        # We have detailed progress from MotherDuck!
+        status = md_progress.get('status', 'running')
+        phase = md_progress.get('phase', 'starting')
+        stage = md_progress.get('stage', '')
+        stage_detail = md_progress.get('stage_detail', '')
+        overall_pct = md_progress.get('overall_pct', 0)
+        current_step = md_progress.get('current_step', 0)
+        total_steps = md_progress.get('total_steps', 0)
+
+        # Status display
+        if status == 'completed':
+            st.success("🎉 Import completed successfully!")
+            st.session_state.import_in_progress = False
+            st.session_state.pop('workflow_run_id', None)
+            st.session_state.pop('import_job_id', None)
+        elif status == 'failed':
+            error_msg = md_progress.get('error_message', 'Unknown error')
+            st.error(f"❌ Import failed: {error_msg}")
+            st.session_state.import_in_progress = False
+        else:
+            # Show current phase and stage
+            phase_display = phase.replace('_', ' ').title()
+            st.info(f"⏳ **{phase_display}**: {stage_detail or stage}")
+
+        # Progress bar with overall percentage
+        st.progress(overall_pct / 100, text=f"{overall_pct:.0f}% complete")
+
+        # Show phase breakdown
+        phase_icons = {
+            "settings": ("⚙️", "League Settings", 5),
+            "fetchers": ("📥", "Fetching Data", 40),
+            "merges": ("🔀", "Merging Data", 15),
+            "transformations": ("🔧", "Transformations", 40),
+            "complete": ("✅", "Complete", 0),
+            "error": ("❌", "Error", 0),
+        }
+
+        phases_order = ["settings", "fetchers", "merges", "transformations"]
+
+        with st.expander("View progress by phase", expanded=(status == 'running')):
+            for p in phases_order:
+                icon, label, weight = phase_icons.get(p, ("•", p, 0))
+
+                if p == phase:
+                    # Current phase
+                    if current_step and total_steps:
+                        st.markdown(f"⟳ **{icon} {label}** ({current_step}/{total_steps} steps)")
+                    else:
+                        st.markdown(f"⟳ **{icon} {label}** (in progress)")
+                    if stage_detail:
+                        st.caption(f"   └─ {stage_detail}")
+                elif p in ["settings", "fetchers", "merges", "transformations"]:
+                    # Check if phase is complete based on order
+                    phase_idx = phases_order.index(p) if p in phases_order else -1
+                    current_idx = phases_order.index(phase) if phase in phases_order else -1
+
+                    if current_idx > phase_idx:
+                        st.markdown(f"✓ {icon} {label}")
+                    else:
+                        st.markdown(f"○ {icon} {label}")
+
+        # Auto-refresh
+        if auto_refresh and status == 'running':
+            import time
+            time.sleep(5)  # MotherDuck updates more frequently, so poll faster
+            st.rerun()
+
+    elif run_id and github_token:
+        # Fall back to GitHub API for basic status
+        try:
+            from streamlit_helpers.trigger_import_workflow import check_import_status
+
+            status = check_import_status(
+                user_id=job_id,
+                github_token=github_token,
+                run_id=run_id
+            )
+
+            if not status.get('success'):
+                st.warning(f"Could not fetch status: {status.get('error', 'Unknown error')}")
+                return
+
+            run_status = status.get('status', 'unknown')
+            conclusion = status.get('conclusion')
+
+            if run_status == 'completed':
+                if conclusion == 'success':
+                    st.success("🎉 Import completed successfully!")
+                    st.session_state.import_in_progress = False
+                    st.session_state.pop('workflow_run_id', None)
+                elif conclusion == 'failure':
+                    st.error("❌ Import failed. Check the workflow logs for details.")
+                    st.session_state.import_in_progress = False
+                else:
+                    st.warning(f"Import ended with status: {conclusion}")
+            elif run_status == 'in_progress':
+                st.info("⏳ Import in progress... (detailed progress will appear once the import script starts)")
+            elif run_status == 'queued':
+                st.info("📋 Import queued, waiting to start...")
+
+            # Basic progress from GitHub (just workflow steps)
+            progress_pct = status.get('progress_pct', 0)
+            st.progress(progress_pct / 100, text=f"Workflow progress: {progress_pct:.0f}%")
+
+            # Auto-refresh
+            if auto_refresh and run_status in ('queued', 'in_progress'):
+                import time
+                time.sleep(10)
+                st.rerun()
+
+        except ImportError:
+            st.warning("Progress tracking module not available.")
+        except Exception as e:
+            st.warning(f"Error fetching progress: {e}")
+    else:
+        st.info("Waiting for progress data... The import script will report progress once it starts.")
+
+
 def render_timeline():
     st.markdown("""
     <div style="margin: 2rem 0;">
@@ -1714,9 +2050,9 @@ def render_landing_page():
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("Register New League", type="secondary", use_container_width=True, key="register_btn"):
-            st.session_state.app_mode = "register"
-            st.rerun()
+        # Direct OAuth redirect - skip the middle page
+        auth_url = build_authorize_url()
+        st.link_button("Register New League", auth_url, type="secondary", use_container_width=True)
 
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -1876,29 +2212,34 @@ def run_register_flow():
                             </div>
                             """, unsafe_allow_html=True)
 
-                            # Two options: Quick Start or Advanced Settings
-                            col_start, col_advanced = st.columns(2)
+                            # Check if import can be started
+                            can_import, block_reason = can_start_import()
 
-                            with col_start:
-                                # Disable button if import already in progress
-                                import_in_progress = st.session_state.get("import_in_progress", False)
-                                if import_in_progress:
-                                    st.info("Import in progress...")
-                                if st.button("Start Import Now", key="start_import_btn", type="primary", use_container_width=True, disabled=import_in_progress):
-                                    st.session_state.import_in_progress = True
-                                    # Quick start - no keeper rules
-                                    league_info = {
-                                        "league_key": selected_league.get("league_key"),
-                                        "name": selected_league.get("name"),
-                                        "season": selected_league.get("season"),
-                                        "num_teams": selected_league.get("num_teams"),
-                                        "keeper_rules": None,
-                                    }
-                                    perform_import_flow(league_info)
+                            if not can_import:
+                                # Show status instead of buttons
+                                st.warning(f"⏳ {block_reason}")
+                                if st.session_state.get("import_job_id"):
+                                    st.info(f"Job ID: `{st.session_state.import_job_id}`")
+                            else:
+                                # Two options: Quick Start or Advanced Settings
+                                col_start, col_advanced = st.columns(2)
 
-                            with col_advanced:
-                                if st.button("Advanced Settings", key="advanced_settings_btn", type="secondary", use_container_width=True):
-                                    st.session_state.show_advanced_settings = True
+                                with col_start:
+                                    if st.button("Start Import Now", key="start_import_btn", type="primary", use_container_width=True):
+                                        mark_import_started()
+                                        # Quick start - no keeper rules
+                                        league_info = {
+                                            "league_key": selected_league.get("league_key"),
+                                            "name": selected_league.get("name"),
+                                            "season": selected_league.get("season"),
+                                            "num_teams": selected_league.get("num_teams"),
+                                            "keeper_rules": None,
+                                        }
+                                        perform_import_flow(league_info)
+
+                                with col_advanced:
+                                    if st.button("Advanced Settings", key="advanced_settings_btn", type="secondary", use_container_width=True):
+                                        st.session_state.show_advanced_settings = True
 
                             # Advanced Settings Section
                             if st.session_state.get("show_advanced_settings", False):
@@ -1940,10 +2281,14 @@ def run_register_flow():
 
                                 st.markdown("---")
 
-                                # Import button with advanced settings - disable if import already in progress
-                                import_in_progress = st.session_state.get("import_in_progress", False)
-                                if st.button("Start Import with Settings", key="start_import_advanced_btn", type="primary", use_container_width=True, disabled=import_in_progress):
-                                    st.session_state.import_in_progress = True
+                                # Import button with advanced settings
+                                can_import_adv, block_reason_adv = can_start_import()
+                                if not can_import_adv:
+                                    st.warning(f"⏳ {block_reason_adv}")
+                                    if st.session_state.get("import_job_id"):
+                                        st.info(f"Job ID: `{st.session_state.import_job_id}`")
+                                elif st.button("Start Import with Settings", key="start_import_advanced_btn", type="primary", use_container_width=True):
+                                    mark_import_started()
                                     league_info = {
                                         "league_key": selected_league.get("league_key"),
                                         "name": selected_league.get("name"),
@@ -1965,69 +2310,32 @@ def run_register_flow():
             render_feature_card("💰", "Transactions", "Trades and pickups")
             render_feature_card("🏆", "Playoffs", "Championship data")
 
-        # Job status section
-        if "job_id" in st.session_state:
+        # Job status section - show if we have an active import
+        if st.session_state.get("import_job_id") or st.session_state.get("workflow_run_id"):
             st.markdown("<br><br>", unsafe_allow_html=True)
             st.markdown("---")
             st.markdown("### 📊 Your Import Job")
 
-            status_info = get_job_status(st.session_state.job_id)
-            render_job_card(
-                st.session_state.job_id,
-                st.session_state.get("job_league_name", "League"),
-                status_info.get("status", "queued")
-            )
+            # Show progress tracker with GitHub Actions status
+            render_import_progress()
 
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🔄 Refresh Status", use_container_width=True):
-                    st.rerun()
-            with col2:
-                github_repo = os.environ.get("GITHUB_REPOSITORY", "your-username/your-repo")
+            # Link to GitHub Actions
+            workflow_url = st.session_state.get("workflow_run_url")
+            if workflow_url:
                 st.link_button(
-                    "🔗 View on GitHub",
-                    f"https://github.com/{github_repo}/actions",
+                    "🔗 View Full Logs on GitHub",
+                    workflow_url,
                     use_container_width=True
                 )
 
-            if status_info.get("status") == "success":
-                st.success("🎉 Your data is ready in MotherDuck!")
-                league_info = st.session_state.get("league_info", {})
-                db_name = league_info.get('name', 'league').lower().replace(' ', '_').replace('-', '_')
-                st.code(f"SELECT * FROM {db_name}.public.matchup LIMIT 10;", language="sql")
-
     else:
-        # Landing page: show hero and make the Connect CTA the primary focus (large centered block)
-        render_hero()
-
-        auth_url = build_authorize_url()
-        # Full-width centered CTA with max-width so it looks prominent on desktop and mobile
-        connect_html_center = f'''
-        <div style="display:flex; justify-content:center; margin: 1.25rem 0;">
-            <a href="{auth_url}" target="_blank" rel="noopener noreferrer" style="text-decoration:none; width:100%; max-width:980px;">
-                <div style="background: linear-gradient(90deg,#ff6b4a,#ff8a5a); color:white; padding:1.25rem 1.5rem; border-radius:0.75rem; text-align:center; font-weight:700; font-size:1.15rem; box-shadow:0 10px 30px rgba(0,0,0,0.08);">
-                    🔐 Connect Yahoo Account
-                </div>
-            </a>
-        </div>
-        '''
-        st.markdown(connect_html_center, unsafe_allow_html=True)
-
-        # Put feature cards below in a compact grid so the CTA remains the main focus
-        st.markdown("<div style='max-width:980px; margin:0 auto;'>", unsafe_allow_html=True)
-        features_col1, features_col2 = st.columns(2)
-        with features_col1:
-            render_feature_card("📈", "Win Probability", "Track your playoff chances")
-            render_feature_card("🎯", "Optimal Lineups", "See your best possible scores")
-        with features_col2:
-            render_feature_card("📊", "Advanced Stats", "Deep dive into performance")
-            render_feature_card("🔮", "Predictions", "Expected vs actual records")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        st.caption("🔒 Your data is secure. We only access league statistics, never personal information.")
-
-    # Note: Import is now triggered via st.button() in the league selection UI
-    # This preserves session state (including OAuth tokens) which anchor links did not
+        # No access token - redirect back to landing page
+        # (Users should arrive here via OAuth from landing page)
+        st.warning("No Yahoo connection found. Please connect your Yahoo account first.")
+        if st.button("← Back to Home", key="back_no_token"):
+            st.session_state.app_mode = "landing"
+            st.rerun()
+        return
 
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -2122,7 +2430,10 @@ def perform_import_flow(league_info: dict):
 
         # Import the trigger function
         try:
-            from streamlit_helpers.trigger_import_workflow import trigger_import_workflow
+            from streamlit_helpers.trigger_import_workflow import trigger_import_workflow, get_workflow_run_id
+
+            # Record trigger time for finding the run
+            trigger_time = datetime.now(timezone.utc).isoformat()
 
             result = trigger_import_workflow(
                 league_data=league_data,
@@ -2133,6 +2444,15 @@ def perform_import_flow(league_info: dict):
                 st.success("✅ Import Started Successfully!")
                 st.session_state.import_job_id = result['user_id']
                 st.session_state.import_in_progress = False  # Reset since workflow is now queued
+                st.session_state.import_league_name = league_data['league_name']
+                st.session_state.workflow_run_url = result['workflow_run_url']
+
+                # Try to get the actual run ID (poll for a few seconds)
+                with st.spinner("Finding workflow run..."):
+                    run_id = get_workflow_run_id(github_token, trigger_time)
+                    if run_id:
+                        st.session_state.workflow_run_id = run_id
+                        st.session_state.github_token_for_status = github_token
 
                 st.markdown(f"""
                 ### 📊 Import Job Details
@@ -2140,16 +2460,10 @@ def perform_import_flow(league_info: dict):
                 - **League**: {league_data['league_name']} ({league_data['season']})
                 - **Estimated Time**: {result.get('estimated_time', '60-120 minutes')}
                 - **Track Progress**: [View Workflow]({result['workflow_run_url']})
-
-                The workflow will:
-                1. ✅ Fetch all fantasy data from Yahoo
-                2. ✅ Merge with NFL stats
-                3. ✅ Create parquet files
-                4. ✅ Upload to MotherDuck
-                5. ✅ Prepare your custom analytics site
-
-                You'll be notified when complete (check back in 1-2 hours).
                 """)
+
+                # Show progress tracker
+                render_import_progress()
 
                 return
             else:

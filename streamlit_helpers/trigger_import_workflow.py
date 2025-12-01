@@ -125,28 +125,67 @@ def trigger_import_workflow(
         }
 
 
-def check_import_status(
-    user_id: str,
+def get_workflow_run_id(
+    github_token: str,
+    triggered_after: str,
+    repo_owner: str = "jeleff1000",
+    repo_name: str = "yahoo_oauth",
+    max_attempts: int = 5,
+) -> Optional[int]:
+    """
+    Find the workflow run ID that was triggered after a given time.
+
+    Args:
+        github_token: GitHub personal access token
+        triggered_after: ISO timestamp - find runs created after this time
+        repo_owner: GitHub repository owner
+        repo_name: GitHub repository name
+        max_attempts: Number of times to poll before giving up
+
+    Returns:
+        Run ID if found, None otherwise
+    """
+    import time
+
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/league_import_worker.yml/runs"
+    headers = {
+        'Accept': 'application/vnd.github.v3+json',
+        'Authorization': f'token {github_token}'
+    }
+
+    for attempt in range(max_attempts):
+        try:
+            response = requests.get(url, headers=headers, params={'per_page': 5}, timeout=30)
+            if response.status_code == 200:
+                runs = response.json().get('workflow_runs', [])
+                for run in runs:
+                    # Check if this run was created after our trigger time
+                    if run['created_at'] >= triggered_after:
+                        return run['id']
+
+            # Wait before next attempt
+            time.sleep(2)
+        except Exception:
+            time.sleep(2)
+
+    return None
+
+
+def get_workflow_jobs(
+    run_id: int,
     github_token: str,
     repo_owner: str = "jeleff1000",
     repo_name: str = "yahoo_oauth",
 ) -> Dict:
     """
-    Check the status of an import job
+    Get the jobs and steps for a workflow run.
 
-    Args:
-        user_id: The unique user ID from trigger_import_workflow
-        github_token: GitHub personal access token
-        repo_owner: GitHub repository owner
-        repo_name: GitHub repository name
-
-    Returns:
-        Dictionary with status information
+    Returns detailed progress information including:
+    - Overall run status
+    - Each job and its status
+    - Each step within each job and its status
     """
-
-    # Get recent workflow runs
-    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/league_import_worker.yml/runs"
-
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/runs/{run_id}/jobs"
     headers = {
         'Accept': 'application/vnd.github.v3+json',
         'Authorization': f'token {github_token}'
@@ -156,19 +195,138 @@ def check_import_status(
         response = requests.get(url, headers=headers, timeout=30)
 
         if response.status_code == 200:
-            runs = response.json().get('workflow_runs', [])
+            data = response.json()
+            jobs = data.get('jobs', [])
 
-            # Find the run for this user_id (would need to check inputs or artifacts)
-            # For now, return the most recent run
-            if runs:
-                latest_run = runs[0]
+            job_info = []
+            total_steps = 0
+            completed_steps = 0
+
+            for job in jobs:
+                steps = job.get('steps', [])
+                job_steps = []
+
+                for step in steps:
+                    step_info = {
+                        'name': step.get('name'),
+                        'status': step.get('status'),  # queued, in_progress, completed
+                        'conclusion': step.get('conclusion'),  # success, failure, skipped, etc.
+                        'number': step.get('number'),
+                    }
+                    job_steps.append(step_info)
+                    total_steps += 1
+                    if step.get('status') == 'completed':
+                        completed_steps += 1
+
+                job_info.append({
+                    'name': job.get('name'),
+                    'status': job.get('status'),
+                    'conclusion': job.get('conclusion'),
+                    'started_at': job.get('started_at'),
+                    'completed_at': job.get('completed_at'),
+                    'steps': job_steps,
+                })
+
+            # Calculate progress percentage
+            progress_pct = (completed_steps / total_steps * 100) if total_steps > 0 else 0
+
+            return {
+                'success': True,
+                'run_id': run_id,
+                'jobs': job_info,
+                'total_steps': total_steps,
+                'completed_steps': completed_steps,
+                'progress_pct': progress_pct,
+            }
+        else:
+            return {
+                'success': False,
+                'error': f"GitHub API error: {response.status_code}",
+            }
+
+    except requests.exceptions.RequestException as e:
+        return {
+            'success': False,
+            'error': f"Network error: {str(e)}"
+        }
+
+
+def check_import_status(
+    user_id: str,
+    github_token: str,
+    repo_owner: str = "jeleff1000",
+    repo_name: str = "yahoo_oauth",
+    run_id: Optional[int] = None,
+) -> Dict:
+    """
+    Check the status of an import job
+
+    Args:
+        user_id: The unique user ID from trigger_import_workflow
+        github_token: GitHub personal access token
+        repo_owner: GitHub repository owner
+        repo_name: GitHub repository name
+        run_id: Optional specific run ID to check (if known)
+
+    Returns:
+        Dictionary with status information including job steps
+    """
+    headers = {
+        'Accept': 'application/vnd.github.v3+json',
+        'Authorization': f'token {github_token}'
+    }
+
+    try:
+        # If we have a specific run_id, get that run directly
+        if run_id:
+            url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/runs/{run_id}"
+            response = requests.get(url, headers=headers, timeout=30)
+
+            if response.status_code == 200:
+                run = response.json()
+                # Get detailed job info
+                jobs_info = get_workflow_jobs(run_id, github_token, repo_owner, repo_name)
+
                 return {
                     'success': True,
+                    'run_id': run_id,
+                    'status': run['status'],  # queued, in_progress, completed
+                    'conclusion': run.get('conclusion'),  # success, failure, cancelled, etc.
+                    'run_url': run['html_url'],
+                    'created_at': run['created_at'],
+                    'updated_at': run['updated_at'],
+                    'jobs': jobs_info.get('jobs', []),
+                    'progress_pct': jobs_info.get('progress_pct', 0),
+                    'total_steps': jobs_info.get('total_steps', 0),
+                    'completed_steps': jobs_info.get('completed_steps', 0),
+                }
+
+        # Otherwise, get recent workflow runs and find the most recent
+        url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/league_import_worker.yml/runs"
+        response = requests.get(url, headers=headers, params={'per_page': 5}, timeout=30)
+
+        if response.status_code == 200:
+            runs = response.json().get('workflow_runs', [])
+
+            if runs:
+                latest_run = runs[0]
+                run_id = latest_run['id']
+
+                # Get detailed job info
+                jobs_info = get_workflow_jobs(run_id, github_token, repo_owner, repo_name)
+
+                return {
+                    'success': True,
+                    'run_id': run_id,
                     'status': latest_run['status'],
                     'conclusion': latest_run.get('conclusion'),
                     'run_url': latest_run['html_url'],
                     'created_at': latest_run['created_at'],
-                    'updated_at': latest_run['updated_at']
+                    'updated_at': latest_run['updated_at'],
+                    'jobs': jobs_info.get('jobs', []),
+                    'progress_pct': jobs_info.get('progress_pct', 0),
+                    'total_steps': jobs_info.get('total_steps', 0),
+                    'completed_steps': jobs_info.get('completed_steps', 0),
                 }
             else:
                 return {

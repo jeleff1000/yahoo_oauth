@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -51,6 +52,7 @@ from multi_league.data_fetchers.aggregators import (
     ensure_fantasy_points_alias
 )
 from multi_league.core.league_context import LeagueContext
+from multi_league.core.import_progress import ProgressTracker
 
 # canonical script dir
 SCRIPT_DIR = Path(__file__).parent
@@ -333,6 +335,12 @@ def main():
     log(f"Start Phase: {start_phase} ({'Settings/Fetchers' if start_phase == 1 else 'Merges' if start_phase == 2 else 'Transformations'})")
     log("=" * 96)
 
+    # Initialize progress tracker for MotherDuck status updates
+    # Job ID comes from GitHub Actions workflow (USER_ID env var) or we generate one
+    job_id = os.environ.get("USER_ID") or os.environ.get("IMPORT_JOB_ID") or f"local_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    tracker = ProgressTracker(job_id=job_id, league_name=ctx.league_name)
+    log(f"[PROGRESS] Tracking progress with job_id: {job_id}")
+
     results: Dict[str, List[Tuple[str, bool]]] = {"settings": [], "fetchers": [], "merges": [], "transformations": []}
     extra_args = ["--dry-run"] if args.dry_run else []
 
@@ -345,6 +353,10 @@ def main():
         log("=" * 96)
         log("[INFO] Fetching league settings for all years from Yahoo API")
         log("[INFO] All other scripts will READ these settings (no additional API calls)")
+
+        # Track settings phase
+        years_to_fetch = list(range(ctx.start_year, (ctx.end_year or datetime.now().year) + 1))
+        tracker.start_phase("settings", total_steps=len(years_to_fetch))
 
         # Determine settings directory (league-wide, not player-specific)
         settings_dir = Path(ctx.data_directory) / "league_settings"
@@ -400,8 +412,10 @@ def main():
             future_to_year = {executor.submit(fetch_year_settings, year): year for year in years}
 
             # Process results as they complete
+            settings_step = 0
             for future in as_completed(future_to_year):
                 year, success, result = future.result()
+                settings_step += 1
 
                 if success:
                     num_teams = result.get("metadata", {}).get("num_teams", "?")
@@ -409,6 +423,7 @@ def main():
                     bye_teams = result.get("metadata", {}).get("bye_teams", "?")
                     log(f"[SETTINGS] [OK] {year}: {num_teams} teams, {playoff_teams} playoff spots, {bye_teams} byes")
                     successful_years.append(year)
+                    tracker.step(settings_step - 1, "league_settings", f"Fetched {year} settings")
                 else:
                     error_msg = result if isinstance(result, str) else "Failed to fetch settings"
                     log(f"[SETTINGS] [FAIL] {year}: {error_msg}")
@@ -421,6 +436,7 @@ def main():
             log(f"[SETTINGS] Failed years: {sorted(failed_years)}")
 
         results["settings"].append(("League Settings (all years)", all_settings_ok))
+        tracker.end_phase()
         log("\n[SETTINGS] Settings fetch complete. All data fetchers will use these saved settings.")
         log("=" * 96)
 
@@ -432,7 +448,12 @@ def main():
         log("PHASE 1: Data Fetchers")
         log("=" * 96)
 
+        tracker.start_phase("fetchers", total_steps=len(DATA_FETCHERS))
+        fetcher_step = 0
+
         for script_path, label in DATA_FETCHERS:
+            tracker.step(fetcher_step, label.replace(" ", "_").lower(), f"Running {label}...")
+            fetcher_step += 1
             # Handle original nfl_offense_stats.py (not v2)
             if "nfl_offense_stats.py" in script_path and "v2" not in script_path:
                 # Original script: fetch NFL stats back to 1999
@@ -611,6 +632,8 @@ def main():
             else:
                 ok = run_script(script_path, label, str(context_path), additional_args=extra_args)
                 results["fetchers"].append((label, ok))
+
+        tracker.end_phase()  # End fetchers phase
     else:
         log(f"\n[SKIP] Skipping PHASE 0 & 1 (Settings/Fetchers) - starting at phase {start_phase}")
 
@@ -664,7 +687,15 @@ def main():
         years_to_process = list(range(nfl_start_year, end_year + 1))
         log(f"[DEBUG] Processing years {nfl_start_year}-{end_year} (Yahoo league starts at {yahoo_start_year})")
 
+        # Track merges phase
+        tracker.start_phase("merges", total_steps=len(years_to_process))
+        merge_step = 0
+
         for year in years_to_process:
+            # Update progress for each year
+            tracker.step(merge_step, "weekly_merge", f"Merging data for {year}...")
+            merge_step += 1
+
             # Determine end_week; default to 17 if unknown
             end_week = None
             try:
@@ -1658,6 +1689,7 @@ def main():
             # --- End league-safe aggregation block ---
         except Exception as e:
             log(f"[ERROR] Aggregation failed: {e}")
+        tracker.end_phase()  # End merges phase
     else:
         log(f"\n[SKIP] Skipping PHASE 2 (Merges) - starting at phase {start_phase}")
 
@@ -1705,6 +1737,11 @@ def main():
         log("PHASE 3: Transformations / Cross-Imports / Aggregations")
         log("=" * 96)
 
+        # Count total transformations across all passes
+        total_transformations = len(TRANSFORMATIONS_PASS_1) + len(TRANSFORMATIONS_PASS_2) + len(TRANSFORMATIONS_PASS_3)
+        tracker.start_phase("transformations", total_steps=total_transformations)
+        transform_step = 0
+
         # Run transformations in multiple passes to handle dependencies
         for pass_num, transformations in enumerate([TRANSFORMATIONS_PASS_1, TRANSFORMATIONS_PASS_2, TRANSFORMATIONS_PASS_3], start=1):
             log(f"\n[TRANSFORM] Running pass {pass_num} / 3 transformations")
@@ -1737,8 +1774,14 @@ def main():
                 else:
                     timeout = custom_timeout
 
+                # Update progress tracker
+                tracker.step(transform_step, label.replace(" ", "_").lower(), f"Running {label}...")
+                transform_step += 1
+
                 ok = run_script(script_path, label, str(context_path), additional_args=extra_args, timeout=timeout)
                 results.setdefault("transformations", []).append((label, ok))
+
+        tracker.end_phase()  # End transformations phase
     else:
         log("\n[SKIP] Skipping transformations (--skip-transformations)")
 
@@ -1821,6 +1864,16 @@ def main():
             log(f"      - {y} W{w}")
 
     verify_unified_outputs(ctx)
+
+    # Check for failures and update final progress
+    all_failed = []
+    for section in ["settings", "fetchers", "merges", "transformations"]:
+        all_failed.extend([n for n, ok in results.get(section, []) if not ok])
+
+    if all_failed:
+        tracker.fail(f"Import completed with {len(all_failed)} failures: {', '.join(all_failed[:5])}")
+    else:
+        tracker.complete()
 
     log("\nInitial import completed.")
 
