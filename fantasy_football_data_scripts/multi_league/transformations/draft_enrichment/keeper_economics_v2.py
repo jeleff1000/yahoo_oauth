@@ -234,8 +234,32 @@ class KeeperPriceCalculator:
             # Player was drafted
             if draft_type == 'auction':
                 rule = self.base_cost_rules.get('auction', {})
-                source = rule.get('source', 'cost')
-                if source == 'cost':
+                source = rule.get('source', 'draft_price')
+
+                if source == 'max_of_draft_faab':
+                    # MAX(draft_adjusted, faab_adjusted)
+                    draft_mult = rule.get('draft_multiplier', 1.0)
+                    draft_flat = rule.get('draft_flat', 0.0)
+                    faab_mult = rule.get('faab_multiplier', 0.5)
+                    faab_flat = rule.get('faab_flat', 0.0)
+
+                    draft_cost = float(cost) if not pd.isna(cost) else 0.0
+                    faab_cost = float(faab_bid) if not pd.isna(faab_bid) else 0.0
+
+                    draft_value = draft_cost * draft_mult + draft_flat
+                    faab_value = faab_cost * faab_mult + faab_flat
+
+                    return max(draft_value, faab_value)
+
+                elif source in ('draft_price', 'cost'):
+                    # Draft price with optional multiplier/flat adjustment
+                    mult = rule.get('multiplier', 1.0)
+                    flat = rule.get('flat', 0.0)
+                    draft_cost = float(cost) if not pd.isna(cost) else 0.0
+                    return draft_cost * mult + flat
+
+                else:
+                    # Fallback to raw cost
                     return float(cost) if not pd.isna(cost) else 0.0
             else:
                 # Snake draft - convert pick to cost
@@ -253,15 +277,27 @@ class KeeperPriceCalculator:
                 return self.ctx.keeper_budget * math.exp(-0.035 * (pick_val - 1))
 
         elif faab_bid and faab_bid > 0:
-            # FAAB acquisition
+            # FAAB acquisition (player not drafted, picked up via FAAB)
             rule = self.base_cost_rules.get('faab_only', {})
-            multiplier = rule.get('multiplier', 0.5)
-            return float(faab_bid) * multiplier
+            source = rule.get('source', 'faab_bid')
+
+            if source == 'max_of_draft_faab':
+                # For FAAB pickups, draft cost is 0, so just use FAAB calculation
+                faab_mult = rule.get('faab_multiplier', 0.5)
+                faab_flat = rule.get('faab_flat', 0.0)
+                faab_cost = float(faab_bid) if not pd.isna(faab_bid) else 0.0
+                return faab_cost * faab_mult + faab_flat
+
+            else:
+                # Simple multiplier + flat
+                mult = rule.get('multiplier', 0.5)
+                flat = rule.get('flat', 0.0)
+                return float(faab_bid) * mult + flat
 
         else:
             # Free agent
             rule = self.base_cost_rules.get('free_agent', {})
-            return rule.get('value', 1)
+            return rule.get('value', self.min_price)
 
     def calculate_keeper_price(
         self,
