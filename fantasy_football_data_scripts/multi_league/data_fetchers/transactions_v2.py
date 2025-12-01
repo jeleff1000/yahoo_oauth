@@ -249,6 +249,7 @@ class Transaction:
     status: str
     transaction_type: str
     manager: str
+    manager_guid: Optional[str]
     player_name: str
     yahoo_player_id: Optional[str]
     player_key: str
@@ -445,7 +446,7 @@ def fetch_team_mappings(
     oauth,
     league_key: str,
     manager_name_overrides: Optional[Dict[str, str]] = None
-) -> Dict[str, str]:
+) -> Tuple[Dict[str, str], Dict[str, str]]:
     """
     Fetch team ID to manager name mappings with proper normalization.
 
@@ -455,7 +456,7 @@ def fetch_team_mappings(
         manager_name_overrides: Dict mapping team names/nicknames to real manager names
 
     Returns:
-        Dict mapping team_key to normalized manager name
+        Tuple of (team_key_to_manager, team_key_to_guid)
     """
     print(f"  Fetching team mappings for {league_key}")
 
@@ -465,6 +466,7 @@ def fetch_team_mappings(
         root = fetch_url(teams_url, oauth)
 
         team_id_to_manager = {}
+        team_id_to_guid = {}
         for team_elem in root.findall(".//team"):
             # Extract team_key
             team_key_elem = team_elem.find("team_key")
@@ -475,6 +477,11 @@ def fetch_team_mappings(
             # Get raw nickname from manager element
             manager_elem = team_elem.find(".//manager/nickname")
             raw_nickname = manager_elem.text if manager_elem is not None else None
+
+            # Get manager guid (persistent identifier across years)
+            guid_elem = team_elem.find(".//manager/guid")
+            manager_guid = guid_elem.text if guid_elem is not None else None
+            team_id_to_guid[team_key] = manager_guid
 
             # Get team name as fallback for --hidden-- managers
             team_name_elem = team_elem.find("name")
@@ -490,10 +497,10 @@ def fetch_team_mappings(
             team_id_to_manager[team_key] = manager_name
 
         print(f"  Loaded {len(team_id_to_manager)} team mappings")
-        return team_id_to_manager
+        return team_id_to_manager, team_id_to_guid
     except Exception as e:
         print(f"  ERROR: Failed to fetch team mappings: {e}")
-        return {}
+        return {}, {}
 
 
 def fetch_transactions_for_year(
@@ -501,6 +508,7 @@ def fetch_transactions_for_year(
     league_key: str,
     year: int,
     team_mappings: Dict[str, str],
+    guid_mappings: Dict[str, str],
     matchup_windows: pd.DataFrame
 ) -> List[Transaction]:
     """
@@ -511,6 +519,7 @@ def fetch_transactions_for_year(
         league_key: Yahoo league key
         year: Season year
         team_mappings: Team key to manager name mapping
+        guid_mappings: Team key to manager GUID mapping
         matchup_windows: DataFrame with week windows for cumulative_week calculation
 
     Returns:
@@ -582,6 +591,7 @@ def fetch_transactions_for_year(
                         tkey = ""
 
                     nickname = team_mappings.get(tkey, "Unknown") if tkey else "Unknown"
+                    manager_guid = guid_mappings.get(tkey) if tkey else None
 
                     # Derive cumulative_week.  Prefer to look up from
                     # matchup_windows (which contains week-start/end
@@ -618,6 +628,7 @@ def fetch_transactions_for_year(
                         status=status,
                         transaction_type=ptype,
                         manager=nickname,
+                        manager_guid=manager_guid,
                         player_name=name,
                         yahoo_player_id=yahoo_player_id,
                         player_key=player_key,
@@ -939,10 +950,10 @@ def fetch_transactions(
 
     # Fetch team mappings (with manager name normalization including --hidden-- fallback)
     manager_overrides = ctx.manager_name_overrides if ctx else {}
-    team_mappings = fetch_team_mappings(oauth, league_key, manager_name_overrides=manager_overrides)
+    team_mappings, guid_mappings = fetch_team_mappings(oauth, league_key, manager_name_overrides=manager_overrides)
 
     # Fetch transactions
-    transactions = fetch_transactions_for_year(oauth, league_key, year, team_mappings, matchup_windows)
+    transactions = fetch_transactions_for_year(oauth, league_key, year, team_mappings, guid_mappings, matchup_windows)
 
     # Convert to DataFrame
     df = transactions_to_dataframe(transactions)
