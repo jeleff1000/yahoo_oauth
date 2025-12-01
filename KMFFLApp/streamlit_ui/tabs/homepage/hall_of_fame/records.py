@@ -12,7 +12,7 @@ import streamlit as st
 import pandas as pd
 import duckdb
 
-from .components import record_card, narrative_callout
+from .components import record_card
 
 
 class RecordsViewer:
@@ -98,10 +98,10 @@ class RecordsViewer:
             """
             biggest_blowout = self.con.execute(biggest_blowout_query).fetchdf()
 
-            # Display record cards in a 2x2 grid
-            col1, col2 = st.columns(2)
+            # Display record cards in a single row
+            cols = st.columns(4)
 
-            with col1:
+            with cols[0]:
                 if not highest_week.empty:
                     row = highest_week.iloc[0]
                     st.markdown(record_card(
@@ -112,17 +112,7 @@ class RecordsViewer:
                         context=f"Week {int(row['week'])}"
                     ), unsafe_allow_html=True)
 
-                if not best_season.empty:
-                    row = best_season.iloc[0]
-                    st.markdown(record_card(
-                        title="📈 Best Season PPG",
-                        holder=row['manager'],
-                        value=f"{row['ppg']:.2f} ppg",
-                        year=int(row['year']),
-                        context=f"{int(row['wins'])} wins"
-                    ), unsafe_allow_html=True)
-
-            with col2:
+            with cols[1]:
                 if not lowest_week.empty:
                     row = lowest_week.iloc[0]
                     st.markdown(record_card(
@@ -133,6 +123,18 @@ class RecordsViewer:
                         context=f"Week {int(row['week'])}"
                     ), unsafe_allow_html=True)
 
+            with cols[2]:
+                if not best_season.empty:
+                    row = best_season.iloc[0]
+                    st.markdown(record_card(
+                        title="📈 Best Season PPG",
+                        holder=row['manager'],
+                        value=f"{row['ppg']:.2f} ppg",
+                        year=int(row['year']),
+                        context=f"{int(row['wins'])} wins"
+                    ), unsafe_allow_html=True)
+
+            with cols[3]:
                 if not biggest_blowout.empty:
                     row = biggest_blowout.iloc[0]
                     st.markdown(record_card(
@@ -142,17 +144,6 @@ class RecordsViewer:
                         year=int(row['year']),
                         context=f"vs {row['loser']}"
                     ), unsafe_allow_html=True)
-
-            # Narrative callout
-            if not highest_week.empty:
-                hw = highest_week.iloc[0]
-                st.markdown(narrative_callout(
-                    f"{hw['manager']}'s {hw['team_points']:.1f}-point explosion in Week {int(hw['week'])}, "
-                    f"{int(hw['year'])} remains the all-time single-week record!",
-                    "🎯"
-                ), unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
 
             # League Totals Section (folded from Miscellaneous)
             st.markdown("#### 📊 League Totals")
@@ -262,17 +253,6 @@ class RecordsViewer:
                         value=f"{int(row['loss_streak'])} games"
                     ), unsafe_allow_html=True)
 
-            # Narrative
-            if not best_win.empty:
-                bw = best_win.iloc[0]
-                st.markdown(narrative_callout(
-                    f"{bw['manager']} holds the record for consecutive wins with an impressive "
-                    f"{int(bw['win_streak'])}-game win streak!",
-                    "🔥"
-                ), unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
             # Show both streak tables side by side
             col1, col2 = st.columns(2)
             with col1:
@@ -292,11 +272,6 @@ class RecordsViewer:
     @st.fragment
     def _display_tough_luck(self):
         st.markdown("### 📉 Tough Luck Records")
-
-        st.markdown(narrative_callout(
-            "Sometimes you put up a great score and still lose. These are the unluckiest losses in league history.",
-            "😢"
-        ), unsafe_allow_html=True)
 
         try:
             # Get highest scoring losses using DuckDB
