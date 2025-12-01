@@ -7,7 +7,7 @@ import logging
 logging.disable(logging.DEBUG)
 
 oauth_file = r"C:\Users\joeye\OneDrive\Desktop\yahoo_oauth\oauth\Oauth.json"
-league_id = "449.l.198278"
+league_id = "331.l.381581"  # KMFFL 2014
 
 oauth = OAuth2(None, None, from_file=oauth_file)
 
