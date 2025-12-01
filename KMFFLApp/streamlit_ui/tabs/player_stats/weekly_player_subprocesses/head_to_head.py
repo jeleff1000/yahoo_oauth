@@ -246,20 +246,22 @@ class H2HViewer:
 
         # Position sort: extract base position and slot number for proper ordering
         # E.g., "QB1" -> base="QB", slot=1; "W/R/T1" -> base="W/R/T", slot=1
-        # For bench (BN/IR), use actual NFL position column for sorting
+        # For bench (BN/IR), sort by BN first then IR, within each sort by position
         def extract_position_parts(row):
-            """Extract base position and slot number from position string like 'QB1', 'WR2', 'W/R/T1'"""
+            """Extract sorting info from position string"""
             pos_str = row.get("fantasy_position", "")
             if pd.isna(pos_str) or pos_str == "":
-                return ("", 999)
+                return ("", 999, 0)  # (base_pos, slot, bn_ir_order)
             pos_str = str(pos_str).strip()
 
-            # For bench/IR positions, use actual NFL position for sorting
+            # For bench/IR positions, return (actual_position, 0, bn_ir_order)
+            # bn_ir_order: 0 for BN, 1 for IR (so BN comes before IR)
             if pos_str.startswith("BN") or pos_str.startswith("IR"):
+                bn_ir_order = 0 if pos_str.startswith("BN") else 1
                 actual_pos = row.get("position", "")
                 if pd.notna(actual_pos) and str(actual_pos).strip() not in ["", "nan", "None"]:
-                    return (str(actual_pos).strip(), 0)  # slot 0 to maintain order within position
-                return (pos_str, 999)
+                    return (str(actual_pos).strip(), 0, bn_ir_order)
+                return (pos_str, 999, bn_ir_order)
 
             # Handle special positions like W/R/T
             if pos_str.startswith("W/R/T"):
@@ -268,7 +270,7 @@ class H2HViewer:
                     slot = int(pos_str[5:]) if len(pos_str) > 5 else 1
                 except:
                     slot = 1
-                return (base, slot)
+                return (base, slot, 0)
 
             # Extract base position (letters) and slot number (digits at end)
             import re
@@ -277,22 +279,26 @@ class H2HViewer:
                 base = match.group(1)
                 slot_str = match.group(2)
                 slot = int(slot_str) if slot_str else 1
-                return (base, slot)
+                return (base, slot, 0)
 
-            return (pos_str, 1)
+            return (pos_str, 1, 0)
 
         if not df.empty:
-            df["__base_pos"], df["__slot_num"] = zip(*df.apply(extract_position_parts, axis=1))
+            result = list(df.apply(extract_position_parts, axis=1))
+            df["__base_pos"] = [r[0] for r in result]
+            df["__slot_num"] = [r[1] for r in result]
+            df["__bn_ir_order"] = [r[2] for r in result]
         else:
             df["__base_pos"] = ""
             df["__slot_num"] = 999
+            df["__bn_ir_order"] = 0
 
-        # Map base positions to order - NFL positions for consistent sorting
+        # Map base positions to order
         pos_order = {"QB": 0, "RB": 1, "WR": 2, "TE": 3, "W/R/T": 4, "K": 5, "DEF": 6, "BN": 7, "IR": 8}
         df["__pos_order"] = df["__base_pos"].map(pos_order).fillna(999).astype(int)
 
-        # Sort by position order, then by slot number, then by points descending
-        df = df.sort_values(["__pos_order", "__slot_num", "points_1"], ascending=[True, True, False]).drop(columns=["__pos_order", "__base_pos", "__slot_num"]).reset_index(drop=True)
+        # Sort by: BN/IR order first (BN before IR), then position order, then slot, then points
+        df = df.sort_values(["__bn_ir_order", "__pos_order", "__slot_num", "points_1"], ascending=[True, True, True, False]).drop(columns=["__pos_order", "__base_pos", "__slot_num", "__bn_ir_order"]).reset_index(drop=True)
 
         # Totals row - ensure all required columns are present
         total_row = pd.DataFrame(
