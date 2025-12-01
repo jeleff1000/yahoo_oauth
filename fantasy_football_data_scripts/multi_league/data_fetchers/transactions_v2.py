@@ -58,6 +58,12 @@ import pandas as pd
 import requests
 import yahoo_fantasy_api as yfa
 
+# Import shared name normalization
+try:
+    from .clean_names import normalize_manager_name
+except ImportError:
+    from clean_names import normalize_manager_name
+
 # Add paths for imports
 _script_file = Path(__file__).resolve()
 _multi_league_dir = _script_file.parent.parent  # multi_league directory
@@ -435,16 +441,21 @@ def map_transaction_to_week(
 # Transaction Fetching
 # =============================================================================
 
-def fetch_team_mappings(oauth, league_key: str) -> Dict[str, str]:
+def fetch_team_mappings(
+    oauth,
+    league_key: str,
+    manager_name_overrides: Optional[Dict[str, str]] = None
+) -> Dict[str, str]:
     """
-    Fetch team ID to manager name mappings.
+    Fetch team ID to manager name mappings with proper normalization.
 
     Args:
         oauth: OAuth2 session
         league_key: Yahoo league key (e.g., "nfl.l.123456")
+        manager_name_overrides: Dict mapping team names/nicknames to real manager names
 
     Returns:
-        Dict mapping team_key to manager nickname
+        Dict mapping team_key to normalized manager name
     """
     print(f"  Fetching team mappings for {league_key}")
 
@@ -452,10 +463,32 @@ def fetch_team_mappings(oauth, league_key: str) -> Dict[str, str]:
 
     try:
         root = fetch_url(teams_url, oauth)
-        mgr_df = pd.read_xml(StringIO(ET.tostring(root, encoding='unicode')), xpath=".//manager", parser="etree")
-        mgr_df["team"] = f"{league_key}.t." + mgr_df["manager_id"].astype(str)
-        mgr_df = mgr_df[["team", "nickname"]]
-        team_id_to_manager = {row["team"]: row["nickname"] for _, row in mgr_df.iterrows()}
+
+        team_id_to_manager = {}
+        for team_elem in root.findall(".//team"):
+            # Extract team_key
+            team_key_elem = team_elem.find("team_key")
+            if team_key_elem is None:
+                continue
+            team_key = team_key_elem.text
+
+            # Get raw nickname from manager element
+            manager_elem = team_elem.find(".//manager/nickname")
+            raw_nickname = manager_elem.text if manager_elem is not None else None
+
+            # Get team name as fallback for --hidden-- managers
+            team_name_elem = team_elem.find("name")
+            team_name = team_name_elem.text if team_name_elem is not None else None
+
+            # Normalize manager name (handles --hidden-- with team_name fallback)
+            manager_name = normalize_manager_name(
+                nickname=raw_nickname,
+                overrides=manager_name_overrides,
+                team_name_fallback=team_name
+            )
+
+            team_id_to_manager[team_key] = manager_name
+
         print(f"  Loaded {len(team_id_to_manager)} team mappings")
         return team_id_to_manager
     except Exception as e:
@@ -904,8 +937,9 @@ def fetch_transactions(
     if matchup_windows is None:
         matchup_windows = load_matchup_windows(ctx, year)
 
-    # Fetch team mappings
-    team_mappings = fetch_team_mappings(oauth, league_key)
+    # Fetch team mappings (with manager name normalization including --hidden-- fallback)
+    manager_overrides = ctx.manager_name_overrides if ctx else {}
+    team_mappings = fetch_team_mappings(oauth, league_key, manager_name_overrides=manager_overrides)
 
     # Fetch transactions
     transactions = fetch_transactions_for_year(oauth, league_key, year, team_mappings, matchup_windows)
