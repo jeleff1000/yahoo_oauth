@@ -39,6 +39,26 @@ sys.path.insert(0, str(_multi_league_dir))
 from core.league_context import LeagueContext
 
 
+def is_valid_guid(guid) -> bool:
+    """
+    Check if a GUID is valid (not a placeholder for hidden managers).
+
+    Invalid GUIDs include:
+    - None, NaN, empty string
+    - '--' (Yahoo's placeholder for hidden managers)
+    - Any other placeholder patterns
+
+    When a GUID is invalid, we should NOT unify records because they may be
+    different people who both have hidden profiles.
+    """
+    if guid is None or pd.isna(guid):
+        return False
+    guid_str = str(guid).strip()
+    if not guid_str or guid_str in ('--', 'None', 'nan', '<NA>'):
+        return False
+    return True
+
+
 def build_guid_to_name_mapping(dataframes: dict) -> dict:
     """
     Build a mapping from manager_guid to the most recent year's manager name.
@@ -48,6 +68,9 @@ def build_guid_to_name_mapping(dataframes: dict) -> dict:
 
     Returns:
         Dict mapping guid -> most recent manager name
+
+    Note: GUIDs that are '--' or other placeholders are SKIPPED because they
+    represent hidden managers who may be different people.
     """
     # Collect all (guid, year, manager) tuples
     all_records = []
@@ -68,7 +91,10 @@ def build_guid_to_name_mapping(dataframes: dict) -> dict:
             guid = row['manager_guid']
             year = row['year']
             manager = row['manager']
-            if guid and pd.notna(guid) and manager and pd.notna(manager):
+            # Skip invalid GUIDs (like '--') - these are different hidden managers
+            if not is_valid_guid(guid):
+                continue
+            if manager and pd.notna(manager):
                 all_records.append({
                     'guid': str(guid),
                     'year': int(year),
@@ -121,13 +147,15 @@ def update_manager_names(df: pd.DataFrame, guid_to_name: dict, table_name: str) 
     old_to_new = {}
     for idx, row in df.iterrows():
         guid = row.get('manager_guid')
-        if guid and pd.notna(guid):
-            guid_str = str(guid)
-            if guid_str in guid_to_name:
-                old_name = row['manager']
-                new_name = guid_to_name[guid_str]
-                if old_name != new_name and old_name not in old_to_new:
-                    old_to_new[old_name] = new_name
+        # Skip invalid GUIDs - don't unify hidden managers
+        if not is_valid_guid(guid):
+            continue
+        guid_str = str(guid)
+        if guid_str in guid_to_name:
+            old_name = row['manager']
+            new_name = guid_to_name[guid_str]
+            if old_name != new_name and old_name not in old_to_new:
+                old_to_new[old_name] = new_name
 
     if not old_to_new:
         return df, 0
@@ -136,27 +164,29 @@ def update_manager_names(df: pd.DataFrame, guid_to_name: dict, table_name: str) 
     updates = 0
     for idx, row in df.iterrows():
         guid = row.get('manager_guid')
-        if guid and pd.notna(guid):
-            guid_str = str(guid)
-            if guid_str in guid_to_name:
-                new_name = guid_to_name[guid_str]
-                old_name = row['manager']
-                if old_name != new_name:
-                    df.at[idx, 'manager'] = new_name
-                    updates += 1
+        # Skip invalid GUIDs - don't unify hidden managers
+        if not is_valid_guid(guid):
+            continue
+        guid_str = str(guid)
+        if guid_str in guid_to_name:
+            new_name = guid_to_name[guid_str]
+            old_name = row['manager']
+            if old_name != new_name:
+                df.at[idx, 'manager'] = new_name
+                updates += 1
 
-                    # Recalculate composite keys
-                    new_name_no_spaces = new_name.replace(" ", "")
+                # Recalculate composite keys
+                new_name_no_spaces = new_name.replace(" ", "")
 
-                    if 'manager_year' in df.columns and 'year' in df.columns:
-                        year_val = row.get('year')
-                        if pd.notna(year_val):
-                            df.at[idx, 'manager_year'] = f"{new_name_no_spaces}{int(year_val)}"
+                if 'manager_year' in df.columns and 'year' in df.columns:
+                    year_val = row.get('year')
+                    if pd.notna(year_val):
+                        df.at[idx, 'manager_year'] = f"{new_name_no_spaces}{int(year_val)}"
 
-                    if 'manager_week' in df.columns and 'cumulative_week' in df.columns:
-                        cw = row.get('cumulative_week')
-                        if pd.notna(cw):
-                            df.at[idx, 'manager_week'] = f"{new_name_no_spaces}{int(cw)}"
+                if 'manager_week' in df.columns and 'cumulative_week' in df.columns:
+                    cw = row.get('cumulative_week')
+                    if pd.notna(cw):
+                        df.at[idx, 'manager_week'] = f"{new_name_no_spaces}{int(cw)}"
 
     # Step 3: Update opponent column using old_to_new mapping
     if 'opponent' in df.columns:
