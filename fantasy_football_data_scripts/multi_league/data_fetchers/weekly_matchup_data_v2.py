@@ -837,7 +837,7 @@ def weekly_matchup_data(
         # NOTE: w_vs_X and l_vs_X head-to-head columns are also NOT included here
         # They will be added by cumulative_stats_v2.py (using head_to_head.py module)
         KEEP = [
-            'week', 'year', 'manager', 'team_name',
+            'week', 'year', 'manager', 'manager_guid', 'team_name',
             'team_points', 'team_projected_points', 'opponent', 'opponent_points',
             'opponent_projected_points', 'margin', 'total_matchup_score', 'close_margin',
             'weekly_mean', 'weekly_median',
