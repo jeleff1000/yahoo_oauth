@@ -538,9 +538,12 @@ def enrich_transactions_with_player_data(
             if 'year' in draft_df.columns:
                 draft_df['year'] = pd.to_numeric(draft_df['year'], errors='coerce').astype('Int64')
 
-            # Select only needed column for join
-            if 'kept_next_year' in draft_df.columns:
-                draft_keeper = draft_df[['yahoo_player_id', 'year', 'kept_next_year']].copy()
+            # Select keeper columns for join
+            keeper_cols = ['kept_next_year', 'is_keeper_status']
+            available_keeper_cols = [c for c in keeper_cols if c in draft_df.columns]
+
+            if available_keeper_cols:
+                draft_keeper = draft_df[['yahoo_player_id', 'year'] + available_keeper_cols].copy()
 
                 # Drop duplicates (in case same player drafted multiple times in a year via trades)
                 # Keep first occurrence
@@ -554,13 +557,18 @@ def enrich_transactions_with_player_data(
                     suffixes=('', '_draft')
                 )
 
-                # Fill NaN with 0 (player not kept next year)
+                # Fill NaN with 0 for keeper columns
                 if 'kept_next_year' in transactions.columns:
                     transactions['kept_next_year'] = transactions['kept_next_year'].fillna(0).astype('Int64')
                     kept_count = (transactions['kept_next_year'] == 1).sum()
                     print(f"  Added kept_next_year: {kept_count:,} transactions involve players kept next year")
+
+                if 'is_keeper_status' in transactions.columns:
+                    transactions['is_keeper_status'] = transactions['is_keeper_status'].fillna(0).astype('Int64')
+                    keeper_count = (transactions['is_keeper_status'] == 1).sum()
+                    print(f"  Added is_keeper_status: {keeper_count:,} transactions involve keeper players")
             else:
-                print(f"  WARNING: kept_next_year not found in draft.parquet - skipping keeper join")
+                print(f"  WARNING: No keeper columns found in draft.parquet - skipping keeper join")
         else:
             print(f"  WARNING: draft.parquet not found at {draft_path} - skipping keeper join")
     except Exception as e:

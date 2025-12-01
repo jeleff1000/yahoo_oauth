@@ -158,7 +158,16 @@ def calculate_weekly_metrics(df: pd.DataFrame) -> pd.DataFrame:
         ascending=False,
         na_option='keep'
     ).astype("Int64")
+
+    # Last place week (1 = lowest score that week)
+    # Manager has last_place_week=1 if their weekly_rank equals the max rank for that week
+    max_rank_per_week = df.groupby(['year', 'week'])['weekly_rank'].transform('max')
+    df['last_place_week'] = (df['weekly_rank'] == max_rank_per_week).astype("Int64")
+    # Handle null weekly_rank (null scores can't be last place)
+    df.loc[df['weekly_rank'].isna(), 'last_place_week'] = pd.NA
+
     print(f"  League mean range: {df['league_weekly_mean'].min():.1f} - {df['league_weekly_mean'].max():.1f}")
+    print(f"  Last place weeks: {df['last_place_week'].sum()}")
     print(f"  Max teams beaten in a week: {df['teams_beat_this_week'].max()}")
     # Ensure weekly columns exist and are null-safe for downstream merges
     for col, dtype in [("weekly_rank","Int64"),("teams_beat_this_week","Int64"),("above_league_median","Int64")]:
