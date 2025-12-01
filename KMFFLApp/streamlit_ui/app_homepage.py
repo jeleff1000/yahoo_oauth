@@ -459,113 +459,6 @@ def main():
         }
     }
 
-    /* Horizontal subtab buttons - compact tab style */
-    .stColumns button {
-        padding: 0.4rem 0.75rem !important;
-        min-height: unset !important;
-        height: auto !important;
-        font-size: 0.85rem !important;
-        border-radius: 6px 6px 0 0 !important;
-        margin-bottom: -1px !important;
-    }
-    .stColumns button[kind="primary"] {
-        background: transparent !important;
-        border: none !important;
-        border-bottom: 2px solid #818CF8 !important;
-        color: #A78BFA !important;
-        font-weight: 600 !important;
-        box-shadow: none !important;
-    }
-    .stColumns button[kind="secondary"],
-    .stColumns button:not([kind="primary"]) {
-        background: transparent !important;
-        border: none !important;
-        border-bottom: 2px solid transparent !important;
-        color: rgba(255, 255, 255, 0.5) !important;
-        font-weight: 500 !important;
-    }
-    .stColumns button[kind="secondary"]:hover,
-    .stColumns button:not([kind="primary"]):hover {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border-bottom: 2px solid rgba(129, 140, 248, 0.4) !important;
-        color: rgba(255, 255, 255, 0.85) !important;
-    }
-    /* Underline container for subtabs */
-    .stColumns {
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        margin-bottom: 0.75rem !important;
-    }
-
-    /* ===========================================
-       MOBILE: Horizontal scrollable chip tabs
-       =========================================== */
-    @media (max-width: 768px) {
-        /* Reduce page margins */
-        .main .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-            padding-top: 1rem !important;
-        }
-
-        /* Force horizontal scroll for subtab columns */
-        .stColumns {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
-            -webkit-overflow-scrolling: touch !important;
-            gap: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
-            margin-bottom: 0.5rem !important;
-        }
-
-        /* Each column becomes inline */
-        .stColumns > div[data-testid="column"] {
-            flex: 0 0 auto !important;
-            width: auto !important;
-            min-width: unset !important;
-        }
-
-        /* Compact chip-style buttons */
-        .stColumns button {
-            padding: 0.35rem 0.75rem !important;
-            font-size: 0.8rem !important;
-            white-space: nowrap !important;
-            border-radius: 16px !important;
-            min-height: 32px !important;
-        }
-
-        /* Active chip */
-        .stColumns button[kind="primary"] {
-            background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%) !important;
-            border: none !important;
-            border-bottom: none !important;
-            color: white !important;
-        }
-
-        /* Inactive chips */
-        .stColumns button[kind="secondary"],
-        .stColumns button:not([kind="primary"]) {
-            background: rgba(255, 255, 255, 0.08) !important;
-            border: 1px solid rgba(255, 255, 255, 0.15) !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
-            color: rgba(255, 255, 255, 0.7) !important;
-        }
-
-        /* Hide scrollbar but keep functionality */
-        .stColumns::-webkit-scrollbar {
-            height: 0px;
-        }
-    }
-
-    /* Even smaller on very small screens */
-    @media (max-width: 480px) {
-        .stColumns button {
-            padding: 0.3rem 0.6rem !important;
-            font-size: 0.75rem !important;
-            min-height: 28px !important;
-        }
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -585,38 +478,118 @@ def main():
     # Get subtabs for current section
     section_subtabs = subtabs.get(selected_tab)
 
-    # Show horizontal subtab navigation for sections that have subtabs
+    # Render content - use native st.tabs for sections with subtabs (handles mobile well)
     if section_subtabs:
-        # Create pill-style buttons for subtab navigation
-        cols = st.columns(len(section_subtabs))
-        for idx, (col, subtab_name) in enumerate(zip(cols, section_subtabs)):
-            with col:
-                is_active = (idx == current_subtab_idx)
-                btn_type = "primary" if is_active else "secondary"
-                if st.button(subtab_name, key=f"subtab_btn_{selected_tab}_{idx}", use_container_width=True, type=btn_type):
-                    if not is_active:
-                        st.session_state[f"subtab_{selected_tab}"] = idx
-                        st.rerun()
+        tabs = st.tabs(section_subtabs)
 
-        st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+        if selected_tab == "Home":
+            with tabs[0]:  # Overview
+                data = load_homepage_tab()
+                from tabs.homepage.homepage_overview import (
+                    _render_hero, _render_quick_stats, _render_navigation_tiles,
+                    _render_key_concepts, _render_quick_tips, _apply_homepage_styles
+                )
+                from shared.themes import inject_theme_css
+                inject_theme_css()
+                apply_modern_styles()
+                _apply_homepage_styles()
+                summary = data.get("summary", {})
+                _render_hero(summary)
+                _render_quick_stats(summary)
+                _render_navigation_tiles()
+                _render_key_concepts()
+                _render_quick_tips()
+            with tabs[1]:  # Hall of Fame
+                from tabs.homepage.homepage_overview import HallOfFameViewer, HALL_OF_FAME_AVAILABLE
+                data = load_homepage_tab()
+                if HALL_OF_FAME_AVAILABLE:
+                    HallOfFameViewer(data).display()
+                else:
+                    st.info("Hall of Fame module not available")
+            with tabs[2]:  # Standings
+                from tabs.homepage.season_standings import display_season_standings
+                display_season_standings()
+            with tabs[3]:  # Schedules
+                from tabs.homepage.schedules import display_schedules
+                display_schedules()
+            with tabs[4]:  # Head-to-Head
+                from tabs.homepage.head_to_head import display_head_to_head
+                display_head_to_head()
+            with tabs[5]:  # Recaps
+                from tabs.homepage.homepage_overview import RecapsViewer, RECAPS_AVAILABLE
+                data = load_homepage_tab()
+                if RECAPS_AVAILABLE:
+                    RecapsViewer(data).display()
+                else:
+                    st.info("Recaps module not available")
 
-    # Render the active section using existing render functions
-    if selected_tab == "Home":
-        render_home_tab()
-    elif selected_tab == "Managers":
-        render_managers_tab()
-    elif selected_tab == "Team Stats":
-        render_team_stats_tab()
-    elif selected_tab == "Players":
-        render_players_tab()
-    elif selected_tab == "Draft":
-        render_draft_tab()
-    elif selected_tab == "Transactions":
-        render_transactions_tab()
-    elif selected_tab == "Simulations":
-        render_simulations_tab()
-    elif selected_tab == "Extras":
-        render_extras_tab()
+        elif selected_tab == "Managers":
+            with tabs[0]:  # Weekly
+                data = load_managers_tab()
+                from tabs.matchups.weekly.weekly_matchup_overview import WeeklyMatchupDataViewer
+                matchup_df = data.get("matchup_df") if data else None
+                if matchup_df is not None and not matchup_df.empty:
+                    WeeklyMatchupDataViewer(matchup_df).display(prefix="weekly")
+                else:
+                    st.info("No weekly matchup data available")
+            with tabs[1]:  # Seasons
+                data = load_managers_tab()
+                from tabs.matchups.season.season_matchup_overview import SeasonMatchupOverviewViewer
+                matchup_df = data.get("matchup_df") if data else None
+                if matchup_df is not None and not matchup_df.empty:
+                    SeasonMatchupOverviewViewer(matchup_df).display(prefix="season")
+                else:
+                    st.info("No season matchup data available")
+            with tabs[2]:  # Career
+                data = load_managers_tab()
+                from tabs.matchups.all_time.career_matchup_overview import CareerMatchupOverviewViewer
+                matchup_df = data.get("matchup_df") if data else None
+                if matchup_df is not None and not matchup_df.empty:
+                    CareerMatchupOverviewViewer(matchup_df).display(prefix="career")
+                else:
+                    st.info("No career matchup data available")
+            with tabs[3]:  # Visualize
+                data = load_managers_tab()
+                from tabs.matchups.graphs import display_matchup_graphs
+                display_matchup_graphs(data)
+
+        elif selected_tab == "Players":
+            with tabs[0]:
+                render_players_weekly()
+            with tabs[1]:
+                render_players_season()
+            with tabs[2]:
+                render_players_career()
+            with tabs[3]:
+                render_players_visualize()
+
+        elif selected_tab == "Extras":
+            with tabs[0]:  # Keeper
+                from md.tab_data_access.keepers import load_optimized_keepers_data
+                from tabs.keepers.keepers_home import KeeperDataViewer
+                keepers_data = load_optimized_keepers_data()
+                if keepers_data is not None:
+                    KeeperDataViewer(keepers_data).display()
+                else:
+                    st.info("No keepers data available")
+            with tabs[1]:  # Team Names
+                from md.tab_data_access.team_names import load_optimized_team_names_data
+                from tabs.team_names.team_names import display_team_names
+                team_names_data = load_optimized_team_names_data()
+                if team_names_data is not None:
+                    display_team_names(team_names_data)
+                else:
+                    st.info("No team names data available")
+    else:
+        # Sections without subtabs - render directly
+        if selected_tab == "Team Stats":
+            render_team_stats_tab()
+        elif selected_tab == "Draft":
+            render_draft_tab()
+        elif selected_tab == "Transactions":
+            render_transactions_tab()
+        elif selected_tab == "Simulations":
+            render_simulations_tab()
 
 
 if __name__ == "__main__":
