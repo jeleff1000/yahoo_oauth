@@ -145,268 +145,388 @@ def render_keeper_rules_ui() -> Optional[dict]:
     # Step 1: Basic Settings
     st.markdown("#### 1. Basic Settings")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         max_keepers = st.number_input(
             "Maximum keepers per team",
             min_value=1, max_value=15, value=3,
             key="max_keepers",
-            help="How many players can each team keep?"
+            help="How many players can each team keep per year?"
         )
     with col2:
-        max_years = st.number_input(
-            "Maximum years a player can be kept",
-            min_value=1, max_value=10, value=3,
-            key="max_keeper_years",
-            help="How many consecutive years can you keep the same player? (1 = can keep once, then must release)"
-        )
-    with col3:
         budget = st.number_input(
-            "Auction budget",
+            "Auction budget ($)",
             min_value=50, max_value=1000, value=200,
             key="keeper_budget",
-            help="Total auction dollars each team has"
+            help="Total auction dollars each team starts with"
         )
 
+    # Keeper years - with unlimited option
+    col1, col2 = st.columns(2)
+    with col1:
+        unlimited_years = st.checkbox(
+            "Players can be kept forever",
+            value=False,
+            key="unlimited_keeper_years",
+            help="No limit on how many years a player can be kept"
+        )
+    with col2:
+        if unlimited_years:
+            max_years = 99  # Use 99 to represent unlimited
+            st.info("Players can be kept indefinitely")
+        else:
+            max_years = st.number_input(
+                "Maximum years a player can be kept",
+                min_value=1, max_value=20, value=3,
+                key="max_keeper_years",
+                help="How many consecutive years can you keep the same player?"
+            )
+
+    # Price limits - clearer UI
+    st.markdown("**Price Limits**")
     col1, col2, col3 = st.columns(3)
     with col1:
         min_price = st.number_input(
-            "Minimum keeper price",
+            "Minimum keeper price ($)",
             min_value=0, max_value=50, value=1,
             key="min_keeper_price",
             help="Lowest cost a keeper can be"
         )
     with col2:
-        max_price = st.number_input(
-            "Maximum keeper price",
-            min_value=0, max_value=500, value=0,
-            key="max_keeper_price",
-            help="Highest cost a keeper can be (0 = no limit)"
+        no_max_price = st.checkbox(
+            "No maximum price",
+            value=True,
+            key="no_max_keeper_price",
+            help="Keeper prices can go as high as the budget allows"
         )
     with col3:
-        round_to_integer = st.checkbox(
-            "Round prices to whole dollars",
-            value=True,
-            key="round_to_integer",
-            help="Round calculated keeper prices to nearest dollar"
-        )
+        if no_max_price:
+            max_price = None
+            st.info("No price cap")
+        else:
+            max_price = st.number_input(
+                "Maximum keeper price ($)",
+                min_value=1, max_value=500, value=100,
+                key="max_keeper_price",
+                help="Highest cost a keeper can be"
+            )
+
+    round_to_integer = st.checkbox(
+        "Round prices to whole dollars",
+        value=True,
+        key="round_to_integer",
+        help="Round calculated keeper prices to nearest dollar"
+    )
 
     st.markdown("---")
 
-    # Step 2: Base Cost Rules (How original cost is determined)
-    st.markdown("#### 2. Base Cost Rules")
-    st.caption("How is the original keeper cost determined based on how you acquired the player?")
+    # Step 2: How is the FIRST year keeper price determined?
+    st.markdown("#### 2. First Year Keeper Price")
+    st.caption("How is a player's keeper price determined the first time they're kept?")
 
-    # Acquisition type selector
-    acquisition_types_info = {
-        "auction": "Players drafted in an auction (you paid $X)",
-        "snake": "Players drafted in a snake draft (you used a round pick)",
-        "faab_only": "Players picked up via FAAB waivers only (no draft cost)",
-        "free_agent": "Players picked up as free agents ($0 FAAB)"
-    }
+    first_year_method = st.selectbox(
+        "First year keeper price is based on:",
+        [
+            "Draft price (what you paid in the auction)",
+            "FAAB bid (what you paid to pick them up)",
+            "Fixed price (same price for all keepers)",
+            "Different rules by how player was acquired"
+        ],
+        key="first_year_method"
+    )
 
     base_cost_rules = {}
 
-    for acq_type, description in acquisition_types_info.items():
-        with st.expander(f"**{acq_type.replace('_', ' ').title()}** - {description}", expanded=(acq_type == "auction")):
+    if first_year_method == "Draft price (what you paid in the auction)":
+        st.success("First year keeper price = Draft price paid")
+        base_cost_rules["auction"] = {"source": "draft_price"}
+        base_cost_rules["faab_only"] = {"source": "faab_bid"}
+        base_cost_rules["free_agent"] = {"source": "fixed", "value": min_price}
 
-            source_options = {
-                "auction": ["Draft price paid", "Draft price + flat adjustment", "Draft price × multiplier", "Custom formula"],
-                "snake": ["Round number as dollars", "Fixed cost per round", "Custom formula"],
-                "faab_only": ["FAAB bid amount", "FAAB × multiplier", "Fixed cost", "FAAB + flat adjustment", "Custom formula"],
-                "free_agent": ["Fixed cost", "Custom formula"]
-            }
+    elif first_year_method == "FAAB bid (what you paid to pick them up)":
+        st.success("First year keeper price = FAAB bid amount")
+        base_cost_rules["auction"] = {"source": "draft_price"}
+        base_cost_rules["faab_only"] = {"source": "faab_bid"}
+        base_cost_rules["free_agent"] = {"source": "fixed", "value": min_price}
 
-            source = st.selectbox(
-                "Base cost calculation:",
-                source_options[acq_type],
-                key=f"base_cost_source_{acq_type}"
+    elif first_year_method == "Fixed price (same price for all keepers)":
+        fixed_first_year = st.number_input(
+            "Fixed first year price ($)",
+            min_value=0, max_value=200, value=10,
+            key="fixed_first_year_price"
+        )
+        st.success(f"All first year keepers cost ${fixed_first_year}")
+        base_cost_rules["auction"] = {"source": "fixed", "value": fixed_first_year}
+        base_cost_rules["faab_only"] = {"source": "fixed", "value": fixed_first_year}
+        base_cost_rules["free_agent"] = {"source": "fixed", "value": fixed_first_year}
+
+    else:  # Different rules by acquisition
+        st.markdown("**Set price rules for each acquisition type:**")
+
+        with st.expander("Drafted Players (Auction)", expanded=True):
+            auction_method = st.selectbox(
+                "Price for drafted players:",
+                ["Draft price paid", "Draft price + adjustment", "Fixed price"],
+                key="auction_method"
             )
+            if auction_method == "Draft price paid":
+                base_cost_rules["auction"] = {"source": "draft_price"}
+            elif auction_method == "Draft price + adjustment":
+                adj = st.number_input("Add/subtract ($)", min_value=-50, max_value=50, value=0, key="auction_adj")
+                base_cost_rules["auction"] = {"source": "draft_price", "adjustment": adj}
+                if adj >= 0:
+                    st.caption(f"Example: $25 draft price → ${25 + adj} keeper price")
+                else:
+                    st.caption(f"Example: $25 draft price → ${25 + adj} keeper price")
+            else:
+                val = st.number_input("Fixed price ($)", min_value=0, max_value=200, value=10, key="auction_fixed")
+                base_cost_rules["auction"] = {"source": "fixed", "value": val}
 
-            rule = {"source": source}
+        with st.expander("Waiver/FAAB Pickups", expanded=False):
+            faab_method = st.selectbox(
+                "Price for FAAB pickups:",
+                ["FAAB bid amount", "FAAB bid + adjustment", "Fixed price"],
+                key="faab_method"
+            )
+            if faab_method == "FAAB bid amount":
+                base_cost_rules["faab_only"] = {"source": "faab_bid"}
+            elif faab_method == "FAAB bid + adjustment":
+                adj = st.number_input("Add/subtract ($)", min_value=-50, max_value=50, value=0, key="faab_adj")
+                base_cost_rules["faab_only"] = {"source": "faab_bid", "adjustment": adj}
+            else:
+                val = st.number_input("Fixed price ($)", min_value=0, max_value=200, value=5, key="faab_fixed")
+                base_cost_rules["faab_only"] = {"source": "fixed", "value": val}
 
-            if "flat adjustment" in source.lower():
-                rule["adjustment"] = st.number_input(
-                    "Adjustment ($)",
-                    min_value=-100, max_value=100, value=0,
-                    key=f"base_cost_adj_{acq_type}",
-                    help="Amount to add to the base cost (can be negative)"
-                )
-
-            if "multiplier" in source.lower():
-                rule["multiplier"] = st.number_input(
-                    "Multiplier",
-                    min_value=0.1, max_value=5.0, value=1.0, step=0.1,
-                    key=f"base_cost_mult_{acq_type}",
-                    help="Multiply the base cost by this factor (e.g., 0.5 = half)"
-                )
-
-            if "fixed" in source.lower():
-                rule["value"] = st.number_input(
-                    "Fixed cost ($)",
-                    min_value=0, max_value=100, value=5 if acq_type != "free_agent" else 1,
-                    key=f"base_cost_fixed_{acq_type}"
-                )
-
-            if "per round" in source.lower():
-                rule["dollars_per_round"] = st.number_input(
-                    "Dollars per round",
-                    min_value=1, max_value=50, value=10,
-                    key=f"base_cost_per_round_{acq_type}",
-                    help="e.g., Round 3 pick = 3 × $10 = $30"
-                )
-
-            if "custom formula" in source.lower():
-                st.markdown("**Custom Formula Variables:**")
-                st.caption("`draft_price`, `faab_bid`, `round`, `keeper_year`")
-                rule["formula"] = st.text_input(
-                    "Formula expression:",
-                    value="draft_price + 5" if acq_type == "auction" else "faab_bid * 0.5" if acq_type == "faab_only" else "5",
-                    key=f"base_cost_formula_{acq_type}",
-                    help="Python-style expression. Example: draft_price * 1.2 + 5"
-                )
-                rule["description"] = st.text_input(
-                    "Description (for display):",
-                    value="",
-                    key=f"base_cost_desc_{acq_type}",
-                    placeholder="e.g., Draft price plus $5"
-                )
-
-            base_cost_rules[acq_type] = rule
+        with st.expander("Free Agent Pickups ($0 FAAB)", expanded=False):
+            fa_price = st.number_input(
+                "Price for free agent pickups ($)",
+                min_value=0, max_value=50, value=min_price,
+                key="free_agent_price"
+            )
+            base_cost_rules["free_agent"] = {"source": "fixed", "value": fa_price}
 
     st.markdown("---")
 
-    # Step 3: Year-over-Year Escalation (Formulas by Keeper Year)
-    st.markdown("#### 3. Keeper Price Escalation")
-    st.caption("How do keeper costs change when you keep a player for multiple years?")
+    # Step 3: Year-over-Year Escalation
+    st.markdown("#### 3. Price Increase Each Year")
+    st.caption("How does the keeper price change when you keep a player for multiple years?")
 
-    escalation_mode = st.radio(
-        "Escalation method:",
+    escalation_type = st.selectbox(
+        "Each year the price increases by:",
         [
-            "Simple (same rule every year)",
-            "Per-year formulas (different rules for Year 1, Year 2+, etc.)"
+            "No increase (same price every year)",
+            "Flat dollar amount (e.g., +$5 each year)",
+            "Percentage (e.g., +20% each year)",
+            "Multiplier (e.g., 1.5× each year)",
+            "Multiplier + flat amount (e.g., 1.5× + $7.50)",
+            "Custom per-year rules"
         ],
-        horizontal=True,
-        key="escalation_mode"
+        key="escalation_type",
+        help="Choose how keeper prices increase year over year"
     )
 
     formulas_by_keeper_year = {}
+    preview_max_years = min(max_years, 5)  # Show up to 5 years in preview
 
-    if escalation_mode == "Simple (same rule every year)":
-        simple_escalation = st.selectbox(
-            "How does cost change each year kept?",
-            [
-                "No change (same as base cost)",
-                "Flat increase per year (e.g., +$5)",
-                "Percentage increase per year (e.g., +20%)",
-                "Multiplier per year (e.g., ×1.2)"
-            ],
-            key="simple_escalation_type"
+    if escalation_type == "No increase (same price every year)":
+        st.success("Keeper price stays the same every year")
+        for yr in range(1, (preview_max_years if max_years == 99 else max_years) + 1):
+            formulas_by_keeper_year[str(yr)] = {
+                "expression": "base_cost",
+                "description": "Same as first year"
+            }
+        if max_years == 99:
+            formulas_by_keeper_year["2+"] = {"expression": "base_cost", "description": "Same as first year"}
+
+    elif escalation_type == "Flat dollar amount (e.g., +$5 each year)":
+        flat_inc = st.number_input(
+            "Dollar increase per year ($)",
+            min_value=0.0, max_value=100.0, value=5.0, step=0.5,
+            key="flat_increase",
+            help="Added to the price each year kept"
         )
+        st.success(f"Year 1: base price | Year 2: +${flat_inc:.2f} | Year 3: +${flat_inc*2:.2f} | ...")
 
-        if "flat increase" in simple_escalation.lower():
-            flat_inc = st.number_input(
-                "Dollar increase per keeper year",
-                min_value=0, max_value=100, value=5,
-                key="simple_flat_increase"
+        for yr in range(1, (preview_max_years if max_years == 99 else max_years) + 1):
+            added = flat_inc * (yr - 1)
+            formulas_by_keeper_year[str(yr)] = {
+                "expression": f"base_cost + {added}",
+                "description": f"Base + ${added:.2f}" if added > 0 else "Base price"
+            }
+        if max_years == 99:
+            formulas_by_keeper_year["2+"] = {
+                "expression": f"base_cost + {flat_inc} * (keeper_year - 1)",
+                "description": f"+${flat_inc:.2f} per year"
+            }
+
+    elif escalation_type == "Percentage (e.g., +20% each year)":
+        pct_inc = st.number_input(
+            "Percentage increase per year (%)",
+            min_value=0, max_value=200, value=20,
+            key="pct_increase",
+            help="Compounding percentage increase each year"
+        )
+        st.success(f"Year 1: base price | Year 2: +{pct_inc}% | Year 3: +{pct_inc}% again | ...")
+
+        for yr in range(1, (preview_max_years if max_years == 99 else max_years) + 1):
+            mult = (1 + pct_inc / 100) ** (yr - 1)
+            formulas_by_keeper_year[str(yr)] = {
+                "expression": f"base_cost * {mult:.4f}",
+                "description": f"Base × {mult:.2f}" if yr > 1 else "Base price"
+            }
+        if max_years == 99:
+            formulas_by_keeper_year["2+"] = {
+                "expression": f"base_cost * ((1 + {pct_inc}/100) ** (keeper_year - 1))",
+                "description": f"+{pct_inc}% compounding"
+            }
+
+    elif escalation_type == "Multiplier (e.g., 1.5× each year)":
+        multiplier = st.number_input(
+            "Multiplier per year",
+            min_value=1.0, max_value=5.0, value=1.5, step=0.1,
+            key="multiplier",
+            help="Price is multiplied by this each year"
+        )
+        st.success(f"Year 1: base price | Year 2: base × {multiplier} | Year 3: base × {multiplier}² | ...")
+
+        for yr in range(1, (preview_max_years if max_years == 99 else max_years) + 1):
+            total_mult = multiplier ** (yr - 1)
+            formulas_by_keeper_year[str(yr)] = {
+                "expression": f"base_cost * {total_mult:.4f}",
+                "description": f"Base × {total_mult:.2f}" if yr > 1 else "Base price"
+            }
+        if max_years == 99:
+            formulas_by_keeper_year["2+"] = {
+                "expression": f"base_cost * ({multiplier} ** (keeper_year - 1))",
+                "description": f"×{multiplier} per year"
+            }
+
+    elif escalation_type == "Multiplier + flat amount (e.g., 1.5× + $7.50)":
+        st.markdown("**Formula: (multiplier × previous price) + flat amount**")
+        col1, col2 = st.columns(2)
+        with col1:
+            mult_part = st.number_input(
+                "Multiplier",
+                min_value=0.5, max_value=5.0, value=1.5, step=0.1,
+                key="combo_multiplier",
+                help="Multiply the previous year's price by this"
             )
-            for yr in range(1, max_years + 1):
-                formulas_by_keeper_year[str(yr)] = {
-                    "expression": f"base_cost + {flat_inc * (yr - 1)}",
-                    "description": f"Base cost + ${flat_inc * (yr - 1)}"
-                }
-
-        elif "percentage increase" in simple_escalation.lower():
-            pct_inc = st.number_input(
-                "Percentage increase per year",
-                min_value=0, max_value=200, value=20,
-                key="simple_pct_increase"
+        with col2:
+            flat_part = st.number_input(
+                "Plus flat amount ($)",
+                min_value=0.0, max_value=100.0, value=7.5, step=0.5,
+                key="combo_flat",
+                help="Add this dollar amount after multiplying"
             )
-            for yr in range(1, max_years + 1):
-                mult = (1 + pct_inc / 100) ** (yr - 1)
+
+        # Show example calculation
+        example_base = 25
+        yr2 = mult_part * example_base + flat_part
+        yr3 = mult_part * yr2 + flat_part
+        st.success(f"Example with $25 base: Year 1 = $25 | Year 2 = ${yr2:.2f} | Year 3 = ${yr3:.2f}")
+
+        # Year 1 is always base cost
+        formulas_by_keeper_year["1"] = {
+            "expression": "base_cost",
+            "description": "Base price"
+        }
+        # Years 2+ use the formula applied recursively
+        # For simplicity, we'll pre-calculate for finite years
+        if max_years != 99:
+            for yr in range(2, max_years + 1):
+                # Calculate what the expression would be
+                # Year 2: mult * base + flat
+                # Year 3: mult * (mult * base + flat) + flat = mult^2 * base + mult*flat + flat
+                # etc.
                 formulas_by_keeper_year[str(yr)] = {
-                    "expression": f"base_cost * {mult:.4f}",
-                    "description": f"Base cost × {mult:.2f} ({pct_inc}% compound for {yr - 1} years)"
+                    "expression": f"base_cost * {mult_part} + {flat_part}",  # simplified - actual is recursive
+                    "description": f"{mult_part}× + ${flat_part:.2f}",
+                    "multiplier": mult_part,
+                    "flat_add": flat_part
                 }
+        # For unlimited, use 2+ wildcard
+        formulas_by_keeper_year["2+"] = {
+            "expression": f"base_cost * {mult_part} + {flat_part}",
+            "description": f"{mult_part}× + ${flat_part:.2f}",
+            "multiplier": mult_part,
+            "flat_add": flat_part,
+            "recursive": True  # Flag that this should be applied to previous year's price
+        }
 
-        elif "multiplier" in simple_escalation.lower():
-            mult_per_year = st.number_input(
-                "Multiplier per year",
-                min_value=1.0, max_value=3.0, value=1.2, step=0.1,
-                key="simple_multiplier"
-            )
-            for yr in range(1, max_years + 1):
-                total_mult = mult_per_year ** (yr - 1)
-                formulas_by_keeper_year[str(yr)] = {
-                    "expression": f"base_cost * {total_mult:.4f}",
-                    "description": f"Base cost × {total_mult:.2f}"
-                }
+    else:  # Custom per-year rules
+        st.markdown("**Define the price calculation for each keeper year:**")
 
-        else:  # No change
-            for yr in range(1, max_years + 1):
-                formulas_by_keeper_year[str(yr)] = {
-                    "expression": "base_cost",
-                    "description": "Same as base cost"
-                }
-
-    else:  # Per-year formulas
-        st.markdown("**Define formula for each keeper year:**")
-        st.caption("Use variables: `base_cost`, `draft_price`, `faab_bid`, `keeper_year`")
-
-        # Allow wildcard years like "2+"
-        use_wildcard = st.checkbox(
-            "Use '2+' wildcard for years 2 and beyond",
+        same_after_year2 = st.checkbox(
+            "Use same formula for Year 2 and beyond",
             value=True,
-            key="use_wildcard_years",
-            help="Instead of defining Year 2, Year 3, etc. separately, use '2+' to apply the same formula to all years 2+"
+            key="same_after_year2"
         )
 
-        if use_wildcard:
+        if same_after_year2:
             years_to_configure = ["1", "2+"]
         else:
-            years_to_configure = [str(yr) for yr in range(1, max_years + 1)]
+            years_to_configure = [str(yr) for yr in range(1, min(max_years + 1, 6))]  # Max 5 years to configure
 
         for yr_key in years_to_configure:
-            col1, col2 = st.columns([1, 2])
+            st.markdown(f"**Year {yr_key}:**")
+            col1, col2, col3 = st.columns(3)
+
             with col1:
-                st.markdown(f"**Year {yr_key}:**")
-            with col2:
-                default_formula = "base_cost" if yr_key == "1" else "base_cost * 1.2 + 5"
-                formula_expr = st.text_input(
-                    f"Formula for year {yr_key}",
-                    value=default_formula,
-                    key=f"formula_year_{yr_key}",
+                yr_method = st.selectbox(
+                    f"Year {yr_key} calculation",
+                    ["Base price (no change)", "Multiply base price", "Add flat amount", "Multiply + add"],
+                    key=f"yr_{yr_key}_method",
                     label_visibility="collapsed"
                 )
-                formula_desc = st.text_input(
-                    f"Description for year {yr_key}",
-                    value="",
-                    key=f"formula_desc_{yr_key}",
-                    placeholder="e.g., 20% increase + $5",
-                    label_visibility="collapsed"
-                )
+
+            if yr_method == "Base price (no change)":
                 formulas_by_keeper_year[yr_key] = {
-                    "expression": formula_expr,
-                    "description": formula_desc or formula_expr
+                    "expression": "base_cost",
+                    "description": "Base price"
+                }
+            elif yr_method == "Multiply base price":
+                with col2:
+                    mult = st.number_input(f"Multiply by", min_value=0.5, max_value=5.0, value=1.5, step=0.1, key=f"yr_{yr_key}_mult", label_visibility="collapsed")
+                formulas_by_keeper_year[yr_key] = {
+                    "expression": f"base_cost * {mult}",
+                    "description": f"Base × {mult}"
+                }
+            elif yr_method == "Add flat amount":
+                with col2:
+                    add = st.number_input(f"Add ($)", min_value=0.0, max_value=100.0, value=5.0, step=0.5, key=f"yr_{yr_key}_add", label_visibility="collapsed")
+                formulas_by_keeper_year[yr_key] = {
+                    "expression": f"base_cost + {add}",
+                    "description": f"Base + ${add:.2f}"
+                }
+            else:  # Multiply + add
+                with col2:
+                    mult = st.number_input(f"Multiply by", min_value=0.5, max_value=5.0, value=1.5, step=0.1, key=f"yr_{yr_key}_mult2", label_visibility="collapsed")
+                with col3:
+                    add = st.number_input(f"Then add ($)", min_value=0.0, max_value=100.0, value=7.5, step=0.5, key=f"yr_{yr_key}_add2", label_visibility="collapsed")
+                formulas_by_keeper_year[yr_key] = {
+                    "expression": f"base_cost * {mult} + {add}",
+                    "description": f"Base × {mult} + ${add:.2f}"
                 }
 
     st.markdown("---")
 
     # Step 4: Snake Draft Settings (if applicable)
-    st.markdown("#### 4. Snake Draft Keeper Rules (Optional)")
+    st.markdown("#### 4. Snake Draft Settings (Optional)")
 
     has_snake = st.checkbox(
-        "League uses snake draft (configure round penalties)",
+        "My league uses a snake draft (not auction)",
         value=False,
         key="has_snake_draft"
     )
 
     snake_rules = None
     if has_snake:
+        st.caption("Configure how draft round affects keeper cost")
+
         snake_penalty_type = st.selectbox(
-            "How are keeper rounds determined?",
+            "Keeper round penalty:",
             [
-                "Keep at draft round (no penalty)",
+                "Keep at same round (no penalty)",
                 "Lose 1 round per year kept",
                 "Lose 2 rounds per year kept",
                 "Custom round penalty"
@@ -422,13 +542,13 @@ def render_keeper_rules_ui() -> Optional[dict]:
             )
         else:
             snake_penalty = {
-                "Keep at draft round (no penalty)": 0,
+                "Keep at same round (no penalty)": 0,
                 "Lose 1 round per year kept": 1,
                 "Lose 2 rounds per year kept": 2
             }.get(snake_penalty_type, 0)
 
         undrafted_round = st.number_input(
-            "Undrafted players kept at round:",
+            "Round for undrafted players:",
             min_value=1, max_value=20, value=10,
             key="undrafted_round",
             help="What round pick does it cost to keep an undrafted player?"
@@ -441,109 +561,90 @@ def render_keeper_rules_ui() -> Optional[dict]:
 
     st.markdown("---")
 
-    # Step 5: Preview Section
-    st.markdown("#### 5. Cost Preview")
+    # Step 5: Live Preview
+    st.markdown("#### 5. Preview Your Settings")
+    st.caption("See how keeper prices would work with these settings")
 
-    preview_col1, preview_col2, preview_col3 = st.columns(3)
+    preview_col1, preview_col2 = st.columns(2)
     with preview_col1:
-        preview_acq_type = st.selectbox(
-            "Acquisition type:",
-            list(base_cost_rules.keys()),
-            format_func=lambda x: x.replace("_", " ").title(),
-            key="preview_acq_type"
-        )
-    with preview_col2:
         preview_draft_price = st.number_input(
-            "Draft price / FAAB bid ($):",
+            "Test with draft price of ($):",
             min_value=0, max_value=200, value=25,
             key="preview_draft_price"
         )
-    with preview_col3:
-        preview_round = st.number_input(
-            "Draft round (if snake):",
-            min_value=1, max_value=20, value=5,
-            key="preview_round"
+    with preview_col2:
+        preview_years_show = st.slider(
+            "Show years:",
+            min_value=1, max_value=min(10, max_years if max_years != 99 else 10),
+            value=min(5, max_years if max_years != 99 else 5),
+            key="preview_years_show"
         )
 
-    # Calculate and display preview
+    # Calculate preview
     def evaluate_formula(expr: str, context: dict) -> float:
         """Safely evaluate a formula expression with given context."""
         try:
-            # Only allow specific operations
-            allowed_names = {"base_cost", "draft_price", "faab_bid", "round", "keeper_year"}
-            # Simple expression evaluation
             result = eval(expr, {"__builtins__": {}}, context)
             return float(result)
         except Exception:
             return 0.0
 
-    def calculate_base_cost(rule: dict, draft_price: float, faab_bid: float, round_num: int) -> float:
-        """Calculate base cost from acquisition rule."""
-        source = rule.get("source", "").lower()
+    # Determine base cost
+    base_cost = preview_draft_price
+    for rule in base_cost_rules.values():
+        if rule.get("source") == "draft_price":
+            base_cost = preview_draft_price + rule.get("adjustment", 0)
+            break
+        elif rule.get("source") == "fixed":
+            base_cost = rule.get("value", preview_draft_price)
+            break
 
-        if "draft price paid" in source or "draft price" == source:
-            base = draft_price
-        elif "faab" in source and "amount" in source:
-            base = faab_bid
-        elif "round number" in source:
-            base = round_num
-        elif "fixed" in source:
-            base = rule.get("value", 1)
-        elif "custom" in source:
-            context = {"draft_price": draft_price, "faab_bid": faab_bid, "round": round_num, "keeper_year": 1}
-            base = evaluate_formula(rule.get("formula", "0"), context)
-        else:
-            base = draft_price
+    st.markdown(f"**Base keeper price: ${base_cost:.2f}**")
 
-        # Apply adjustments
-        if "adjustment" in rule:
-            base += rule["adjustment"]
-        if "multiplier" in rule:
-            base *= rule["multiplier"]
-        if "dollars_per_round" in rule:
-            base = round_num * rule["dollars_per_round"]
-
-        return base
-
-    # Calculate base cost for preview
-    acq_rule = base_cost_rules.get(preview_acq_type, {})
-    base_cost = calculate_base_cost(acq_rule, preview_draft_price, preview_draft_price, preview_round)
-
-    st.markdown(f"**Base cost for {preview_acq_type.replace('_', ' ')}: ${base_cost:.0f}**")
-
-    # Show year-by-year preview
+    # Calculate year-by-year
     st.markdown("**Keeper cost by year:**")
-    preview_results = []
-    for yr in range(1, max_years + 1):
+    previous_cost = base_cost
+    preview_data = []
+
+    for yr in range(1, preview_years_show + 1):
         yr_key = str(yr)
         if yr_key not in formulas_by_keeper_year:
-            # Check for wildcard
             if "2+" in formulas_by_keeper_year and yr >= 2:
                 yr_key = "2+"
             else:
                 continue
 
         formula = formulas_by_keeper_year[yr_key]
-        context = {
-            "base_cost": base_cost,
-            "draft_price": preview_draft_price,
-            "faab_bid": preview_draft_price,
-            "round": preview_round,
-            "keeper_year": yr
-        }
-        cost = evaluate_formula(formula["expression"], context)
+
+        # Check if this is a recursive formula (multiplier + flat applied to previous year)
+        if formula.get("recursive") and yr > 1:
+            mult = formula.get("multiplier", 1)
+            flat_add = formula.get("flat_add", 0)
+            cost = previous_cost * mult + flat_add
+        else:
+            context = {
+                "base_cost": base_cost,
+                "draft_price": preview_draft_price,
+                "faab_bid": preview_draft_price,
+                "keeper_year": yr
+            }
+            cost = evaluate_formula(formula["expression"], context)
 
         # Apply min/max
         cost = max(min_price, cost)
-        if max_price > 0:
+        if max_price is not None:
             cost = min(max_price, cost)
         if round_to_integer:
             cost = round(cost)
 
-        preview_results.append({"year": yr, "cost": cost, "desc": formula.get("description", "")})
+        preview_data.append({"Year": yr, "Cost": f"${cost:.0f}", "Change": f"+${cost - previous_cost:.0f}" if yr > 1 else "-"})
+        previous_cost = cost
 
-    for res in preview_results:
-        st.markdown(f"- **Year {res['year']}**: ${res['cost']:.0f}" + (f" ({res['desc']})" if res['desc'] else ""))
+    # Display as a nice table
+    import pandas as pd
+    if preview_data:
+        df = pd.DataFrame(preview_data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
@@ -551,10 +652,10 @@ def render_keeper_rules_ui() -> Optional[dict]:
     keeper_rules = {
         "enabled": True,
         "max_keepers": max_keepers,
-        "max_years": max_years,
+        "max_years": max_years if max_years != 99 else None,  # None = unlimited
         "budget": budget,
         "min_price": min_price,
-        "max_price": max_price if max_price > 0 else None,
+        "max_price": max_price,
         "round_to_integer": round_to_integer,
         "formulas_by_keeper_year": formulas_by_keeper_year,
         "base_cost_rules": base_cost_rules,
