@@ -246,11 +246,20 @@ class H2HViewer:
 
         # Position sort: extract base position and slot number for proper ordering
         # E.g., "QB1" -> base="QB", slot=1; "W/R/T1" -> base="W/R/T", slot=1
-        def extract_position_parts(pos_str):
+        # For bench (BN/IR), use actual NFL position column for sorting
+        def extract_position_parts(row):
             """Extract base position and slot number from position string like 'QB1', 'WR2', 'W/R/T1'"""
+            pos_str = row.get("fantasy_position", "")
             if pd.isna(pos_str) or pos_str == "":
                 return ("", 999)
             pos_str = str(pos_str).strip()
+
+            # For bench/IR positions, use actual NFL position for sorting
+            if pos_str.startswith("BN") or pos_str.startswith("IR"):
+                actual_pos = row.get("position", "")
+                if pd.notna(actual_pos) and str(actual_pos).strip() not in ["", "nan", "None"]:
+                    return (str(actual_pos).strip(), 0)  # slot 0 to maintain order within position
+                return (pos_str, 999)
 
             # Handle special positions like W/R/T
             if pos_str.startswith("W/R/T"):
@@ -273,17 +282,17 @@ class H2HViewer:
             return (pos_str, 1)
 
         if not df.empty:
-            df["__base_pos"], df["__slot_num"] = zip(*df["fantasy_position"].apply(extract_position_parts))
+            df["__base_pos"], df["__slot_num"] = zip(*df.apply(extract_position_parts, axis=1))
         else:
             df["__base_pos"] = ""
             df["__slot_num"] = 999
 
-        # Map base positions to order (includes BN and IR for proper bench sorting)
-        pos_order = {p: i for i, p in enumerate(ALL_POSITIONS)}
+        # Map base positions to order - NFL positions for consistent sorting
+        pos_order = {"QB": 0, "RB": 1, "WR": 2, "TE": 3, "W/R/T": 4, "K": 5, "DEF": 6, "BN": 7, "IR": 8}
         df["__pos_order"] = df["__base_pos"].map(pos_order).fillna(999).astype(int)
 
-        # Sort by position order, then by slot number
-        df = df.sort_values(["__pos_order", "__slot_num"]).drop(columns=["__pos_order", "__base_pos", "__slot_num"]).reset_index(drop=True)
+        # Sort by position order, then by slot number, then by points descending
+        df = df.sort_values(["__pos_order", "__slot_num", "points_1"], ascending=[True, True, False]).drop(columns=["__pos_order", "__base_pos", "__slot_num"]).reset_index(drop=True)
 
         # Totals row - ensure all required columns are present
         total_row = pd.DataFrame(
