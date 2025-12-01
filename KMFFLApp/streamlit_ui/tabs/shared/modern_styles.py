@@ -370,104 +370,134 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       RESPONSIVE - TABLET (768px)
+       RESPONSIVE - TABLET/MOBILE (768px)
        =========================================== */
     @media (max-width: 768px) {
-        .hero-section {
-            padding: var(--space-md, 1rem);
-            margin-bottom: var(--space-md, 1rem);
+        /* Tighter page margins */
+        .main .block-container {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            padding-top: 0.75rem !important;
         }
-        .hero-section h1 { font-size: 1.5rem !important; }
-        .hero-section h2 { font-size: 1.3rem !important; }
-        .hero-section p { font-size: 0.9rem; }
+
+        .hero-section {
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .hero-section h1 { font-size: 1.4rem !important; }
+        .hero-section h2 { font-size: 1.2rem !important; }
+        .hero-section p { font-size: 0.85rem; margin-top: 0.25rem; }
 
         .static-card,
         .feature-card,
         .interactive-card {
-            padding: var(--space-sm, 0.5rem);
-            margin: var(--space-xs, 0.25rem) 0;
+            padding: 0.5rem;
+            margin: 0.25rem 0;
         }
 
         .info-box, .success-box, .warning-box, .error-box {
-            padding: var(--space-sm, 0.5rem);
-            font-size: 0.9rem;
+            padding: 0.5rem;
+            font-size: 0.85rem;
         }
 
-        /* Scrollable tabs */
+        /* Horizontal scrollable section tabs */
         .stTabs [data-baseweb="tab-list"] {
             flex-wrap: nowrap;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
+            gap: 0.25rem;
+            padding-bottom: 0.25rem;
+        }
+        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
+            height: 0;
         }
         .stTabs [data-baseweb="tab"] {
-            height: 2rem;
+            height: 1.75rem;
             padding: 0 0.5rem;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             flex-shrink: 0;
+            border-radius: 12px;
+        }
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {
+            background: rgba(239, 68, 68, 0.15) !important;
         }
 
-        /* Full width buttons */
-        .stButton > button {
-            width: 100%;
+        /* Tighter expanders */
+        .streamlit-expanderHeader {
+            padding: 0.5rem !important;
+            font-size: 0.85rem !important;
+        }
+        [data-testid="stExpander"] > div > div {
+            padding: 0.5rem !important;
         }
 
-        /* Better touch targets */
+        /* Touch-friendly inputs */
         .stMultiSelect [data-baseweb="select"],
         .stSelectbox select,
         .stTextInput input,
         .stNumberInput input {
-            min-height: 44px;
-            font-size: 16px; /* Prevents iOS zoom */
+            min-height: 40px;
+            font-size: 16px;
         }
 
-        /* Reduce font sizes */
-        h1 { font-size: 1.5rem !important; }
-        h2 { font-size: 1.3rem !important; }
-        h3 { font-size: 1.1rem !important; }
-        h4 { font-size: 1rem !important; }
+        /* Compact typography */
+        h1 { font-size: 1.4rem !important; }
+        h2 { font-size: 1.2rem !important; }
+        h3 { font-size: 1rem !important; }
+        h4 { font-size: 0.9rem !important; }
 
         /* Scrollable tables */
         .stDataFrame {
             overflow-x: auto;
         }
-        .stDataFrame table { font-size: 0.85rem; }
-        .stDataFrame th { padding: 0.4rem !important; }
-        .stDataFrame td { padding: 0.3rem !important; }
+        .stDataFrame table { font-size: 0.8rem; }
+        .stDataFrame th { padding: 0.3rem !important; font-size: 0.75rem; }
+        .stDataFrame td { padding: 0.25rem !important; }
 
-        .stat-value { font-size: 1.5rem; }
+        .stat-value { font-size: 1.4rem; }
+
+        /* Reduce vertical gaps */
+        .element-container { margin-bottom: 0.5rem !important; }
+        .stMarkdown { margin-bottom: 0.25rem !important; }
     }
 
     /* ===========================================
-       RESPONSIVE - MOBILE (480px)
+       RESPONSIVE - SMALL MOBILE (480px)
        =========================================== */
     @media (max-width: 480px) {
-        .hero-section {
-            padding: var(--space-sm, 0.5rem);
+        .main .block-container {
+            padding-left: 0.35rem !important;
+            padding-right: 0.35rem !important;
         }
-        .hero-section h1 { font-size: 1.3rem !important; }
-        .hero-section h2 { font-size: 1.1rem !important; }
+
+        .hero-section {
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .hero-section h1 { font-size: 1.2rem !important; }
+        .hero-section h2 { font-size: 1rem !important; }
 
         .static-card,
         .feature-card,
         .interactive-card {
-            padding: var(--space-sm, 0.5rem);
+            padding: 0.4rem;
         }
 
         .stTabs [data-baseweb="tab"] {
-            height: 1.75rem;
-            padding: 0 0.35rem;
-            font-size: 0.7rem;
+            height: 1.5rem;
+            padding: 0 0.4rem;
+            font-size: 0.65rem;
         }
 
-        h1 { font-size: 1.3rem !important; }
-        h2 { font-size: 1.15rem !important; }
-        h3 { font-size: 1rem !important; }
+        h1 { font-size: 1.2rem !important; }
+        h2 { font-size: 1rem !important; }
+        h3 { font-size: 0.9rem !important; }
 
-        .stDataFrame table { font-size: 0.75rem; }
-        .stDataFrame th { font-size: 0.7rem; padding: 0.25rem !important; }
-        .stDataFrame td { padding: 0.2rem !important; }
+        .stDataFrame table { font-size: 0.7rem; }
+        .stDataFrame th { font-size: 0.65rem; padding: 0.2rem !important; }
+        .stDataFrame td { padding: 0.15rem !important; }
 
-        .stat-value { font-size: 1.3rem; }
+        .stat-value { font-size: 1.2rem; }
     }
 
     /* ===========================================

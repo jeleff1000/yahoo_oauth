@@ -459,7 +459,7 @@ def main():
         }
     }
 
-    /* Horizontal subtab buttons - compact tab style (not bulky pills) */
+    /* Horizontal subtab buttons - compact tab style */
     .stColumns button {
         padding: 0.4rem 0.75rem !important;
         min-height: unset !important;
@@ -496,11 +496,74 @@ def main():
         margin-bottom: 0.75rem !important;
     }
 
-    /* Mobile: smaller text */
+    /* ===========================================
+       MOBILE: Horizontal scrollable chip tabs
+       =========================================== */
     @media (max-width: 768px) {
+        /* Reduce page margins */
+        .main .block-container {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            padding-top: 1rem !important;
+        }
+
+        /* Force horizontal scroll for subtab columns */
+        .stColumns {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            gap: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+
+        /* Each column becomes inline */
+        .stColumns > div[data-testid="column"] {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            min-width: unset !important;
+        }
+
+        /* Compact chip-style buttons */
         .stColumns button {
+            padding: 0.35rem 0.75rem !important;
+            font-size: 0.8rem !important;
+            white-space: nowrap !important;
+            border-radius: 16px !important;
+            min-height: 32px !important;
+        }
+
+        /* Active chip */
+        .stColumns button[kind="primary"] {
+            background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%) !important;
+            border: none !important;
+            border-bottom: none !important;
+            color: white !important;
+        }
+
+        /* Inactive chips */
+        .stColumns button[kind="secondary"],
+        .stColumns button:not([kind="primary"]) {
+            background: rgba(255, 255, 255, 0.08) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+            color: rgba(255, 255, 255, 0.7) !important;
+        }
+
+        /* Hide scrollbar but keep functionality */
+        .stColumns::-webkit-scrollbar {
+            height: 0px;
+        }
+    }
+
+    /* Even smaller on very small screens */
+    @media (max-width: 480px) {
+        .stColumns button {
+            padding: 0.3rem 0.6rem !important;
             font-size: 0.75rem !important;
-            padding: 0.35rem 0.5rem !important;
+            min-height: 28px !important;
         }
     }
     </style>
