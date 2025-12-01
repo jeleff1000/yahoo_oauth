@@ -229,7 +229,7 @@ def render_keeper_rules_ui() -> Optional[dict]:
         [
             "Draft price (what you paid in the auction)",
             "FAAB bid (what you paid to pick them up)",
-            "Higher of draft price OR % of FAAB budget",
+            "Higher of: draft price OR (multiplier × FAAB bid)",
             "Fixed price (same price for all keepers)",
             "Different rules by how player was acquired"
         ],
@@ -250,46 +250,50 @@ def render_keeper_rules_ui() -> Optional[dict]:
         base_cost_rules["faab_only"] = {"source": "faab_bid"}
         base_cost_rules["free_agent"] = {"source": "fixed", "value": min_price}
 
-    elif first_year_method == "Higher of draft price OR % of FAAB budget":
+    elif first_year_method == "Higher of: draft price OR (multiplier × FAAB bid)":
         st.markdown("**Keeper price = whichever is higher:**")
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**Option A:** Draft price paid")
         with col2:
-            faab_pct = st.number_input(
-                "**Option B:** % of FAAB budget",
-                min_value=0, max_value=100, value=50,
-                key="faab_floor_pct",
-                help="e.g., 50% of $100 FAAB = $50 minimum"
+            faab_multiplier = st.number_input(
+                "**Option B:** Multiplier × FAAB bid",
+                min_value=0.0, max_value=2.0, value=0.5, step=0.1,
+                key="faab_bid_multiplier",
+                help="e.g., 0.5 × $20 FAAB bid = $10"
             )
 
-        faab_floor = budget * (faab_pct / 100)
-        st.success(f"First year price = MAX(draft price, ${faab_floor:.0f})")
-        st.caption(f"With your ${budget} FAAB budget, the minimum keeper price is ${faab_floor:.0f}")
+        st.success(f"First year price = MAX(draft price, {faab_multiplier}× FAAB bid)")
 
         # Example calculations
         with st.expander("See examples"):
+            st.markdown("**Example: Player drafted for $8, later picked up for $20 FAAB**")
+            example_draft = 8
+            example_faab = 20
+            example_result = max(example_draft, faab_multiplier * example_faab)
+            st.markdown(f"- Draft price: ${example_draft}")
+            st.markdown(f"- FAAB bid: ${example_faab} × {faab_multiplier} = ${faab_multiplier * example_faab:.0f}")
+            st.markdown(f"- **Keeper price: ${example_result:.0f}** (higher of the two)")
+
+            st.markdown("---")
+            st.markdown("**More examples:**")
             examples = [
-                (10, f"$10 draft → ${max(10, faab_floor):.0f} (floor applies)"),
-                (25, f"$25 draft → ${max(25, faab_floor):.0f}" + (" (floor applies)" if 25 < faab_floor else "")),
-                (75, f"$75 draft → ${max(75, faab_floor):.0f}" + (" (floor applies)" if 75 < faab_floor else "")),
+                (30, 10, f"$30 draft, $10 FAAB → MAX($30, ${faab_multiplier * 10:.0f}) = ${max(30, faab_multiplier * 10):.0f}"),
+                (5, 40, f"$5 draft, $40 FAAB → MAX($5, ${faab_multiplier * 40:.0f}) = ${max(5, faab_multiplier * 40):.0f}"),
+                (25, 0, f"$25 draft, $0 FAAB (kept from draft) → ${max(25, 0):.0f}"),
             ]
-            for price, desc in examples:
+            for draft, faab, desc in examples:
                 st.markdown(f"- {desc}")
 
         base_cost_rules["auction"] = {
-            "source": "max_of",
-            "options": ["draft_price", {"type": "budget_pct", "pct": faab_pct}],
-            "faab_floor_pct": faab_pct,
-            "faab_floor_value": faab_floor
+            "source": "max_of_draft_faab",
+            "faab_multiplier": faab_multiplier
         }
         base_cost_rules["faab_only"] = {
-            "source": "max_of",
-            "options": ["faab_bid", {"type": "budget_pct", "pct": faab_pct}],
-            "faab_floor_pct": faab_pct,
-            "faab_floor_value": faab_floor
+            "source": "max_of_draft_faab",
+            "faab_multiplier": faab_multiplier
         }
-        base_cost_rules["free_agent"] = {"source": "fixed", "value": max(min_price, faab_floor)}
+        base_cost_rules["free_agent"] = {"source": "fixed", "value": min_price}
 
     elif first_year_method == "Fixed price (same price for all keepers)":
         fixed_first_year = st.number_input(
@@ -607,20 +611,47 @@ def render_keeper_rules_ui() -> Optional[dict]:
     st.markdown("#### 5. Preview Your Settings")
     st.caption("See how keeper prices would work with these settings")
 
-    preview_col1, preview_col2 = st.columns(2)
-    with preview_col1:
-        preview_draft_price = st.number_input(
-            "Test with draft price of ($):",
-            min_value=0, max_value=200, value=25,
-            key="preview_draft_price"
-        )
-    with preview_col2:
-        preview_years_show = st.slider(
-            "Show years:",
-            min_value=1, max_value=min(10, max_years if max_years != 99 else 10),
-            value=min(5, max_years if max_years != 99 else 5),
-            key="preview_years_show"
-        )
+    # Check if we need FAAB bid input (for max_of_draft_faab rule)
+    needs_faab_input = any(r.get("source") == "max_of_draft_faab" for r in base_cost_rules.values())
+
+    if needs_faab_input:
+        preview_col1, preview_col2, preview_col3 = st.columns(3)
+        with preview_col1:
+            preview_draft_price = st.number_input(
+                "Draft price ($):",
+                min_value=0, max_value=200, value=8,
+                key="preview_draft_price"
+            )
+        with preview_col2:
+            preview_faab_bid = st.number_input(
+                "FAAB bid ($):",
+                min_value=0, max_value=200, value=20,
+                key="preview_faab_bid",
+                help="The FAAB amount used to acquire this player"
+            )
+        with preview_col3:
+            preview_years_show = st.slider(
+                "Show years:",
+                min_value=1, max_value=min(10, max_years if max_years != 99 else 10),
+                value=min(5, max_years if max_years != 99 else 5),
+                key="preview_years_show"
+            )
+    else:
+        preview_col1, preview_col2 = st.columns(2)
+        with preview_col1:
+            preview_draft_price = st.number_input(
+                "Test with draft price of ($):",
+                min_value=0, max_value=200, value=25,
+                key="preview_draft_price"
+            )
+        with preview_col2:
+            preview_years_show = st.slider(
+                "Show years:",
+                min_value=1, max_value=min(10, max_years if max_years != 99 else 10),
+                value=min(5, max_years if max_years != 99 else 5),
+                key="preview_years_show"
+            )
+        preview_faab_bid = 0
 
     # Calculate preview
     def evaluate_formula(expr: str, context: dict) -> float:
@@ -641,17 +672,18 @@ def render_keeper_rules_ui() -> Optional[dict]:
         elif rule.get("source") == "fixed":
             base_cost = rule.get("value", preview_draft_price)
             break
-        elif rule.get("source") == "max_of":
-            # Higher of draft price or FAAB floor
-            faab_floor = rule.get("faab_floor_value", 0)
-            base_cost = max(preview_draft_price, faab_floor)
-            if preview_draft_price >= faab_floor:
-                base_cost_explanation = f" (draft price wins: ${preview_draft_price} > ${faab_floor:.0f} floor)"
+        elif rule.get("source") == "max_of_draft_faab":
+            # Higher of draft price or (multiplier × FAAB bid)
+            faab_mult = rule.get("faab_multiplier", 0.5)
+            faab_value = faab_mult * preview_faab_bid
+            base_cost = max(preview_draft_price, faab_value)
+            if preview_draft_price >= faab_value:
+                base_cost_explanation = f" (draft ${preview_draft_price} > {faab_mult}×${preview_faab_bid}=${faab_value:.0f})"
             else:
-                base_cost_explanation = f" (floor wins: ${faab_floor:.0f} > ${preview_draft_price} draft)"
+                base_cost_explanation = f" ({faab_mult}×${preview_faab_bid}=${faab_value:.0f} > draft ${preview_draft_price})"
             break
 
-    st.markdown(f"**Base keeper price: ${base_cost:.2f}**{base_cost_explanation}")
+    st.markdown(f"**Base keeper price: ${base_cost:.0f}**{base_cost_explanation}")
 
     # Calculate year-by-year
     st.markdown("**Keeper cost by year:**")
