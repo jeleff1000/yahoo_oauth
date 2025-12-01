@@ -419,186 +419,103 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Collapsible hamburger menu with improved styling
+    # Clean hamburger menu - main sections only, subtabs shown as horizontal tabs in content
     st.markdown("""
     <style>
-    /* Wider popover for better readability */
+    /* Wider popover */
     [data-testid="stPopoverBody"] {
-        min-width: 220px !important;
-        max-width: 280px !important;
+        min-width: 200px !important;
     }
 
     /* Category separator */
     .menu-separator {
         border-top: 1px solid rgba(255, 255, 255, 0.1);
-        margin: 12px 0 8px 0;
-        padding-top: 8px;
+        margin: 10px 0 6px 0;
+        padding-top: 6px;
     }
     .menu-separator-label {
         font-size: 0.65rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         color: rgba(255, 255, 255, 0.4);
-        margin-bottom: 6px;
+        margin-bottom: 4px;
     }
 
-    /* Current section - bright glow effect */
-    .menu-current {
-        background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%);
-        color: white !important;
-        padding: 10px 14px;
-        border-radius: 8px;
-        margin: 4px 0;
-        font-weight: 600;
-        box-shadow: 0 0 12px rgba(129, 140, 248, 0.4),
-                    0 0 24px rgba(129, 140, 248, 0.2);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .menu-current:hover {
-        box-shadow: 0 0 16px rgba(129, 140, 248, 0.5),
-                    0 0 32px rgba(129, 140, 248, 0.3);
-    }
-    .menu-chevron {
-        font-size: 0.7rem;
-        transition: transform 0.2s ease;
-    }
-    .menu-chevron.expanded {
-        transform: rotate(180deg);
-    }
-
-    /* Subtab container - collapsible */
-    .subtab-container {
-        margin-left: 1rem;
-        padding-left: 0.75rem;
-        border-left: 2px solid rgba(129, 140, 248, 0.4);
-        margin-top: 4px;
-        margin-bottom: 8px;
-    }
-    .subtab-item {
-        display: flex;
-        align-items: center;
-        padding: 6px 10px;
-        margin: 2px 0;
-        border-radius: 6px;
-        font-size: 0.82rem;
-        color: rgba(255, 255, 255, 0.7);
-        cursor: pointer;
-        transition: all 0.15s ease;
-    }
-    .subtab-item:hover {
-        background: rgba(129, 140, 248, 0.15);
-        color: rgba(255, 255, 255, 0.95);
-    }
-    .subtab-item.active {
-        background: rgba(129, 140, 248, 0.25);
-        color: #A78BFA;
-        font-weight: 500;
-    }
-    .subtab-icon {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: currentColor;
-        margin-right: 10px;
-        opacity: 0.6;
-    }
-    .subtab-item.active .subtab-icon {
-        background: #A78BFA;
-        opacity: 1;
-        box-shadow: 0 0 6px rgba(167, 139, 250, 0.5);
-    }
-
-    /* Non-current menu items */
-    .menu-item {
-        display: flex;
-        align-items: center;
-        padding: 10px 14px;
-        margin: 2px 0;
-        border-radius: 8px;
-        color: rgba(255, 255, 255, 0.75);
-        cursor: pointer;
-        transition: all 0.15s ease;
-        font-weight: 500;
-    }
-    .menu-item:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: rgba(255, 255, 255, 0.95);
-    }
-
-    /* Primary button (current section) styling */
+    /* Primary button (current section) - bright glow */
     .stPopover button[kind="primary"],
     [data-testid="stPopoverBody"] button[kind="primary"] {
         background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%) !important;
         border: none !important;
         box-shadow: 0 0 12px rgba(129, 140, 248, 0.4) !important;
+        font-weight: 600 !important;
     }
     .stPopover button[kind="primary"]:hover,
     [data-testid="stPopoverBody"] button[kind="primary"]:hover {
-        box-shadow: 0 0 16px rgba(129, 140, 248, 0.5) !important;
+        box-shadow: 0 0 18px rgba(129, 140, 248, 0.6) !important;
     }
 
     /* Secondary buttons (other sections) */
-    .stPopover button[kind="secondary"],
     .stPopover button:not([kind="primary"]),
-    [data-testid="stPopoverBody"] button[kind="secondary"],
     [data-testid="stPopoverBody"] button:not([kind="primary"]) {
         background: transparent !important;
         border: 1px solid rgba(255, 255, 255, 0.1) !important;
         color: rgba(255, 255, 255, 0.8) !important;
     }
-    .stPopover button[kind="secondary"]:hover,
     .stPopover button:not([kind="primary"]):hover,
-    [data-testid="stPopoverBody"] button[kind="secondary"]:hover,
     [data-testid="stPopoverBody"] button:not([kind="primary"]):hover {
         background: rgba(255, 255, 255, 0.08) !important;
         border-color: rgba(129, 140, 248, 0.4) !important;
     }
 
-    /* Subtab buttons - indented and smaller */
-    .stPopover button[key^="sub_"],
-    [data-testid="stPopoverBody"] button[key^="sub_"] {
-        margin-left: 1rem !important;
-        font-size: 0.85rem !important;
-        padding: 6px 10px !important;
-        border-left: 2px solid rgba(129, 140, 248, 0.4) !important;
-        border-radius: 0 6px 6px 0 !important;
-    }
-
     @media (max-width: 768px) {
         [data-testid="stPopoverBody"] {
-            min-width: 200px !important;
+            min-width: 180px !important;
         }
-        .menu-current, .menu-item {
-            padding: 12px 14px;
-        }
-        .stPopover .stRadio label,
-        [data-testid="stPopoverBody"] .stRadio label {
-            font-size: 0.88rem !important;
-            padding: 10px 12px !important;
+    }
+
+    /* Horizontal subtab buttons - pill style */
+    .stColumns button[kind="primary"] {
+        background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%) !important;
+        border: none !important;
+        border-radius: 20px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 2px 8px rgba(129, 140, 248, 0.3) !important;
+    }
+    .stColumns button[kind="secondary"],
+    .stColumns button:not([kind="primary"]) {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-radius: 20px !important;
+        color: rgba(255, 255, 255, 0.7) !important;
+    }
+    .stColumns button[kind="secondary"]:hover,
+    .stColumns button:not([kind="primary"]):hover {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border-color: rgba(129, 140, 248, 0.5) !important;
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    /* Mobile: stack subtabs or scroll */
+    @media (max-width: 768px) {
+        .stColumns button {
+            font-size: 0.8rem !important;
+            padding: 0.4rem 0.6rem !important;
         }
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # Define category groups
+    # Define category groups for visual organization
     category_groups = [
-        {"label": None, "items": ["Home"]},  # No label for first group
+        {"label": None, "items": ["Home"]},
         {"label": "Data", "items": ["Managers", "Team Stats", "Players"]},
         {"label": "History", "items": ["Draft", "Transactions"]},
         {"label": "Tools", "items": ["Simulations", "Extras"]},
     ]
 
-    # Track which section is expanded (for collapsible subtabs)
-    if "menu_expanded" not in st.session_state:
-        st.session_state["menu_expanded"] = selected_tab
-
-    # Hamburger menu
+    # Simple hamburger menu - main sections only
     with st.popover("☰ Menu"):
         for group in category_groups:
-            # Add separator with label (except for first group)
             if group["label"]:
                 st.markdown(f'''
                 <div class="menu-separator">
@@ -610,38 +527,34 @@ def main():
                 i = tab_names.index(name)
                 icon = tab_icons[i]
                 is_current = (i == current_idx)
-                section_subtabs = subtabs.get(name)
-                has_subtabs = section_subtabs is not None and len(section_subtabs) > 0
-                is_expanded = st.session_state.get("menu_expanded") == name
 
                 if is_current:
-                    # Current section - clicking toggles expansion if has subtabs
-                    chevron = " ▼" if is_expanded and has_subtabs else " ▶" if has_subtabs else ""
-                    if st.button(f"{icon} {name}{chevron}", key=f"current_{name}", use_container_width=True, type="primary"):
-                        if has_subtabs:
-                            st.session_state["menu_expanded"] = None if is_expanded else name
-                            st.rerun()
-
-                    # Subtabs as buttons (only if expanded)
-                    if has_subtabs and is_expanded:
-                        for sub_idx, sub_name in enumerate(section_subtabs):
-                            is_active_sub = (sub_idx == current_subtab_idx)
-                            # Use markdown for subtab items with custom styling
-                            sub_class = "subtab-active" if is_active_sub else "subtab-item"
-                            if st.button(f"  {'●' if is_active_sub else '○'} {sub_name}", key=f"sub_{name}_{sub_idx}", use_container_width=True):
-                                st.session_state[f"subtab_{name}"] = sub_idx
-                                st.rerun()
+                    st.button(f"{icon} {name}", key=f"current_{name}", use_container_width=True, type="primary", disabled=True)
                 else:
-                    # Other sections - buttons
                     if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
                         st.session_state["active_main_tab"] = i
                         st.session_state[f"subtab_{name}"] = 0
-                        # Auto-expand if section has subtabs
-                        if has_subtabs:
-                            st.session_state["menu_expanded"] = name
                         st.rerun()
 
-    # Render ONLY the active tab (true lazy loading!)
+    # Get subtabs for current section
+    section_subtabs = subtabs.get(selected_tab)
+
+    # Show horizontal subtab navigation for sections that have subtabs
+    if section_subtabs:
+        # Create pill-style buttons for subtab navigation
+        cols = st.columns(len(section_subtabs))
+        for idx, (col, subtab_name) in enumerate(zip(cols, section_subtabs)):
+            with col:
+                is_active = (idx == current_subtab_idx)
+                btn_type = "primary" if is_active else "secondary"
+                if st.button(subtab_name, key=f"subtab_btn_{selected_tab}_{idx}", use_container_width=True, type=btn_type):
+                    if not is_active:
+                        st.session_state[f"subtab_{selected_tab}"] = idx
+                        st.rerun()
+
+        st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+
+    # Render the active section using existing render functions
     if selected_tab == "Home":
         render_home_tab()
     elif selected_tab == "Managers":
