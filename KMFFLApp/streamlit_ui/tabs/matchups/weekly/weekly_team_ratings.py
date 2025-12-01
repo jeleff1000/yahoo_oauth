@@ -40,73 +40,27 @@ class WeeklyTeamRatingsViewer:
 
     @st.fragment
     def display(self, prefix: str = "weekly_team_ratings") -> None:
-        """Display enhanced weekly team ratings with improved UX."""
+        """Display weekly team ratings."""
         apply_modern_styles()
         apply_theme_styles()
-
-        # Header with description
-        st.markdown("""
-        <div class="tab-header">
-        <h2>⭐ Weekly Team Ratings</h2>
-        <p>Power ratings and playoff probability projections based on current performance</p>
-        </div>
-        """, unsafe_allow_html=True)
 
         if self.base_df.empty:
             st.info("No team ratings data available with current filters")
             return
 
-        # View mode selector
-        st.markdown("**View Mode:**")
-        view_mode = st.radio(
-            "Select what to display",
-            ["Overview", "Seed Distribution"],
-            horizontal=True,
-            key=f"{prefix}_view_mode",
-            help="Overview shows playoff odds, Seed Distribution shows probability of each final seed"
-        )
-
-        if view_mode == "Overview":
-            self._display_overview(prefix)
-        else:
-            self._display_seed_distribution(prefix)
+        # Just show the overview directly (no mode selector)
+        self._display_overview(prefix)
 
     def _display_overview(self, prefix: str):
         """Display overview with power ratings and playoff odds."""
-        # Prepare data
         display_df = self._prepare_overview_data()
 
         if display_df.empty:
             st.info("No team ratings data available")
             return
 
-        # Calculate summary statistics
-        stats = self._calculate_stats(display_df)
-
-        # === ENHANCED TABLE DISPLAY ===
-        st.markdown(f"**Viewing {len(display_df):,} team ratings**")
-        st.caption("💡 **Power Rating** measures team strength. **Playoff probabilities** show likelihood of advancing based on simulations.")
+        # Clean table display
         self._render_overview_table(display_df, prefix)
-
-        # === QUICK STATS SECTION (Below Table) ===
-        st.markdown("---")
-        self._render_quick_stats(stats)
-
-        # === DOWNLOAD SECTION ===
-        st.markdown("---")
-        col1, col2, col3 = st.columns([2, 1, 1])
-        with col1:
-            st.markdown("**💾 Export Data**")
-        with col2:
-            csv = display_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 CSV",
-                data=csv,
-                file_name=f"weekly_team_ratings_{pd.Timestamp.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv",
-                key=f"{prefix}_download_csv",
-                use_container_width=True
-            )
 
     def _display_seed_distribution(self, prefix: str):
         """Display detailed seed probability distribution."""
