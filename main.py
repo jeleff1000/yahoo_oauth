@@ -204,67 +204,57 @@ def render_keeper_rules_ui() -> Optional[dict]:
     if is_auction:
         st.caption("How is the keeper price determined the first time you keep a player?")
 
-        first_year_source = st.selectbox(
-            "Base price comes from:",
-            [
-                "Draft price only",
-                "FAAB bid only",
-                "Higher of: draft price OR (multiplier × FAAB bid)",
-            ],
-            key="first_year_source"
+        use_faab_comparison = st.checkbox(
+            "Use higher of: draft price OR FAAB-based price",
+            value=False,
+            key="use_faab_comparison",
+            help="Check if keeper price should be the MAX of draft price and a FAAB-based calculation"
         )
 
-        # Formula inputs: multiplier × value + flat
-        st.markdown("**Adjust the base price (optional):**")
-        col1, col2 = st.columns(2)
-        with col1:
-            base_multiplier = st.number_input(
-                "Multiply by",
-                min_value=0.1, max_value=5.0, value=1.0, step=0.1,
-                key="base_multiplier",
-                help="1.0 = no change, 0.5 = half, 2.0 = double"
-            )
-        with col2:
-            base_flat = st.number_input(
-                "Then add ($)",
-                min_value=-50.0, max_value=100.0, value=0.0, step=0.5,
-                key="base_flat",
-                help="Added after multiplying (can be negative)"
-            )
+        if use_faab_comparison:
+            st.markdown("**Keeper price = higher of:**")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**A) Draft price**")
+                draft_mult = st.number_input("Multiply draft by", min_value=0.1, max_value=5.0, value=1.0, step=0.1, key="draft_mult")
+                draft_flat = st.number_input("Then add ($)", min_value=-50.0, max_value=100.0, value=0.0, step=0.5, key="draft_flat")
+            with col2:
+                st.markdown("**B) FAAB calculation**")
+                faab_mult = st.number_input("Multiply FAAB by", min_value=0.1, max_value=5.0, value=0.5, step=0.1, key="faab_mult")
+                faab_flat = st.number_input("Then add ($)", min_value=-50.0, max_value=100.0, value=0.0, step=0.5, key="faab_flat")
 
-        if first_year_source == "Higher of: draft price OR (multiplier × FAAB bid)":
-            faab_multiplier = st.number_input(
-                "FAAB multiplier (for comparison)",
-                min_value=0.1, max_value=2.0, value=0.5, step=0.1,
-                key="faab_compare_mult",
-                help="e.g., 0.5 means compare draft price to 50% of FAAB bid"
-            )
+            # Show formula
+            draft_formula = f"{draft_mult}× draft" + (f" + ${draft_flat}" if draft_flat > 0 else f" - ${abs(draft_flat)}" if draft_flat < 0 else "")
+            faab_formula = f"{faab_mult}× FAAB" + (f" + ${faab_flat}" if faab_flat > 0 else f" - ${abs(faab_flat)}" if faab_flat < 0 else "")
+            st.success(f"Price = MAX({draft_formula}, {faab_formula})")
+
             base_cost_rules["auction"] = {
                 "source": "max_of_draft_faab",
-                "faab_multiplier": faab_multiplier,
-                "multiplier": base_multiplier,
-                "flat": base_flat
+                "draft_multiplier": draft_mult,
+                "draft_flat": draft_flat,
+                "faab_multiplier": faab_mult,
+                "faab_flat": faab_flat
             }
             base_cost_rules["faab_only"] = base_cost_rules["auction"].copy()
-        elif first_year_source == "FAAB bid only":
-            base_cost_rules["auction"] = {"source": "draft_price", "multiplier": base_multiplier, "flat": base_flat}
-            base_cost_rules["faab_only"] = {"source": "faab_bid", "multiplier": base_multiplier, "flat": base_flat}
-        else:  # Draft price only
-            base_cost_rules["auction"] = {"source": "draft_price", "multiplier": base_multiplier, "flat": base_flat}
-            base_cost_rules["faab_only"] = {"source": "faab_bid", "multiplier": base_multiplier, "flat": base_flat}
+
+        else:
+            st.markdown("**Draft price adjustment (optional):**")
+            col1, col2 = st.columns(2)
+            with col1:
+                draft_mult = st.number_input("Multiply by", min_value=0.1, max_value=5.0, value=1.0, step=0.1, key="draft_mult_only")
+            with col2:
+                draft_flat = st.number_input("Then add ($)", min_value=-50.0, max_value=100.0, value=0.0, step=0.5, key="draft_flat_only")
+
+            if draft_mult != 1.0 or draft_flat != 0:
+                formula = f"{draft_mult}× draft" + (f" + ${draft_flat}" if draft_flat > 0 else f" - ${abs(draft_flat)}" if draft_flat < 0 else "")
+                st.success(f"First year price = {formula}")
+            else:
+                st.success("First year price = draft price")
+
+            base_cost_rules["auction"] = {"source": "draft_price", "multiplier": draft_mult, "flat": draft_flat}
+            base_cost_rules["faab_only"] = {"source": "faab_bid", "multiplier": draft_mult, "flat": draft_flat}
 
         base_cost_rules["free_agent"] = {"source": "fixed", "value": min_price}
-
-        # Show formula summary
-        if base_multiplier != 1.0 or base_flat != 0:
-            formula_str = f"{base_multiplier}× base"
-            if base_flat > 0:
-                formula_str += f" + ${base_flat:.2f}"
-            elif base_flat < 0:
-                formula_str += f" - ${abs(base_flat):.2f}"
-            st.success(f"First year price = {formula_str}")
-        else:
-            st.success("First year price = base price (no adjustment)")
 
     else:  # Snake draft
         st.caption("How is the keeper round determined?")
@@ -394,22 +384,31 @@ def render_keeper_rules_ui() -> Optional[dict]:
         # Calculate base cost
         rule = base_cost_rules.get("auction", {})
         if rule.get("source") == "max_of_draft_faab":
+            # Calculate both options
+            draft_mult = rule.get("draft_multiplier", 1.0)
+            draft_flat = rule.get("draft_flat", 0.0)
             faab_mult = rule.get("faab_multiplier", 0.5)
-            base_value = max(preview_draft, faab_mult * preview_faab)
-            base_note = f"MAX(${preview_draft}, {faab_mult}×${preview_faab})"
-        else:
-            base_value = preview_draft
-            base_note = f"${preview_draft}"
+            faab_flat = rule.get("faab_flat", 0.0)
 
-        # Apply base adjustments
-        mult = rule.get("multiplier", 1.0)
-        flat = rule.get("flat", 0.0)
-        base_cost = base_value * mult + flat
+            draft_value = preview_draft * draft_mult + draft_flat
+            faab_value = preview_faab * faab_mult + faab_flat
+            base_cost = max(draft_value, faab_value)
+
+            if draft_value >= faab_value:
+                base_note = f"MAX(${draft_value:.0f}, ${faab_value:.0f}) = ${base_cost:.0f} (draft wins)"
+            else:
+                base_note = f"MAX(${draft_value:.0f}, ${faab_value:.0f}) = ${base_cost:.0f} (FAAB wins)"
+        else:
+            mult = rule.get("multiplier", 1.0)
+            flat = rule.get("flat", 0.0)
+            base_cost = preview_draft * mult + flat
+            base_note = f"${base_cost:.0f}"
+
         base_cost = max(min_price, base_cost)
         if max_price:
             base_cost = min(max_price, base_cost)
 
-        st.markdown(f"**Base: {base_note} → ${base_cost:.0f}**")
+        st.markdown(f"**Base keeper price: {base_note}**")
 
         # Year-by-year
         preview_data = []
