@@ -247,6 +247,14 @@ class H2HViewer:
         # Position sort: extract base position and slot number for proper ordering
         # E.g., "QB1" -> base="QB", slot=1; "W/R/T1" -> base="W/R/T", slot=1
         # For bench (BN/IR), sort by BN first then IR, within each sort by position
+        pos_order_map = {"QB": 0, "RB": 1, "WR": 2, "TE": 3, "W/R/T": 4, "K": 5, "DEF": 6, "BN": 7, "IR": 8}
+
+        def get_position_order(pos_str):
+            """Get sort order for a position string"""
+            if pd.isna(pos_str) or str(pos_str).strip() in ["", "nan", "None"]:
+                return 999
+            return pos_order_map.get(str(pos_str).strip(), 999)
+
         def extract_position_parts(row):
             """Extract sorting info from position string"""
             pos_str = row.get("fantasy_position", "")
@@ -288,17 +296,40 @@ class H2HViewer:
             df["__base_pos"] = [r[0] for r in result]
             df["__slot_num"] = [r[1] for r in result]
             df["__bn_ir_order"] = [r[2] for r in result]
+
+            # For bench, get position order for BOTH teams and use the minimum (earliest position)
+            # This ensures rows are sorted by the best position on either side
+            df["__pos_order"] = df["__base_pos"].map(pos_order_map).fillna(999).astype(int)
+
+            # Also get position order for the other team's player (position_1 and position_2)
+            if "position_1" in df.columns:
+                df["__pos_order_1"] = df["position_1"].apply(get_position_order)
+            else:
+                df["__pos_order_1"] = 999
+            if "position_2" in df.columns:
+                df["__pos_order_2"] = df["position_2"].apply(get_position_order)
+            else:
+                df["__pos_order_2"] = 999
+
+            # Use minimum of both position orders for sorting (so QB on either side comes first)
+            df["__min_pos_order"] = df[["__pos_order_1", "__pos_order_2"]].min(axis=1)
         else:
             df["__base_pos"] = ""
             df["__slot_num"] = 999
             df["__bn_ir_order"] = 0
+            df["__pos_order"] = 999
+            df["__min_pos_order"] = 999
 
-        # Map base positions to order
-        pos_order = {"QB": 0, "RB": 1, "WR": 2, "TE": 3, "W/R/T": 4, "K": 5, "DEF": 6, "BN": 7, "IR": 8}
-        df["__pos_order"] = df["__base_pos"].map(pos_order).fillna(999).astype(int)
+        # Sort by: BN/IR order first (BN before IR), then min position order (for bench), then slot, then points
+        df = df.sort_values(["__bn_ir_order", "__min_pos_order", "__slot_num", "points_1"], ascending=[True, True, True, False])
 
-        # Sort by: BN/IR order first (BN before IR), then position order, then slot, then points
-        df = df.sort_values(["__bn_ir_order", "__pos_order", "__slot_num", "points_1"], ascending=[True, True, True, False]).drop(columns=["__pos_order", "__base_pos", "__slot_num", "__bn_ir_order"]).reset_index(drop=True)
+        # Clean up temp columns
+        cols_to_drop = ["__pos_order", "__base_pos", "__slot_num", "__bn_ir_order", "__min_pos_order"]
+        if "__pos_order_1" in df.columns:
+            cols_to_drop.append("__pos_order_1")
+        if "__pos_order_2" in df.columns:
+            cols_to_drop.append("__pos_order_2")
+        df = df.drop(columns=cols_to_drop).reset_index(drop=True)
 
         # Totals row - ensure all required columns are present
         total_row = pd.DataFrame(
