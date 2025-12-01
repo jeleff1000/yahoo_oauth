@@ -291,7 +291,7 @@ class SeasonStandingsViewer:
                 'L': '{:.1f}' if per_game else '{:.0f}'
             })
 
-            st.dataframe(styled_df, use_container_width=True, hide_index=True, height=500)
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
             # Compact legend
             with st.expander("Legend", expanded=False):

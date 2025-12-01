@@ -683,6 +683,7 @@ def transactions_to_dataframe(transactions: List[Transaction]) -> pd.DataFrame:
             # Foreign keys (for joins)
             "yahoo_player_id": tx.yahoo_player_id,
             "manager": tx.manager,
+            "manager_guid": tx.manager_guid,
 
             # Time columns
             "year": tx.year,
@@ -741,7 +742,7 @@ def transactions_to_dataframe(transactions: List[Transaction]) -> pd.DataFrame:
         "transaction_id",
 
         # Foreign keys
-        "manager", "yahoo_player_id", "player_name",
+        "manager", "manager_guid", "yahoo_player_id", "player_name",
 
         # Time columns
         "year", "week", "cumulative_week", "week_start", "week_end",

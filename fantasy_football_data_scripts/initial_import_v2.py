@@ -96,6 +96,7 @@ YAHOO_FETCHER = "multi_league/data_fetchers/yahoo_fantasy_data.py"
 # CRITICAL: Split into multiple passes to handle dependencies
 # Pass 1: Base calculations (no dependencies)
 TRANSFORMATIONS_PASS_1 = [
+    ("multi_league/transformations/base/resolve_hidden_managers.py", "Resolve Hidden Managers", 120),  # Unify --hidden-- manager names by GUID FIRST (before any other transformations)
     ("multi_league/transformations/base/cumulative_stats_v2.py", "Cumulative Stats", 600),  # FIX matchup playoff flags FIRST using seed-based detection
     ("multi_league/transformations/base/enrich_schedule_with_playoff_flags.py", "Enrich Schedule w/ Playoff Flags", 120),  # Merge playoff flags from matchup into schedule (needed by playoff_odds_import)
 ]
