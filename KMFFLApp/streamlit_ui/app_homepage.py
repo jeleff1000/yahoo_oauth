@@ -419,124 +419,236 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Simple hamburger menu - clean list style
+    # Collapsible hamburger menu with improved styling
     st.markdown("""
     <style>
-    /* Current section header */
+    /* Wider popover for better readability */
+    [data-testid="stPopoverBody"] {
+        min-width: 220px !important;
+        max-width: 280px !important;
+    }
+
+    /* Category separator */
+    .menu-separator {
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        margin: 12px 0 8px 0;
+        padding-top: 8px;
+    }
+    .menu-separator-label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: rgba(255, 255, 255, 0.4);
+        margin-bottom: 6px;
+    }
+
+    /* Current section - bright glow effect */
     .menu-current {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%);
         color: white !important;
-        padding: 8px 12px;
-        border-radius: 6px;
+        padding: 10px 14px;
+        border-radius: 8px;
         margin: 4px 0;
         font-weight: 600;
+        box-shadow: 0 0 12px rgba(129, 140, 248, 0.4),
+                    0 0 24px rgba(129, 140, 248, 0.2);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
-    /* Subtab radio - force smaller and indented */
+    .menu-current:hover {
+        box-shadow: 0 0 16px rgba(129, 140, 248, 0.5),
+                    0 0 32px rgba(129, 140, 248, 0.3);
+    }
+    .menu-chevron {
+        font-size: 0.7rem;
+        transition: transform 0.2s ease;
+    }
+    .menu-chevron.expanded {
+        transform: rotate(180deg);
+    }
+
+    /* Subtab container - collapsible */
+    .subtab-container {
+        margin-left: 1rem;
+        padding-left: 0.75rem;
+        border-left: 2px solid rgba(129, 140, 248, 0.4);
+        margin-top: 4px;
+        margin-bottom: 8px;
+    }
+    .subtab-item {
+        display: flex;
+        align-items: center;
+        padding: 6px 10px;
+        margin: 2px 0;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        color: rgba(255, 255, 255, 0.7);
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .subtab-item:hover {
+        background: rgba(129, 140, 248, 0.15);
+        color: rgba(255, 255, 255, 0.95);
+    }
+    .subtab-item.active {
+        background: rgba(129, 140, 248, 0.25);
+        color: #A78BFA;
+        font-weight: 500;
+    }
+    .subtab-icon {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        margin-right: 10px;
+        opacity: 0.6;
+    }
+    .subtab-item.active .subtab-icon {
+        background: #A78BFA;
+        opacity: 1;
+        box-shadow: 0 0 6px rgba(167, 139, 250, 0.5);
+    }
+
+    /* Non-current menu items */
+    .menu-item {
+        display: flex;
+        align-items: center;
+        padding: 10px 14px;
+        margin: 2px 0;
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.75);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        font-weight: 500;
+    }
+    .menu-item:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.95);
+    }
+
+    /* Subtab radio buttons - cleaner styling */
     .stPopover .stRadio > div,
-    [data-testid="stPopoverBody"] .stRadio > div,
-    div[data-baseweb="popover"] .stRadio > div {
-        margin-left: 1.5rem !important;
+    [data-testid="stPopoverBody"] .stRadio > div {
+        margin-left: 1rem !important;
         padding-left: 0.75rem !important;
-        border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
-        gap: 0 !important;
+        border-left: 2px solid rgba(129, 140, 248, 0.4) !important;
+        gap: 2px !important;
+        flex-direction: column !important;
     }
     .stPopover .stRadio label,
-    .stPopover .stRadio p,
-    [data-testid="stPopoverBody"] .stRadio label,
-    [data-testid="stPopoverBody"] .stRadio p,
-    div[data-baseweb="popover"] .stRadio label,
-    div[data-baseweb="popover"] .stRadio p {
-        font-size: 0.72rem !important;
-        padding: 1px 6px !important;
+    [data-testid="stPopoverBody"] .stRadio label {
+        font-size: 0.82rem !important;
+        padding: 6px 10px !important;
         min-height: unset !important;
-        color: #666 !important;
+        color: rgba(255, 255, 255, 0.7) !important;
+        border-radius: 6px !important;
+    }
+    .stPopover .stRadio label:hover,
+    [data-testid="stPopoverBody"] .stRadio label:hover {
+        background: rgba(129, 140, 248, 0.15) !important;
+        color: rgba(255, 255, 255, 0.95) !important;
     }
     .stPopover .stRadio input:checked + div,
     .stPopover .stRadio input:checked ~ label,
-    [data-testid="stPopoverBody"] .stRadio input:checked + div {
-        color: #667eea !important;
+    [data-testid="stPopoverBody"] .stRadio input:checked + div,
+    [data-testid="stPopoverBody"] .stRadio input:checked ~ label {
+        color: #A78BFA !important;
         font-weight: 500 !important;
+        background: rgba(129, 140, 248, 0.25) !important;
     }
     .stPopover .stRadio [data-baseweb="radio"],
-    [data-testid="stPopoverBody"] .stRadio [data-baseweb="radio"],
-    div[data-baseweb="popover"] .stRadio [data-baseweb="radio"] {
-        width: 12px !important;
-        height: 12px !important;
-        min-width: 12px !important;
-        min-height: 12px !important;
+    [data-testid="stPopoverBody"] .stRadio [data-baseweb="radio"] {
+        width: 10px !important;
+        height: 10px !important;
+        min-width: 10px !important;
+        min-height: 10px !important;
+    }
+
+    @media (max-width: 768px) {
+        [data-testid="stPopoverBody"] {
+            min-width: 200px !important;
+        }
+        .menu-current, .menu-item {
+            padding: 12px 14px;
+        }
+        .stPopover .stRadio label,
+        [data-testid="stPopoverBody"] .stRadio label {
+            font-size: 0.88rem !important;
+            padding: 10px 12px !important;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
 
+    # Define category groups
+    category_groups = [
+        {"label": None, "items": ["Home"]},  # No label for first group
+        {"label": "Data", "items": ["Managers", "Team Stats", "Players"]},
+        {"label": "History", "items": ["Draft", "Transactions"]},
+        {"label": "Tools", "items": ["Simulations", "Extras"]},
+    ]
+
+    # Track which section is expanded (for collapsible subtabs)
+    if "menu_expanded" not in st.session_state:
+        st.session_state["menu_expanded"] = selected_tab
+
     # Hamburger menu
     with st.popover("☰ Menu"):
-        # Subtab styling (mobile + desktop)
-        st.markdown("""
-        <style>
-        .stRadio > div {
-            margin-left: 1rem !important;
-            padding-left: 0.5rem !important;
-            border-left: 2px solid rgba(102, 126, 234, 0.3) !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: flex-start !important;
-        }
-        .stRadio > div > label {
-            font-size: 0.8rem !important;
-            padding: 8px 8px !important;
-            margin-bottom: 6px !important;
-            white-space: nowrap !important;
-            display: flex !important;
-            align-items: center !important;
-            min-height: 32px !important;
-        }
-        .stRadio [data-baseweb="radio"] {
-            width: 16px !important;
-            height: 16px !important;
-            min-width: 16px !important;
-            min-height: 16px !important;
-            margin-right: 8px !important;
-        }
-        @media (max-width: 768px) {
-            .stRadio > div > label {
-                font-size: 0.85rem !important;
-                padding: 8px 10px !important;
-                min-height: 36px !important;
-            }
-            .stRadio [data-baseweb="radio"] {
-                width: 18px !important;
-                height: 18px !important;
-            }
-        }
-        </style>
-        """, unsafe_allow_html=True)
+        for group in category_groups:
+            # Add separator with label (except for first group)
+            if group["label"]:
+                st.markdown(f'''
+                <div class="menu-separator">
+                    <div class="menu-separator-label">{group["label"]}</div>
+                </div>
+                ''', unsafe_allow_html=True)
 
-        for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
-            is_current = (i == current_idx)
-
-            if is_current:
-                # Current section - styled header
-                st.markdown(f'<div class="menu-current">{icon} {name}</div>', unsafe_allow_html=True)
-
-                # Subtabs as radio
+            for name in group["items"]:
+                i = tab_names.index(name)
+                icon = tab_icons[i]
+                is_current = (i == current_idx)
                 section_subtabs = subtabs.get(name)
-                if section_subtabs:
-                    new_subtab = st.radio(
-                        "Subtab",
-                        options=section_subtabs,
-                        index=current_subtab_idx,
-                        key=f"radio_{name}",
-                        label_visibility="collapsed"
-                    )
-                    if section_subtabs.index(new_subtab) != current_subtab_idx:
-                        st.session_state[f"subtab_{name}"] = section_subtabs.index(new_subtab)
+                has_subtabs = section_subtabs is not None and len(section_subtabs) > 0
+                is_expanded = st.session_state.get("menu_expanded") == name
+
+                if is_current:
+                    # Current section - bright header with optional chevron
+                    chevron = "▼" if is_expanded else "▶" if has_subtabs else ""
+                    chevron_class = "expanded" if is_expanded else ""
+
+                    # Clickable header to toggle expansion
+                    col1, col2 = st.columns([0.85, 0.15])
+                    with col1:
+                        st.markdown(f'<div class="menu-current">{icon} {name}</div>', unsafe_allow_html=True)
+                    with col2:
+                        if has_subtabs:
+                            if st.button("▼" if is_expanded else "▶", key=f"toggle_{name}", help="Toggle subtabs"):
+                                st.session_state["menu_expanded"] = None if is_expanded else name
+                                st.rerun()
+
+                    # Subtabs as radio (only if expanded)
+                    if has_subtabs and is_expanded:
+                        new_subtab = st.radio(
+                            "Subtab",
+                            options=section_subtabs,
+                            index=current_subtab_idx,
+                            key=f"radio_{name}",
+                            label_visibility="collapsed"
+                        )
+                        if section_subtabs.index(new_subtab) != current_subtab_idx:
+                            st.session_state[f"subtab_{name}"] = section_subtabs.index(new_subtab)
+                            st.rerun()
+                else:
+                    # Other sections - buttons
+                    if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
+                        st.session_state["active_main_tab"] = i
+                        st.session_state[f"subtab_{name}"] = 0
+                        # Auto-expand if section has subtabs
+                        if has_subtabs:
+                            st.session_state["menu_expanded"] = name
                         st.rerun()
-            else:
-                # Other sections - buttons
-                if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
-                    st.session_state["active_main_tab"] = i
-                    st.session_state[f"subtab_{name}"] = 0
-                    st.rerun()
 
     # Render ONLY the active tab (true lazy loading!)
     if selected_tab == "Home":
