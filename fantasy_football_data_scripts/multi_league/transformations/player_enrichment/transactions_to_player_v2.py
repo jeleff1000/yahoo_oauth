@@ -250,9 +250,17 @@ def merge_transactions_to_player(
     # CRITICAL: Normalize data types before merge to prevent type mismatch errors
     # yahoo_player_id can be int64 in one dataframe but object/string in another
     # cumulative_week can be float64 (201401.0) in player but Int64 (201401) in transactions
-    # Convert all merge keys: numeric -> int -> string for consistent merging
+    # Convert numeric merge keys: numeric -> int -> string for consistent merging
+    # SKIP league_id - it's already a string and pd.to_numeric would corrupt it!
     print("  Normalizing data types for merge keys...")
     for key in merge_keys:
+        # Skip league_id - it's a string like '331.l.492605', not numeric
+        if key == 'league_id':
+            # Just ensure consistent string dtype across all dataframes
+            for df in [player_df, cumulative_faab_df, transactions_df]:
+                if key in df.columns:
+                    df[key] = df[key].astype(str)
+            continue
         for df in [player_df, cumulative_faab_df, transactions_df]:
             if key in df.columns:
                 # Convert to numeric first (handles strings, floats, ints)
@@ -445,10 +453,15 @@ def import_transactions_to_player(
         # Drop new columns first to get base dataframe
         player_base = player_original.drop(columns=list(new_cols), errors='ignore').copy()
 
-        # Now normalize merge keys in BOTH dataframes (numeric -> Int64 -> string)
+        # Now normalize merge keys in BOTH dataframes (numeric -> Int64, skip league_id)
         for key in merge_keys:
+            if key == 'league_id':
+                # league_id is a string - just ensure consistent dtype, don't use to_numeric
+                if key in player_base.columns:
+                    player_base[key] = player_base[key].astype(str)
+                continue
             if key in player_base.columns:
-                # Same normalization as enrichment: numeric -> int -> string
+                # Same normalization as enrichment: numeric -> Int64
                 player_base[key] = pd.to_numeric(player_base[key], errors='coerce').astype('Int64')
 
         # Select only new columns from enriched data
@@ -456,6 +469,11 @@ def import_transactions_to_player(
 
         # CRITICAL: Also normalize enriched_subset merge keys to ensure type consistency
         for key in merge_keys:
+            if key == 'league_id':
+                # league_id is a string - just ensure consistent dtype
+                if key in enriched_subset.columns:
+                    enriched_subset[key] = enriched_subset[key].astype(str)
+                continue
             if key in enriched_subset.columns:
                 enriched_subset[key] = pd.to_numeric(enriched_subset[key], errors='coerce').astype('Int64')
 
