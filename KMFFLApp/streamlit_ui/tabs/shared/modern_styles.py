@@ -370,134 +370,104 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       RESPONSIVE - TABLET/MOBILE (768px)
+       RESPONSIVE - TABLET (768px)
        =========================================== */
     @media (max-width: 768px) {
-        /* Tighter page margins */
-        .main .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-            padding-top: 0.75rem !important;
-        }
-
         .hero-section {
-            padding: 0.75rem;
-            margin-bottom: 0.75rem;
+            padding: var(--space-md, 1rem);
+            margin-bottom: var(--space-md, 1rem);
         }
-        .hero-section h1 { font-size: 1.4rem !important; }
-        .hero-section h2 { font-size: 1.2rem !important; }
-        .hero-section p { font-size: 0.85rem; margin-top: 0.25rem; }
+        .hero-section h1 { font-size: 1.5rem !important; }
+        .hero-section h2 { font-size: 1.3rem !important; }
+        .hero-section p { font-size: 0.9rem; }
 
         .static-card,
         .feature-card,
         .interactive-card {
-            padding: 0.5rem;
-            margin: 0.25rem 0;
+            padding: var(--space-sm, 0.5rem);
+            margin: var(--space-xs, 0.25rem) 0;
         }
 
         .info-box, .success-box, .warning-box, .error-box {
-            padding: 0.5rem;
-            font-size: 0.85rem;
+            padding: var(--space-sm, 0.5rem);
+            font-size: 0.9rem;
         }
 
-        /* Horizontal scrollable section tabs */
+        /* Scrollable tabs */
         .stTabs [data-baseweb="tab-list"] {
             flex-wrap: nowrap;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
-            gap: 0.25rem;
-            padding-bottom: 0.25rem;
-        }
-        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
-            height: 0;
         }
         .stTabs [data-baseweb="tab"] {
-            height: 1.75rem;
+            height: 2rem;
             padding: 0 0.5rem;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             flex-shrink: 0;
-            border-radius: 12px;
-        }
-        .stTabs [data-baseweb="tab"][aria-selected="true"] {
-            background: rgba(239, 68, 68, 0.15) !important;
         }
 
-        /* Tighter expanders */
-        .streamlit-expanderHeader {
-            padding: 0.5rem !important;
-            font-size: 0.85rem !important;
-        }
-        [data-testid="stExpander"] > div > div {
-            padding: 0.5rem !important;
+        /* Full width buttons */
+        .stButton > button {
+            width: 100%;
         }
 
-        /* Touch-friendly inputs */
+        /* Better touch targets */
         .stMultiSelect [data-baseweb="select"],
         .stSelectbox select,
         .stTextInput input,
         .stNumberInput input {
-            min-height: 40px;
-            font-size: 16px;
+            min-height: 44px;
+            font-size: 16px; /* Prevents iOS zoom */
         }
 
-        /* Compact typography */
-        h1 { font-size: 1.4rem !important; }
-        h2 { font-size: 1.2rem !important; }
-        h3 { font-size: 1rem !important; }
-        h4 { font-size: 0.9rem !important; }
+        /* Reduce font sizes */
+        h1 { font-size: 1.5rem !important; }
+        h2 { font-size: 1.3rem !important; }
+        h3 { font-size: 1.1rem !important; }
+        h4 { font-size: 1rem !important; }
 
         /* Scrollable tables */
         .stDataFrame {
             overflow-x: auto;
         }
-        .stDataFrame table { font-size: 0.8rem; }
-        .stDataFrame th { padding: 0.3rem !important; font-size: 0.75rem; }
-        .stDataFrame td { padding: 0.25rem !important; }
+        .stDataFrame table { font-size: 0.85rem; }
+        .stDataFrame th { padding: 0.4rem !important; }
+        .stDataFrame td { padding: 0.3rem !important; }
 
-        .stat-value { font-size: 1.4rem; }
-
-        /* Reduce vertical gaps */
-        .element-container { margin-bottom: 0.5rem !important; }
-        .stMarkdown { margin-bottom: 0.25rem !important; }
+        .stat-value { font-size: 1.5rem; }
     }
 
     /* ===========================================
-       RESPONSIVE - SMALL MOBILE (480px)
+       RESPONSIVE - MOBILE (480px)
        =========================================== */
     @media (max-width: 480px) {
-        .main .block-container {
-            padding-left: 0.35rem !important;
-            padding-right: 0.35rem !important;
-        }
-
         .hero-section {
-            padding: 0.5rem;
-            margin-bottom: 0.5rem;
+            padding: var(--space-sm, 0.5rem);
         }
-        .hero-section h1 { font-size: 1.2rem !important; }
-        .hero-section h2 { font-size: 1rem !important; }
+        .hero-section h1 { font-size: 1.3rem !important; }
+        .hero-section h2 { font-size: 1.1rem !important; }
 
         .static-card,
         .feature-card,
         .interactive-card {
-            padding: 0.4rem;
+            padding: var(--space-sm, 0.5rem);
         }
 
         .stTabs [data-baseweb="tab"] {
-            height: 1.5rem;
-            padding: 0 0.4rem;
-            font-size: 0.65rem;
+            height: 1.75rem;
+            padding: 0 0.35rem;
+            font-size: 0.7rem;
         }
 
-        h1 { font-size: 1.2rem !important; }
-        h2 { font-size: 1rem !important; }
-        h3 { font-size: 0.9rem !important; }
+        h1 { font-size: 1.3rem !important; }
+        h2 { font-size: 1.15rem !important; }
+        h3 { font-size: 1rem !important; }
 
-        .stDataFrame table { font-size: 0.7rem; }
-        .stDataFrame th { font-size: 0.65rem; padding: 0.2rem !important; }
-        .stDataFrame td { padding: 0.15rem !important; }
+        .stDataFrame table { font-size: 0.75rem; }
+        .stDataFrame th { font-size: 0.7rem; padding: 0.25rem !important; }
+        .stDataFrame td { padding: 0.2rem !important; }
 
-        .stat-value { font-size: 1.2rem; }
+        .stat-value { font-size: 1.3rem; }
     }
 
     /* ===========================================
