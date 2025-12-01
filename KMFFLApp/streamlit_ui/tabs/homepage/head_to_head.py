@@ -101,11 +101,13 @@ def display_head_to_head(df_dict: Dict[str, Any]):
         if "matchup_name" not in player_week_df.columns:
             st.error("Column 'matchup_name' is missing in player data.")
             return
-        matchup_names = (
+        raw_matchup_names = (
             player_week_df["matchup_name"]
             .dropna().astype(str).unique().tolist()
         )
-        matchup_options.extend(sorted(matchup_names))
+        # Format matchup names: replace "__vs__" with " vs "
+        formatted_matchups = [m.replace("__vs__", " vs ") for m in raw_matchup_names if m.lower() not in ['none vs none', 'nan vs nan', 'none', 'nan', '']]
+        matchup_options.extend(sorted(formatted_matchups))
 
     # ✅ Default selection index = 0 ("Optimal")
     sel_matchup = st.selectbox(

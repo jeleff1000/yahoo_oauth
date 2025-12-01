@@ -150,6 +150,7 @@ def resolve_hidden_managers(ctx: LeagueContext, dry_run: bool = False) -> dict:
         'matchup': ctx.canonical_matchup_file,
         'draft': ctx.canonical_draft_file,
         'transactions': ctx.canonical_transaction_file,
+        'schedule': Path(ctx.data_directory) / "schedule.parquet",
     }
 
     # Load all tables

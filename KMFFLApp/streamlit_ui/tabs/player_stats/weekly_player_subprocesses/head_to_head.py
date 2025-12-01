@@ -706,14 +706,6 @@ class H2HViewer:
             st.warning("No rows for that matchup.")
             return
 
-        # Radio button to switch between actual and optimal lineups
-        lineup_type = st.radio(
-            "Lineup Type",
-            options=["Actual Lineups", "Optimal Lineups"],
-            key=f"{prefix}_lineup_type_{matchup_name}",
-            horizontal=True
-        )
-
         # Identify each side from columns present in the player_df
         # team_1 and team_2 ARE the manager names (alphabetically ordered)
         if "team_1" in dfm.columns and "team_2" in dfm.columns:
@@ -725,50 +717,51 @@ class H2HViewer:
             team_1 = mgrs[0] if mgrs else "Team 1"
             team_2 = mgrs[1] if len(mgrs) > 1 else "Team 2"
 
-        # Determine which position column to use based on lineup type
-        if lineup_type == "Optimal Lineups":
-            # Use optimal_position instead of lineup_position (fantasy_position)
-            if "optimal_position" not in dfm.columns:
-                st.warning("Optimal lineup data not available for this matchup.")
-                return
+        # Tabs to switch between actual and optimal lineups
+        lineup_tabs = st.tabs(["Actual", "Optimal"])
 
-            # Check if we have data with optimal positions that are not null/BN/IR
-            opt_check = dfm[dfm["optimal_position"].notna() &
-                           ~dfm["optimal_position"].isin(["BN", "IR", ""])]
-            if opt_check.empty:
-                st.warning("No optimal lineup positions found for this matchup.")
-                return
-
-            # Temporarily replace fantasy_position with optimal_position for optimal view
-            dfm_optimal = dfm.copy()
-            dfm_optimal["fantasy_position"] = dfm_optimal["optimal_position"]
-
-            # Prepare each side with optimal positions
-            # team_1 and team_2 are already the manager names, use them directly
-            team_1_main = self._prepare_team_duckdb(dfm_optimal, team_1, "team_1", MAIN_POSITIONS)
-            team_2_main = self._prepare_team_duckdb(dfm_optimal, team_2, "team_2", MAIN_POSITIONS)
-
-            team_1_bench = self._prepare_team_duckdb(dfm_optimal, team_1, "team_1", BENCH_IR)
-            team_2_bench = self._prepare_team_duckdb(dfm_optimal, team_2, "team_2", BENCH_IR)
-        else:
-            # Use actual lineups (lineup_position is already in fantasy_position column)
+        # Actual Lineups tab
+        with lineup_tabs[0]:
             team_1_main = self._prepare_team_duckdb(dfm, team_1, "team_1", MAIN_POSITIONS)
             team_2_main = self._prepare_team_duckdb(dfm, team_2, "team_2", MAIN_POSITIONS)
-
             team_1_bench = self._prepare_team_duckdb(dfm, team_1, "team_1", BENCH_IR)
             team_2_bench = self._prepare_team_duckdb(dfm, team_2, "team_2", BENCH_IR)
 
-        main_df = self._merge_two_teams(team_1_main, team_2_main)
-        main_df, team_1_name, team_2_name = self._postprocess_and_totals(main_df)
+            main_df = self._merge_two_teams(team_1_main, team_2_main)
+            main_df, team_1_name, team_2_name = self._postprocess_and_totals(main_df)
+            bench_df = self._merge_two_teams(team_1_bench, team_2_bench)
+            bench_df, _, _ = self._postprocess_and_totals(bench_df)
 
-        bench_df = self._merge_two_teams(team_1_bench, team_2_bench)
-        bench_df, _, _ = self._postprocess_and_totals(bench_df)
-
-        # Render with spinner
-        with st.spinner(f"Loading {lineup_type.lower()}..."):
             self.render_table(main_df, team_1_name, team_2_name, color_coding=True)
-            if not bench_df.empty and len(bench_df) > 1:  # Only show bench if there are players
+            if not bench_df.empty and len(bench_df) > 1:
                 self.render_table(bench_df, team_1_name, team_2_name, color_coding=False)
+
+        # Optimal Lineups tab
+        with lineup_tabs[1]:
+            if "optimal_position" not in dfm.columns:
+                st.warning("Optimal lineup data not available for this matchup.")
+            else:
+                opt_check = dfm[dfm["optimal_position"].notna() &
+                               ~dfm["optimal_position"].isin(["BN", "IR", ""])]
+                if opt_check.empty:
+                    st.warning("No optimal lineup positions found for this matchup.")
+                else:
+                    dfm_optimal = dfm.copy()
+                    dfm_optimal["fantasy_position"] = dfm_optimal["optimal_position"]
+
+                    team_1_main = self._prepare_team_duckdb(dfm_optimal, team_1, "team_1", MAIN_POSITIONS)
+                    team_2_main = self._prepare_team_duckdb(dfm_optimal, team_2, "team_2", MAIN_POSITIONS)
+                    team_1_bench = self._prepare_team_duckdb(dfm_optimal, team_1, "team_1", BENCH_IR)
+                    team_2_bench = self._prepare_team_duckdb(dfm_optimal, team_2, "team_2", BENCH_IR)
+
+                    main_df = self._merge_two_teams(team_1_main, team_2_main)
+                    main_df, team_1_name, team_2_name = self._postprocess_and_totals(main_df)
+                    bench_df = self._merge_two_teams(team_1_bench, team_2_bench)
+                    bench_df, _, _ = self._postprocess_and_totals(bench_df)
+
+                    self.render_table(main_df, team_1_name, team_2_name, color_coding=True)
+                    if not bench_df.empty and len(bench_df) > 1:
+                        self.render_table(bench_df, team_1_name, team_2_name, color_coding=False)
 
     # ---- rendering -----------------------------------------------------------
 
@@ -864,7 +857,7 @@ class H2HViewer:
             .h2h-points-cell {
                 font-weight: bold;
                 font-size: 1.15em;
-                color: #4ade80;
+                color: white;
             }
 
             .h2h-pos-badge {

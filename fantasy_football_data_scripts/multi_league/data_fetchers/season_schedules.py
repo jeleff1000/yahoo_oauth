@@ -172,17 +172,20 @@ def extract_team(team_node: ET.Element, manager_overrides: dict = None) -> dict:
     # Get team name first so it can be used as fallback for hidden managers
     team_name_raw = team_node.findtext("name") or ""
 
+    # Get manager guid (persistent identifier across years)
+    manager_guid = team_node.findtext(".//managers/manager/guid") or ""
+
     nickname = (
         team_node.findtext(".//managers/manager/nickname")
         or team_node.findtext(".//managers/manager/name")
-        or team_node.findtext(".//managers/manager/guid")
+        or manager_guid
         or ""
     )
     # Pass team_name as fallback for hidden managers
     manager = norm_manager(nickname, manager_overrides, team_name_fallback=team_name_raw)
     team_name = team_name_raw or manager
     points = safe_float(team_node.findtext("team_points/total"), 0.0)
-    return {'manager': manager, 'team_name': team_name, 'team_points': points}
+    return {'manager': manager, 'manager_guid': manager_guid, 'team_name': team_name, 'team_points': points}
 
 def parse_week_schedule(league_key: str, season_year: int, week: int, manager_overrides: dict = None) -> list[dict]:
     """
@@ -250,6 +253,7 @@ def parse_week_schedule(league_key: str, season_year: int, week: int, manager_ov
             'is_playoffs': is_playoffs,
             'is_consolation': is_consolation,
             'manager': t1['manager'],
+            'manager_guid': t1['manager_guid'],
             'team_name': t1['team_name'],
             'cumulative_week': cumulative_week,
             'manager_week': manager1_week,
@@ -268,6 +272,7 @@ def parse_week_schedule(league_key: str, season_year: int, week: int, manager_ov
             'is_playoffs': is_playoffs,
             'is_consolation': is_consolation,
             'manager': t2['manager'],
+            'manager_guid': t2['manager_guid'],
             'team_name': t2['team_name'],
             'cumulative_week': cumulative_week,
             'manager_week': manager2_week,
