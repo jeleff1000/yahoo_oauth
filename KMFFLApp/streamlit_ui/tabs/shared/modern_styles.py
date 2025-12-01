@@ -245,39 +245,36 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       STREAMLIT NATIVE TABS (section tabs like Matchup Stats, etc.)
+       STREAMLIT NATIVE TABS
        =========================================== */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0.25rem;
-        border-bottom: 1px solid var(--border, rgba(255,255,255,0.1));
+        gap: var(--space-sm, 0.5rem);
+        border-bottom: 1px solid var(--border, #E5E7EB);
         padding-bottom: 0;
     }
 
     .stTabs [data-baseweb="tab"] {
-        height: 2.25rem;
-        padding: 0 0.75rem;
-        border-radius: 4px 4px 0 0;
+        height: 2.75rem;
+        padding: 0 var(--space-md, 1rem);
+        border-radius: var(--radius-sm, 4px) var(--radius-sm, 4px) 0 0;
         font-weight: 500;
-        font-size: 0.85rem;
         background-color: transparent;
-        color: rgba(255, 255, 255, 0.55);
+        color: var(--text-secondary, #6B7280);
         border: none;
         border-bottom: 2px solid transparent;
         margin-bottom: -1px;
-        transition: all 0.15s ease;
     }
 
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
         background-color: transparent;
-        color: #EF4444;
-        border-bottom: 2px solid #EF4444;
+        color: var(--accent, #667eea);
+        border-bottom: 2px solid var(--accent, #667eea);
         font-weight: 600;
     }
 
     .stTabs [data-baseweb="tab"]:hover:not([aria-selected="true"]) {
-        color: rgba(255, 255, 255, 0.85);
-        background-color: rgba(255, 255, 255, 0.05);
-        border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        color: var(--text-primary, #1F2937);
+        background-color: var(--hover, #F5F5F5);
     }
 
     /* Force consistent text in tabs */
@@ -400,9 +397,9 @@ def apply_modern_styles():
             -webkit-overflow-scrolling: touch;
         }
         .stTabs [data-baseweb="tab"] {
-            height: 2rem;
-            padding: 0 0.5rem;
-            font-size: 0.75rem;
+            height: 2.5rem;
+            padding: 0 var(--space-sm, 0.5rem);
+            font-size: 0.85rem;
             flex-shrink: 0;
         }
 
@@ -454,9 +451,9 @@ def apply_modern_styles():
         }
 
         .stTabs [data-baseweb="tab"] {
-            height: 1.75rem;
-            padding: 0 0.35rem;
-            font-size: 0.7rem;
+            height: 2.25rem;
+            padding: 0 var(--space-xs, 0.25rem);
+            font-size: 0.8rem;
         }
 
         h1 { font-size: 1.3rem !important; }
