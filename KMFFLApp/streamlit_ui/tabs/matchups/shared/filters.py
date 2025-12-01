@@ -90,7 +90,7 @@ def render_filter_ui(
     prefix: str = "",
     show_weeks: bool = False,
     show_positions: bool = False,
-    data_last_updated: Optional[datetime] = None,
+    consolation_default: bool = False,
 ) -> Dict[str, Any]:
     """
     Render consistent filter UI for matchup data views.
@@ -100,7 +100,7 @@ def render_filter_ui(
         prefix: Unique prefix for widget keys to avoid conflicts
         show_weeks: Whether to show week filter
         show_positions: Whether to show position filter
-        data_last_updated: Optional timestamp of when data was last loaded
+        consolation_default: Default value for consolation checkbox
 
     Returns:
         Dictionary with filter selections
@@ -189,7 +189,7 @@ def render_filter_ui(
         with toggle_cols[1]:
             playoffs = st.checkbox("Playoffs", value=True, key=f"{prefix}_playoffs")
         with toggle_cols[2]:
-            consolation = st.checkbox("Consolation", value=False, key=f"{prefix}_consolation")
+            consolation = st.checkbox("Consolation", value=consolation_default, key=f"{prefix}_consolation")
         with toggle_cols[3]:
             result_filter = st.selectbox(
                 "Result",

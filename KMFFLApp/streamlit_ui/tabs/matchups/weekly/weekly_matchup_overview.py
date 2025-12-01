@@ -34,12 +34,13 @@ class WeeklyMatchupDataViewer:
         # Generate fun facts
         fun_facts = get_weekly_fun_facts(self.matchup_df)
 
-        # Render filter UI
+        # Render filter UI (consolation defaults to checked for weekly view)
         filters = render_filter_ui(
             df=self.matchup_df,
             prefix=prefix,
             show_weeks=True,
-            show_positions=False
+            show_positions=False,
+            consolation_default=True
         )
 
         # Apply filters with loading indicator
