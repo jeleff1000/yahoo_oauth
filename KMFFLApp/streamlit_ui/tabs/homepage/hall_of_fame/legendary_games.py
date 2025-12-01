@@ -2,8 +2,6 @@
 import streamlit as st
 import duckdb
 
-from .components import game_card, upset_card, rivalry_card, narrative_callout
-
 
 class LegendaryGamesViewer:
     def __init__(self, df):
