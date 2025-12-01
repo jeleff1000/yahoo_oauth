@@ -31,13 +31,12 @@ class CareerMatchupOverviewViewer:
         # Generate fun facts
         fun_facts = get_career_fun_facts(self.matchup_df)
 
-        # Render filter UI with data freshness (with positions for career view)
+        # Render filter UI (with positions for career view)
         filters = render_filter_ui(
             df=self.matchup_df,
             prefix=prefix,
             show_weeks=False,
-            show_positions=True,  # Career view can filter by position
-            data_last_updated=self.data_loaded_at
+            show_positions=True
         )
 
         # Apply filters with loading indicator

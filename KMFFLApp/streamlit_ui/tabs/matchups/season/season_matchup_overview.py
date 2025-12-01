@@ -34,13 +34,12 @@ class SeasonMatchupOverviewViewer:
         # Generate fun facts
         fun_facts = get_season_fun_facts(self.matchup_df)
 
-        # Render filter UI with data freshness (no weeks for season view)
+        # Render filter UI (no weeks for season view)
         filters = render_filter_ui(
             df=self.matchup_df,
             prefix=prefix,
             show_weeks=False,
-            show_positions=False,
-            data_last_updated=self.data_loaded_at
+            show_positions=False
         )
 
         # Apply filters with loading indicator

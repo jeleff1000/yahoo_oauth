@@ -16,13 +16,6 @@ def display_matchup_overview(df_dict, prefix=""):
     apply_modern_styles()
     apply_theme_styles()
 
-    st.markdown("""
-    <div class="hero-section">
-    <h2>Manager Matchups</h2>
-    <p style="margin: 0.5rem 0 0 0;">Analyze head-to-head performance and matchup history.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
     # Get subtab from session state (controlled by hamburger menu)
     subtab_idx = st.session_state.get("subtab_Managers", 0)
     sub_tab_names = ["Weekly", "Seasons", "Career", "Visualize"]
