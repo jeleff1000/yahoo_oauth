@@ -305,3 +305,127 @@ def upload_to_motherduck(files: list[Path], db_name: str, token: str = None) -> 
 
     con.close()
     return results
+
+
+def upload_external_data_to_staging(
+    external_data: dict,
+    db_name: str,
+    token: str = None
+) -> dict:
+    """
+    Upload external data (from Streamlit file uploads) directly to MotherDuck staging tables.
+
+    This bypasses GitHub Actions size limits by uploading data directly to MotherDuck
+    instead of passing it through the workflow dispatch API.
+
+    Args:
+        external_data: Dict from render_external_data_ui() with structure:
+            {
+                "matchup": [{"filename": "...", "data": [...], "columns": [...], "row_count": N}, ...],
+                "player": [...],
+                ...
+            }
+        db_name: Database name (league name).
+        token: MotherDuck token (uses env var if not provided).
+
+    Returns:
+        Dict with upload results:
+            {
+                "success": True/False,
+                "tables_uploaded": [("staging_matchup", 500), ...],
+                "error": "..." (if failed)
+            }
+    """
+    import pandas as pd
+
+    if not external_data:
+        return {"success": True, "tables_uploaded": [], "message": "No external data to upload"}
+
+    token = token or MOTHERDUCK_TOKEN
+    if not token:
+        return {"success": False, "error": "MotherDuck token not configured"}
+
+    os.environ["MOTHERDUCK_TOKEN"] = token
+    db = _slug(db_name, "l")
+
+    try:
+        con = duckdb.connect("md:")
+        con.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
+        con.execute(f"USE {db}")
+        con.execute(f"CREATE SCHEMA IF NOT EXISTS staging")
+
+        results = []
+
+        for data_type, files in external_data.items():
+            if not files:
+                continue
+
+            # Combine all files of this type into one DataFrame
+            all_records = []
+            for file_info in files:
+                records = file_info.get("data", [])
+                all_records.extend(records)
+
+            if not all_records:
+                continue
+
+            # Create DataFrame
+            df = pd.DataFrame(all_records)
+
+            # Upload to staging table
+            staging_table = f"staging_{_slug(data_type, 't')}"
+
+            # Register DataFrame and create table
+            con.register("temp_df", df)
+            con.execute(f"CREATE OR REPLACE TABLE staging.{staging_table} AS SELECT * FROM temp_df")
+            con.unregister("temp_df")
+
+            # Get row count
+            cnt = con.execute(f"SELECT COUNT(*) FROM staging.{staging_table}").fetchone()[0]
+            results.append((staging_table, int(cnt)))
+            print(f"Uploaded {cnt} rows to {db}.staging.{staging_table}")
+
+        con.close()
+
+        return {
+            "success": True,
+            "tables_uploaded": results,
+            "database": db,
+            "message": f"Uploaded {len(results)} staging tables to {db}"
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+def check_staging_tables(db_name: str, token: str = None) -> list[str]:
+    """
+    Check which staging tables exist for a database.
+
+    Returns list of staging table names.
+    """
+    token = token or MOTHERDUCK_TOKEN
+    if not token:
+        return []
+
+    try:
+        os.environ["MOTHERDUCK_TOKEN"] = token
+        db = _slug(db_name, "l")
+        con = duckdb.connect("md:")
+
+        # Check if staging schema exists
+        result = con.execute(f"""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_catalog = '{db}'
+            AND table_schema = 'staging'
+        """).fetchall()
+
+        con.close()
+        return [row[0] for row in result]
+
+    except Exception:
+        return []

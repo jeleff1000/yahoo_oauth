@@ -1546,6 +1546,32 @@ def perform_import_flow(league_info: dict):
                                 pass
             st.info(f"Extended year range with external data: {start_year}-{end_year}")
 
+        # Upload external data directly to MotherDuck (bypasses GitHub Actions size limits)
+        has_external_data = False
+        if external_data and "external_data" in external_data:
+            with st.spinner("Uploading external data to MotherDuck..."):
+                try:
+                    from streamlit_helpers.database import upload_external_data_to_staging
+
+                    upload_result = upload_external_data_to_staging(
+                        external_data=external_data["external_data"],
+                        db_name=league_name
+                    )
+
+                    if upload_result.get("success"):
+                        has_external_data = True
+                        tables = upload_result.get("tables_uploaded", [])
+                        if tables:
+                            st.success(f"✅ Uploaded {len(tables)} external data tables to MotherDuck staging")
+                            for tbl, cnt in tables:
+                                st.caption(f"  • {tbl}: {cnt:,} rows")
+                    else:
+                        st.warning(f"⚠️ External data upload failed: {upload_result.get('error')}")
+                        st.caption("External data will be skipped. Yahoo data will still import.")
+                except Exception as e:
+                    st.warning(f"⚠️ Could not upload external data: {e}")
+                    st.caption("External data will be skipped. Yahoo data will still import.")
+
         league_data = {
             "league_id": league_info.get("league_key") or league_info.get("league_id"),
             "league_name": league_name,
@@ -1556,7 +1582,7 @@ def perform_import_flow(league_info: dict):
             "playoff_teams": 6,
             "regular_season_weeks": 14,
             "keeper_rules": league_info.get("keeper_rules"),  # Pass keeper rules if configured
-            "external_data": external_data,  # Pass external data files if uploaded
+            "has_external_data": has_external_data,  # Flag only - data is in MotherDuck staging
             "manager_name_overrides": league_info.get("manager_name_overrides", {}),  # Pass hidden manager mappings
         }
 
