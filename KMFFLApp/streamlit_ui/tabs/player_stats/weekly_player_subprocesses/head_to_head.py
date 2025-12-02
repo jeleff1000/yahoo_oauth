@@ -330,8 +330,9 @@ class H2HViewer:
             df["__pos_order"] = 999
             df["__min_pos_order"] = 999
 
-        # Sort by: BN/IR order first (BN before IR), then min position order (for bench), then slot, then points
-        df = df.sort_values(["__bn_ir_order", "__min_pos_order", "__slot_num", "points_1"], ascending=[True, True, True, False])
+        # Sort by: BN/IR order first, then lineup position order (from fantasy_position), then slot, then points
+        # Use __pos_order (based on lineup slot like W/R/T) not __min_pos_order (based on NFL position like WR)
+        df = df.sort_values(["__bn_ir_order", "__pos_order", "__slot_num", "points_1"], ascending=[True, True, True, False])
 
         # Clean up temp columns
         cols_to_drop = ["__pos_order", "__base_pos", "__slot_num", "__bn_ir_order", "__min_pos_order"]
