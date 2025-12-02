@@ -242,34 +242,39 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
     # Compact filters in collapsible expander
     with st.expander('🔎 Filters', expanded=False):
         try:
-            # Row 1: Year slider + Position
-            c1, c2 = st.columns([2, 1])
+            # Get year bounds
+            min_year = int(df['year'].min()) if 'year' in df.columns and df['year'].notna().any() else 1999
+            max_year = int(df['year'].max()) if 'year' in df.columns and df['year'].notna().any() else 2025
+
+            # Row 1: Start Year, End Year, Position
+            c1, c2, c3 = st.columns([1, 1, 1])
             with c1:
-                years = sorted(df['year'].dropna().unique().tolist())
-                if years:
-                    year_range = st.select_slider('Year Range', options=years, value=(years[0], years[-1]))
-                else:
-                    year_range = (int(df['year'].min()) if 'year' in df.columns and df['year'].notna().any() else None,
-                                  int(df['year'].max()) if 'year' in df.columns and df['year'].notna().any() else None)
+                start_year = st.number_input('From', min_value=min_year, max_value=max_year, value=min_year, key='draft_start_yr')
             with c2:
+                end_year = st.number_input('To', min_value=int(start_year), max_value=max_year, value=max_year, key='draft_end_yr')
+            with c3:
                 positions = sorted(df['yahoo_position'].dropna().unique().tolist()) if 'yahoo_position' in df.columns else []
-                selected_positions = st.multiselect('Position', options=positions, default=positions, placeholder="All")
+                selected_positions = st.multiselect('Position', options=positions, placeholder="All", key='draft_pos')
 
             # Row 2: Manager
             managers = sorted(df['manager'].dropna().astype(str).unique().tolist()) if 'manager' in df.columns else []
-            selected_managers = st.multiselect('Manager', options=managers, default=managers, placeholder="All")
+            selected_managers = st.multiselect('Manager', options=managers, placeholder="Manager", key='draft_mgr')
+
+            # Empty selection means all
+            filter_positions = selected_positions if selected_positions else positions
+            filter_managers = selected_managers if selected_managers else managers
 
             filters = {
-                'year_range': year_range,
-                'positions': selected_positions,
-                'managers': selected_managers,
+                'year_range': (start_year, end_year),
+                'positions': filter_positions,
+                'managers': filter_managers,
             }
 
             # Quick preview count
             try:
                 mask = (
-                    (df['year'] >= filters['year_range'][0]) & (df['year'] <= filters['year_range'][1]) &
-                    (df['yahoo_position'].isin(filters['positions'])) & (df['manager'].isin(filters['managers']))
+                    (df['year'] >= start_year) & (df['year'] <= end_year) &
+                    (df['yahoo_position'].isin(filter_positions)) & (df['manager'].isin(filter_managers))
                 )
                 st.caption(f"📊 {mask.sum():,} picks from {len(df):,} total")
             except Exception:
