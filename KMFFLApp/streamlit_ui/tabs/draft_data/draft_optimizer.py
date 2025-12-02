@@ -1500,13 +1500,16 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
         if bench_count > 0:
             st.caption(f"✅ Detected: {bench_count} bench spots")
         # Debug: show full detected config
-        with st.expander("🔧 Detected Roster Config Debug"):
+        with st.expander("🔧 Detected Roster Config Debug", expanded=True):
+            st.write(f"**Full config dict:** {detected_config}")
             st.write(f"QB={detected_config.get('qb')}, RB={detected_config.get('rb')}, WR={detected_config.get('wr')}, TE={detected_config.get('te')}")
             st.write(f"FLEX={detected_config.get('flex')}, DEF={detected_config.get('def')}, K={detected_config.get('k')}, Bench={detected_config.get('bench')}")
             # Show raw position_counts from detect_roster_structure
             pos_counts = detected_config.get('_position_counts', {})
             if pos_counts:
                 st.write(f"Raw position_counts: {pos_counts}")
+            else:
+                st.warning("No _position_counts in config - may be using stale cache")
 
     st.markdown("---")
 
