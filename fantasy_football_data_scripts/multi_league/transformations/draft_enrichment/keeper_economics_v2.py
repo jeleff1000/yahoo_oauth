@@ -93,6 +93,7 @@ class KeeperFormulaEvaluator:
     - cost: Alias for base_cost
     - faab_bid: Maximum FAAB bid on player
     - previous_keeper_price: Last year's keeper price
+    - prev_cost: Alias for previous_keeper_price (for escalation formulas)
     - pick: Draft pick number (snake)
     - round: Draft round number
     - budget: League auction budget
@@ -151,6 +152,7 @@ class KeeperFormulaEvaluator:
             'cost': float(base_cost) if not pd.isna(base_cost) else 0.0,
             'faab_bid': float(faab_bid) if not pd.isna(faab_bid) else 0.0,
             'previous_keeper_price': float(previous_keeper_price) if not pd.isna(previous_keeper_price) else 0.0,
+            'prev_cost': float(previous_keeper_price) if not pd.isna(previous_keeper_price) else 0.0,  # Alias for formulas
             'pick': int(pick) if not pd.isna(pick) else 0,
             'round': int(round_num) if not pd.isna(round_num) else 0,
             'budget': self.budget,

@@ -136,7 +136,7 @@ def run_script(
     additional_args: Optional[List[str]] = None,
     timeout: Optional[int] = 900,
     oauth_env: Optional[dict] = None
-) -> bool:
+) -> Tuple[bool, Optional[str]]:
     """
     Execute a child script with retry logic for rate limits.
 
@@ -155,10 +155,10 @@ def run_script(
         oauth_env: Pre-configured OAuth environment (if None, will be set up)
 
     Returns:
-        True if script succeeded, False otherwise
+        Tuple of (success: bool, stderr: Optional[str])
 
     Example:
-        >>> run_script(
+        >>> ok, err = run_script(
         ...     "multi_league/data_fetchers/yahoo_fantasy_data.py",
         ...     "Yahoo player data",
         ...     "/path/to/context.json",
@@ -254,11 +254,13 @@ def run_script(
     MAX_RETRIES = 3
     RATE_LIMIT_COOLDOWN = 600  # 10 minutes in seconds
 
+    last_stderr = None
     for attempt in range(MAX_RETRIES):
         ok, stderr = _run_once()
+        last_stderr = stderr
 
         if ok:
-            return True
+            return True, None
 
         # Check if it's a rate limit error or temporary access denial
         if stderr and ("Request denied" in stderr or
@@ -272,12 +274,12 @@ def run_script(
                 continue
             else:
                 log(f"[FAIL] Max retries reached for {label} after rate limiting")
-                return False
+                return False, stderr
         else:
             # Not a rate limit error, don't retry
-            return False
+            return False, stderr
 
-    return False
+    return False, last_stderr
 
 
 def run_scripts_parallel(

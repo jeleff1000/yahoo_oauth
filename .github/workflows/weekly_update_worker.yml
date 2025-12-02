@@ -260,12 +260,21 @@ jobs:
               current_week = date_based_week_estimate()
               print(f"Using date-based estimate: week {current_week}")
 
-          # Output the week (last COMPLETED week = current - 1)
-          # But we fetch current week's data after games complete (Tuesday run)
-          # So we want the week that just finished
-          target_week = max(1, current_week - 1) if current_week > 1 else 1
+          # Determine target week based on day of week
+          # On Tuesday-Saturday: the current_week just finished (MNF is Monday night)
+          # On Sunday-Monday: games still in progress, so previous week is complete
+          from datetime import date
+          today = date.today()
+          weekday = today.weekday()  # 0=Monday, 1=Tuesday, ..., 6=Sunday
 
-          print(f"Current NFL week: {current_week}, targeting completed week: {target_week}")
+          if weekday >= 1 and weekday <= 5:  # Tuesday-Saturday
+              # Week's games are complete (MNF ended Monday night)
+              target_week = current_week
+          else:  # Sunday or Monday
+              # Games still in progress
+              target_week = max(1, current_week - 1)
+
+          print(f"Current NFL week: {current_week}, today is weekday {weekday}, targeting completed week: {target_week}")
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write(f'current_week={target_week}\n')
