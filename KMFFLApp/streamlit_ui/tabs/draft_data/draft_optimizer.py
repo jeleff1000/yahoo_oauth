@@ -1185,27 +1185,62 @@ def prepare_dual_role_data(agg_data: pd.DataFrame, bench_metrics: Optional[Dict]
 
 
 def get_roster_preset(preset_name: str, detected_config: dict = None) -> dict:
-    """Return roster configuration presets"""
+    """
+    Return roster configuration presets.
+
+    Each preset includes both legacy keys (qb, rb, wr, etc.) and dynamic config
+    (dedicated_slots, flex_slots, flex_eligible_positions) for compatibility.
+    """
+    # Standard flex eligibility for most leagues
+    standard_flex_eligible = {'RB', 'WR', 'TE'}
+
     presets = {
         "Standard": {
+            # Legacy keys
             "qb": 1, "rb": 2, "wr": 3, "te": 1,
-            "flex": 1, "def": 1, "k": 1, "budget": 200
+            "flex": 1, "def": 1, "k": 1, "bench": 6, "budget": 200,
+            # Dynamic config
+            "dedicated_slots": {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DEF": 1, "K": 1},
+            "flex_slots": [{"name": "W/R/T", "count": 1, "eligible_positions": standard_flex_eligible}],
+            "flex_eligible_positions": standard_flex_eligible,
+            "total_flex_count": 1,
+            "bench_count": 6,
         },
         "2 QB": {
             "qb": 2, "rb": 2, "wr": 3, "te": 1,
-            "flex": 1, "def": 1, "k": 1, "budget": 200
+            "flex": 1, "def": 1, "k": 1, "bench": 6, "budget": 200,
+            "dedicated_slots": {"QB": 2, "RB": 2, "WR": 3, "TE": 1, "DEF": 1, "K": 1},
+            "flex_slots": [{"name": "W/R/T", "count": 1, "eligible_positions": standard_flex_eligible}],
+            "flex_eligible_positions": standard_flex_eligible,
+            "total_flex_count": 1,
+            "bench_count": 6,
         },
         "PPR Flex Heavy": {
             "qb": 1, "rb": 2, "wr": 3, "te": 1,
-            "flex": 2, "def": 1, "k": 1, "budget": 200
+            "flex": 2, "def": 1, "k": 1, "bench": 6, "budget": 200,
+            "dedicated_slots": {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DEF": 1, "K": 1},
+            "flex_slots": [{"name": "W/R/T", "count": 2, "eligible_positions": standard_flex_eligible}],
+            "flex_eligible_positions": standard_flex_eligible,
+            "total_flex_count": 2,
+            "bench_count": 6,
         },
         "Best Ball": {
             "qb": 2, "rb": 4, "wr": 4, "te": 2,
-            "flex": 0, "def": 0, "k": 0, "budget": 200
+            "flex": 0, "def": 0, "k": 0, "bench": 6, "budget": 200,
+            "dedicated_slots": {"QB": 2, "RB": 4, "WR": 4, "TE": 2},
+            "flex_slots": [],
+            "flex_eligible_positions": set(),
+            "total_flex_count": 0,
+            "bench_count": 6,
         },
         "Custom": {
             "qb": 1, "rb": 2, "wr": 2, "te": 1,
-            "flex": 1, "def": 1, "k": 1, "budget": 200
+            "flex": 1, "def": 1, "k": 1, "bench": 6, "budget": 200,
+            "dedicated_slots": {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "DEF": 1, "K": 1},
+            "flex_slots": [{"name": "W/R/T", "count": 1, "eligible_positions": standard_flex_eligible}],
+            "flex_eligible_positions": standard_flex_eligible,
+            "total_flex_count": 1,
+            "bench_count": 6,
         }
     }
 
@@ -1511,16 +1546,27 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
         if bench_count > 0:
             st.caption(f"✅ Detected: {bench_count} bench spots")
         # Debug: show full detected config
-        with st.expander("🔧 Detected Roster Config Debug", expanded=True):
-            st.write(f"**Full config dict:** {detected_config}")
-            st.write(f"QB={detected_config.get('qb')}, RB={detected_config.get('rb')}, WR={detected_config.get('wr')}, TE={detected_config.get('te')}")
-            st.write(f"FLEX={detected_config.get('flex')}, DEF={detected_config.get('def')}, K={detected_config.get('k')}, Bench={detected_config.get('bench')}")
-            # Show raw position_counts from detect_roster_structure
-            pos_counts = detected_config.get('_position_counts', {})
-            if pos_counts:
-                st.write(f"Raw position_counts: {pos_counts}")
-            else:
-                st.warning("No _position_counts in config - may be using stale cache")
+        with st.expander("🔧 Detected Roster Config", expanded=False):
+            # Show dedicated slots
+            dedicated = detected_config.get('dedicated_slots', {})
+            if dedicated:
+                slots_str = ", ".join(f"{pos}={count}" for pos, count in dedicated.items())
+                st.write(f"**Dedicated slots:** {slots_str}")
+
+            # Show flex slots with eligibility
+            flex_slots = detected_config.get('flex_slots', [])
+            if flex_slots:
+                for fs in flex_slots:
+                    eligible = fs.get('eligible_positions', set())
+                    st.write(f"**{fs['name']}** ({fs['count']} slot{'s' if fs['count'] > 1 else ''}): can be {', '.join(sorted(eligible))}")
+
+            # Show bench count
+            st.write(f"**Bench:** {detected_config.get('bench_count', detected_config.get('bench', 0))} slots")
+
+            # Show flex-eligible positions
+            flex_eligible = detected_config.get('flex_eligible_positions', set())
+            if flex_eligible:
+                st.write(f"**Flex-eligible positions:** {', '.join(sorted(flex_eligible))}")
 
     st.markdown("---")
 
@@ -1873,6 +1919,25 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
                                 (filtered_agg_data['avg_cost'] <= max_cap)
                             ]
 
+                # Build dynamic roster_config for remaining slots
+                # This enables the optimizer to use dynamic constraints
+                remaining_roster_config = None
+                if preset_config and 'dedicated_slots' in preset_config:
+                    # Use dynamic config with remaining counts
+                    remaining_dedicated = {}
+                    for pos, count in preset_config.get('dedicated_slots', {}).items():
+                        remaining = max(0, count - filled_counts.get(pos, 0))
+                        if remaining > 0:
+                            remaining_dedicated[pos] = remaining
+
+                    remaining_roster_config = {
+                        'dedicated_slots': remaining_dedicated,
+                        'flex_slots': preset_config.get('flex_slots', []),
+                        'flex_eligible_positions': preset_config.get('flex_eligible_positions', set()),
+                        'total_flex_count': remaining_flex,
+                        'bench_count': remaining_bench,
+                    }
+
                 result = run_optimization(
                     filtered_agg_data,
                     remaining_budget,
@@ -1880,7 +1945,8 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
                     num_bench=remaining_bench,
                     bench_metrics=bench_insurance_metrics,
                     starter_budget=remaining_starter_budget,
-                    bench_budget=remaining_bench_budget
+                    bench_budget=remaining_bench_budget,
+                    roster_config=remaining_roster_config
                 )
                 # Debug if optimization returns empty
                 if result is None or (isinstance(result, pd.DataFrame) and result.empty):
@@ -1916,7 +1982,8 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
 
 def run_optimization(agg_data, budget, num_qb, num_rb, num_wr, num_te, num_flex, num_def, num_k,
                      num_bench=0, bench_metrics: Optional[Dict] = None,
-                     starter_budget: Optional[float] = None, bench_budget: Optional[float] = None):
+                     starter_budget: Optional[float] = None, bench_budget: Optional[float] = None,
+                     roster_config: Optional[Dict] = None):
     """
     Run the linear programming optimization for FULL roster (starters + bench).
 
@@ -1925,28 +1992,35 @@ def run_optimization(agg_data, budget, num_qb, num_rb, num_wr, num_te, num_flex,
     - Backup SPAR (used when filling bench slots, with data-driven discounts)
 
     This allows the optimizer to properly value picks based on how they'll be used.
-    A backup QB has ~0 SPAR because it rarely plays, even if the same tier QB
-    used as a starter produces good value.
 
-    FLEX Constraint Logic:
-    - Each position (RB, WR, TE) has a minimum requirement (dedicated slots)
-    - FLEX slots can be filled by any of RB, WR, or TE
-    - Total RB+WR+TE selected = dedicated slots + FLEX slots
+    Args:
+        agg_data: Aggregated player data
+        budget: Total draft budget
+        num_qb, num_rb, etc.: Legacy position counts (used if roster_config not provided)
+        num_bench: Number of bench slots
+        bench_metrics: Historical bench performance data
+        starter_budget: Budget allocated for starters
+        bench_budget: Budget allocated for bench
+        roster_config: Dynamic roster configuration dict with:
+            - dedicated_slots: Dict of position -> count (non-flex starters)
+            - flex_slots: List of flex slot definitions with eligible_positions
+            - flex_eligible_positions: Set of positions that can fill flex
+            - bench_count: Number of bench slots
+
+    FLEX Constraint Logic (now dynamic):
+    - Dedicated slots get exact count constraints
+    - Flex-eligible positions get minimum constraints (dedicated count)
+    - Total flex-eligible starters = sum of dedicated + all flex slots
 
     BENCH Constraint Logic:
-    - Bench players can be QB, RB, WR, or TE (not DEF/K)
-    - Bench uses backup SPAR values with data-driven discounts based on:
-      * Starter failure rates (busts + injuries)
-      * Bench activation rates (how often backups play)
-      * Expected SPAR when activated
+    - Bench players can be flex-eligible positions + QB (not DEF/K by default)
+    - Bench uses backup SPAR values with data-driven discounts
 
     BUDGET Constraints:
     - If starter_budget and bench_budget are provided, separate constraints are added
-    - This forces the optimizer to respect the budget split, not just the total
     """
 
     # Prepare dual-role data with separate starter/bench SPAR values
-    # Uses data-driven discounts if bench_metrics is provided
     dual_data = prepare_dual_role_data(agg_data, bench_metrics=bench_metrics)
 
     costs = dual_data["avg_cost"].values
@@ -1961,6 +2035,38 @@ def run_optimization(agg_data, budget, num_qb, num_rb, num_wr, num_te, num_flex,
     else:
         objective_values = dual_data["median_ppg"].values
 
+    # === BUILD CONSTRAINT CONFIG ===
+    # Use dynamic roster_config if provided, otherwise fall back to legacy parameters
+    if roster_config and 'dedicated_slots' in roster_config:
+        dedicated_slots = roster_config['dedicated_slots']
+        flex_slots = roster_config.get('flex_slots', [])
+        flex_eligible_positions = roster_config.get('flex_eligible_positions', set())
+        total_flex_count = roster_config.get('total_flex_count', 0)
+        bench_count = roster_config.get('bench_count', num_bench)
+
+        # Calculate total starters from dynamic config
+        total_starters = sum(dedicated_slots.values()) + total_flex_count
+    else:
+        # Legacy mode: build from individual parameters
+        dedicated_slots = {
+            'QB': num_qb, 'RB': num_rb, 'WR': num_wr, 'TE': num_te,
+            'DEF': num_def, 'K': num_k
+        }
+        # Remove zero counts
+        dedicated_slots = {k: v for k, v in dedicated_slots.items() if v > 0}
+
+        # Legacy flex-eligible positions
+        flex_eligible_positions = {'RB', 'WR', 'TE'}
+        total_flex_count = num_flex
+        bench_count = num_bench
+        total_starters = num_qb + num_rb + num_wr + num_te + num_flex + num_def + num_k
+
+        # Create legacy flex_slots structure
+        if num_flex > 0:
+            flex_slots = [{'name': 'FLEX', 'count': num_flex, 'eligible_positions': flex_eligible_positions}]
+        else:
+            flex_slots = []
+
     # Create problem
     prob = LpProblem("Draft_Optimizer", LpMaximize)
     n = len(costs)
@@ -1970,61 +2076,66 @@ def run_optimization(agg_data, budget, num_qb, num_rb, num_wr, num_te, num_flex,
     prob += lpSum(objective_values[i] * x[i] for i in range(n))
 
     # === CREATE MASKS FOR STARTER VS BENCH ROWS ===
-    # (Must be defined before budget constraints that use them)
     starter_mask = (slot_types == "starter").astype(int)
     bench_mask = (slot_types == "bench").astype(int)
 
     # === BUDGET CONSTRAINTS ===
-    # Total budget constraint (always applied as upper bound)
     prob += lpSum(costs[i] * x[i] for i in range(n)) <= float(budget)
 
-    # Separate starter/bench budget constraints (if provided)
     if starter_budget is not None and bench_budget is not None:
-        # Starter budget constraint: cost of starter slots <= starter_budget
         starter_costs = [(costs[i] * starter_mask[i]) for i in range(n)]
         prob += lpSum(starter_costs[i] * x[i] for i in range(n)) <= float(starter_budget)
 
-        # Bench budget constraint: cost of bench slots <= bench_budget
         bench_costs = [(costs[i] * bench_mask[i]) for i in range(n)]
         prob += lpSum(bench_costs[i] * x[i] for i in range(n)) <= float(bench_budget)
 
-    # === POSITION CONSTRAINTS ===
-    total_starters = num_qb + num_rb + num_wr + num_te + num_flex + num_def + num_k
-    total_roster = total_starters + num_bench
+    # === POSITION CONSTRAINTS (DYNAMIC) ===
 
-    # Total starter slots must be filled from starter rows
+    # Total starter slots must be filled
     prob += lpSum(starter_mask[i] * x[i] for i in range(n)) == total_starters
 
-    # Total bench slots must be filled from bench rows
-    prob += lpSum(bench_mask[i] * x[i] for i in range(n)) == num_bench
+    # Total bench slots must be filled
+    prob += lpSum(bench_mask[i] * x[i] for i in range(n)) == bench_count
 
-    # Non-flex positions: exact counts from starter rows
-    for pos, count in [("QB", num_qb), ("DEF", num_def), ("K", num_k)]:
+    # Dedicated position constraints
+    # Non-flex positions get exact count, flex-eligible get minimum count
+    for pos, count in dedicated_slots.items():
         if count > 0:
             pos_starter_mask = ((positions == pos) & (slot_types == "starter")).astype(int)
-            prob += lpSum(pos_starter_mask[i] * x[i] for i in range(n)) == count
+            if pos in flex_eligible_positions:
+                # Flex-eligible: at least the dedicated count (can have more via flex)
+                prob += lpSum(pos_starter_mask[i] * x[i] for i in range(n)) >= count
+            else:
+                # Non-flex: exact count
+                prob += lpSum(pos_starter_mask[i] * x[i] for i in range(n)) == count
 
-    # Flex-eligible positions: minimum starters from starter rows
-    flex_positions = ["RB", "WR", "TE"]
-    for pos, min_count in [("RB", num_rb), ("WR", num_wr), ("TE", num_te)]:
-        if min_count > 0:
-            pos_starter_mask = ((positions == pos) & (slot_types == "starter")).astype(int)
-            prob += lpSum(pos_starter_mask[i] * x[i] for i in range(n)) >= min_count
+    # Total flex-eligible starters = dedicated + flex slots
+    if flex_eligible_positions and total_flex_count > 0:
+        flex_eligible_list = list(flex_eligible_positions)
+        flex_starter_mask = (np.isin(positions, flex_eligible_list) & (slot_types == "starter")).astype(int)
 
-    # Total flex-eligible starters (RB + WR + TE) = dedicated + FLEX slots
-    flex_starter_mask = (np.isin(positions, flex_positions) & (slot_types == "starter")).astype(int)
-    total_flex_starters = num_rb + num_wr + num_te + num_flex
-    prob += lpSum(flex_starter_mask[i] * x[i] for i in range(n)) == total_flex_starters
+        # Sum of dedicated slots for flex-eligible positions
+        dedicated_flex_count = sum(dedicated_slots.get(pos, 0) for pos in flex_eligible_positions)
+        total_flex_starters = dedicated_flex_count + total_flex_count
 
-    # Bench can only be QB, RB, WR, TE (not DEF/K)
-    bench_eligible = ["QB", "RB", "WR", "TE"]
-    for pos in ["DEF", "K"]:
+        prob += lpSum(flex_starter_mask[i] * x[i] for i in range(n)) == total_flex_starters
+
+    # Bench constraints: exclude positions that shouldn't be on bench
+    # By default, DEF and K shouldn't be on bench (unless flex-eligible in some league)
+    bench_excluded = set()
+    for pos in dedicated_slots.keys():
+        if pos not in flex_eligible_positions and pos not in ['QB']:
+            # Non-flex positions (except QB) typically shouldn't be on bench
+            bench_excluded.add(pos)
+
+    for pos in bench_excluded:
         pos_bench_mask = ((positions == pos) & (slot_types == "bench")).astype(int)
         prob += lpSum(pos_bench_mask[i] * x[i] for i in range(n)) == 0
 
-    # TE bench: at most 1
-    te_bench_mask = ((positions == "TE") & (slot_types == "bench")).astype(int)
-    prob += lpSum(te_bench_mask[i] * x[i] for i in range(n)) <= 1
+    # TE bench: at most 1 (reasonable constraint for most leagues)
+    if 'TE' in dedicated_slots or 'TE' in flex_eligible_positions:
+        te_bench_mask = ((positions == "TE") & (slot_types == "bench")).astype(int)
+        prob += lpSum(te_bench_mask[i] * x[i] for i in range(n)) <= 1
 
     # Solve
     solver = PULP_CBC_CMD(msg=False, timeLimit=30)
@@ -2039,37 +2150,38 @@ def run_optimization(agg_data, budget, num_qb, num_rb, num_wr, num_te, num_flex,
     optimal_draft = dual_data.iloc[selected].copy()
 
     # === IDENTIFY STARTERS vs BENCH vs FLEX ===
-    # Use slot_type from dual_data to identify bench picks
     optimal_draft["is_bench"] = optimal_draft["slot_type"] == "bench"
     optimal_draft["is_flex"] = False
 
-    # Identify FLEX among starters
+    # Identify FLEX among starters (players beyond dedicated slots)
     starter_rows = optimal_draft[~optimal_draft["is_bench"]].copy()
     starter_rows = starter_rows.sort_values(["yahoo_position", "avg_cost"], ascending=[True, False])
 
-    starter_counts = {"QB": 0, "RB": 0, "WR": 0, "TE": 0, "DEF": 0, "K": 0}
-    starter_limits = {"QB": num_qb, "RB": num_rb, "WR": num_wr, "TE": num_te, "DEF": num_def, "K": num_k}
-    flex_remaining = num_flex
+    # Track how many of each position we've assigned to dedicated slots
+    starter_counts = {pos: 0 for pos in dedicated_slots.keys()}
+    flex_remaining = total_flex_count
 
     for idx in starter_rows.index:
         pos = starter_rows.loc[idx, "yahoo_position"]
 
-        if pos in ["DEF", "K"]:
-            continue
-        elif starter_counts.get(pos, 0) < starter_limits.get(pos, 0):
+        if pos in dedicated_slots and starter_counts.get(pos, 0) < dedicated_slots.get(pos, 0):
+            # Assign to dedicated slot
             starter_counts[pos] = starter_counts.get(pos, 0) + 1
-        elif flex_remaining > 0 and pos in ["RB", "WR", "TE"]:
+        elif flex_remaining > 0 and pos in flex_eligible_positions:
+            # Assign to flex slot
             optimal_draft.loc[idx, "is_flex"] = True
             flex_remaining -= 1
 
     # Re-sort for display: starters first, then FLEX, then bench
+    # Build dynamic position order from dedicated_slots
+    pos_order = {pos: i for i, pos in enumerate(dedicated_slots.keys())}
+
     def sort_key(row):
         if row["is_bench"]:
             return (2, row["yahoo_position"], -row["avg_cost"])
         elif row["is_flex"]:
             return (1, row["yahoo_position"], -row["avg_cost"])
         else:
-            pos_order = {"QB": 0, "RB": 1, "WR": 2, "TE": 3, "DEF": 4, "K": 5}
             return (0, pos_order.get(row["yahoo_position"], 99), -row["avg_cost"])
 
     optimal_draft["_sort"] = optimal_draft.apply(sort_key, axis=1)

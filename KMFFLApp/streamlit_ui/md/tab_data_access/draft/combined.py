@@ -5,11 +5,66 @@ Combined data loader for Draft tab.
 Main entry point for loading all data needed by the draft tab.
 """
 from __future__ import annotations
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Set
 import re
 import streamlit as st
 from .draft_data import load_draft_data
 from md.data_access import run_query, T
+
+
+# Position code mapping for parsing flex slots
+# Yahoo uses single letters: Q=QB, W=WR, R=RB, T=TE, K=K, D=DEF
+POSITION_CODE_MAP = {
+    'Q': 'QB',
+    'W': 'WR',
+    'R': 'RB',
+    'T': 'TE',
+    'K': 'K',
+    'D': 'DEF',
+}
+
+# Known bench/IR slot names
+BENCH_SLOT_NAMES = {'BN', 'IR', 'IL'}
+
+
+def parse_flex_eligibility(slot_name: str) -> Set[str]:
+    """
+    Parse a flex slot name to determine which positions are eligible.
+
+    Examples:
+        'W/R/T' -> {'WR', 'RB', 'TE'}
+        'Q/W/R/T' -> {'QB', 'WR', 'RB', 'TE'}  (Superflex)
+        'W/R' -> {'WR', 'RB'}
+        'W/T' -> {'WR', 'TE'}
+
+    Returns:
+        Set of eligible position names
+    """
+    if '/' not in slot_name:
+        return set()
+
+    eligible = set()
+    # Split by / and map each code
+    for code in slot_name.replace('/', ''):
+        if code in POSITION_CODE_MAP:
+            eligible.add(POSITION_CODE_MAP[code])
+
+    return eligible
+
+
+def is_flex_slot(slot_name: str) -> bool:
+    """Check if a slot name represents a flex position."""
+    return '/' in slot_name and slot_name not in BENCH_SLOT_NAMES
+
+
+def is_bench_slot(slot_name: str) -> bool:
+    """Check if a slot name represents a bench/IR position."""
+    return slot_name in BENCH_SLOT_NAMES
+
+
+def is_dedicated_slot(slot_name: str) -> bool:
+    """Check if a slot is a dedicated (non-flex, non-bench) position."""
+    return not is_flex_slot(slot_name) and not is_bench_slot(slot_name)
 
 
 @st.cache_data(show_spinner=True, ttl=600)
@@ -44,13 +99,19 @@ def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
     Uses league_settings table (canonical source) to get roster_positions.
     Falls back to inferring from player data if unavailable.
 
-    Returns:
-        Dict with position counts (qb, rb, wr, te, flex, def, k, bench) and budget,
-        or None if detection fails
+    Returns a fully generic config that the optimizer can use dynamically:
+    - roster_slots: Dict of all slot names -> counts (e.g., {'QB': 1, 'RB': 2, 'W/R/T': 1})
+    - dedicated_slots: Dict of dedicated position slots -> counts (non-flex, non-bench)
+    - flex_slots: List of flex slot definitions with eligibility
+    - bench_count: Total bench/IR slots
+    - flex_eligible_positions: Set of all positions that can fill flex slots
+    - all_positions: Set of all position types in the league
+    - budget: Default draft budget
+
+    Also includes legacy keys (qb, rb, wr, etc.) for backwards compatibility.
     """
     import json
 
-    bench_positions = ['BN', 'IR', 'IL']
     position_counts = None
 
     # Try league_settings table first (canonical source)
@@ -119,36 +180,73 @@ def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
         st.warning("⚠️ No roster configuration found")
         return None
 
-    # Count bench slots
-    bench_count = sum(position_counts.get(bp, 0) for bp in bench_positions)
+    # === BUILD GENERIC CONFIG ===
 
-    # Count flex positions (anything with / that's not bench)
-    flex_count = 0
-    for pos, count in position_counts.items():
-        if '/' in pos and pos not in bench_positions:
-            flex_count += count
+    # Separate slots into dedicated, flex, and bench
+    dedicated_slots = {}
+    flex_slots = []
+    bench_count = 0
+    flex_eligible_positions = set()
+    all_positions = set()
 
+    for slot_name, count in position_counts.items():
+        if is_bench_slot(slot_name):
+            bench_count += count
+        elif is_flex_slot(slot_name):
+            eligibility = parse_flex_eligibility(slot_name)
+            flex_slots.append({
+                'name': slot_name,
+                'count': count,
+                'eligible_positions': eligibility
+            })
+            flex_eligible_positions.update(eligibility)
+        else:
+            # Dedicated position slot
+            dedicated_slots[slot_name] = count
+            all_positions.add(slot_name)
+
+    # Add flex-eligible positions to all_positions
+    all_positions.update(flex_eligible_positions)
+
+    # Calculate total flex slot count
+    total_flex_count = sum(fs['count'] for fs in flex_slots)
+
+    # Calculate total starters (dedicated + flex, excluding bench)
+    total_starters = sum(dedicated_slots.values()) + total_flex_count
+
+    # === BUILD CONFIG ===
     config = {
-        "qb": position_counts.get('QB', 0),
-        "rb": position_counts.get('RB', 0),
-        "wr": position_counts.get('WR', 0),
-        "te": position_counts.get('TE', 0),
-        "flex": flex_count,
-        "def": position_counts.get('DEF', 0),
-        "k": position_counts.get('K', 0),
-        "bench": bench_count,
+        # Generic structure (use these for dynamic optimizer)
+        "roster_slots": position_counts,  # Raw slot counts
+        "dedicated_slots": dedicated_slots,  # Non-flex, non-bench slots
+        "flex_slots": flex_slots,  # List of flex slot definitions
+        "bench_count": bench_count,
+        "total_flex_count": total_flex_count,
+        "flex_eligible_positions": flex_eligible_positions,
+        "all_positions": all_positions,
+        "total_starters": total_starters,
         "budget": 200,
+
+        # Legacy keys for backwards compatibility
+        "qb": dedicated_slots.get('QB', 0),
+        "rb": dedicated_slots.get('RB', 0),
+        "wr": dedicated_slots.get('WR', 0),
+        "te": dedicated_slots.get('TE', 0),
+        "flex": total_flex_count,
+        "def": dedicated_slots.get('DEF', 0),
+        "k": dedicated_slots.get('K', 0),
+        "bench": bench_count,
+
+        # Debug info
         "_position_counts": position_counts,
     }
 
-    # Validate: should have at least QB, RB, or WR (core fantasy positions)
-    core_positions = config['qb'] + config['rb'] + config['wr']
-    if core_positions == 0:
-        st.warning("⚠️ No core positions (QB/RB/WR) detected")
+    # Validate: should have at least some positions
+    if not all_positions:
+        st.warning("⚠️ No positions detected")
         return None
 
     # Validate: should have at least 5 starter positions
-    total_starters = sum(config[k] for k in ['qb', 'rb', 'wr', 'te', 'flex', 'def', 'k'])
     if total_starters < 5:
         st.warning("⚠️ Too few starter positions detected")
         return None
