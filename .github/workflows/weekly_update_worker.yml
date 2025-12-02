@@ -490,11 +490,13 @@ jobs:
               try:
                   import tempfile
                   # Create temp OAuth file to test
+                  # IMPORTANT: access_token must be non-null for yahoo_oauth to attempt refresh
                   test_oauth = {
                       'consumer_key': consumer_key,
                       'consumer_secret': consumer_secret,
+                      'access_token': 'expired_placeholder',
                       'refresh_token': refresh_token,
-                      'token_time': time.time() - 7200,
+                      'token_time': 0,  # Force expired so library refreshes
                   }
                   with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
                       json.dump(test_oauth, f)
@@ -544,11 +546,13 @@ jobs:
               if consumer_key and consumer_secret:
                   try:
                       import tempfile
+                      # IMPORTANT: access_token must be non-null for yahoo_oauth to attempt refresh
                       test_oauth = {
                           'consumer_key': consumer_key,
                           'consumer_secret': consumer_secret,
+                          'access_token': 'expired_placeholder',
                           'refresh_token': refresh_token,
-                          'token_time': time.time() - 7200,
+                          'token_time': 0,  # Force expired so library refreshes
                       }
                       with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
                           json.dump(test_oauth, f)
@@ -573,12 +577,14 @@ jobs:
               print("   Or add YAHOO_MASTER_REFRESH_TOKEN as a GitHub secret for fallback")
 
           # Build oauth data
+          # IMPORTANT: access_token must be a non-null string for yahoo_oauth to attempt refresh
+          # If null, the library skips refresh and goes straight to interactive auth
           oauth_data = {
               'consumer_key': consumer_key,
               'consumer_secret': consumer_secret,
-              'access_token': access_token,
+              'access_token': access_token or 'expired_placeholder',
               'refresh_token': refresh_token,
-              'token_time': token_time,
+              'token_time': 0,  # Force token to appear expired so library refreshes it
               'token_type': 'bearer',
           }
 
