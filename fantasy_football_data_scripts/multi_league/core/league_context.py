@@ -204,8 +204,9 @@ class LeagueContext:
 
         # Validate embedded OAuth credentials if provided
         if self.oauth_credentials:
-            required_keys = ['access_token', 'consumer_key', 'consumer_secret', 'refresh_token', 'token_type']
-            missing = [k for k in required_keys if k not in self.oauth_credentials]
+            # access_token can be None (will be refreshed from refresh_token)
+            required_keys = ['consumer_key', 'consumer_secret', 'refresh_token']
+            missing = [k for k in required_keys if not self.oauth_credentials.get(k)]
             if missing:
                 raise ValueError(f"OAuth credentials missing required keys: {missing}")
 

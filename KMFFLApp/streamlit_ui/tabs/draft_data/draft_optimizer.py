@@ -1474,10 +1474,19 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
             st.markdown("---")
 
     # Validate data
-    required_cols = ["yahoo_position", "cost_bucket", "year", "cost", "season_ppg"]
+    required_cols = ["yahoo_position", "year", "cost", "season_ppg"]
+    # cost_bucket OR position_tier is needed for tiering
+    has_tier_col = "cost_bucket" in draft_history.columns or "position_tier" in draft_history.columns
+
     missing = [col for col in required_cols if col not in draft_history.columns]
     if missing:
-        st.error(f"❌ Missing columns: {', '.join(missing)}")
+        st.error(f"❌ Missing required columns: {', '.join(missing)}")
+        st.caption(f"Available columns: {list(draft_history.columns)[:15]}...")
+        return
+
+    if not has_tier_col:
+        st.error("❌ Missing tier column: need either 'cost_bucket' or 'position_tier'")
+        st.caption(f"Available columns: {list(draft_history.columns)[:15]}...")
         return
 
     draft_with_cost = draft_history[

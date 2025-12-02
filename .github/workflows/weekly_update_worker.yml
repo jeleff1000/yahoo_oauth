@@ -359,9 +359,8 @@ jobs:
         id: context
         env:
           DATABASE_NAME: ${{ matrix.database }}
-          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
-          YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
         run: |
+          # Create initial context WITHOUT oauth - credentials added in next step
           python - <<'PYEOF'
           import json
           import os
@@ -389,7 +388,8 @@ jobs:
                   context = {
                       "league_id": latest.get('league_key', db_name),
                       "league_name": league_name,
-                      "oauth_file_path": str(Path("oauth/Oauth.json").resolve()),
+                      "oauth_file_path": None,  # Will use embedded oauth_credentials
+                      "oauth_credentials": None,  # Populated in next step
                       "game_code": "nfl",
                       "start_year": int(df['year'].min()),
                       "end_year": int(df['year'].max()),
@@ -420,8 +420,9 @@ jobs:
           print(f"⚠️ Could not find league_settings.parquet, creating minimal context")
           context = {
               "league_id": db_name,
-              "league_name": league_name,  # Uses the display name computed above
-              "oauth_file_path": str(Path("oauth/Oauth.json").resolve()),
+              "league_name": league_name,
+              "oauth_file_path": None,
+              "oauth_credentials": None,
               "game_code": "nfl",
               "start_year": 2020,
               "end_year": 2024,
@@ -434,7 +435,7 @@ jobs:
           print(json.dumps(context, indent=2))
           PYEOF
 
-      - name: Retrieve stored credentials
+      - name: Retrieve and embed credentials
         id: creds
         env:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
@@ -444,10 +445,8 @@ jobs:
           YAHOO_MASTER_REFRESH_TOKEN: ${{ secrets.YAHOO_MASTER_REFRESH_TOKEN }}
           DATABASE_NAME: ${{ matrix.database }}
         run: |
-          mkdir -p oauth
-
           echo "========================================"
-          echo "Retrieving stored credentials for: ${DATABASE_NAME}"
+          echo "Retrieving and embedding credentials for: ${DATABASE_NAME}"
           echo "========================================"
 
           python - <<'PYEOF'
@@ -465,7 +464,9 @@ jobs:
           master_refresh_token = os.environ.get('YAHOO_MASTER_REFRESH_TOKEN')
 
           refresh_token = None
+          access_token = None
           token_source = None
+          token_time = time.time() - 7200  # Default: force refresh
 
           # Try to retrieve stored credentials from MotherDuck
           if encryption_key:
@@ -481,7 +482,7 @@ jobs:
           else:
               print("⚠️ CREDENTIAL_ENCRYPTION_KEY not set - cannot decrypt stored credentials")
 
-          # Validate per-league token if we have one
+          # Validate and refresh per-league token if we have one
           token_valid = False
           if refresh_token and consumer_key and consumer_secret:
               print("🔍 Validating per-league token...")
@@ -501,31 +502,31 @@ jobs:
                   # Try to refresh the token
                   from yahoo_oauth import OAuth2
                   oauth = OAuth2(None, None, from_file=test_file)
-                  if oauth.token_is_valid():
-                      token_valid = True
-                      print("✅ Per-league token is valid")
-                  else:
-                      # Try to refresh
+                  if not oauth.token_is_valid():
                       oauth.refresh_access_token()
-                      token_valid = True
-                      print("✅ Per-league token refreshed successfully")
 
-                      # Save the new refresh token back to MotherDuck (keeps it alive)
-                      new_refresh = getattr(oauth, 'refresh_token', None)
-                      if new_refresh and new_refresh != refresh_token:
-                          print("🔄 Saving refreshed token back to storage...")
-                          try:
-                              from multi_league.utils.credential_store import store_league_credentials
-                              store_league_credentials(
-                                  database_name=database_name,
-                                  refresh_token=new_refresh,
-                                  league_id=creds.get('league_id', database_name),
-                                  league_name=creds.get('league_name', database_name)
-                              )
-                              refresh_token = new_refresh  # Use the new one
-                              print("✅ Token persisted - will stay valid for future runs")
-                          except Exception as store_err:
-                              print(f"⚠️ Could not persist token: {store_err}")
+                  # Get the fresh tokens
+                  access_token = getattr(oauth, 'access_token', None)
+                  new_refresh = getattr(oauth, 'refresh_token', refresh_token)
+                  token_time = time.time()
+                  token_valid = True
+                  print("✅ Per-league token refreshed successfully")
+
+                  # Save the new refresh token back to MotherDuck (keeps it alive)
+                  if new_refresh and new_refresh != refresh_token:
+                      print("🔄 Saving refreshed token back to storage...")
+                      try:
+                          from multi_league.utils.credential_store import store_league_credentials
+                          store_league_credentials(
+                              database_name=database_name,
+                              refresh_token=new_refresh,
+                              league_id=creds.get('league_id', database_name),
+                              league_name=creds.get('league_name', database_name)
+                          )
+                          refresh_token = new_refresh
+                          print("✅ Token persisted - will stay valid for future runs")
+                      except Exception as store_err:
+                          print(f"⚠️ Could not persist token: {store_err}")
 
                   os.unlink(test_file)
               except Exception as e:
@@ -538,21 +539,68 @@ jobs:
               token_source = "master"
               print("📌 Using master refresh token as fallback")
 
+              # Refresh the master token to get access_token
+              if consumer_key and consumer_secret:
+                  try:
+                      import tempfile
+                      test_oauth = {
+                          'consumer_key': consumer_key,
+                          'consumer_secret': consumer_secret,
+                          'refresh_token': refresh_token,
+                          'token_time': time.time() - 7200,
+                      }
+                      with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                          json.dump(test_oauth, f)
+                          test_file = f.name
+
+                      from yahoo_oauth import OAuth2
+                      oauth = OAuth2(None, None, from_file=test_file)
+                      if not oauth.token_is_valid():
+                          oauth.refresh_access_token()
+
+                      access_token = getattr(oauth, 'access_token', None)
+                      refresh_token = getattr(oauth, 'refresh_token', refresh_token)
+                      token_time = time.time()
+                      os.unlink(test_file)
+                      print("✅ Master token refreshed successfully")
+                  except Exception as e:
+                      print(f"⚠️ Master token refresh failed: {e}")
+
           if not refresh_token:
               print("⚠️ No refresh token available - data fetching may fail")
               print("   This league may need to be re-imported to store credentials")
               print("   Or add YAHOO_MASTER_REFRESH_TOKEN as a GitHub secret for fallback")
 
-          # Create OAuth file
-          oauth_data = {
+          # Read the existing league_context.json and embed credentials
+          with open("league_context.json", 'r') as f:
+              context = json.load(f)
+
+          # Embed oauth_credentials directly (like local setup)
+          context['oauth_credentials'] = {
               'consumer_key': consumer_key,
               'consumer_secret': consumer_secret,
+              'access_token': access_token,
               'refresh_token': refresh_token,
-              'token_time': time.time() - 7200,  # Force refresh
+              'token_time': token_time,
+              'token_type': 'bearer',
           }
+          context['oauth_file_path'] = None  # Explicitly null - use embedded creds
 
-          with open("oauth/Oauth.json", 'w') as f:
-              json.dump(oauth_data, f, indent=2)
+          # Write updated context
+          with open("league_context.json", 'w') as f:
+              json.dump(context, f, indent=2)
+
+          print("📋 Updated league_context.json with embedded oauth_credentials:")
+          # Print context without sensitive tokens
+          safe_context = dict(context)
+          if safe_context.get('oauth_credentials'):
+              safe_creds = dict(safe_context['oauth_credentials'])
+              if safe_creds.get('access_token'):
+                  safe_creds['access_token'] = safe_creds['access_token'][:20] + '...'
+              if safe_creds.get('refresh_token'):
+                  safe_creds['refresh_token'] = safe_creds['refresh_token'][:20] + '...'
+              safe_context['oauth_credentials'] = safe_creds
+          print(json.dumps(safe_context, indent=2))
 
           # Set output for later steps
           has_token = "true" if refresh_token else "false"
@@ -561,9 +609,9 @@ jobs:
               f.write(f"token_source={token_source or 'none'}\n")
 
           if refresh_token:
-              print(f"✅ OAuth credentials configured (source: {token_source})")
+              print(f"✅ OAuth credentials embedded (source: {token_source})")
           else:
-              print("⚠️ OAuth file created but may not work without refresh token")
+              print("⚠️ Context created but may not work without refresh token")
           PYEOF
 
       - name: Run weekly update
