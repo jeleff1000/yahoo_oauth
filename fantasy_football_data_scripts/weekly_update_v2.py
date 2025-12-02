@@ -512,9 +512,9 @@ def main():
 
     args = parser.parse_args()
 
-    # Load context
+    # Load context - use absolute path so child scripts can find it
     ctx = LeagueContext.load(args.context)
-    ctx._source_path = Path(args.context)
+    ctx._source_path = Path(args.context).resolve()
 
     # Determine year
     year = args.year or datetime.now().year
