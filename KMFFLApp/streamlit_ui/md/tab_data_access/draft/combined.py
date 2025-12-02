@@ -70,7 +70,12 @@ def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
         df = run_query(sql)
 
         if df is None or df.empty:
+            st.warning("⚠️ No lineup_position data found in player table")
             return None
+
+        # DEBUG: Show raw values before processing
+        raw_values = df['lineup_position'].tolist() if 'lineup_position' in df.columns else []
+        st.info(f"🔍 Raw lineup_position values from DB: {raw_values[:25]}")
 
         # Parse lineup positions using regex to extract base position
         # QB1 -> QB, RB2 -> RB, W/R/T1 -> W/R/T, BN3 -> BN, etc.
