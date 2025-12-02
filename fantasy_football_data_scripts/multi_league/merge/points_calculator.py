@@ -187,7 +187,10 @@ def compute_dst_points(row: pd.Series, dst_scoring: Dict[str, float]) -> float:
         total += float(row.get("def_sacks") or 0) * dst_scoring.get("Sack", 0.0)
         total += float(row.get("def_interceptions") or 0) * dst_scoring.get("Interception", 0.0)
         total += float(row.get("fum_rec") or row.get("fumble_recovery_opp") or 0) * dst_scoring.get("Fumble Recovery", 0.0)
-        total += float(row.get("def_tds") or 0) * dst_scoring.get("Touchdown", 0.0)
+        # Cap def_tds at 3 - nflverse has bad data for some old games (e.g., 2001 PIT vs JAX shows 6 TDs)
+        # No NFL defense has ever scored more than 3 TDs in a single game
+        def_tds = min(float(row.get("def_tds") or 0), 3.0)
+        total += def_tds * dst_scoring.get("Touchdown", 0.0)
         total += float(row.get("def_safeties") or 0) * dst_scoring.get("Safety", 0.0)
         total += float(row.get("special_teams_tds") or row.get("ret_td") or 0) * dst_scoring.get("Kickoff and Punt Return Touchdowns", 0.0)
 
