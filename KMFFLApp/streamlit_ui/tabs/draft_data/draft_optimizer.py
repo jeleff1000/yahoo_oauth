@@ -1955,12 +1955,28 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
                 )
                 # Debug if optimization returns empty
                 if result is None or (isinstance(result, pd.DataFrame) and result.empty):
-                    with st.expander("🔍 Debug: Optimization returned empty"):
-                        st.write(f"Filtered agg_data rows: {len(filtered_agg_data)}")
-                        st.write(f"Remaining budget: ${remaining_budget}")
-                        st.write(f"Slots needed: QB={remaining_qb}, RB={remaining_rb}, WR={remaining_wr}, TE={remaining_te}, FLEX={remaining_flex}, DEF={remaining_def}, K={remaining_k}, Bench={remaining_bench}")
-                        st.write(f"Positions in data: {filtered_agg_data['yahoo_position'].unique().tolist() if not filtered_agg_data.empty else 'none'}")
-                        st.write(f"Starter budget: ${remaining_starter_budget}, Bench budget: ${remaining_bench_budget}")
+                    with st.expander("🔍 Debug: Optimization returned empty", expanded=True):
+                        st.write(f"**Filtered agg_data rows:** {len(filtered_agg_data)}")
+                        st.write(f"**Remaining budget:** ${remaining_budget}")
+                        st.write(f"**Slots needed:** QB={remaining_qb}, RB={remaining_rb}, WR={remaining_wr}, TE={remaining_te}, FLEX={remaining_flex}, DEF={remaining_def}, K={remaining_k}, Bench={remaining_bench}")
+                        st.write(f"**Positions in data:** {filtered_agg_data['yahoo_position'].unique().tolist() if not filtered_agg_data.empty else 'none'}")
+                        st.write(f"**Starter budget:** ${remaining_starter_budget}, **Bench budget:** ${remaining_bench_budget}")
+
+                        # Show roster_config being used
+                        if remaining_roster_config:
+                            st.write("**Using dynamic roster_config:**")
+                            st.write(f"  - dedicated_slots: {remaining_roster_config.get('dedicated_slots')}")
+                            st.write(f"  - flex_eligible: {remaining_roster_config.get('flex_eligible_positions')}")
+                            st.write(f"  - total_flex_count: {remaining_roster_config.get('total_flex_count')}")
+                            st.write(f"  - bench_count: {remaining_roster_config.get('bench_count')}")
+                        else:
+                            st.write("**Using legacy mode** (no roster_config)")
+
+                        # Show cost distribution in data
+                        if not filtered_agg_data.empty and 'avg_cost' in filtered_agg_data.columns:
+                            st.write(f"**Cost range in data:** ${filtered_agg_data['avg_cost'].min():.1f} - ${filtered_agg_data['avg_cost'].max():.1f}")
+                            cheap_options = len(filtered_agg_data[filtered_agg_data['avg_cost'] <= 3])
+                            st.write(f"**Cheap options (≤$3):** {cheap_options} rows")
             else:
                 result = None  # All slots filled
 
@@ -2045,7 +2061,14 @@ def run_optimization(agg_data, budget, num_qb, num_rb, num_wr, num_te, num_flex,
     if roster_config and 'dedicated_slots' in roster_config:
         dedicated_slots = roster_config['dedicated_slots']
         flex_slots = roster_config.get('flex_slots', [])
-        flex_eligible_positions = roster_config.get('flex_eligible_positions', set())
+        # Ensure flex_eligible_positions is a set (might be list from JSON)
+        flex_raw = roster_config.get('flex_eligible_positions')
+        if flex_raw is None:
+            flex_eligible_positions = set()
+        elif isinstance(flex_raw, set):
+            flex_eligible_positions = flex_raw
+        else:
+            flex_eligible_positions = set(flex_raw)
         total_flex_count = roster_config.get('total_flex_count', 0)
         bench_count = roster_config.get('bench_count', num_bench)
 
@@ -2149,21 +2172,45 @@ def run_optimization(agg_data, budget, num_qb, num_rb, num_wr, num_te, num_flex,
     if prob.status != 1:
         st.error("❌ No optimal solution found. Try relaxing constraints or increasing budget.")
         # Debug: show constraint analysis
-        with st.expander("🔍 Constraint Analysis"):
+        with st.expander("🔍 Constraint Analysis", expanded=True):
             bench_rows = dual_data[dual_data['slot_type'] == 'bench'] if 'slot_type' in dual_data.columns else pd.DataFrame()
-            starter_rows = dual_data[dual_data['slot_type'] == 'starter'] if 'slot_type' in dual_data.columns else dual_data
+            starter_rows_data = dual_data[dual_data['slot_type'] == 'starter'] if 'slot_type' in dual_data.columns else dual_data
 
-            st.write(f"**Data rows:** {len(dual_data)} total, {len(starter_rows)} starter, {len(bench_rows)} bench")
+            st.write(f"**Data rows:** {len(dual_data)} total, {len(starter_rows_data)} starter, {len(bench_rows)} bench")
+
+            # Show constraint parameters
+            st.write("---")
+            st.write("**Constraint Parameters:**")
+            st.write(f"  dedicated_slots: {dedicated_slots}")
+            st.write(f"  flex_eligible_positions: {flex_eligible_positions}")
+            st.write(f"  total_flex_count: {total_flex_count}")
+            st.write(f"  total_starters: {total_starters}")
+            st.write(f"  bench_count: {bench_count}")
+
+            # Per-position availability
+            st.write("---")
+            st.write("**Starter rows per position:**")
+            for pos in sorted(set(positions)):
+                pos_starter_count = ((positions == pos) & (slot_types == "starter")).sum()
+                pos_bench_count = ((positions == pos) & (slot_types == "bench")).sum()
+                st.write(f"  {pos}: {pos_starter_count} starter, {pos_bench_count} bench")
+
+            # Check feasibility
+            st.write("---")
+            st.write("**Feasibility checks:**")
+            min_cost_per_starter = starter_rows_data.groupby('yahoo_position')['avg_cost'].min() if not starter_rows_data.empty else {}
+            min_starter_cost = sum(min_cost_per_starter.get(pos, 0) * count for pos, count in dedicated_slots.items())
+            st.write(f"  Min cost for dedicated starters: ${min_starter_cost:.1f}")
 
             if not bench_rows.empty:
-                st.write(f"**Bench costs:** min=${bench_rows['avg_cost'].min():.1f}, max=${bench_rows['avg_cost'].max():.1f}")
-                st.write(f"**Bench positions:** {bench_rows['yahoo_position'].unique().tolist()}")
-                # Count bench-eligible rows
                 bench_eligible_mask = bench_rows['yahoo_position'].isin(['QB', 'RB', 'WR', 'TE'])
-                st.write(f"**Bench-eligible rows (QB/RB/WR/TE):** {bench_eligible_mask.sum()}")
-                if bench_eligible_mask.any():
-                    cheap_bench = bench_rows[bench_eligible_mask & (bench_rows['avg_cost'] <= 3)]
-                    st.write(f"**Cheap bench options (≤$3):** {len(cheap_bench)}")
+                eligible_bench = bench_rows[bench_eligible_mask]
+                if not eligible_bench.empty:
+                    min_bench_costs = eligible_bench.nsmallest(bench_count, 'avg_cost')['avg_cost'].sum() if len(eligible_bench) >= bench_count else float('inf')
+                    st.write(f"  Min cost for {bench_count} bench spots: ${min_bench_costs:.1f}")
+                    st.write(f"  Bench budget available: ${bench_budget}")
+                else:
+                    st.write("  No bench-eligible rows!")
 
             st.write(f"**Budget:** total=${budget}, starter=${starter_budget}, bench=${bench_budget}")
             st.write(f"**Slots needed:** {total_starters} starters, {bench_count} bench")
