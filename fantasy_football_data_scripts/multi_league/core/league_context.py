@@ -102,6 +102,9 @@ class LeagueContext:
     #   "round_to_integer": bool
     # }
 
+    # === External Data ===
+    has_external_data: bool = False         # True if external data was uploaded to MotherDuck staging
+
     # === Metadata ===
     created_at: Optional[str] = None        # ISO timestamp of context creation
     updated_at: Optional[str] = None        # ISO timestamp of last update
