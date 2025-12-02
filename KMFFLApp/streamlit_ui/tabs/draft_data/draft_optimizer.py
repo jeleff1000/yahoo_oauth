@@ -1420,7 +1420,12 @@ def get_bench_strategy(strategy_name: str, bench_spots: int, budget: int,
     # Always use percentages of total budget, floor bench (extra goes to starters)
     bench_pct = strategy.get('budget_pct', 10)
     bench_budget_raw = budget * bench_pct / 100
-    strategy['budget'] = max(bench_spots, int(bench_budget_raw))  # Floor bench
+
+    # Ensure minimum bench budget for feasibility:
+    # - At least $1 per bench spot (absolute minimum)
+    # - But prefer $2 per spot to allow optimizer flexibility
+    min_bench_budget = bench_spots * 2  # $2 per slot minimum
+    strategy['budget'] = max(min_bench_budget, int(bench_budget_raw))
     strategy['starter_budget'] = budget - strategy['budget']  # Starters get remainder (ALWAYS sums to budget)
     strategy['avg_per_spot'] = round(strategy['budget'] / bench_spots, 1) if bench_spots > 0 else 0
 
