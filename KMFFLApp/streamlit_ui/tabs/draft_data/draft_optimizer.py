@@ -1826,6 +1826,8 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
     total_remaining_slots = remaining_qb + remaining_rb + remaining_wr + remaining_te + remaining_flex + remaining_def + remaining_k + remaining_bench
 
     # Run optimization for REMAINING slots
+    st.warning(f"🔍 RUNNING OPTIMIZER: {total_remaining_slots} slots, ${remaining_budget} budget, years {start_year}-{end_year}")
+
     with st.spinner("🔄 Optimizing..."):
         try:
             # Preprocess data
