@@ -36,90 +36,121 @@ def load_optimized_draft_data() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-@st.cache_data(show_spinner=False, ttl=3600)
+@st.cache_data(show_spinner=False, ttl=600)
 def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
     """
     Load roster configuration for the draft optimizer.
 
-    Queries player table for lineup_position values from ONE manager's roster
-    to determine roster structure. Very lightweight - only fetches position slots.
+    Uses league_settings table (canonical source) to get roster_positions.
+    Falls back to inferring from player data if unavailable.
 
     Returns:
         Dict with position counts (qb, rb, wr, te, flex, def, k, bench) and budget,
         or None if detection fails
     """
+    import json
+
+    bench_positions = ['BN', 'IR', 'IL']
+    position_counts = None
+
+    # Try league_settings table first (canonical source)
     try:
-        # Query ONE manager's lineup positions from the most recent week
-        # DISTINCT gives us unique slot names (QB1, RB1, RB2, WR1, WR2, WR3, W/R/T1, BN1, etc.)
         sql = f"""
-            SELECT DISTINCT lineup_position
-            FROM {T['player']}
-            WHERE year = (SELECT MAX(year) FROM {T['player']})
-              AND week = 1
-              AND lineup_position IS NOT NULL
-              AND lineup_position != ''
-              AND manager = (
-                  SELECT manager FROM {T['player']}
-                  WHERE year = (SELECT MAX(year) FROM {T['player']})
-                    AND week = 1
-                    AND manager IS NOT NULL
-                    AND manager != ''
-                  LIMIT 1
-              )
+            SELECT settings_json
+            FROM {T['league_settings']}
+            WHERE year = (SELECT MAX(year) FROM {T['league_settings']})
+            LIMIT 1
         """
         df = run_query(sql)
 
-        if df is None or df.empty:
-            st.warning("⚠️ No lineup_position data found in player table")
+        if df is not None and not df.empty and 'settings_json' in df.columns:
+            settings_str = df.iloc[0]['settings_json']
+            if settings_str:
+                settings = json.loads(settings_str) if isinstance(settings_str, str) else settings_str
+                roster_positions = settings.get('roster_positions', [])
+
+                if roster_positions:
+                    position_counts = {}
+                    for slot in roster_positions:
+                        pos = slot.get('position', '').upper()
+                        count = int(slot.get('count', 0))
+                        if pos and count > 0:
+                            position_counts[pos] = count
+                    st.info(f"🔍 Roster from league_settings: {position_counts}")
+
+    except Exception:
+        pass  # Fall through to player-based detection
+
+    # Fallback: infer from player data
+    if not position_counts:
+        try:
+            sql = f"""
+                SELECT fantasy_position, COUNT(*) as slot_count
+                FROM {T['player']}
+                WHERE year = (SELECT MAX(year) FROM {T['player']})
+                  AND week = 1
+                  AND fantasy_position IS NOT NULL
+                  AND fantasy_position != ''
+                  AND manager = (
+                      SELECT manager FROM {T['player']}
+                      WHERE year = (SELECT MAX(year) FROM {T['player']})
+                        AND week = 1
+                        AND manager IS NOT NULL
+                        AND manager != ''
+                      LIMIT 1
+                  )
+                GROUP BY fantasy_position
+            """
+            df = run_query(sql)
+
+            if df is not None and not df.empty:
+                position_counts = {}
+                for _, row in df.iterrows():
+                    pos = str(row['fantasy_position']).upper().strip()
+                    count = int(row['slot_count'])
+                    position_counts[pos] = count
+                st.info(f"🔍 Roster from player data: {position_counts}")
+
+        except Exception as e:
+            st.warning(f"Roster config detection failed: {e}")
             return None
 
-        # DEBUG: Show raw values before processing
-        raw_values = df['lineup_position'].tolist() if 'lineup_position' in df.columns else []
-        st.info(f"🔍 Raw lineup_position values from DB: {raw_values[:25]}")
-
-        # Parse lineup positions using regex to extract base position
-        # QB1 -> QB, RB2 -> RB, W/R/T1 -> W/R/T, BN3 -> BN, etc.
-        position_counts = {}
-
-        for _, row in df.iterrows():
-            pos = str(row['lineup_position']).upper().strip()
-            # Extract base position (remove trailing numbers)
-            base_pos = re.sub(r'\d+$', '', pos)
-            position_counts[base_pos] = position_counts.get(base_pos, 0) + 1
-
-        # Convert to optimizer format
-        # Known bench/IR positions
-        bench_positions = ['BN', 'IR', 'IL']
-
-        # Count bench slots
-        bench_count = sum(position_counts.get(bp, 0) for bp in bench_positions)
-
-        # Count flex positions (anything with / that's not bench)
-        flex_count = 0
-        for pos, count in position_counts.items():
-            if '/' in pos and pos not in bench_positions:
-                flex_count += count
-
-        config = {
-            "qb": position_counts.get('QB', 0),
-            "rb": position_counts.get('RB', 0),
-            "wr": position_counts.get('WR', 0),
-            "te": position_counts.get('TE', 0),
-            "flex": flex_count,
-            "def": position_counts.get('DEF', 0),
-            "k": position_counts.get('K', 0),
-            "bench": bench_count,
-            "budget": 200,
-            "_position_counts": position_counts,  # For debugging
-        }
-
-        # Validate: should have at least 5 starter positions
-        total_starters = sum(config[k] for k in ['qb', 'rb', 'wr', 'te', 'flex', 'def', 'k'])
-        if total_starters < 5:
-            return None
-
-        return config
-
-    except Exception as e:
-        st.warning(f"Roster config detection failed: {e}")
+    if not position_counts:
+        st.warning("⚠️ No roster configuration found")
         return None
+
+    # Count bench slots
+    bench_count = sum(position_counts.get(bp, 0) for bp in bench_positions)
+
+    # Count flex positions (anything with / that's not bench)
+    flex_count = 0
+    for pos, count in position_counts.items():
+        if '/' in pos and pos not in bench_positions:
+            flex_count += count
+
+    config = {
+        "qb": position_counts.get('QB', 0),
+        "rb": position_counts.get('RB', 0),
+        "wr": position_counts.get('WR', 0),
+        "te": position_counts.get('TE', 0),
+        "flex": flex_count,
+        "def": position_counts.get('DEF', 0),
+        "k": position_counts.get('K', 0),
+        "bench": bench_count,
+        "budget": 200,
+        "_position_counts": position_counts,
+    }
+
+    # Validate: should have at least QB, RB, or WR (core fantasy positions)
+    core_positions = config['qb'] + config['rb'] + config['wr']
+    if core_positions == 0:
+        st.warning("⚠️ No core positions (QB/RB/WR) detected")
+        return None
+
+    # Validate: should have at least 5 starter positions
+    total_starters = sum(config[k] for k in ['qb', 'rb', 'wr', 'te', 'flex', 'def', 'k'])
+    if total_starters < 5:
+        st.warning("⚠️ Too few starter positions detected")
+        return None
+
+    return config

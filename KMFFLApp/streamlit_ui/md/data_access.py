@@ -44,6 +44,7 @@ def get_table_dict() -> Dict[str, str]:
         "draft": f"{db}.public.draft",
         "schedule": f"{db}.public.schedule",
         "transactions": f"{db}.public.transactions",
+        "league_settings": f"{db}.public.league_settings",
     }
 
 
@@ -238,10 +239,12 @@ BENCH_POSITIONS = ["BN", "IR", "IL"]
 @st.cache_data(ttl=3600, show_spinner=False)
 def detect_roster_structure() -> Optional[Dict]:
     """
-    Detect roster configuration from the player table's lineup_position column.
+    Detect roster configuration from the league_settings table.
 
-    Queries ONE manager's roster from the most recent week to count position slots.
-    Uses same approach as head_to_head.py for consistency.
+    Parses the roster_positions array from the settings_json column
+    for the most recent year. This is the canonical source of truth.
+
+    Falls back to inferring from player data if league_settings unavailable.
 
     Returns:
         Dict with:
@@ -251,15 +254,65 @@ def detect_roster_structure() -> Optional[Dict]:
         - total_roster: total roster size
         - flex_positions: list of flex position names (e.g., ['W/R/T'])
     """
+    import json
+
     try:
-        # Query ONE manager's lineup positions to get roster structure
+        # Try league_settings table first (canonical source)
         sql = f"""
-            SELECT DISTINCT lineup_position
+            SELECT settings_json
+            FROM {T['league_settings']}
+            WHERE year = (SELECT MAX(year) FROM {T['league_settings']})
+            LIMIT 1
+        """
+        df = run_query(sql)
+
+        if df is not None and not df.empty and 'settings_json' in df.columns:
+            settings_str = df.iloc[0]['settings_json']
+            if settings_str:
+                settings = json.loads(settings_str) if isinstance(settings_str, str) else settings_str
+                roster_positions = settings.get('roster_positions', [])
+
+                if roster_positions:
+                    position_counts = {}
+                    starter_count = 0
+                    bench_count = 0
+                    flex_positions = []
+
+                    for slot in roster_positions:
+                        pos = slot.get('position', '').upper()
+                        count = int(slot.get('count', 0))
+                        if pos and count > 0:
+                            position_counts[pos] = count
+
+                            is_bench = pos in BENCH_POSITIONS
+                            if is_bench:
+                                bench_count += count
+                            else:
+                                starter_count += count
+                                if '/' in pos:
+                                    flex_positions.append(pos)
+
+                    if position_counts:
+                        return {
+                            'starter_count': starter_count,
+                            'bench_count': bench_count,
+                            'position_counts': position_counts,
+                            'total_roster': starter_count + bench_count,
+                            'flex_positions': flex_positions
+                        }
+
+    except Exception:
+        pass  # Fall through to player-based detection
+
+    # Fallback: infer from player data
+    try:
+        sql = f"""
+            SELECT fantasy_position, COUNT(*) as slot_count
             FROM {T['player']}
             WHERE year = (SELECT MAX(year) FROM {T['player']})
               AND week = 1
-              AND lineup_position IS NOT NULL
-              AND lineup_position != ''
+              AND fantasy_position IS NOT NULL
+              AND fantasy_position != ''
               AND manager = (
                   SELECT manager FROM {T['player']}
                   WHERE year = (SELECT MAX(year) FROM {T['player']})
@@ -268,37 +321,30 @@ def detect_roster_structure() -> Optional[Dict]:
                     AND manager != ''
                   LIMIT 1
               )
+            GROUP BY fantasy_position
         """
         df = run_query(sql)
 
         if df is None or df.empty:
             return None
 
-        # Parse lineup positions (QB1, RB1, RB2, WR1, WR2, WR3, W/R/T1, BN1, BN2, IR1, etc.)
         position_counts = {}
         starter_count = 0
         bench_count = 0
         flex_positions = []
 
         for _, row in df.iterrows():
-            pos = str(row['lineup_position']).upper().strip()
+            pos = str(row['fantasy_position']).upper().strip()
+            count = int(row['slot_count'])
+            position_counts[pos] = count
 
-            # Extract base position (remove trailing numbers)
-            import re
-            base_pos = re.sub(r'\d+$', '', pos)
-
-            # Count this position
-            position_counts[base_pos] = position_counts.get(base_pos, 0) + 1
-
-            # Classify as starter or bench
-            is_bench = any(pos.startswith(bp) for bp in BENCH_POSITIONS)
+            is_bench = pos in BENCH_POSITIONS
             if is_bench:
-                bench_count += 1
+                bench_count += count
             else:
-                starter_count += 1
-                # Track flex positions
-                if '/' in base_pos and base_pos not in flex_positions:
-                    flex_positions.append(base_pos)
+                starter_count += count
+                if '/' in pos and pos not in flex_positions:
+                    flex_positions.append(pos)
 
         return {
             'starter_count': starter_count,
