@@ -45,14 +45,18 @@ except ImportError:
 
 # Import league intelligence
 try:
-    from .league_intelligence import LeagueIntelligence
+    from KMFFLApp.streamlit_ui.tabs.draft_data.league_intelligence import LeagueIntelligence
     INTELLIGENCE_AVAILABLE = True
 except ImportError:
     try:
-        from league_intelligence import LeagueIntelligence
+        from .league_intelligence import LeagueIntelligence
         INTELLIGENCE_AVAILABLE = True
     except ImportError:
-        INTELLIGENCE_AVAILABLE = False
+        try:
+            from league_intelligence import LeagueIntelligence
+            INTELLIGENCE_AVAILABLE = True
+        except ImportError:
+            INTELLIGENCE_AVAILABLE = False
 
 
 # =============================================================================
@@ -80,7 +84,7 @@ def compute_league_insights(draft_df_json: str) -> Optional[Dict]:
         return None
 
     try:
-        draft_df = pd.read_json(draft_df_json)
+        draft_df = pd.read_json(draft_df_json, orient='split')
         intel = LeagueIntelligence(draft_df)
         return {
             'efficiency': intel.calculate_position_efficiency(),
@@ -111,15 +115,23 @@ def render_league_insights_panel(draft_df: pd.DataFrame) -> Optional[Dict]:
 
     # Convert to JSON for caching
     try:
-        df_json = draft_df.to_json()
+        df_json = draft_df.to_json(orient='split')
         insights = compute_league_insights(df_json)
     except Exception:
         insights = None
 
     if not insights:
-        # Show minimal fallback
+        # Show minimal fallback with debug info
         with st.expander("📊 League Intelligence", expanded=False):
-            st.info("Add the `league_intelligence.py` module to enable data-driven insights.")
+            if not INTELLIGENCE_AVAILABLE:
+                st.warning("League Intelligence module not available - check imports")
+            elif draft_df is None:
+                st.warning("No draft data provided")
+            elif draft_df.empty:
+                st.warning("Draft data is empty")
+            else:
+                st.info("Could not compute insights - check data columns")
+                st.caption(f"DataFrame has {len(draft_df)} rows, columns: {list(draft_df.columns)[:10]}...")
         return None
 
     # Render the panel
@@ -648,7 +660,7 @@ def integrate_into_optimizer(draft_df: pd.DataFrame) -> Dict:
 
     if INTELLIGENCE_AVAILABLE and draft_df is not None and not draft_df.empty:
         try:
-            df_json = draft_df.to_json()
+            df_json = draft_df.to_json(orient='split')
             insights = compute_league_insights(df_json)
         except Exception:
             pass

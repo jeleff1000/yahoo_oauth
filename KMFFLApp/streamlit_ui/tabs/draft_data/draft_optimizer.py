@@ -19,8 +19,8 @@ from typing import Dict, Optional
 
 # League Intelligence imports
 try:
-    from .league_intelligence import LeagueIntelligence
-    from .optimizer_ui_enhancements import (
+    from KMFFLApp.streamlit_ui.tabs.draft_data.league_intelligence import LeagueIntelligence
+    from KMFFLApp.streamlit_ui.tabs.draft_data.optimizer_ui_enhancements import (
         render_league_insights_panel,
         render_position_efficiency_badges,
         enhance_bench_recommendations
@@ -28,15 +28,24 @@ try:
     LEAGUE_INTELLIGENCE_AVAILABLE = True
 except ImportError:
     try:
-        from league_intelligence import LeagueIntelligence
-        from optimizer_ui_enhancements import (
+        from .league_intelligence import LeagueIntelligence
+        from .optimizer_ui_enhancements import (
             render_league_insights_panel,
             render_position_efficiency_badges,
             enhance_bench_recommendations
         )
         LEAGUE_INTELLIGENCE_AVAILABLE = True
     except ImportError:
-        LEAGUE_INTELLIGENCE_AVAILABLE = False
+        try:
+            from league_intelligence import LeagueIntelligence
+            from optimizer_ui_enhancements import (
+                render_league_insights_panel,
+                render_position_efficiency_badges,
+                enhance_bench_recommendations
+            )
+            LEAGUE_INTELLIGENCE_AVAILABLE = True
+        except ImportError:
+            LEAGUE_INTELLIGENCE_AVAILABLE = False
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
