@@ -80,6 +80,9 @@ def detect_roster_config() -> dict:
         if df is None or df.empty:
             return None
 
+        # Debug: store raw positions for troubleshooting
+        raw_positions = df['lineup_position'].tolist() if 'lineup_position' in df.columns else []
+
         # Count positions - lineup_position is like "QB1", "RB1", "BN1", "BN2", etc.
         config = {"qb": 0, "rb": 0, "wr": 0, "te": 0, "flex": 0, "def": 0, "k": 0, "bench": 0, "budget": 200}
 
@@ -105,6 +108,19 @@ def detect_roster_config() -> dict:
                 config['k'] += 1
             elif pos.startswith('IR') or pos.startswith('IL'):
                 pass  # Skip IR slots
+
+        # Store raw positions for debug
+        config['_raw_positions'] = raw_positions
+
+        # VALIDATION: Cap unreasonable values (no league has 3+ DEF or K slots)
+        config['qb'] = min(config['qb'], 3)
+        config['rb'] = min(config['rb'], 5)
+        config['wr'] = min(config['wr'], 5)
+        config['te'] = min(config['te'], 3)
+        config['flex'] = min(config['flex'], 4)
+        config['def'] = min(config['def'], 2)  # Max 2 DEF
+        config['k'] = min(config['k'], 2)      # Max 2 K
+        config['bench'] = min(config['bench'], 10)
 
         # Validate we got reasonable values
         total_starters = sum(config[k] for k in ['qb', 'rb', 'wr', 'te', 'flex', 'def', 'k'])
@@ -1553,6 +1569,13 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
         bench_count = detected_config.get('bench', 0)
         if bench_count > 0:
             st.caption(f"✅ Detected: {bench_count} bench spots")
+        # Debug: show full detected config
+        with st.expander("🔧 Detected Roster Config Debug"):
+            st.write(f"QB={detected_config.get('qb')}, RB={detected_config.get('rb')}, WR={detected_config.get('wr')}, TE={detected_config.get('te')}")
+            st.write(f"FLEX={detected_config.get('flex')}, DEF={detected_config.get('def')}, K={detected_config.get('k')}, Bench={detected_config.get('bench')}")
+            raw_pos = detected_config.get('_raw_positions', [])
+            if raw_pos:
+                st.write(f"Raw lineup_position values: {raw_pos[:20]}")
 
     st.markdown("---")
 
