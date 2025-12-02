@@ -221,7 +221,11 @@ def render_league_insights_panel(draft_df: pd.DataFrame) -> Optional[Dict]:
         recommendations = insights.get('recommendations', [])
         if recommendations:
             st.markdown("##### 💡 Key Recommendations")
+            # Debug: show what we received
+            st.caption(f"Debug: {len(recommendations)} recs: {[r[:50] if r else 'EMPTY' for r in recommendations[:3]]}")
             for rec in recommendations[:3]:
+                if not rec or not rec.strip():
+                    continue  # Skip empty recommendations
                 if 'EXPLOIT' in rec:
                     st.success(rec)
                 elif 'AVOID' in rec:

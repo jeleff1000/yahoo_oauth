@@ -1467,7 +1467,19 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
     st.caption("Build your optimal roster using historical performance data.")
 
     # IMMEDIATE DEBUG - shows at very top
-    st.info(f"🔍 DEBUG: Received {len(draft_history)} rows, cols include: cost_bucket={'cost_bucket' in draft_history.columns}, position_tier={'position_tier' in draft_history.columns}")
+    st.info(f"🔍 DEBUG: Received {len(draft_history)} rows")
+    with st.expander("📊 Data Column Debug", expanded=True):
+        st.write(f"**Tier columns:** cost_bucket={'cost_bucket' in draft_history.columns}, position_tier={'position_tier' in draft_history.columns}")
+        st.write(f"**Key columns:** season_ppg={'season_ppg' in draft_history.columns}, cost={'cost' in draft_history.columns}, yahoo_position={'yahoo_position' in draft_history.columns}")
+        if 'season_ppg' in draft_history.columns:
+            ppg_valid = (pd.to_numeric(draft_history['season_ppg'], errors='coerce') > 0).sum()
+            st.write(f"**season_ppg > 0:** {ppg_valid} rows")
+        if 'cost_bucket' in draft_history.columns:
+            bucket_vals = draft_history['cost_bucket'].dropna().unique()[:10]
+            st.write(f"**cost_bucket values:** {list(bucket_vals)}")
+        if 'position_tier' in draft_history.columns:
+            tier_vals = draft_history['position_tier'].dropna().unique()[:10]
+            st.write(f"**position_tier values:** {list(tier_vals)}")
 
     # === LEAGUE INTELLIGENCE PANEL ===
     league_insights = None
