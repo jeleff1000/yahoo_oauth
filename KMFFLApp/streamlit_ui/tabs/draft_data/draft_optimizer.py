@@ -51,76 +51,41 @@ except ImportError:
 @st.cache_data(ttl=3600, show_spinner=False)
 def detect_roster_config() -> dict:
     """
-    Auto-detect roster configuration from the player table's lineup_position column.
-    Looks at a single manager's roster from the most recent week to determine positions.
+    Auto-detect roster configuration using detect_roster_structure() from data_access.
 
     Returns:
         Dict with position counts (qb, rb, wr, te, flex, def, k, bench) and budget
     """
     try:
-        # Query ONE manager's lineup positions to get the roster structure
-        # This ensures we count positions correctly (not multiplied by # of managers)
-        sql = f"""
-            SELECT DISTINCT lineup_position
-            FROM {T['player']}
-            WHERE year = (SELECT MAX(year) FROM {T['player']})
-              AND week = 1
-              AND lineup_position IS NOT NULL
-              AND lineup_position != ''
-              AND manager = (
-                  SELECT manager FROM {T['player']}
-                  WHERE year = (SELECT MAX(year) FROM {T['player']})
-                    AND week = 1
-                  LIMIT 1
-              )
-            ORDER BY lineup_position
-        """
-        df = run_query(sql)
-
-        if df is None or df.empty:
+        # Use centralized roster detection from data_access
+        roster_structure = detect_roster_structure()
+        if not roster_structure:
             return None
 
-        # Debug: store raw positions for troubleshooting
-        raw_positions = df['lineup_position'].tolist() if 'lineup_position' in df.columns else []
+        position_counts = roster_structure.get('position_counts', {})
 
-        # Count positions - lineup_position is like "QB1", "RB1", "BN1", "BN2", etc.
-        config = {"qb": 0, "rb": 0, "wr": 0, "te": 0, "flex": 0, "def": 0, "k": 0, "bench": 0, "budget": 200}
+        # Convert position_counts to optimizer format
+        # position_counts has base positions like 'QB', 'RB', 'WR', 'TE', 'W/R/T', 'DEF', 'K', 'BN', etc.
+        config = {
+            "qb": position_counts.get('QB', 0),
+            "rb": position_counts.get('RB', 0),
+            "wr": position_counts.get('WR', 0),
+            "te": position_counts.get('TE', 0),
+            "flex": 0,  # Calculate from flex positions
+            "def": position_counts.get('DEF', 0) + position_counts.get('D/ST', 0),
+            "k": position_counts.get('K', 0),
+            "bench": roster_structure.get('bench_count', 0),
+            "budget": 200
+        }
 
-        for _, row in df.iterrows():
-            pos = str(row['lineup_position']).upper().strip()
-            if pos.startswith('BN') or pos.startswith('BENCH'):
-                config['bench'] += 1
-            elif pos.startswith('QB'):
-                config['qb'] += 1
-            elif pos.startswith('RB') and not pos.startswith('RB/'):
-                config['rb'] += 1
-            elif pos.startswith('WR') and not pos.startswith('WR/'):
-                config['wr'] += 1
-            elif pos.startswith('TE') and not pos.startswith('TE/'):
-                config['te'] += 1
-            elif pos in ('W/R/T', 'W/R/T1', 'W/R/T2', 'FLEX', 'FLEX1', 'FLEX2', 'RB/WR', 'WR/RB', 'RB/WR/TE', 'WR/RB/TE'):
-                config['flex'] += 1
-            elif pos.startswith('W/R/T') or 'FLEX' in pos:
-                config['flex'] += 1
-            elif pos.startswith('DEF') or pos == 'D' or pos.startswith('D/ST') or pos == 'DST':
-                config['def'] += 1
-            elif pos.startswith('K') and len(pos) <= 2:  # K or K1, not "KEEPER"
-                config['k'] += 1
-            elif pos.startswith('IR') or pos.startswith('IL'):
-                pass  # Skip IR slots
+        # Count flex positions (any position with / in the name, excluding bench)
+        for pos, count in position_counts.items():
+            if '/' in pos and pos not in ['BN', 'IR', 'IL']:
+                config['flex'] += count
 
-        # Store raw positions for debug
-        config['_raw_positions'] = raw_positions
-
-        # VALIDATION: Cap unreasonable values (no league has 3+ DEF or K slots)
-        config['qb'] = min(config['qb'], 3)
-        config['rb'] = min(config['rb'], 5)
-        config['wr'] = min(config['wr'], 5)
-        config['te'] = min(config['te'], 3)
-        config['flex'] = min(config['flex'], 4)
-        config['def'] = min(config['def'], 2)  # Max 2 DEF
-        config['k'] = min(config['k'], 2)      # Max 2 K
-        config['bench'] = min(config['bench'], 10)
+        # Store raw data for debug
+        config['_position_counts'] = position_counts
+        config['_raw_positions'] = list(position_counts.keys())
 
         # Validate we got reasonable values
         total_starters = sum(config[k] for k in ['qb', 'rb', 'wr', 'te', 'flex', 'def', 'k'])
@@ -1573,9 +1538,10 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
         with st.expander("🔧 Detected Roster Config Debug"):
             st.write(f"QB={detected_config.get('qb')}, RB={detected_config.get('rb')}, WR={detected_config.get('wr')}, TE={detected_config.get('te')}")
             st.write(f"FLEX={detected_config.get('flex')}, DEF={detected_config.get('def')}, K={detected_config.get('k')}, Bench={detected_config.get('bench')}")
-            raw_pos = detected_config.get('_raw_positions', [])
-            if raw_pos:
-                st.write(f"Raw lineup_position values: {raw_pos[:20]}")
+            # Show raw position_counts from detect_roster_structure
+            pos_counts = detected_config.get('_position_counts', {})
+            if pos_counts:
+                st.write(f"Raw position_counts: {pos_counts}")
 
     st.markdown("---")
 
