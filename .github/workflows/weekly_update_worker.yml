@@ -571,12 +571,8 @@ jobs:
               print("   This league may need to be re-imported to store credentials")
               print("   Or add YAHOO_MASTER_REFRESH_TOKEN as a GitHub secret for fallback")
 
-          # Read the existing league_context.json and embed credentials
-          with open("league_context.json", 'r') as f:
-              context = json.load(f)
-
-          # Embed oauth_credentials directly (like local setup)
-          context['oauth_credentials'] = {
+          # Build oauth data
+          oauth_data = {
               'consumer_key': consumer_key,
               'consumer_secret': consumer_secret,
               'access_token': access_token,
@@ -584,7 +580,21 @@ jobs:
               'token_time': token_time,
               'token_type': 'bearer',
           }
-          context['oauth_file_path'] = None  # Explicitly null - use embedded creds
+
+          # Write oauth/Oauth.json for child scripts that still use file-based OAuth
+          import os
+          os.makedirs("oauth", exist_ok=True)
+          with open("oauth/Oauth.json", 'w') as f:
+              json.dump(oauth_data, f, indent=2)
+          print("📁 Created oauth/Oauth.json for child script compatibility")
+
+          # Read the existing league_context.json and embed credentials
+          with open("league_context.json", 'r') as f:
+              context = json.load(f)
+
+          # Embed oauth_credentials directly (like local setup)
+          context['oauth_credentials'] = oauth_data
+          context['oauth_file_path'] = str(Path("oauth/Oauth.json").resolve())
 
           # Write updated context
           with open("league_context.json", 'w') as f:
