@@ -28,14 +28,23 @@ class PlayoffOddsViewer:
             st.info("No season data available.")
             return
 
-        # Selection mode
-        mode = st.radio(
-            "Selection Mode",
-            ["Today's Date", "Specific Week"],
-            horizontal=True,
-            key="playoff_odds_mode",
-            index=0
-        )
+        # Session state buttons instead of radio
+        mode_key = "playoff_odds_mode"
+        if mode_key not in st.session_state:
+            st.session_state[mode_key] = 0
+
+        modes = ["Today's Date", "Specific Week"]
+        cols = st.columns(2)
+        for idx, (col, name) in enumerate(zip(cols, modes)):
+            with col:
+                is_active = (st.session_state[mode_key] == idx)
+                if st.button(name, key=f"playoff_odds_btn_{idx}", use_container_width=True,
+                            type="primary" if is_active else "secondary"):
+                    if not is_active:
+                        st.session_state[mode_key] = idx
+                        st.rerun()
+
+        mode = modes[st.session_state[mode_key]]
 
         show_results = False
 

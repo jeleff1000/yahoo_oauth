@@ -573,17 +573,26 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
     matchup_data_df['year'] = pd.to_numeric(matchup_data_df['year'], errors='coerce').astype(int)
     matchup_data_df['week'] = pd.to_numeric(matchup_data_df['week'], errors='coerce').astype(int)
 
-    # Selection mode like playoff_odds.py
+    # Selection mode with session state buttons
     years = sorted(matchup_data_df['year'].unique(), reverse=True)
     max_year = years[0] if years else None
 
-    mode = st.radio(
-        "Selection Mode",
-        ["Today's Date", "Specific Week"],
-        horizontal=True,
-        key="pm_mode",
-        index=0
-    )
+    mode_key = "pm_mode"
+    if mode_key not in st.session_state:
+        st.session_state[mode_key] = 0
+
+    modes = ["Today's Date", "Specific Week"]
+    mode_cols = st.columns(2)
+    for idx, (col, name) in enumerate(zip(mode_cols, modes)):
+        with col:
+            is_active = (st.session_state[mode_key] == idx)
+            if st.button(name, key=f"pm_mode_btn_{idx}", use_container_width=True,
+                        type="primary" if is_active else "secondary"):
+                if not is_active:
+                    st.session_state[mode_key] = idx
+                    st.rerun()
+
+    mode = modes[st.session_state[mode_key]]
 
     show_machine = False
 

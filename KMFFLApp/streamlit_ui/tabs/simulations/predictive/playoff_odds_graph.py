@@ -163,18 +163,26 @@ class PlayoffOddsViewer:
             st.info("No data for selected managers.")
             return
 
-        # Metric selection
+        # Metric selection with session state buttons
         st.markdown("---")
         st.markdown("### 📈 Choose Metric to Display")
 
-        selected_metric = st.radio(
-            "Metric",
-            list(METRIC_LABELS.keys()),
-            format_func=lambda k: METRIC_LABELS[k],
-            horizontal=True,
-            key="metric_select",
-            help="Select which playoff metric to visualize"
-        )
+        metric_key = "metric_select"
+        if metric_key not in st.session_state:
+            st.session_state[metric_key] = 0
+
+        metric_keys = list(METRIC_LABELS.keys())
+        metric_cols = st.columns(len(metric_keys))
+        for idx, (col, key) in enumerate(zip(metric_cols, metric_keys)):
+            with col:
+                is_active = (st.session_state[metric_key] == idx)
+                if st.button(METRIC_LABELS[key], key=f"metric_btn_{idx}", use_container_width=True,
+                            type="primary" if is_active else "secondary"):
+                    if not is_active:
+                        st.session_state[metric_key] = idx
+                        st.rerun()
+
+        selected_metric = metric_keys[st.session_state[metric_key]]
 
         # Create visualization
         self._create_enhanced_chart(plot_df, selected_metric, selected_years)

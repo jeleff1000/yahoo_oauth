@@ -2099,6 +2099,12 @@ def display_draft_tracker(optimal_draft, budget, remaining_budget, filled_picks,
     """
     constraint_data = constraint_data or {}
 
+    # Early debug
+    opt_type = type(optimal_draft).__name__
+    opt_len = len(optimal_draft) if optimal_draft is not None else 0
+    agg_len = len(agg_data) if agg_data is not None else 0
+    st.caption(f"🔍 Tracker Debug: optimal={opt_type}(len={opt_len}), agg_data={agg_len} rows")
+
     # Calculate spent by category
     starter_spent = sum(p['cost'] for p in filled_picks if p.get('slot_type') != 'bench')
     bench_spent = sum(p['cost'] for p in filled_picks if p.get('slot_type') == 'bench')
@@ -2264,6 +2270,9 @@ def display_draft_tracker(optimal_draft, budget, remaining_budget, filled_picks,
 
     # === OPTIMAL PLAN ===
     st.markdown("---")
+
+    # Debug: Show what we received
+    st.caption(f"🔍 Debug: optimal_draft type={type(optimal_draft).__name__}, len={len(optimal_draft) if optimal_draft is not None else 'None'}")
 
     if optimal_draft is not None and len(optimal_draft) > 0:
         # Highlight NEXT recommended pick

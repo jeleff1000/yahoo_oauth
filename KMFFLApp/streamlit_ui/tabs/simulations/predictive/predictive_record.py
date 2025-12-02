@@ -10,13 +10,23 @@ from .table_styles import render_modern_table
 
 def _select_week_for_record(base_df: pd.DataFrame):
     """Week selection with auto-load option."""
-    mode = st.radio(
-        "Selection Mode",
-        ["Today's Date", "Specific Week"],
-        horizontal=True,
-        key="pred_mode_record",
-        index=0
-    )
+    # Session state buttons instead of radio
+    mode_key = "pred_mode_record"
+    if mode_key not in st.session_state:
+        st.session_state[mode_key] = 0
+
+    modes = ["Today's Date", "Specific Week"]
+    cols = st.columns(2)
+    for idx, (col, name) in enumerate(zip(cols, modes)):
+        with col:
+            is_active = (st.session_state[mode_key] == idx)
+            if st.button(name, key=f"pred_record_btn_{idx}", use_container_width=True,
+                        type="primary" if is_active else "secondary"):
+                if not is_active:
+                    st.session_state[mode_key] = idx
+                    st.rerun()
+
+    mode = modes[st.session_state[mode_key]]
 
     if mode == "Today's Date":
         year = int(base_df['year'].max())

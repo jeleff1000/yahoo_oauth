@@ -56,13 +56,23 @@ class PlayoffOddsCumulativeViewer:
             help="Choose which playoff metric to compare year-over-year"
         )
 
-        trend_type = st.radio(
-            "📈 Calculation Method",
-            ["Season Average", "Peak Value"],
-            key="trend_type_cum",
-            horizontal=True,
-            help="Season Average = average odds throughout season | Peak Value = highest odds reached"
-        )
+        # Session state buttons instead of radio
+        trend_key = "trend_type_cum"
+        if trend_key not in st.session_state:
+            st.session_state[trend_key] = 0
+
+        trend_types = ["Season Average", "Peak Value"]
+        trend_cols = st.columns(2)
+        for idx, (col, name) in enumerate(zip(trend_cols, trend_types)):
+            with col:
+                is_active = (st.session_state[trend_key] == idx)
+                if st.button(name, key=f"trend_btn_{idx}", use_container_width=True,
+                            type="primary" if is_active else "secondary"):
+                    if not is_active:
+                        st.session_state[trend_key] = idx
+                        st.rerun()
+
+        trend_type = trend_types[st.session_state[trend_key]]
 
         # Manager selection
         managers = sorted(df["manager"].unique())
