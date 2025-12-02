@@ -9,15 +9,28 @@ error messages so the Streamlit UI doesn't go blank when data is unexpected.
 import streamlit as st
 import pandas as pd
 from typing import Dict, Optional
+from ..shared.modern_styles import apply_modern_styles
 
 
 def setup_page_config() -> None:
-    """Small page styling helper retained from the previous file."""
+    """Apply modern dark-mode styling."""
+    apply_modern_styles()
     st.markdown(
         """
         <style>
-        .info-box { background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); padding:1rem; border-radius:8px; color:white }
-        .info-box h3{ margin:0 }
+        /* Compact filter styling */
+        [data-testid="stExpander"] .stSelectbox,
+        [data-testid="stExpander"] .stMultiSelect,
+        [data-testid="stExpander"] .stSlider {
+            margin-bottom: 0.25rem !important;
+        }
+        [data-testid="stExpander"] [data-testid="column"] {
+            padding: 0 0.25rem !important;
+        }
+        [data-testid="stExpander"] label {
+            font-size: 0.85rem !important;
+            margin-bottom: 0.1rem !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -87,9 +100,7 @@ def validate_and_prep_data(draft_data: pd.DataFrame) -> pd.DataFrame:
 @st.fragment
 def display_value_analysis(df: pd.DataFrame) -> None:
     """Inline value analysis using Manager SPAR (actual value captured while rostered)."""
-    st.header("💰 Draft Value Analysis")
-
-    st.info("Using Manager SPAR: actual value captured while players were on your roster. Manager SPAR / Cost = draft ROI. Higher is better.")
+    st.markdown("**Using Manager SPAR**: actual value captured while players were on your roster. Manager SPAR / Cost = draft ROI. Higher is better.")
 
     if df is None or df.empty:
         st.warning("No data available for value analysis")
@@ -143,8 +154,6 @@ def display_value_analysis(df: pd.DataFrame) -> None:
     with col4:
         st.metric('Median Cost', f"${value_df['cost'].median():.0f}")
 
-    st.markdown('---')
-
     # Value by position
     try:
         pos = value_df.groupby('yahoo_position').agg({
@@ -159,8 +168,6 @@ def display_value_analysis(df: pd.DataFrame) -> None:
         st.dataframe(pos, use_container_width=True)
     except Exception as e:
         st.warning(f'Could not compute value by position: {e}')
-
-    st.markdown('---')
 
     # Top value picks
     try:
@@ -191,8 +198,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
     (b) a DataFrame directly. If given a dict, it looks for the 'Draft History' key.
     """
     setup_page_config()
-
-    st.markdown('<div class="info-box"><h3>📊 Draft Analysis Hub</h3><p style="margin:0.25rem 0 0 0;opacity:0.95">Comprehensive insights into your fantasy draft history</p></div>', unsafe_allow_html=True)
 
     # Resolve input
     draft_data = None
@@ -234,64 +239,68 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
             pass
         return
 
-    # Data quality metrics
-    try:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric('Total Draft Picks', f"{len(df):,}")
-        with col2:
-            if 'year' in df.columns and df['year'].notna().any():
-                st.metric('Year Range', f"{int(df['year'].min())}-{int(df['year'].max())}")
-        with col3:
-            if 'manager' in df.columns:
-                mgrs = df['manager'].dropna().astype(str)
-                mgrs = mgrs[mgrs.str.lower() != 'nan']
-                st.metric('Active Managers', mgrs.nunique())
-        with col4:
-            if 'cost' in df.columns:
-                costs = pd.to_numeric(df['cost'], errors='coerce')
-                avg = costs[costs > 0].mean()
-                if pd.notna(avg):
-                    st.metric('Avg Draft Cost', f"${avg:.1f}")
-    except Exception as e:
-        st.warning(f'Could not compute quality metrics: {e}')
-
-    st.markdown('---')
-
-    # Filters
-    with st.expander('🎯 Filter All Views', expanded=False):
+    # Compact filters in collapsible expander
+    with st.expander('🔎 Filters', expanded=False):
         try:
-            years = sorted(df['year'].dropna().unique().tolist())
-            if years:
-                year_range = st.select_slider('Year Range', options=years, value=(years[0], years[-1]))
-            else:
-                year_range = (int(df['year'].min()) if 'year' in df.columns and df['year'].notna().any() else None, int(df['year'].max()) if 'year' in df.columns and df['year'].notna().any() else None)
+            # Row 1: Year slider + Position
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                years = sorted(df['year'].dropna().unique().tolist())
+                if years:
+                    year_range = st.select_slider('Year Range', options=years, value=(years[0], years[-1]))
+                else:
+                    year_range = (int(df['year'].min()) if 'year' in df.columns and df['year'].notna().any() else None,
+                                  int(df['year'].max()) if 'year' in df.columns and df['year'].notna().any() else None)
+            with c2:
+                positions = sorted(df['yahoo_position'].dropna().unique().tolist()) if 'yahoo_position' in df.columns else []
+                selected_positions = st.multiselect('Position', options=positions, default=positions, placeholder="All")
 
-            positions = sorted(df['yahoo_position'].dropna().unique().tolist()) if 'yahoo_position' in df.columns else []
-            selected_positions = st.multiselect('Positions', options=positions, default=positions)
-
+            # Row 2: Manager
             managers = sorted(df['manager'].dropna().astype(str).unique().tolist()) if 'manager' in df.columns else []
-            selected_managers = st.multiselect('Managers', options=managers, default=managers)
+            selected_managers = st.multiselect('Manager', options=managers, default=managers, placeholder="All")
 
             filters = {
                 'year_range': year_range,
                 'positions': selected_positions,
                 'managers': selected_managers,
             }
+
             # Quick preview count
             try:
                 mask = (
                     (df['year'] >= filters['year_range'][0]) & (df['year'] <= filters['year_range'][1]) &
                     (df['yahoo_position'].isin(filters['positions'])) & (df['manager'].isin(filters['managers']))
                 )
-                st.info(f"Filtering {mask.sum():,} picks from {len(df):,} total")
+                st.caption(f"📊 {mask.sum():,} picks from {len(df):,} total")
             except Exception:
                 pass
         except Exception as e:
             st.warning(f'Could not show filters: {e}')
-            filters = {'year_range': (df['year'].min(), df['year'].max()), 'positions': df['yahoo_position'].unique().tolist() if 'yahoo_position' in df.columns else [], 'managers': df['manager'].unique().tolist() if 'manager' in df.columns else []}
+            filters = {'year_range': (df['year'].min(), df['year'].max()),
+                       'positions': df['yahoo_position'].unique().tolist() if 'yahoo_position' in df.columns else [],
+                       'managers': df['manager'].unique().tolist() if 'manager' in df.columns else []}
 
-    st.markdown('---')
+    # Compact metrics row
+    try:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric('Picks', f"{len(df):,}")
+        with col2:
+            if 'year' in df.columns and df['year'].notna().any():
+                st.metric('Years', f"{int(df['year'].min())}-{int(df['year'].max())}")
+        with col3:
+            if 'manager' in df.columns:
+                mgrs = df['manager'].dropna().astype(str)
+                mgrs = mgrs[mgrs.str.lower() != 'nan']
+                st.metric('Managers', mgrs.nunique())
+        with col4:
+            if 'cost' in df.columns:
+                costs = pd.to_numeric(df['cost'], errors='coerce')
+                avg = costs[costs > 0].mean()
+                if pd.notna(avg):
+                    st.metric('Avg Cost', f"${avg:.0f}")
+    except Exception as e:
+        st.warning(f'Could not compute quality metrics: {e}')
 
     # Flattened tab structure with integrated visualizations
     tabs = st.tabs(["📋 Summary", "🎯 Performance", "💰 Value", "🔧 Optimizer", "📈 Trends", "💵 Pricing", "🏆 Career", "🔒 Keeper Analysis", "🎖️ Manager Grades", "📜 Report Card"])
@@ -362,7 +371,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
 
     # Tab 0: Summary
     with tabs[0]:
-        st.markdown('*Quick overview of draft picks and costs*')
         if display_draft_summary:
             try:
                 display_draft_summary(df)
@@ -375,7 +383,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
 
     # Tab 1: Performance
     with tabs[1]:
-        st.markdown('*Player scoring outcomes and rankings*')
         if display_scoring_outcomes:
             try:
                 display_scoring_outcomes(df)
@@ -385,7 +392,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
             st.info('Performance module unavailable')
 
         # Add Round Efficiency visualization
-        st.markdown('---')
         st.subheader('📈 Draft Round Efficiency')
         try:
             from .graphs.draft_round_efficiency import display_draft_round_efficiency
@@ -395,12 +401,10 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
 
     # Tab 2: Value (inline)
     with tabs[2]:
-        st.markdown('*Draft value and ROI metrics*')
         display_value_analysis(df)
 
     # Tab 3: Optimizer
     with tabs[3]:
-        st.markdown('*Build optimal lineups with constraints*')
         if display_draft_optimizer:
             try:
                 display_draft_optimizer(df)
@@ -411,7 +415,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
 
     # Tab 4: Trends
     with tabs[4]:
-        st.markdown('*Historical draft patterns and preferences*')
         if display_draft_preferences:
             try:
                 display_draft_preferences(df)
@@ -421,7 +424,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
             st.info('Preferences module unavailable')
 
         # Add Spending & Market Trends visualizations
-        st.markdown('---')
         st.subheader('📊 Spending & Market Analysis')
         try:
             from .graphs.draft_spending_trends import display_draft_spending_trends
@@ -437,7 +439,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
 
     # Tab 5: Pricing
     with tabs[5]:
-        st.markdown('*Average costs by position and tier*')
         if display_draft_overview:
             try:
                 display_draft_overview(df)
@@ -448,7 +449,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
 
     # Tab 6: Career
     with tabs[6]:
-        st.markdown('*Long-term player draft history*')
         if display_career_draft:
             try:
                 display_career_draft(df)
@@ -459,7 +459,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
 
     # Tab 7: Keeper Analysis
     with tabs[7]:
-        st.markdown('*Keeper vs drafted player performance and value*')
         try:
             from .graphs.draft_keeper_analysis import display_draft_keeper_analysis
             display_draft_keeper_analysis(prefix="keeper_analysis")
@@ -468,7 +467,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
 
     # Tab 8: Manager Grades
     with tabs[8]:
-        st.markdown('*Manager-level draft grades and all-time performance*')
         if display_manager_draft_grades:
             try:
                 display_manager_draft_grades(df)
@@ -479,7 +477,6 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
 
     # Tab 9: Report Card
     with tabs[9]:
-        st.markdown('*Official draft transcript styled as a report card*')
         if display_draft_report_card:
             try:
                 display_draft_report_card(df)
