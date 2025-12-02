@@ -1838,6 +1838,19 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
 
             if agg_data.empty:
                 st.error("❌ No valid data after filtering. Try expanding your year range.")
+                # Debug info
+                with st.expander("🔍 Debug: Data filtering details"):
+                    st.write(f"Year range: {start_year} - {end_year}")
+                    st.write(f"Draft history rows: {len(draft_history)}")
+                    years_in_data = draft_history['year'].unique() if 'year' in draft_history.columns else []
+                    st.write(f"Years in data: {sorted(years_in_data)}")
+                    has_tier = 'position_tier' in draft_history.columns or 'cost_bucket' in draft_history.columns
+                    st.write(f"Has tier column: {has_tier}")
+                    has_ppg = 'season_ppg' in draft_history.columns
+                    st.write(f"Has season_ppg: {has_ppg}")
+                    if has_ppg:
+                        ppg_positive = (draft_history['season_ppg'] > 0).sum()
+                        st.write(f"Rows with season_ppg > 0: {ppg_positive}")
                 return
 
             # Apply global max bid if set, but don't cap by remaining budget
@@ -1875,6 +1888,14 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
                     starter_budget=remaining_starter_budget,
                     bench_budget=remaining_bench_budget
                 )
+                # Debug if optimization returns empty
+                if result is None or (isinstance(result, pd.DataFrame) and result.empty):
+                    with st.expander("🔍 Debug: Optimization returned empty"):
+                        st.write(f"Filtered agg_data rows: {len(filtered_agg_data)}")
+                        st.write(f"Remaining budget: ${remaining_budget}")
+                        st.write(f"Slots needed: QB={remaining_qb}, RB={remaining_rb}, WR={remaining_wr}, TE={remaining_te}, FLEX={remaining_flex}, DEF={remaining_def}, K={remaining_k}, Bench={remaining_bench}")
+                        st.write(f"Positions in data: {filtered_agg_data['yahoo_position'].unique().tolist() if not filtered_agg_data.empty else 'none'}")
+                        st.write(f"Starter budget: ${remaining_starter_budget}, Bench budget: ${remaining_bench_budget}")
             else:
                 result = None  # All slots filled
 
