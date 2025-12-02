@@ -82,13 +82,13 @@ class SmartFilterPanel:
         # Row 3: Toggles (compact inline)
         c1, c2, c3 = st.columns(3)
         with c1:
-            if st.checkbox("Rostered", key=f"{self.key_prefix}_rost"):
+            if st.checkbox("Rostered Only", key=f"{self.key_prefix}_rost"):
                 filters['rostered_only'] = True
         with c2:
-            if st.checkbox("Started", key=f"{self.key_prefix}_start"):
+            if st.checkbox("Started Only", key=f"{self.key_prefix}_start"):
                 filters['started_only'] = True
         with c3:
-            if not st.checkbox("Postseason", value=True, key=f"{self.key_prefix}_post"):
+            if not st.checkbox("Include NFL Playoffs", value=True, key=f"{self.key_prefix}_post"):
                 filters['exclude_postseason'] = True
 
         # Row 4: Advanced (optional, collapsed by default)
