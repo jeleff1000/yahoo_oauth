@@ -66,7 +66,7 @@ class SmartFilterPanel:
         c1, c2, c3 = st.columns([2, 1, 1])
         with c1:
             managers = self._get_managers()
-            mgr = st.multiselect("Manager", managers, key=f"{self.key_prefix}_mgr", placeholder="All", label_visibility="collapsed")
+            mgr = st.multiselect("Manager", managers, key=f"{self.key_prefix}_mgr", placeholder="Manager", label_visibility="collapsed")
             if mgr:
                 filters['manager'] = mgr
 
