@@ -767,9 +767,14 @@ class H2HViewer:
 
     def _calculate_lineup_points(self, df: pd.DataFrame, manager: str, use_optimal: bool = False) -> float:
         """Calculate total points for a manager's starting lineup."""
-        pos_col = "optimal_position" if use_optimal and "optimal_position" in df.columns else "fantasy_position"
-        if "lineup_position" in df.columns:
+        # For optimal: use optimal_position to determine starters
+        # For actual: use lineup_position (or fantasy_position as fallback)
+        if use_optimal and "optimal_position" in df.columns:
+            pos_col = "optimal_position"
+        elif "lineup_position" in df.columns:
             pos_col = "lineup_position"
+        else:
+            pos_col = "fantasy_position"
 
         team_df = df[df["manager"] == manager].copy()
         if team_df.empty:
