@@ -48,52 +48,17 @@ except ImportError:
             LEAGUE_INTELLIGENCE_AVAILABLE = False
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def detect_roster_config() -> dict:
     """
-    Auto-detect roster configuration using detect_roster_structure() from data_access.
+    Auto-detect roster configuration using the dedicated loader from draft tab data access.
 
     Returns:
         Dict with position counts (qb, rb, wr, te, flex, def, k, bench) and budget
     """
     try:
-        # Use centralized roster detection from data_access
-        roster_structure = detect_roster_structure()
-        if not roster_structure:
-            return None
-
-        position_counts = roster_structure.get('position_counts', {})
-
-        # Convert position_counts to optimizer format
-        # position_counts has base positions like 'QB', 'RB', 'WR', 'TE', 'W/R/T', 'DEF', 'K', 'BN', etc.
-        config = {
-            "qb": position_counts.get('QB', 0),
-            "rb": position_counts.get('RB', 0),
-            "wr": position_counts.get('WR', 0),
-            "te": position_counts.get('TE', 0),
-            "flex": 0,  # Calculate from flex positions
-            "def": position_counts.get('DEF', 0) + position_counts.get('D/ST', 0),
-            "k": position_counts.get('K', 0),
-            "bench": roster_structure.get('bench_count', 0),
-            "budget": 200
-        }
-
-        # Count flex positions (any position with / in the name, excluding bench)
-        for pos, count in position_counts.items():
-            if '/' in pos and pos not in ['BN', 'IR', 'IL']:
-                config['flex'] += count
-
-        # Store raw data for debug
-        config['_position_counts'] = position_counts
-        config['_raw_positions'] = list(position_counts.keys())
-
-        # Validate we got reasonable values
-        total_starters = sum(config[k] for k in ['qb', 'rb', 'wr', 'te', 'flex', 'def', 'k'])
-        if total_starters < 5:
-            return None
-
-        return config
-
+        # Use the dedicated roster config loader from draft tab data access
+        from md.tab_data_access.draft.combined import load_roster_config_for_optimizer
+        return load_roster_config_for_optimizer()
     except Exception:
         return None
 
