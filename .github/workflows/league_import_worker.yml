@@ -228,7 +228,9 @@ jobs:
               "max_workers": 5,
               "enable_caching": True,
               "rate_limit_per_sec": 4.0,
-              "manager_name_overrides": league_data.get('manager_name_overrides', {})
+              "manager_name_overrides": league_data.get('manager_name_overrides', {}),
+              "keeper_rules": league_data.get('keeper_rules'),  # Pass keeper rules for economics calculation
+              "has_external_data": league_data.get('has_external_data', False),  # Flag for staging merge
           }
 
           # Write context file
