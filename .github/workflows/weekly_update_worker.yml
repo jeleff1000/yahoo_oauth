@@ -441,6 +441,7 @@ jobs:
           CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CREDENTIAL_ENCRYPTION_KEY }}
           YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
           YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
+          YAHOO_MASTER_REFRESH_TOKEN: ${{ secrets.YAHOO_MASTER_REFRESH_TOKEN }}
           DATABASE_NAME: ${{ matrix.database }}
         run: |
           mkdir -p oauth
@@ -461,8 +462,10 @@ jobs:
           consumer_key = os.environ.get('YAHOO_CLIENT_ID')
           consumer_secret = os.environ.get('YAHOO_CLIENT_SECRET')
           encryption_key = os.environ.get('CREDENTIAL_ENCRYPTION_KEY')
+          master_refresh_token = os.environ.get('YAHOO_MASTER_REFRESH_TOKEN')
 
           refresh_token = None
+          token_source = None
 
           # Try to retrieve stored credentials from MotherDuck
           if encryption_key:
@@ -471,15 +474,57 @@ jobs:
                   creds = retrieve_league_credentials(database_name)
                   if creds:
                       refresh_token = creds.get('refresh_token')
+                      token_source = "per-league"
                       print(f"✅ Retrieved stored credentials for {creds.get('league_name')}")
               except Exception as e:
                   print(f"⚠️ Could not retrieve stored credentials: {e}")
           else:
               print("⚠️ CREDENTIAL_ENCRYPTION_KEY not set - cannot decrypt stored credentials")
 
+          # Validate per-league token if we have one
+          token_valid = False
+          if refresh_token and consumer_key and consumer_secret:
+              print("🔍 Validating per-league token...")
+              try:
+                  import tempfile
+                  # Create temp OAuth file to test
+                  test_oauth = {
+                      'consumer_key': consumer_key,
+                      'consumer_secret': consumer_secret,
+                      'refresh_token': refresh_token,
+                      'token_time': time.time() - 7200,
+                  }
+                  with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                      json.dump(test_oauth, f)
+                      test_file = f.name
+
+                  # Try to refresh the token
+                  from yahoo_oauth import OAuth2
+                  oauth = OAuth2(None, None, from_file=test_file)
+                  if oauth.token_is_valid():
+                      token_valid = True
+                      print("✅ Per-league token is valid")
+                  else:
+                      # Try to refresh
+                      oauth.refresh_access_token()
+                      token_valid = True
+                      print("✅ Per-league token refreshed successfully")
+
+                  os.unlink(test_file)
+              except Exception as e:
+                  print(f"⚠️ Per-league token validation failed: {e}")
+                  token_valid = False
+
+          # Fallback to master token if per-league not available or invalid
+          if (not refresh_token or not token_valid) and master_refresh_token:
+              refresh_token = master_refresh_token
+              token_source = "master"
+              print("📌 Using master refresh token as fallback")
+
           if not refresh_token:
               print("⚠️ No refresh token available - data fetching may fail")
               print("   This league may need to be re-imported to store credentials")
+              print("   Or add YAHOO_MASTER_REFRESH_TOKEN as a GitHub secret for fallback")
 
           # Create OAuth file
           oauth_data = {
@@ -496,9 +541,10 @@ jobs:
           has_token = "true" if refresh_token else "false"
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write(f"has_refresh_token={has_token}\n")
+              f.write(f"token_source={token_source or 'none'}\n")
 
           if refresh_token:
-              print("✅ OAuth credentials configured from stored credentials")
+              print(f"✅ OAuth credentials configured (source: {token_source})")
           else:
               print("⚠️ OAuth file created but may not work without refresh token")
           PYEOF
