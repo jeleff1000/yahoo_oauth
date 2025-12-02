@@ -51,16 +51,26 @@ class KeeperDataViewer:
             st.metric("Keep Rate", f"{keep_rate:.1f}%",
                      help="Percentage of available keeper slots that were used")
 
-        # Tabs for different views
-        tab1, tab2, tab3 = st.tabs(["📊 Keeper Explorer", "📈 Analytics", "💎 Best Keepers"])
+        # Tab navigation buttons at top
+        sub_tab_names = ["Explorer", "Analytics", "Best Keepers"]
+        current_idx = st.session_state.get("subtab_Keepers", 0)
 
-        with tab1:
+        cols = st.columns(len(sub_tab_names))
+        for idx, (col, name) in enumerate(zip(cols, sub_tab_names)):
+            with col:
+                is_active = (idx == current_idx)
+                btn_type = "primary" if is_active else "secondary"
+                if st.button(name, key=f"keepers_subtab_{idx}", use_container_width=True, type=btn_type):
+                    if not is_active:
+                        st.session_state["subtab_Keepers"] = idx
+                        st.rerun()
+
+        # Render active view
+        if current_idx == 0:
             self._display_keeper_explorer(df)
-
-        with tab2:
+        elif current_idx == 1:
             self._display_analytics(df)
-
-        with tab3:
+        elif current_idx == 2:
             self._display_best_keepers(df)
 
     def _get_color_scale(self, value, min_val, max_val, reverse=False):

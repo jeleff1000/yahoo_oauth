@@ -48,11 +48,22 @@ class SimulationDataViewer:
             st.info("📊 No matchup data available. Please ensure data is loaded.")
             return
 
-        # Two main category tabs for clear separation
-        main_tabs = st.tabs(["📊 Predictive Analytics", "🔀 What-If Scenarios"])
+        # Top-level navigation buttons
+        main_tab_names = ["Predictive", "What-If"]
+        current_main_idx = st.session_state.get("subtab_Simulations", 0)
+
+        cols = st.columns(len(main_tab_names))
+        for idx, (col, name) in enumerate(zip(cols, main_tab_names)):
+            with col:
+                is_active = (idx == current_main_idx)
+                btn_type = "primary" if is_active else "secondary"
+                if st.button(name, key=f"sim_main_{idx}", use_container_width=True, type=btn_type):
+                    if not is_active:
+                        st.session_state["subtab_Simulations"] = idx
+                        st.rerun()
 
         # ==================== PREDICTIVE ANALYTICS ====================
-        with main_tabs[0]:
+        if current_main_idx == 0:
             pred_tabs = st.tabs([
                 "🏆 Playoff Dashboard",
                 "🎰 Playoff Machine",
@@ -99,7 +110,7 @@ class SimulationDataViewer:
                     st.warning(f"Multi-year trends unavailable: {e}")
 
         # ==================== WHAT-IF SCENARIOS ====================
-        with main_tabs[1]:
+        elif current_main_idx == 1:
             whatif_tabs = st.tabs([
                 "🔀 Schedule Shuffles",
                 "💪 Strength of Schedule",

@@ -307,8 +307,19 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
     except Exception as e:
         st.warning(f'Could not compute quality metrics: {e}')
 
-    # Flattened tab structure with integrated visualizations
-    tabs = st.tabs(["📋 Summary", "🎯 Performance", "💰 Value", "🔧 Optimizer", "📈 Trends", "💵 Pricing", "🏆 Career", "🔒 Keeper Analysis", "🎖️ Manager Grades", "📜 Report Card"])
+    # Top-level navigation buttons (3 categories)
+    main_tab_names = ["Overview", "Analysis", "Grades"]
+    current_main_idx = st.session_state.get("subtab_Draft", 0)
+
+    cols = st.columns(len(main_tab_names))
+    for idx, (col, name) in enumerate(zip(cols, main_tab_names)):
+        with col:
+            is_active = (idx == current_main_idx)
+            btn_type = "primary" if is_active else "secondary"
+            if st.button(name, key=f"draft_main_{idx}", use_container_width=True, type=btn_type):
+                if not is_active:
+                    st.session_state["subtab_Draft"] = idx
+                    st.rerun()
 
     # Try to import submodules but fail gracefully
     sub_import_errors = []
@@ -374,118 +385,118 @@ def display_draft_data_overview(df_dict: Optional[Dict[str, pd.DataFrame]] = Non
         for msg in sub_import_errors:
             st.write('-', msg)
 
-    # Tab 0: Summary
-    with tabs[0]:
-        if display_draft_summary:
+    # ==================== OVERVIEW (Summary, Performance, Value) ====================
+    if current_main_idx == 0:
+        overview_tabs = st.tabs(["Summary", "Performance", "Value"])
+
+        with overview_tabs[0]:
+            if display_draft_summary:
+                try:
+                    display_draft_summary(df)
+                except Exception as e:
+                    st.error(f'Summary rendering error: {e}')
+                    st.dataframe(df.head(50))
+            else:
+                st.warning('Summary module unavailable — showing raw data preview')
+                st.dataframe(df)
+
+        with overview_tabs[1]:
+            if display_scoring_outcomes:
+                try:
+                    display_scoring_outcomes(df)
+                except Exception as e:
+                    st.error(f'Performance rendering error: {e}')
+            else:
+                st.info('Performance module unavailable')
+
+            st.subheader('📈 Draft Round Efficiency')
             try:
-                display_draft_summary(df)
+                from .graphs.draft_round_efficiency import display_draft_round_efficiency
+                display_draft_round_efficiency(prefix="performance_round_eff")
             except Exception as e:
-                st.error(f'Summary rendering error: {e}')
-                st.dataframe(df.head(50))
-        else:
-            st.warning('Summary module unavailable — showing raw data preview')
-            st.dataframe(df)
+                st.warning(f'Round efficiency graph unavailable: {e}')
 
-    # Tab 1: Performance
-    with tabs[1]:
-        if display_scoring_outcomes:
+        with overview_tabs[2]:
+            display_value_analysis(df)
+
+    # ==================== ANALYSIS (Optimizer, Trends, Pricing, Career) ====================
+    elif current_main_idx == 1:
+        analysis_tabs = st.tabs(["Optimizer", "Trends", "Pricing", "Career"])
+
+        with analysis_tabs[0]:
+            if display_draft_optimizer:
+                try:
+                    display_draft_optimizer(df)
+                except Exception as e:
+                    st.error(f'Optimizer rendering error: {e}')
+            else:
+                st.info('Optimizer module unavailable')
+
+        with analysis_tabs[1]:
+            if display_draft_preferences:
+                try:
+                    display_draft_preferences(df)
+                except Exception as e:
+                    st.error(f'Trends rendering error: {e}')
+            else:
+                st.info('Preferences module unavailable')
+
+            st.subheader('📊 Spending & Market Analysis')
             try:
-                display_scoring_outcomes(df)
+                from .graphs.draft_spending_trends import display_draft_spending_trends
+                from .graphs.draft_market_trends import display_draft_market_trends
+
+                trend_tabs = st.tabs(["💰 Spending Trends", "🔥 Market Trends"])
+                with trend_tabs[0]:
+                    display_draft_spending_trends(prefix="trends_spending")
+                with trend_tabs[1]:
+                    display_draft_market_trends(prefix="trends_market")
             except Exception as e:
-                st.error(f'Performance rendering error: {e}')
-        else:
-            st.info('Performance module unavailable')
+                st.warning(f'Trend graphs unavailable: {e}')
 
-        # Add Round Efficiency visualization
-        st.subheader('📈 Draft Round Efficiency')
-        try:
-            from .graphs.draft_round_efficiency import display_draft_round_efficiency
-            display_draft_round_efficiency(prefix="performance_round_eff")
-        except Exception as e:
-            st.warning(f'Round efficiency graph unavailable: {e}')
+        with analysis_tabs[2]:
+            if display_draft_overview:
+                try:
+                    display_draft_overview(df)
+                except Exception as e:
+                    st.error(f'Pricing rendering error: {e}')
+            else:
+                st.info('Pricing module unavailable')
 
-    # Tab 2: Value (inline)
-    with tabs[2]:
-        display_value_analysis(df)
+        with analysis_tabs[3]:
+            if display_career_draft:
+                try:
+                    display_career_draft(df)
+                except Exception as e:
+                    st.error(f'Career rendering error: {e}')
+            else:
+                st.info('Career module unavailable')
 
-    # Tab 3: Optimizer
-    with tabs[3]:
-        if display_draft_optimizer:
+    # ==================== GRADES (Keeper Analysis, Manager Grades, Report Card) ====================
+    elif current_main_idx == 2:
+        grades_tabs = st.tabs(["Keeper Analysis", "Manager Grades", "Report Card"])
+
+        with grades_tabs[0]:
             try:
-                display_draft_optimizer(df)
+                from .graphs.draft_keeper_analysis import display_draft_keeper_analysis
+                display_draft_keeper_analysis(prefix="keeper_analysis")
             except Exception as e:
-                st.error(f'Optimizer rendering error: {e}')
-        else:
-            st.info('Optimizer module unavailable')
+                st.warning(f'Keeper analysis unavailable: {e}')
 
-    # Tab 4: Trends
-    with tabs[4]:
-        if display_draft_preferences:
-            try:
-                display_draft_preferences(df)
-            except Exception as e:
-                st.error(f'Trends rendering error: {e}')
-        else:
-            st.info('Preferences module unavailable')
+        with grades_tabs[1]:
+            if display_manager_draft_grades:
+                try:
+                    display_manager_draft_grades(df)
+                except Exception as e:
+                    st.error(f'Manager grades rendering error: {e}')
+            else:
+                st.info('Manager grades module unavailable')
 
-        # Add Spending & Market Trends visualizations
-        st.subheader('📊 Spending & Market Analysis')
-        try:
-            from .graphs.draft_spending_trends import display_draft_spending_trends
-            from .graphs.draft_market_trends import display_draft_market_trends
-
-            trend_tabs = st.tabs(["💰 Spending Trends", "🔥 Market Trends"])
-            with trend_tabs[0]:
-                display_draft_spending_trends(prefix="trends_spending")
-            with trend_tabs[1]:
-                display_draft_market_trends(prefix="trends_market")
-        except Exception as e:
-            st.warning(f'Trend graphs unavailable: {e}')
-
-    # Tab 5: Pricing
-    with tabs[5]:
-        if display_draft_overview:
-            try:
-                display_draft_overview(df)
-            except Exception as e:
-                st.error(f'Pricing rendering error: {e}')
-        else:
-            st.info('Pricing module unavailable')
-
-    # Tab 6: Career
-    with tabs[6]:
-        if display_career_draft:
-            try:
-                display_career_draft(df)
-            except Exception as e:
-                st.error(f'Career rendering error: {e}')
-        else:
-            st.info('Career module unavailable')
-
-    # Tab 7: Keeper Analysis
-    with tabs[7]:
-        try:
-            from .graphs.draft_keeper_analysis import display_draft_keeper_analysis
-            display_draft_keeper_analysis(prefix="keeper_analysis")
-        except Exception as e:
-            st.warning(f'Keeper analysis unavailable: {e}')
-
-    # Tab 8: Manager Grades
-    with tabs[8]:
-        if display_manager_draft_grades:
-            try:
-                display_manager_draft_grades(df)
-            except Exception as e:
-                st.error(f'Manager grades rendering error: {e}')
-        else:
-            st.info('Manager grades module unavailable')
-
-    # Tab 9: Report Card
-    with tabs[9]:
-        if display_draft_report_card:
-            try:
-                display_draft_report_card(df)
-            except Exception as e:
-                st.error(f'Report card rendering error: {e}')
-        else:
-            st.info('Report card module unavailable')
+        with grades_tabs[2]:
+            if display_draft_report_card:
+                try:
+                    display_draft_report_card(df)
+                except Exception as e:
+                    st.error(f'Report card rendering error: {e}')
+            else:
+                st.info('Report card module unavailable')

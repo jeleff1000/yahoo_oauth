@@ -35,11 +35,22 @@ class AllTransactionsViewer:
     def display(self):
         apply_modern_styles()
 
-        # Top-level tabs: Weekly / Season / Career
-        main_tabs = st.tabs(["Weekly", "Season", "Career"])
+        # Top-level navigation buttons
+        main_tab_names = ["Weekly", "Season", "Career"]
+        current_main_idx = st.session_state.get("subtab_Transactions", 0)
+
+        cols = st.columns(len(main_tab_names))
+        for idx, (col, name) in enumerate(zip(cols, main_tab_names)):
+            with col:
+                is_active = (idx == current_main_idx)
+                btn_type = "primary" if is_active else "secondary"
+                if st.button(name, key=f"trans_main_{idx}", use_container_width=True, type=btn_type):
+                    if not is_active:
+                        st.session_state["subtab_Transactions"] = idx
+                        st.rerun()
 
         # ==================== WEEKLY ====================
-        with main_tabs[0]:
+        if current_main_idx == 0:
             weekly_subtabs = st.tabs(["Add/Drop", "Trades", "Drop Regrets"])
 
             with weekly_subtabs[0]:
@@ -64,7 +75,7 @@ class AllTransactionsViewer:
                 display_drop_regret_analysis(self.transaction_df)
 
         # ==================== SEASON ====================
-        with main_tabs[1]:
+        elif current_main_idx == 1:
             season_subtabs = st.tabs(["Add/Drop", "Trades", "Report Card"])
 
             with season_subtabs[0]:
@@ -81,7 +92,7 @@ class AllTransactionsViewer:
                 display_transaction_report_card(self.transaction_df, self.player_df)
 
         # ==================== CAREER ====================
-        with main_tabs[2]:
+        elif current_main_idx == 2:
             career_subtabs = st.tabs(["Add/Drop", "Trades", "Report Card"])
 
             with career_subtabs[0]:
