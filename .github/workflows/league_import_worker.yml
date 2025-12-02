@@ -489,7 +489,15 @@ jobs:
           python - <<'PYEOF'
           import json
           import os
+          import re
           import duckdb
+
+          def _slug(s, prefix_if_digit="l"):
+              """Consistent slug function matching Streamlit app."""
+              x = re.sub(r"[^a-zA-Z0-9]+", "_", s.strip().lower()).strip("_")
+              if re.match(r"^\d", x):
+                  x = f"{prefix_if_digit}_{x}"
+              return x[:63]
 
           # Check if has_external_data flag is set
           with open("league_data_input.json") as f:
@@ -501,7 +509,9 @@ jobs:
               print("ℹ️ No external data flag set - skipping staging merge")
               exit(0)
 
-          db_name = os.environ.get("DATABASE_NAME")
+          # Use league_name and apply same slug as Streamlit upload
+          league_name = league_data.get("league_name", "")
+          db_name = _slug(league_name, "l")
           token = os.environ.get("MOTHERDUCK_TOKEN")
 
           if not token or not db_name:
@@ -509,9 +519,24 @@ jobs:
               exit(0)
 
           print(f"🔄 Merging staging data for database: {db_name}")
+          print(f"   (from league_name: {league_name})")
 
           os.environ["MOTHERDUCK_TOKEN"] = token
           con = duckdb.connect("md:")
+
+          # First, list all databases to verify our target exists
+          print("\n📋 Checking available databases...")
+          all_dbs = con.execute("SELECT database_name FROM information_schema.schemata WHERE database_name NOT IN ('memory', 'system', 'temp')").fetchall()
+          print(f"   Available databases: {[d[0] for d in all_dbs]}")
+
+          # USE the database to ensure correct context
+          try:
+              con.execute(f"USE {db_name}")
+              print(f"   ✓ Connected to database: {db_name}")
+          except Exception as e:
+              print(f"   ❌ Could not connect to database {db_name}: {e}")
+              con.close()
+              exit(0)
 
           # Check if staging schema exists
           try:
@@ -521,11 +546,23 @@ jobs:
                   WHERE table_catalog = '{db_name}'
                   AND table_schema = 'staging'
               """).fetchall()
-          except:
+              print(f"   Staging tables query returned: {staging_tables}")
+          except Exception as e:
+              print(f"   Staging tables query error: {e}")
               staging_tables = []
 
           if not staging_tables:
               print("ℹ️ No staging tables found - nothing to merge")
+              # List all schemas/tables in the database for debugging
+              try:
+                  all_tables = con.execute(f"""
+                      SELECT table_schema, table_name
+                      FROM information_schema.tables
+                      WHERE table_catalog = '{db_name}'
+                  """).fetchall()
+                  print(f"   All tables in {db_name}: {all_tables}")
+              except:
+                  pass
               con.close()
               exit(0)
 
