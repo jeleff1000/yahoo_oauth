@@ -142,6 +142,9 @@ class H2HViewer:
             pos_case_parts = []
             for pos, order in pos_order_map.items():
                 pos_case_parts.append(f"WHEN fantasy_position LIKE '{pos}%' THEN {order}")
+                # Also handle FLEX as alias for W/R/T
+                if pos == "W/R/T":
+                    pos_case_parts.append(f"WHEN fantasy_position LIKE 'FLEX%' THEN {order}")
             pos_case = "CASE " + " ".join(pos_case_parts) + " ELSE 999 END"
             order_clause = f"{pos_case}, fantasy_position, points DESC"
 
@@ -247,7 +250,7 @@ class H2HViewer:
         # Position sort: extract base position and slot number for proper ordering
         # E.g., "QB1" -> base="QB", slot=1; "W/R/T1" -> base="W/R/T", slot=1
         # For bench (BN/IR), sort by BN first then IR, within each sort by position
-        pos_order_map = {"QB": 0, "RB": 1, "WR": 2, "TE": 3, "W/R/T": 4, "K": 5, "DEF": 6, "BN": 7, "IR": 8}
+        pos_order_map = {"QB": 0, "RB": 1, "WR": 2, "TE": 3, "W/R/T": 4, "FLEX": 4, "K": 5, "DEF": 6, "BN": 7, "IR": 8}
 
         def get_position_order(pos_str):
             """Get sort order for a position string"""
@@ -271,11 +274,18 @@ class H2HViewer:
                     return (str(actual_pos).strip(), 0, bn_ir_order)
                 return (pos_str, 999, bn_ir_order)
 
-            # Handle special positions like W/R/T
+            # Handle special positions like W/R/T and FLEX
             if pos_str.startswith("W/R/T"):
                 base = "W/R/T"
                 try:
                     slot = int(pos_str[5:]) if len(pos_str) > 5 else 1
+                except:
+                    slot = 1
+                return (base, slot, 0)
+            if pos_str.startswith("FLEX"):
+                base = "FLEX"  # Will map to order 4 (same as W/R/T)
+                try:
+                    slot = int(pos_str[4:]) if len(pos_str) > 4 else 1
                 except:
                     slot = 1
                 return (base, slot, 0)
