@@ -25,8 +25,21 @@ def display_team_names(team_names_data):
         st.error("Team Names Data not found or missing required columns (manager, year, team_name).")
         return
 
-    # View selector
-    view_mode = st.radio("View", ["All Managers", "By Division"], horizontal=True, label_visibility="collapsed")
+    # Subtab navigation buttons at top
+    sub_tab_names = ["All Managers", "By Division"]
+    current_idx = st.session_state.get("subtab_Team Names", 0)
+
+    cols = st.columns(len(sub_tab_names))
+    for idx, (col, name) in enumerate(zip(cols, sub_tab_names)):
+        with col:
+            is_active = (idx == current_idx)
+            btn_type = "primary" if is_active else "secondary"
+            if st.button(name, key=f"team_names_subtab_{idx}", use_container_width=True, type=btn_type):
+                if not is_active:
+                    st.session_state["subtab_Team Names"] = idx
+                    st.rerun()
+
+    view_mode = sub_tab_names[current_idx] if current_idx < len(sub_tab_names) else "All Managers"
 
     data = team_names_data.copy()
     data = data[['manager', 'team_name', 'year', 'division_id']].dropna(subset=['manager', 'team_name'])
