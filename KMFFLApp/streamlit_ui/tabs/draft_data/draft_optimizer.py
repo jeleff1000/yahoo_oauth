@@ -58,8 +58,19 @@ def detect_roster_config() -> dict:
     try:
         # Use the dedicated roster config loader from draft tab data access
         from md.tab_data_access.draft.combined import load_roster_config_for_optimizer
-        return load_roster_config_for_optimizer()
-    except Exception:
+        result = load_roster_config_for_optimizer()
+        # Debug: show what we got
+        import streamlit as st
+        if result:
+            st.info(f"🔧 Roster detected: QB={result.get('qb')}, RB={result.get('rb')}, WR={result.get('wr')}, TE={result.get('te')}, FLEX={result.get('flex')}, DEF={result.get('def')}, K={result.get('k')}, Bench={result.get('bench')}")
+            if '_position_counts' in result:
+                st.caption(f"Raw position_counts: {result['_position_counts']}")
+        else:
+            st.warning("⚠️ Roster detection returned None - using preset defaults")
+        return result
+    except Exception as e:
+        import streamlit as st
+        st.error(f"❌ Roster detection error: {e}")
         return None
 
 
