@@ -406,7 +406,7 @@ def main():
     subtabs = {
         "Home": ["Overview", "Hall of Fame", "Standings", "Schedules", "Head-to-Head", "Recaps"],
         "Managers": ["Weekly", "Seasons", "Career", "Visualize"],
-        "Team Stats": None,
+        "Team Stats": ["Weekly", "Seasons", "Career"],
         "Players": ["Weekly", "Season", "Career", "Visualize"],
         "Draft": None,
         "Transactions": None,
