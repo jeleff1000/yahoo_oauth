@@ -510,6 +510,23 @@ jobs:
                       token_valid = True
                       print("✅ Per-league token refreshed successfully")
 
+                      # Save the new refresh token back to MotherDuck (keeps it alive)
+                      new_refresh = getattr(oauth, 'refresh_token', None)
+                      if new_refresh and new_refresh != refresh_token:
+                          print("🔄 Saving refreshed token back to storage...")
+                          try:
+                              from multi_league.utils.credential_store import store_league_credentials
+                              store_league_credentials(
+                                  database_name=database_name,
+                                  refresh_token=new_refresh,
+                                  league_id=creds.get('league_id', database_name),
+                                  league_name=creds.get('league_name', database_name)
+                              )
+                              refresh_token = new_refresh  # Use the new one
+                              print("✅ Token persisted - will stay valid for future runs")
+                          except Exception as store_err:
+                              print(f"⚠️ Could not persist token: {store_err}")
+
                   os.unlink(test_file)
               except Exception as e:
                   print(f"⚠️ Per-league token validation failed: {e}")
