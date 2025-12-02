@@ -8,18 +8,10 @@ from .season_team_subprocesses.season_team_advanced_stats import get_advanced_st
 from .season_team_subprocesses.season_team_basic_stats_by_manager import get_basic_stats as get_basic_stats_by_mgr
 from .team_stats_visualizations import TeamStatsVisualizer
 
-# Import new shared components
-from .shared.theme import (
-    apply_theme_styles,
-    render_gradient_header,
-    render_info_box,
-    render_empty_state,
-    render_metric_grid,
-    render_filter_count
-)
+from .shared.theme import apply_theme_styles, render_empty_state
 from ..shared.modern_styles import apply_modern_styles
-from .shared.filters import render_simple_position_filter
 from .shared.constants import TAB_LABELS
+from .shared.column_config import get_column_config_for_position
 
 
 class SeasonTeamViewer:
@@ -31,734 +23,303 @@ class SeasonTeamViewer:
         self.team_data_by_lineup_position = team_data_by_lineup_position.copy() if team_data_by_lineup_position is not None else pd.DataFrame()
 
     def display(self):
-        """Display season team stats."""
-        # Apply styling
+        """Display season team stats with clean, mobile-friendly layout."""
         apply_theme_styles()
         apply_modern_styles()
 
-        # Gradient header
-        render_gradient_header(
-            title="Season Team Stats",
-            subtitle="Analyze season-long trends and aggregated statistics",
-            icon="📅"
-        )
+        # Collapsible filters expander (like matchups)
+        filters = self._render_filter_ui()
 
-        # Grouping selector
-        grouping_options = ["By Manager & Position", "By Manager & Lineup Position", "By Manager Only"]
-        selected_grouping = st.radio(
-            "Group By",
-            grouping_options,
-            horizontal=True,
-            key="season_team_grouping",
-            label_visibility="visible"
-        )
+        # View tabs for different stat types
+        view_tabs = st.tabs(["By Position", "By Lineup Slot", "By Manager", "Visualizations"])
 
-        if selected_grouping == "By Manager & Position":
-            self.display_by_position()
-        elif selected_grouping == "By Manager & Lineup Position":
-            self.display_by_lineup_position()
-        else:
-            self.display_by_manager()
+        with view_tabs[0]:
+            self._display_by_position(filters)
 
-    def display_by_position(self):
-        """Display stats grouped by manager and position with player_stats-style layout."""
+        with view_tabs[1]:
+            self._display_by_lineup_position(filters)
+
+        with view_tabs[2]:
+            self._display_by_manager(filters)
+
+        with view_tabs[3]:
+            self._display_visualizations(filters)
+
+    def _render_filter_ui(self) -> dict:
+        """Render compact collapsible filter UI matching matchups style."""
+        # Compact filter styling
+        st.markdown("""
+        <style>
+        [data-testid="stExpander"] .stMultiSelect,
+        [data-testid="stExpander"] .stCheckbox,
+        [data-testid="stExpander"] .stSelectbox {
+            margin-bottom: 0.25rem !important;
+        }
+        [data-testid="stExpander"] [data-testid="column"] {
+            padding: 0 0.25rem !important;
+        }
+        [data-testid="stExpander"] .stMarkdown p {
+            margin-bottom: 0.25rem !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        with st.expander("🔎 Filters", expanded=False):
+            col1, col2 = st.columns(2)
+
+            # Position filter
+            with col1:
+                positions = ["All", "QB", "RB", "WR", "TE", "K", "DEF", "W/R/T"]
+                selected_position = st.selectbox(
+                    "Position",
+                    positions,
+                    index=0,
+                    key="season_team_position"
+                )
+
+            # Manager filter
+            with col2:
+                if not self.team_data_by_position.empty and 'manager' in self.team_data_by_position.columns:
+                    managers = sorted(self.team_data_by_position['manager'].dropna().unique())
+                    selected_managers = st.multiselect(
+                        "Manager(s)",
+                        managers,
+                        default=[],
+                        key="season_team_managers",
+                        placeholder="All managers"
+                    )
+                    if not selected_managers:
+                        selected_managers = managers
+                else:
+                    selected_managers = []
+
+            # Year filter
+            if not self.team_data_by_position.empty and 'year' in self.team_data_by_position.columns:
+                years = sorted(self.team_data_by_position['year'].dropna().unique())
+                selected_years = st.multiselect(
+                    "Year(s)",
+                    years,
+                    default=[],
+                    key="season_team_years",
+                    placeholder="All years"
+                )
+                if not selected_years:
+                    selected_years = years
+            else:
+                selected_years = []
+
+            # Game type toggles (inline, compact)
+            st.markdown(
+                '<p style="margin: 0.5rem 0 0.25rem 0; font-size: 0.85rem; opacity: 0.7;">Game Types</p>',
+                unsafe_allow_html=True
+            )
+            toggle_cols = st.columns(3)
+
+            with toggle_cols[0]:
+                regular_season = st.checkbox(
+                    "Regular",
+                    value=st.session_state.get("season_team_include_regular_season", True),
+                    key="season_team_include_regular_season"
+                )
+            with toggle_cols[1]:
+                playoffs = st.checkbox(
+                    "Playoffs",
+                    value=st.session_state.get("season_team_include_playoffs", True),
+                    key="season_team_include_playoffs"
+                )
+            with toggle_cols[2]:
+                consolation = st.checkbox(
+                    "Consolation",
+                    value=st.session_state.get("season_team_include_consolation", False),
+                    key="season_team_include_consolation"
+                )
+
+        return {
+            'position': selected_position,
+            'managers': selected_managers,
+            'years': selected_years,
+            'regular_season': regular_season,
+            'playoffs': playoffs,
+            'consolation': consolation
+        }
+
+    def _apply_filters(self, data: pd.DataFrame, filters: dict, filter_position: bool = True) -> pd.DataFrame:
+        """Apply filters to dataframe."""
+        if data.empty:
+            return data
+
+        filtered = data.copy()
+
+        # Position filter
+        if filter_position and filters['position'] != "All" and 'fantasy_position' in filtered.columns:
+            filtered = filtered[filtered['fantasy_position'] == filters['position']]
+
+        # Year filter
+        if filters['years'] and 'year' in filtered.columns:
+            filtered = filtered[filtered['year'].isin(filters['years'])]
+
+        # Manager filter
+        if filters['managers'] and 'manager' in filtered.columns:
+            filtered = filtered[filtered['manager'].isin(filters['managers'])]
+
+        return filtered
+
+    def _display_by_position(self, filters: dict):
+        """Display stats grouped by manager and position."""
         if self.team_data_by_position.empty:
             render_empty_state(
-                title="No Team Data Available",
+                title="No Data Available",
                 message="Season team data has not been loaded yet.",
                 icon="📭"
             )
             return
 
-        # Use player_stats style: filters on left (1), data on right (3)
-        filter_col, data_col = st.columns([1, 3])
+        filtered_data = self._apply_filters(self.team_data_by_position, filters)
 
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
+        if filtered_data.empty:
+            st.warning("No data matches the selected filters.")
+            return
 
-            render_info_box(
-                "Filter by position to see manager performance for that position group",
-                icon="ℹ️"
-            )
+        # Stats tabs
+        stat_tabs = st.tabs([TAB_LABELS['basic_stats'], TAB_LABELS['advanced_stats']])
 
-            # Position filter
-            selected_position = render_simple_position_filter(
-                prefix="season_team",
-                default="All"
-            )
+        with stat_tabs[0]:
+            df = get_basic_stats_by_pos(filtered_data, filters['position'])
+            self._render_data_table(df, "season_basic_pos", filters['position'])
 
-            st.markdown("---")
+        with stat_tabs[1]:
+            df = get_advanced_stats_by_pos(filtered_data, filters['position'])
+            self._render_data_table(df, "season_advanced_pos", filters['position'])
 
-            # Week type filters (Regular Season, Playoffs, Consolation)
-            st.markdown("**🏆 Week Type Filters:**")
-            st.checkbox(
-                "Regular Season",
-                value=st.session_state.get("season_team_include_regular_season", True),
-                key="season_team_include_regular_season",
-                help="Include regular season weeks"
-            )
-            playoff_col1, playoff_col2 = st.columns(2)
-            with playoff_col1:
-                st.checkbox(
-                    "Playoffs",
-                    value=st.session_state.get("season_team_include_playoffs", True),
-                    key="season_team_include_playoffs",
-                    help="Include weeks from the fantasy playoffs"
-                )
-            with playoff_col2:
-                st.checkbox(
-                    "Consolation",
-                    value=st.session_state.get("season_team_include_consolation", False),
-                    key="season_team_include_consolation",
-                    help="Include weeks from the consolation bracket"
-                )
-
-            st.markdown("---")
-
-            # Year filter (defaults to empty = all years)
-            st.markdown("**📅 Year Range:**")
-            if 'year' in self.team_data_by_position.columns:
-                years = sorted(self.team_data_by_position['year'].dropna().unique())
-                if years:
-                    selected_years = st.multiselect(
-                        "Filter by Year",
-                        options=years,
-                        default=[],  # Empty means all years
-                        key="season_team_years",
-                        label_visibility="collapsed",
-                        help="Leave empty to show all years"
-                    )
-                else:
-                    selected_years = []
-            else:
-                selected_years = []
-
-            st.markdown("---")
-
-            # Manager filter
-            st.markdown("**👤 Manager Filter:**")
-            if 'manager' in self.team_data_by_position.columns:
-                managers = sorted(self.team_data_by_position['manager'].dropna().unique())
-                selected_managers = st.multiselect(
-                    "Select Manager(s)",
-                    options=managers,
-                    default=[],
-                    key="season_team_managers",
-                    help="Leave empty to show all managers",
-                    label_visibility="collapsed"
-                )
-            else:
-                selected_managers = []
-
-            st.markdown("---")
-
-            # Active filters summary
-            st.markdown("**🎯 Active Filters:**")
-            active_filters = []
-            if selected_position != "All":
-                active_filters.append(f"Position: {selected_position}")
-            if not st.session_state.get("season_team_include_regular_season", True):
-                active_filters.append("Regular Season: Excluded")
-            if not st.session_state.get("season_team_include_playoffs", True):
-                active_filters.append("Playoffs: Excluded")
-            if st.session_state.get("season_team_include_consolation", False):
-                active_filters.append("Consolation: Included")
-            if selected_years:
-                if len(selected_years) <= 3:
-                    active_filters.append(f"Years: {', '.join(map(str, selected_years))}")
-                else:
-                    active_filters.append(f"Years: {min(selected_years)}-{max(selected_years)}")
-            if selected_managers:
-                if len(selected_managers) <= 2:
-                    active_filters.append(f"Managers: {', '.join(selected_managers)}")
-                else:
-                    active_filters.append(f"Managers: {len(selected_managers)} selected")
-
-            if active_filters:
-                for filter_text in active_filters:
-                    st.caption(f"🏷️ {filter_text}")
-            else:
-                st.caption("No filters active")
-
-            # Clear all filters button
-            if active_filters:
-                if st.button("🔄 Clear All Filters", key="season_team_clear_all", use_container_width=True):
-                    # Clear session state for filters
-                    for key in list(st.session_state.keys()):
-                        if key.startswith("season_team"):
-                            del st.session_state[key]
-                    st.rerun()
-
-        with data_col:
-            # Apply filters to data
-            filtered_data = self.team_data_by_position.copy()
-
-            # Position filter
-            if selected_position != "All":
-                filtered_data = filtered_data[filtered_data["fantasy_position"] == selected_position]
-
-            # Year filter
-            if selected_years:
-                filtered_data = filtered_data[filtered_data['year'].isin(selected_years)]
-
-            # Manager filter
-            if selected_managers:
-                filtered_data = filtered_data[filtered_data['manager'].isin(selected_managers)]
-
-            # Show quick metrics for filtered data
-            self._display_quick_metrics_for_data(filtered_data, selected_position)
-
-            # Stat type tabs
-            stat_tabs = st.tabs([
-                TAB_LABELS['basic_stats'],
-                TAB_LABELS['advanced_stats'],
-                TAB_LABELS['visualizations']
-            ])
-
-            with stat_tabs[0]:
-                df = get_basic_stats_by_pos(filtered_data, selected_position)
-                if df.empty:
-                    render_empty_state(
-                        title="No Data Found",
-                        message=f"No basic stats available for {selected_position}",
-                        icon="🔍"
-                    )
-                else:
-                    # Show data count
-                    render_filter_count(len(df), len(filtered_data))
-
-                    # Display table with dynamic height
-                    table_height = min(max(300, len(df) * 35), 700)
-                    st.dataframe(df, hide_index=True, use_container_width=True, height=table_height)
-
-                    # Export button
-                    self._render_export_button(df, "season_basic_stats")
-
-            with stat_tabs[1]:
-                df = get_advanced_stats_by_pos(filtered_data, selected_position)
-                if df.empty:
-                    render_empty_state(
-                        title="No Data Found",
-                        message=f"No advanced stats available for {selected_position}",
-                        icon="🔍"
-                    )
-                else:
-                    # Show data count
-                    render_filter_count(len(df), len(filtered_data))
-
-                    # Display table with dynamic height
-                    table_height = min(max(300, len(df) * 35), 700)
-                    st.dataframe(df, hide_index=True, use_container_width=True, height=table_height)
-
-                    # Export button
-                    self._render_export_button(df, "season_advanced_stats")
-
-            with stat_tabs[2]:
-                visualizer = TeamStatsVisualizer(filtered_data, self.team_data_by_manager)
-                visualizer.display_season_visualizations()
-
-    def display_by_lineup_position(self):
-        """Display stats grouped by manager and lineup position (WR1, WR2, RB1, etc.)."""
+    def _display_by_lineup_position(self, filters: dict):
+        """Display stats grouped by manager and lineup position."""
         if self.team_data_by_lineup_position.empty:
             render_empty_state(
-                title="No Team Data Available",
-                message="Season team data by lineup position has not been loaded yet.",
+                title="No Data Available",
+                message="Season lineup position data has not been loaded yet.",
                 icon="📭"
             )
             return
 
-        # Use player_stats style: filters on left (1), data on right (3)
-        filter_col, data_col = st.columns([1, 3])
+        # Apply filters (without position filter)
+        filtered_data = self._apply_filters(self.team_data_by_lineup_position, filters, filter_position=False)
 
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
-
-            render_info_box(
-                "Filter by lineup position (WR1, WR2, RB1, etc.) to see manager performance",
-                icon="ℹ️"
+        # Lineup position selector
+        if 'lineup_position' in filtered_data.columns:
+            lineup_positions = ["All"] + sorted(filtered_data['lineup_position'].dropna().unique().tolist())
+            selected_lp = st.selectbox(
+                "Lineup Position",
+                lineup_positions,
+                index=0,
+                key="season_team_lp_select"
             )
+            if selected_lp != "All":
+                filtered_data = filtered_data[filtered_data['lineup_position'] == selected_lp]
 
-            # Lineup Position filter
-            st.markdown("**📍 Lineup Position:**")
-            if 'lineup_position' in self.team_data_by_lineup_position.columns:
-                lineup_positions = sorted(self.team_data_by_lineup_position['lineup_position'].dropna().unique())
-                lineup_options = ["All"] + list(lineup_positions)
-                selected_lineup_pos = st.selectbox(
-                    "Select Lineup Position",
-                    options=lineup_options,
-                    index=0,
-                    key="season_team_lineup_position",
-                    label_visibility="collapsed"
-                )
-            else:
-                selected_lineup_pos = "All"
+        if filtered_data.empty:
+            st.warning("No data matches the selected filters.")
+            return
 
-            st.markdown("---")
+        df = self._get_basic_stats_by_lineup_pos(filtered_data)
+        self._render_data_table(df, "season_lineup_pos", "All")
 
-            # Week type filters (Regular Season, Playoffs, Consolation)
-            # Use the same keys as the position view so data loader gets updated values
-            st.markdown("**🏆 Week Type Filters:**")
-            st.checkbox(
-                "Regular Season",
-                value=st.session_state.get("season_team_include_regular_season", True),
-                key="season_team_include_regular_season",
-                help="Include regular season weeks"
+    def _display_by_manager(self, filters: dict):
+        """Display stats grouped by manager only."""
+        if self.team_data_by_manager.empty:
+            render_empty_state(
+                title="No Data Available",
+                message="Season manager data has not been loaded yet.",
+                icon="📭"
             )
-            playoff_col1, playoff_col2 = st.columns(2)
-            with playoff_col1:
-                st.checkbox(
-                    "Playoffs",
-                    value=st.session_state.get("season_team_include_playoffs", True),
-                    key="season_team_include_playoffs",
-                    help="Include weeks from the fantasy playoffs"
-                )
-            with playoff_col2:
-                st.checkbox(
-                    "Consolation",
-                    value=st.session_state.get("season_team_include_consolation", False),
-                    key="season_team_include_consolation",
-                    help="Include weeks from the consolation bracket"
-                )
+            return
 
-            st.markdown("---")
+        filtered_data = self._apply_filters(self.team_data_by_manager, filters, filter_position=False)
 
-            # Year filter
-            st.markdown("**📅 Year Range:**")
-            if 'year' in self.team_data_by_lineup_position.columns:
-                years = sorted(self.team_data_by_lineup_position['year'].dropna().unique())
-                if years:
-                    selected_years = st.multiselect(
-                        "Filter by Year",
-                        options=years,
-                        default=[],
-                        key="season_team_lp_years",
-                        label_visibility="collapsed",
-                        help="Leave empty to show all years"
-                    )
-                else:
-                    selected_years = []
-            else:
-                selected_years = []
+        if filtered_data.empty:
+            st.warning("No data matches the selected filters.")
+            return
 
-            st.markdown("---")
+        df = get_basic_stats_by_mgr(filtered_data)
+        self._render_data_table(df, "season_manager", "All")
 
-            # Manager filter
-            st.markdown("**👤 Manager Filter:**")
-            if 'manager' in self.team_data_by_lineup_position.columns:
-                managers = sorted(self.team_data_by_lineup_position['manager'].dropna().unique())
-                selected_managers = st.multiselect(
-                    "Select Manager(s)",
-                    options=managers,
-                    default=[],
-                    key="season_team_lp_managers",
-                    help="Leave empty to show all managers",
-                    label_visibility="collapsed"
-                )
-            else:
-                selected_managers = []
+    def _display_visualizations(self, filters: dict):
+        """Display visualizations."""
+        filtered_pos_data = self._apply_filters(self.team_data_by_position, filters)
+        filtered_mgr_data = self._apply_filters(self.team_data_by_manager, filters, filter_position=False)
 
-            st.markdown("---")
+        if filtered_pos_data.empty and filtered_mgr_data.empty:
+            st.info("No data available for visualizations with the selected filters.")
+            return
 
-            # Active filters summary
-            st.markdown("**🎯 Active Filters:**")
-            active_filters = []
-            if selected_lineup_pos != "All":
-                active_filters.append(f"Lineup Pos: {selected_lineup_pos}")
-            if not st.session_state.get("season_team_include_regular_season", True):
-                active_filters.append("Regular Season: Excluded")
-            if not st.session_state.get("season_team_include_playoffs", True):
-                active_filters.append("Playoffs: Excluded")
-            if st.session_state.get("season_team_include_consolation", False):
-                active_filters.append("Consolation: Included")
-            if selected_years:
-                if len(selected_years) <= 3:
-                    active_filters.append(f"Years: {', '.join(map(str, selected_years))}")
-                else:
-                    active_filters.append(f"Years: {min(selected_years)}-{max(selected_years)}")
-            if selected_managers:
-                if len(selected_managers) <= 2:
-                    active_filters.append(f"Managers: {', '.join(selected_managers)}")
-                else:
-                    active_filters.append(f"Managers: {len(selected_managers)} selected")
+        visualizer = TeamStatsVisualizer(filtered_pos_data, filtered_mgr_data)
+        visualizer.display_season_visualizations()
 
-            if active_filters:
-                for filter_text in active_filters:
-                    st.caption(f"🏷️ {filter_text}")
-            else:
-                st.caption("No filters active")
-
-            # Clear all filters button
-            if active_filters:
-                if st.button("🔄 Clear All Filters", key="season_team_lp_clear_all", use_container_width=True):
-                    for key in list(st.session_state.keys()):
-                        if key.startswith("season_team"):
-                            del st.session_state[key]
-                    st.rerun()
-
-        with data_col:
-            # Apply filters to data
-            filtered_data = self.team_data_by_lineup_position.copy()
-
-            # Lineup position filter
-            if selected_lineup_pos != "All":
-                filtered_data = filtered_data[filtered_data["lineup_position"] == selected_lineup_pos]
-
-            # Year filter
-            if selected_years:
-                filtered_data = filtered_data[filtered_data['year'].isin(selected_years)]
-
-            # Manager filter
-            if selected_managers:
-                filtered_data = filtered_data[filtered_data['manager'].isin(selected_managers)]
-
-            # Show quick metrics for filtered data
-            self._display_quick_metrics_for_lineup_data(filtered_data, selected_lineup_pos)
-
-            # Stat type tabs
-            stat_tabs = st.tabs([
-                TAB_LABELS['basic_stats'],
-                TAB_LABELS['visualizations']
-            ])
-
-            with stat_tabs[0]:
-                df = self._get_basic_stats_by_lineup_pos(filtered_data, selected_lineup_pos)
-                if df.empty:
-                    render_empty_state(
-                        title="No Data Found",
-                        message=f"No basic stats available for {selected_lineup_pos}",
-                        icon="🔍"
-                    )
-                else:
-                    # Show data count
-                    render_filter_count(len(df), len(filtered_data))
-
-                    # Display table with dynamic height
-                    table_height = min(max(300, len(df) * 35), 700)
-                    st.dataframe(df, hide_index=True, use_container_width=True, height=table_height)
-
-                    # Export button
-                    self._render_export_button(df, "season_lineup_pos_stats")
-
-            with stat_tabs[1]:
-                visualizer = TeamStatsVisualizer(filtered_data, self.team_data_by_manager)
-                visualizer.display_season_visualizations()
-
-    def _get_basic_stats_by_lineup_pos(self, data: pd.DataFrame, lineup_position: str) -> pd.DataFrame:
+    def _get_basic_stats_by_lineup_pos(self, data: pd.DataFrame) -> pd.DataFrame:
         """Get basic stats formatted for lineup position view."""
         if data.empty:
             return pd.DataFrame()
 
-        # Select columns to display (season granularity - no aggregation)
-        display_cols = []
-        for col in ['manager', 'year', 'lineup_position', 'points', 'manager_spar', 'games_played', 'season_ppg']:
-            if col in data.columns:
-                display_cols.append(col)
+        display_cols = [col for col in ['manager', 'year', 'lineup_position', 'points', 'manager_spar', 'games_played', 'season_ppg']
+                       if col in data.columns]
 
         if not display_cols:
             return pd.DataFrame()
 
         result = data[display_cols].copy()
 
-        # Round numeric columns for cleaner display
-        if 'points' in result.columns:
-            result['points'] = result['points'].round(2)
-        if 'manager_spar' in result.columns:
-            result['manager_spar'] = result['manager_spar'].round(2)
-        if 'season_ppg' in result.columns:
-            result['season_ppg'] = result['season_ppg'].round(2)
+        # Round numeric columns
+        for col in ['points', 'manager_spar', 'season_ppg']:
+            if col in result.columns:
+                result[col] = result[col].round(2)
 
-        # Rename columns for display
+        # Rename columns
         rename_map = {
-            'manager': 'Manager',
-            'year': 'Year',
+            'manager': 'Manager', 'year': 'Year',
             'lineup_position': 'Lineup Position',
-            'points': 'Points',
-            'manager_spar': 'Manager SPAR',
-            'games_played': 'Games',
-            'season_ppg': 'PPG'
+            'points': 'Points', 'manager_spar': 'Manager SPAR',
+            'games_played': 'Games', 'season_ppg': 'PPG'
         }
         result = result.rename(columns={k: v for k, v in rename_map.items() if k in result.columns})
 
-        # Sort by year desc, then points desc
-        sort_cols = []
-        if 'Year' in result.columns:
-            sort_cols.append(('Year', False))
-        if 'Points' in result.columns:
-            sort_cols.append(('Points', False))
-
+        # Sort
+        sort_cols = [c for c in ['Year', 'Points'] if c in result.columns]
         if sort_cols:
-            result = result.sort_values([c[0] for c in sort_cols], ascending=[c[1] for c in sort_cols])
+            result = result.sort_values(sort_cols, ascending=[False, False][:len(sort_cols)])
 
         return result
 
-    def _display_quick_metrics_for_lineup_data(self, data: pd.DataFrame, lineup_position: str):
-        """Display quick summary metrics for lineup position data."""
-        try:
-            if data.empty:
-                return
-
-            # Calculate metrics
-            total_points = data["points"].sum() if "points" in data.columns else 0
-            avg_points = data["points"].mean() if "points" in data.columns else 0
-            total_records = len(data)
-            unique_managers = data["manager"].nunique() if "manager" in data.columns else 0
-
-            # Display metrics in grid
-            metrics = [
-                {"label": "Total Points", "value": f"{total_points:,.1f}"},
-                {"label": "Avg Points/Season", "value": f"{avg_points:.1f}"},
-                {"label": "Total Seasons", "value": f"{total_records:,}"},
-                {"label": "Managers", "value": f"{unique_managers}"},
-            ]
-
-            render_metric_grid(metrics, columns=4)
-
-        except Exception:
-            pass
-
-    def display_by_manager(self):
-        """Display stats grouped by manager only."""
-        if self.team_data_by_manager.empty:
-            render_empty_state(
-                title="No Team Data Available",
-                message="Season team data has not been loaded yet.",
-                icon="📭"
-            )
-            return
-
-        # Use player_stats style: filters on left (1), data on right (3)
-        filter_col, data_col = st.columns([1, 3])
-
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
-
-            render_info_box(
-                "Aggregated stats for each manager across all positions",
-                icon="ℹ️"
-            )
-
-            st.markdown("---")
-
-            # Week type filters (Regular Season, Playoffs, Consolation) - shared with position view
-            # Use the same keys as the position view so data loader gets updated values
-            st.markdown("**🏆 Week Type Filters:**")
-            st.checkbox(
-                "Regular Season",
-                value=st.session_state.get("season_team_include_regular_season", True),
-                key="season_team_include_regular_season",
-                help="Include regular season weeks"
-            )
-            playoff_col1, playoff_col2 = st.columns(2)
-            with playoff_col1:
-                st.checkbox(
-                    "Playoffs",
-                    value=st.session_state.get("season_team_include_playoffs", True),
-                    key="season_team_include_playoffs",
-                    help="Include weeks from the fantasy playoffs"
-                )
-            with playoff_col2:
-                st.checkbox(
-                    "Consolation",
-                    value=st.session_state.get("season_team_include_consolation", False),
-                    key="season_team_include_consolation",
-                    help="Include weeks from the consolation bracket"
-                )
-
-            st.markdown("---")
-
-            # Year filter
-            st.markdown("**📅 Year Range:**")
-            if 'year' in self.team_data_by_manager.columns:
-                years = sorted(self.team_data_by_manager['year'].dropna().unique())
-                if years:
-                    selected_years = st.multiselect(
-                        "Filter by Year",
-                        options=years,
-                        default=[],
-                        key="season_team_mgr_years",
-                        label_visibility="collapsed",
-                        help="Leave empty to show all years"
-                    )
-                else:
-                    selected_years = []
-            else:
-                selected_years = []
-
-            st.markdown("---")
-
-            # Manager filter
-            st.markdown("**👤 Manager Filter:**")
-            if 'manager' in self.team_data_by_manager.columns:
-                managers = sorted(self.team_data_by_manager['manager'].dropna().unique())
-                selected_managers = st.multiselect(
-                    "Select Manager(s)",
-                    options=managers,
-                    default=[],
-                    key="season_team_mgr_managers",
-                    help="Leave empty to show all managers",
-                    label_visibility="collapsed"
-                )
-            else:
-                selected_managers = []
-
-            st.markdown("---")
-
-            # Active filters summary
-            st.markdown("**🎯 Active Filters:**")
-            active_filters = []
-            if not st.session_state.get("season_team_include_regular_season", True):
-                active_filters.append("Regular Season: Excluded")
-            if not st.session_state.get("season_team_include_playoffs", True):
-                active_filters.append("Playoffs: Excluded")
-            if st.session_state.get("season_team_include_consolation", False):
-                active_filters.append("Consolation: Included")
-            if selected_years:
-                if len(selected_years) <= 3:
-                    active_filters.append(f"Years: {', '.join(map(str, selected_years))}")
-                else:
-                    active_filters.append(f"Years: {min(selected_years)}-{max(selected_years)}")
-            if selected_managers:
-                if len(selected_managers) <= 2:
-                    active_filters.append(f"Managers: {', '.join(selected_managers)}")
-                else:
-                    active_filters.append(f"Managers: {len(selected_managers)} selected")
-
-            if active_filters:
-                for filter_text in active_filters:
-                    st.caption(f"🏷️ {filter_text}")
-            else:
-                st.caption("No filters active")
-
-            # Clear all filters button
-            if active_filters:
-                if st.button("🔄 Clear All Filters", key="season_team_mgr_clear_all", use_container_width=True):
-                    for key in list(st.session_state.keys()):
-                        if key.startswith("season_team"):
-                            del st.session_state[key]
-                    st.rerun()
-
-        with data_col:
-            # Apply filters to data
-            filtered_data = self.team_data_by_manager.copy()
-
-            # Year filter
-            if selected_years:
-                filtered_data = filtered_data[filtered_data['year'].isin(selected_years)]
-
-            # Manager filter
-            if selected_managers:
-                filtered_data = filtered_data[filtered_data['manager'].isin(selected_managers)]
-
-            # Stat type tabs (no advanced stats for manager-only view)
-            stat_tabs = st.tabs([
-                TAB_LABELS['basic_stats'],
-                TAB_LABELS['visualizations']
-            ])
-
-            with stat_tabs[0]:
-                df = get_basic_stats_by_mgr(filtered_data)
-                if df.empty:
-                    render_empty_state(
-                        title="No Data Found",
-                        message="No basic stats available",
-                        icon="🔍"
-                    )
-                else:
-                    # Show data count
-                    st.markdown(f"**Showing {len(df)} managers**")
-
-                    # Get column config (use 'All' since this is aggregated across positions)
-                    from .shared.column_config import get_column_config_for_position
-                    column_config = get_column_config_for_position("All")
-
-                    # Display table with dynamic height
-                    table_height = min(max(300, len(df) * 35), 700)
-                    st.dataframe(
-                        df,
-                        column_config=column_config,
-                        hide_index=True,
-                        use_container_width=True,
-                        height=table_height
-                    )
-
-                    # Export button
-                    self._render_export_button(df, "season_manager_stats")
-
-            with stat_tabs[1]:
-                visualizer = TeamStatsVisualizer(filtered_data, filtered_data)
-                visualizer.display_season_visualizations()
-
-    def _display_quick_metrics(self, position: str):
-        """Display quick summary metrics for the selected position."""
-        try:
-            # Filter data by position if not 'All'
-            if position != "All":
-                data = self.team_data_by_position[
-                    self.team_data_by_position["fantasy_position"] == position
-                ]
-            else:
-                data = self.team_data_by_position
-
-            if data.empty:
-                return
-
-            # Calculate metrics
-            total_points = data["points"].sum() if "points" in data.columns else 0
-            avg_points = data["points"].mean() if "points" in data.columns else 0
-            total_records = len(data)
-            unique_managers = data["manager"].nunique() if "manager" in data.columns else 0
-
-            # Display metrics in grid
-            metrics = [
-                {"label": "Total Points", "value": f"{total_points:,.1f}"},
-                {"label": "Avg Points/Season", "value": f"{avg_points:.1f}"},
-                {"label": "Total Seasons", "value": f"{total_records:,}"},
-                {"label": "Managers", "value": f"{unique_managers}"},
-            ]
-
-            render_metric_grid(metrics, columns=4)
-
-        except Exception as e:
-            # Silently fail if metrics can't be calculated
-            pass
-
-    def _display_quick_metrics_for_data(self, data: pd.DataFrame, position: str):
-        """Display quick summary metrics for already-filtered data."""
-        try:
-            if data.empty:
-                return
-
-            # Calculate metrics from the filtered data
-            total_points = data["points"].sum() if "points" in data.columns else 0
-            avg_points = data["points"].mean() if "points" in data.columns else 0
-            total_records = len(data)
-            unique_managers = data["manager"].nunique() if "manager" in data.columns else 0
-
-            # Display metrics in grid
-            metrics = [
-                {"label": "Total Points", "value": f"{total_points:,.1f}"},
-                {"label": "Avg Points/Season", "value": f"{avg_points:.1f}"},
-                {"label": "Total Seasons", "value": f"{total_records:,}"},
-                {"label": "Managers", "value": f"{unique_managers}"},
-            ]
-
-            render_metric_grid(metrics, columns=4)
-
-        except Exception as e:
-            # Silently fail if metrics can't be calculated
-            pass
-
-    def _render_export_button(self, df: pd.DataFrame, filename_prefix: str):
-        """Render CSV export button for a dataframe."""
+    def _render_data_table(self, df: pd.DataFrame, prefix: str, position: str):
+        """Render a data table with count and export button."""
         if df.empty:
+            render_empty_state(
+                title="No Data Found",
+                message=f"No stats available for the selected filters",
+                icon="🔍"
+            )
             return
 
-        csv = df.to_csv(index=False).encode('utf-8')
+        # Show count
+        st.markdown(f"**{len(df):,} records**")
 
+        # Get column config
+        column_config = get_column_config_for_position(position)
+
+        # Display table
+        table_height = min(max(300, len(df) * 35), 600)
+        st.dataframe(
+            df,
+            column_config=column_config,
+            hide_index=True,
+            use_container_width=True,
+            height=table_height
+        )
+
+        # Export button
+        csv = df.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="📥 Download CSV",
+            label="Download CSV",
             data=csv,
-            file_name=f"{filename_prefix}.csv",
+            file_name=f"{prefix}.csv",
             mime="text/csv",
-            key=f"{filename_prefix}_download"
+            key=f"{prefix}_download"
         )

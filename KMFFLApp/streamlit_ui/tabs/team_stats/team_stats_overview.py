@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Team Stats Overview - Main entry point for team stats tab."""
-# Updated to support both manager+position and manager-only groupings
 import streamlit as st
 
 from .weekly_team_stats import WeeklyTeamViewer
@@ -17,33 +16,27 @@ from md.tab_data_access.team_stats import (
     load_season_team_data_by_lineup_position,
     load_career_team_data_by_lineup_position,
 )
+from ..shared.modern_styles import apply_modern_styles
+from .shared.theme import apply_theme_styles
 
 
 @st.fragment
 def display_team_stats_overview():
     """Main team stats display with Weekly, Season, and Career subtabs."""
+    apply_modern_styles()
+    apply_theme_styles()
 
-    st.markdown("## Team Stats")
-    st.caption("View aggregated statistics for managers and position groups")
+    # Get subtab from session state (controlled by hamburger menu)
+    subtab_idx = st.session_state.get("subtab_Team Stats", 0)
+    sub_tab_names = ["Weekly", "Seasons", "Career"]
+    sub_tab_name = sub_tab_names[subtab_idx] if subtab_idx < len(sub_tab_names) else "Weekly"
 
-    # Subtabs for different time periods
-    subtab_names = ["Weekly", "Season", "Career"]
-    selected_subtab = st.radio(
-        "Team View",
-        subtab_names,
-        horizontal=True,
-        index=st.session_state.get("active_team_subtab", 0),
-        key="team_subtab_selector",
-        label_visibility="collapsed"
-    )
-    st.session_state["active_team_subtab"] = subtab_names.index(selected_subtab)
-
-    # Render the selected subtab
-    if selected_subtab == "Weekly":
+    # Render only the active subtab (lazy loading)
+    if sub_tab_name == "Weekly":
         render_weekly_team()
-    elif selected_subtab == "Season":
+    elif sub_tab_name == "Seasons":
         render_season_team()
-    elif selected_subtab == "Career":
+    elif sub_tab_name == "Career":
         render_career_team()
 
 
