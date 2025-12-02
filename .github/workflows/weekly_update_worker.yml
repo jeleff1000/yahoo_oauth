@@ -360,7 +360,8 @@ jobs:
         env:
           DATABASE_NAME: ${{ matrix.database }}
         run: |
-          # Create initial context WITHOUT oauth - credentials added in next step
+          # Reconstruct context from league_context.parquet (stored by initial import)
+          # Falls back to league_settings.parquet for backwards compatibility
           python - <<'PYEOF'
           import json
           import os
@@ -376,7 +377,65 @@ jobs:
               display_name = db_name[2:]  # Strip the l_ prefix
           league_name = display_name.replace('_', ' ').title()
 
-          # Try to read league info from league_settings.parquet
+          # PREFERRED: Try to read from league_context.parquet (stored by initial import)
+          context_file = data_dir / "league_context.parquet"
+          if context_file.exists():
+              print(f"✅ Found league_context.parquet - using stored context")
+              df = pd.read_parquet(context_file)
+              if not df.empty:
+                  row = df.iloc[0]
+
+                  context = {
+                      "league_id": row.get('league_id', db_name),
+                      "league_name": row.get('league_name', league_name),
+                      "oauth_file_path": None,  # Will use embedded oauth_credentials
+                      "oauth_credentials": None,  # Populated in next step
+                      "game_code": row.get('game_code', 'nfl'),
+                      "start_year": int(row.get('start_year', 2014)),
+                      "end_year": int(row.get('end_year', 2024)),
+                      "num_teams": int(row.get('num_teams')) if pd.notna(row.get('num_teams')) else None,
+                      "playoff_teams": int(row.get('playoff_teams')) if pd.notna(row.get('playoff_teams')) else None,
+                      "regular_season_weeks": int(row.get('regular_season_weeks')) if pd.notna(row.get('regular_season_weeks')) else None,
+                      "data_directory": str(data_dir.resolve()),
+                      "max_workers": 5,
+                      "enable_caching": True,
+                      "rate_limit_per_sec": 4.0,
+                  }
+
+                  # Parse JSON columns
+                  try:
+                      league_ids_json = row.get('league_ids_json', '{}')
+                      if league_ids_json and pd.notna(league_ids_json):
+                          context['league_ids'] = json.loads(league_ids_json)
+                          print(f"   Loaded {len(context['league_ids'])} league IDs")
+                  except Exception as e:
+                      print(f"   ⚠️ Could not parse league_ids_json: {e}")
+
+                  try:
+                      keeper_rules_json = row.get('keeper_rules_json')
+                      if keeper_rules_json and pd.notna(keeper_rules_json):
+                          context['keeper_rules'] = json.loads(keeper_rules_json)
+                  except:
+                      pass
+
+                  try:
+                      overrides_json = row.get('manager_name_overrides_json', '{}')
+                      if overrides_json and pd.notna(overrides_json):
+                          context['manager_name_overrides'] = json.loads(overrides_json)
+                  except:
+                      pass
+
+                  with open("league_context.json", 'w') as f:
+                      json.dump(context, f, indent=2)
+
+                  print(f"✅ Reconstructed context for {db_name}")
+                  print(f"   Years: {context.get('start_year')} - {context.get('end_year')}")
+                  if context.get('league_ids'):
+                      print(f"   League IDs: {list(context['league_ids'].keys())}")
+                  exit(0)
+
+          # FALLBACK: Try to read league info from league_settings.parquet (older imports)
+          print(f"⚠️ No league_context.parquet found - falling back to league_settings.parquet")
           settings_file = data_dir / "league_settings.parquet"
 
           if settings_file.exists():
@@ -388,8 +447,8 @@ jobs:
                   context = {
                       "league_id": latest.get('league_key', db_name),
                       "league_name": league_name,
-                      "oauth_file_path": None,  # Will use embedded oauth_credentials
-                      "oauth_credentials": None,  # Populated in next step
+                      "oauth_file_path": None,
+                      "oauth_credentials": None,
                       "game_code": "nfl",
                       "start_year": int(df['year'].min()),
                       "end_year": int(df['year'].max()),
@@ -412,12 +471,12 @@ jobs:
                   with open("league_context.json", 'w') as f:
                       json.dump(context, f, indent=2)
 
-                  print(f"✅ Reconstructed context for {db_name}")
+                  print(f"✅ Reconstructed context from league_settings for {db_name}")
                   print(json.dumps(context, indent=2))
                   exit(0)
 
-          # Fallback: create minimal context
-          print(f"⚠️ Could not find league_settings.parquet, creating minimal context")
+          # LAST RESORT: create minimal context
+          print(f"⚠️ No settings files found - creating minimal context")
           context = {
               "league_id": db_name,
               "league_name": league_name,
@@ -668,6 +727,58 @@ jobs:
             echo "❌ Weekly update failed with exit code ${EXIT_CODE}"
             tail -100 ../weekly_update.log
           fi
+
+      - name: Save updated context to parquet
+        if: steps.update.outputs.exit_code == '0' && github.event.inputs.dry_run != 'true'
+        run: |
+          echo "========================================"
+          echo "Saving updated context to parquet"
+          echo "========================================"
+          python - <<'PYEOF'
+          import json
+          import pandas as pd
+          from pathlib import Path
+
+          # Read the (potentially updated) league_context.json
+          context_file = Path("league_context.json")
+          if not context_file.exists():
+              print("⚠️ league_context.json not found")
+              exit(0)
+
+          with open(context_file) as f:
+              context = json.load(f)
+
+          print(f"Saving context for: {context.get('league_name')}")
+          print(f"  Years: {context.get('start_year')} - {context.get('end_year')}")
+          print(f"  League IDs: {len(context.get('league_ids', {}))} years mapped")
+
+          # Convert to a single-row DataFrame with JSON columns for complex fields
+          row = {
+              'league_id': context.get('league_id'),
+              'league_name': context.get('league_name'),
+              'game_code': context.get('game_code', 'nfl'),
+              'start_year': context.get('start_year'),
+              'end_year': context.get('end_year'),
+              'num_teams': context.get('num_teams'),
+              'playoff_teams': context.get('playoff_teams'),
+              'regular_season_weeks': context.get('regular_season_weeks'),
+              # Store complex objects as JSON strings
+              'league_ids_json': json.dumps(context.get('league_ids', {})),
+              'keeper_rules_json': json.dumps(context.get('keeper_rules')) if context.get('keeper_rules') else None,
+              'manager_name_overrides_json': json.dumps(context.get('manager_name_overrides', {})),
+              # Metadata
+              'created_at': context.get('created_at'),
+              'updated_at': context.get('updated_at'),
+          }
+
+          df = pd.DataFrame([row])
+
+          # Save to fantasy_football_data so it gets uploaded with other parquets
+          output_path = Path("fantasy_football_data/league_context.parquet")
+          df.to_parquet(output_path, index=False)
+
+          print(f"✅ Saved {output_path}")
+          PYEOF
 
       - name: Upload updated data to MotherDuck
         if: steps.update.outputs.exit_code == '0' && github.event.inputs.dry_run != 'true'

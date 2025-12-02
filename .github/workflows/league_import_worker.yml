@@ -427,6 +427,65 @@ jobs:
               print("⚠️  No valid settings to save")
           PYEOF
 
+      - name: Save league context to parquet for MotherDuck
+        if: steps.import.outputs.exit_code == '0'
+        run: |
+          echo "========================================"
+          echo "Saving league context to parquet"
+          echo "========================================"
+          python - <<'PYEOF'
+          import json
+          import pandas as pd
+          from pathlib import Path
+
+          # Read the updated league_context.json (may have been updated by initial_import_v2.py with discovered league_ids)
+          context_file = Path("league_context.json")
+          if not context_file.exists():
+              print("⚠️ league_context.json not found")
+              exit(1)
+
+          with open(context_file) as f:
+              context = json.load(f)
+
+          print(f"Saving context for: {context.get('league_name')}")
+          print(f"  Years: {context.get('start_year')} - {context.get('end_year')}")
+          print(f"  League IDs: {len(context.get('league_ids', {}))} years mapped")
+
+          # Convert to a single-row DataFrame with JSON columns for complex fields
+          row = {
+              'league_id': context.get('league_id'),
+              'league_name': context.get('league_name'),
+              'game_code': context.get('game_code', 'nfl'),
+              'start_year': context.get('start_year'),
+              'end_year': context.get('end_year'),
+              'num_teams': context.get('num_teams'),
+              'playoff_teams': context.get('playoff_teams'),
+              'regular_season_weeks': context.get('regular_season_weeks'),
+              # Store complex objects as JSON strings
+              'league_ids_json': json.dumps(context.get('league_ids', {})),
+              'keeper_rules_json': json.dumps(context.get('keeper_rules')) if context.get('keeper_rules') else None,
+              'manager_name_overrides_json': json.dumps(context.get('manager_name_overrides', {})),
+              # Metadata
+              'created_at': context.get('created_at'),
+              'updated_at': context.get('updated_at'),
+          }
+
+          df = pd.DataFrame([row])
+
+          # Save to fantasy_football_data so it gets uploaded with other parquets
+          output_path = Path("fantasy_football_data/league_context.parquet")
+          df.to_parquet(output_path, index=False)
+
+          print(f"✅ Saved {output_path}")
+          print(f"   Columns: {list(df.columns)}")
+
+          # Show the league_ids mapping
+          if context.get('league_ids'):
+              print(f"\n   League IDs mapping:")
+              for year, lid in sorted(context.get('league_ids', {}).items()):
+                  print(f"     {year}: {lid}")
+          PYEOF
+
       - name: Upload to MotherDuck
         if: steps.import.outputs.exit_code == '0'
         id: motherduck
