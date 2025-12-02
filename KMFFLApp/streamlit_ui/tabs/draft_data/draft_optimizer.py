@@ -1466,6 +1466,9 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
     st.header("🔧 Draft Optimizer")
     st.caption("Build your optimal roster using historical performance data.")
 
+    # IMMEDIATE DEBUG - shows at very top
+    st.info(f"🔍 DEBUG: Received {len(draft_history)} rows, cols include: cost_bucket={'cost_bucket' in draft_history.columns}, position_tier={'position_tier' in draft_history.columns}")
+
     # === LEAGUE INTELLIGENCE PANEL ===
     league_insights = None
     if LEAGUE_INTELLIGENCE_AVAILABLE:
