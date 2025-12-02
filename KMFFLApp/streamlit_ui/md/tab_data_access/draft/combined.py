@@ -131,13 +131,15 @@ def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
                 roster_positions = settings.get('roster_positions', [])
 
                 if roster_positions:
+                    # Debug: show raw roster_positions
+                    st.info(f"🔍 Raw roster_positions from DB: {roster_positions}")
                     position_counts = {}
                     for slot in roster_positions:
                         pos = slot.get('position', '').upper()
                         count = int(slot.get('count', 0))
                         if pos and count > 0:
                             position_counts[pos] = count
-                    st.info(f"🔍 Roster from league_settings: {position_counts}")
+                    st.info(f"🔍 Parsed position_counts: {position_counts}")
 
     except Exception:
         pass  # Fall through to player-based detection
