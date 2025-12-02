@@ -146,15 +146,8 @@ class OptimizedCareerPlayerViewer:
     def display(self):
         apply_modern_styles()
 
-        st.markdown("""
-        <div class="hero-section">
-        <h2>🏆 Career Player Stats</h2>
-        <p style="margin: 0.5rem 0 0 0;">Aggregated player performance across all seasons. Use filters to narrow down results.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Create tabs
-        tabs = st.tabs(["📊 Basic Stats", "📈 Advanced Stats", "🎯 Matchup Stats", "🏆 Optimal Lineup"])
+        # Create tabs (no hero section - cleaner mobile UI)
+        tabs = st.tabs(["Basic Stats", "Advanced Stats", "Matchup Stats", "Optimal Lineup"])
 
         # ==================== BASIC STATS TAB ====================
         with tabs[0]:
@@ -170,176 +163,118 @@ class OptimizedCareerPlayerViewer:
 
         # ==================== OPTIMAL LINEUP TAB ====================
         with tabs[3]:
-            st.header("Optimal Lineup — Career")
             from .career_player_subprocesses.optimal_lineup_career import OptimalLineupCareerViewer
             OptimalLineupCareerViewer().display()
 
     @st.fragment
     def _display_basic_stats_tab(self):
         """Display Basic Stats tab with optimized layout."""
-        st.header("Basic Career Statistics")
-
-        # Create two-column layout: filters on left, data on right
-        filter_col, data_col = st.columns([1, 3])
-
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
+        # Collapsible filters
+        with st.expander("🔎 Filters", expanded=False):
             filter_panel = SmartFilterPanel("career_basic", self)
             filters, active_position = filter_panel.display_filters()
 
-        with data_col:
-            # Get sort preferences
-            sort_col = "points"
-            sort_dir = "DESC"  # Always sort by points DESC
+        sort_col, sort_dir = "points", "DESC"
+        with st.spinner("Loading career data..."):
+            position_filter = filters.get('position') or filters.get('nfl_position')
+            if isinstance(position_filter, list) and len(position_filter) == 1:
+                position_filter = position_filter[0]
+            elif isinstance(position_filter, list) and len(position_filter) > 1:
+                position_filter = None
 
-            # Load and display data
-            with st.spinner("Loading career data..."):
-                # Extract position from filters - handle both list and string
-                # Check 'position' first (from quick filters), then fall back to 'nfl_position'
-                position_filter = filters.get('position') or filters.get('nfl_position')
-                if isinstance(position_filter, list) and len(position_filter) == 1:
-                    position_filter = position_filter[0]
-                elif isinstance(position_filter, list) and len(position_filter) > 1:
-                    position_filter = None  # Multiple positions selected
+            career_data = load_players_career_data(
+                position=position_filter,
+                player_query=filters.get('player_query'),
+                manager_query=filters.get('manager_query'),
+                manager=filters.get('manager'),
+                nfl_team=filters.get('nfl_team'),
+                opponent=filters.get('opponent'),
+                opponent_nfl_team=filters.get('opponent_nfl_team'),
+                year=filters.get('year'),
+                rostered_only=filters.get('rostered_only', False),
+                started_only=filters.get('started_only', False),
+                sort_column=sort_col,
+                sort_direction=sort_dir
+            )
 
-                career_data = load_players_career_data(
-                    position=position_filter,
-                    player_query=filters.get('player_query'),
-                    manager_query=filters.get('manager_query'),
-                    manager=filters.get('manager'),
-                    nfl_team=filters.get('nfl_team'),
-                    opponent=filters.get('opponent'),
-                    opponent_nfl_team=filters.get('opponent_nfl_team'),
-                    year=filters.get('year'),
-                    rostered_only=filters.get('rostered_only', False),
-                    started_only=filters.get('started_only', False),
-                    sort_column=sort_col,
-                    sort_direction=sort_dir
-                )
-
-                if career_data is not None and not career_data.empty:
-                    basic_stats_df = get_basic_stats(career_data, active_position or "All")
-
-                    # Use full dataframe (no column selection UI)
-                    display_df = basic_stats_df
-
-                    # Get total count
-                    total_count = len(display_df)
-
-                    # Display with load more
-                    self.display_basic.display_table_with_load_more(
-                        display_df,
-                        total_available=total_count
-                    )
-                else:
-                    st.warning("No data available for the selected filters.")
+            if career_data is not None and not career_data.empty:
+                basic_stats_df = get_basic_stats(career_data, active_position or "All")
+                self.display_basic.display_table_with_load_more(basic_stats_df, total_available=len(basic_stats_df))
+            else:
+                st.warning("No data available for the selected filters.")
 
     @st.fragment
     def _display_advanced_stats_tab(self):
         """Display Advanced Stats tab."""
-        st.header("Advanced Career Statistics")
-
-        filter_col, data_col = st.columns([1, 3])
-
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
+        # Collapsible filters
+        with st.expander("🔎 Filters", expanded=False):
             filter_panel = SmartFilterPanel("career_advanced", self)
             filters, active_position = filter_panel.display_filters()
 
-        with data_col:
-            # Always sort by points DESC (best default)
-            sort_col = "points"
-            sort_dir = "DESC"
+        sort_col, sort_dir = "points", "DESC"
+        with st.spinner("Loading advanced career data..."):
+            position_filter = filters.get('position') or filters.get('nfl_position')
+            if isinstance(position_filter, list) and len(position_filter) == 1:
+                position_filter = position_filter[0]
+            elif isinstance(position_filter, list) and len(position_filter) > 1:
+                position_filter = None
 
-            with st.spinner("Loading advanced career data..."):
-                # Extract position from filters - handle both list and string
-                # Check 'position' first (from quick filters), then fall back to 'nfl_position'
-                position_filter = filters.get('position') or filters.get('nfl_position')
-                if isinstance(position_filter, list) and len(position_filter) == 1:
-                    position_filter = position_filter[0]
-                elif isinstance(position_filter, list) and len(position_filter) > 1:
-                    position_filter = None  # Multiple positions selected
+            career_data = load_players_career_data(
+                position=position_filter,
+                player_query=filters.get('player_query'),
+                manager_query=filters.get('manager_query'),
+                manager=filters.get('manager'),
+                nfl_team=filters.get('nfl_team'),
+                opponent=filters.get('opponent'),
+                opponent_nfl_team=filters.get('opponent_nfl_team'),
+                year=filters.get('year'),
+                rostered_only=filters.get('rostered_only', False),
+                started_only=filters.get('started_only', False),
+                exclude_postseason=filters.get('exclude_postseason', False),
+                sort_column=sort_col,
+                sort_direction=sort_dir
+            )
 
-                career_data = load_players_career_data(
-                    position=position_filter,
-                    player_query=filters.get('player_query'),
-                    manager_query=filters.get('manager_query'),
-                    manager=filters.get('manager'),
-                    nfl_team=filters.get('nfl_team'),
-                    opponent=filters.get('opponent'),
-                    opponent_nfl_team=filters.get('opponent_nfl_team'),
-                    year=filters.get('year'),
-                    rostered_only=filters.get('rostered_only', False),
-                    started_only=filters.get('started_only', False),
-                    exclude_postseason=filters.get('exclude_postseason', False),
-                    sort_column=sort_col,
-                    sort_direction=sort_dir
-                )
-
-                if career_data is not None and not career_data.empty:
-                    advanced_stats_df = get_advanced_stats(career_data, active_position or "All")
-
-                    # Use full dataframe (no column selection UI)
-                    display_df = advanced_stats_df
-                    total_count = len(display_df)
-
-                    self.display_advanced.display_table_with_load_more(
-                        display_df,
-                        total_available=total_count
-                    )
-                else:
-                    st.warning("No data available for the selected filters.")
+            if career_data is not None and not career_data.empty:
+                advanced_stats_df = get_advanced_stats(career_data, active_position or "All")
+                self.display_advanced.display_table_with_load_more(advanced_stats_df, total_available=len(advanced_stats_df))
+            else:
+                st.warning("No data available for the selected filters.")
 
     @st.fragment
     def _display_matchup_stats_tab(self):
         """Display Matchup Stats tab."""
-        st.header("Career Matchup Statistics")
-
-        st.info("📌 **Career Matchup Stats**: Shows only rostered players with full career matchup context. All rows are displayed (no pagination).")
-
-        filter_col, data_col = st.columns([1, 3])
-
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
+        # Collapsible filters
+        with st.expander("🔎 Filters", expanded=False):
             filter_panel = SmartFilterPanel("career_matchup", self)
             filters, active_position = filter_panel.display_filters()
 
-        with data_col:
-            # Always sort by points DESC (best default)
-            sort_col = "points"
-            sort_dir = "DESC"
+        sort_col, sort_dir = "points", "DESC"
+        with st.spinner("Loading matchup career data..."):
+            position_filter = filters.get('position') or filters.get('nfl_position')
+            if isinstance(position_filter, list) and len(position_filter) == 1:
+                position_filter = position_filter[0]
+            elif isinstance(position_filter, list) and len(position_filter) > 1:
+                position_filter = None
 
-            with st.spinner("Loading matchup career data..."):
-                # Extract position from filters - handle both list and string
-                # Check 'position' first (from quick filters), then fall back to 'nfl_position'
-                position_filter = filters.get('position') or filters.get('nfl_position')
-                if isinstance(position_filter, list) and len(position_filter) == 1:
-                    position_filter = position_filter[0]
-                elif isinstance(position_filter, list) and len(position_filter) > 1:
-                    position_filter = None  # Multiple positions selected
+            career_data = load_players_career_data(
+                position=position_filter,
+                player_query=filters.get('player_query'),
+                manager_query=filters.get('manager_query'),
+                manager=filters.get('manager'),
+                nfl_team=filters.get('nfl_team'),
+                opponent=filters.get('opponent'),
+                opponent_nfl_team=filters.get('opponent_nfl_team'),
+                year=filters.get('year'),
+                rostered_only=True,
+                started_only=filters.get('started_only', False),
+                sort_column=sort_col,
+                sort_direction=sort_dir
+            )
 
-                career_data = load_players_career_data(
-                    position=position_filter,
-                    player_query=filters.get('player_query'),
-                    manager_query=filters.get('manager_query'),
-                    manager=filters.get('manager'),
-                    nfl_team=filters.get('nfl_team'),
-                    opponent=filters.get('opponent'),
-                    opponent_nfl_team=filters.get('opponent_nfl_team'),
-                    year=filters.get('year'),
-                    # For matchup/tab we only need rostered players (have a manager) — filter at SQL level for performance
-                    rostered_only=True,
-                    started_only=filters.get('started_only', False),
-                    sort_column=sort_col,
-                    sort_direction=sort_dir
-                )
-
-                if career_data is not None and not career_data.empty:
-                    # Show row count
-                    st.success(f"✅ Showing all {len(career_data):,} career matchup rows")
-
-                    # Use matchup viewer - directly display
-                    matchup_viewer = CombinedMatchupStatsViewer(career_data)
-                    matchup_viewer.display(prefix="career_matchup")
-                else:
-                    st.warning("No data available for the selected filters.")
+            if career_data is not None and not career_data.empty:
+                st.markdown(f"**{len(career_data):,} career matchup rows**")
+                matchup_viewer = CombinedMatchupStatsViewer(career_data)
+                matchup_viewer.display(prefix="career_matchup")
+            else:
+                st.warning("No data available for the selected filters.")

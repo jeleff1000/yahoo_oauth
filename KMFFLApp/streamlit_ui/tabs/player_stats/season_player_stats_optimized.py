@@ -144,15 +144,8 @@ class OptimizedSeasonPlayerViewer:
     def display(self):
         apply_modern_styles()
 
-        st.markdown("""
-        <div class="hero-section">
-        <h2>📊 Season Player Stats</h2>
-        <p style="margin: 0.5rem 0 0 0;">Aggregated player performance by season. Use filters to narrow down results.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Create tabs
-        tabs = st.tabs(["📊 Basic Stats", "📈 Advanced Stats", "🎯 Matchup Stats", "🏆 Optimal Lineup"])
+        # Create tabs (no hero section - cleaner mobile UI)
+        tabs = st.tabs(["Basic Stats", "Advanced Stats", "Matchup Stats", "Optimal Lineup"])
 
         # ==================== BASIC STATS TAB ====================
         with tabs[0]:
@@ -168,179 +161,120 @@ class OptimizedSeasonPlayerViewer:
 
         # ==================== OPTIMAL LINEUP TAB ====================
         with tabs[3]:
-            st.header("Optimal Lineup — Season")
-            # Import locally to avoid populating top-level imports if optional
             from .season_player_subprocesses.optimal_lineup_season import OptimalLineupSeasonViewer
             OptimalLineupSeasonViewer().display()
 
     @st.fragment
     def _display_basic_stats_tab(self):
         """Display Basic Stats tab with optimized layout."""
-        st.header("Basic Season Statistics")
-
-        # Create two-column layout: filters on left, data on right
-        filter_col, data_col = st.columns([1, 3])
-
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
+        # Collapsible filters
+        with st.expander("🔎 Filters", expanded=False):
             filter_panel = SmartFilterPanel("season_basic", self)
             filters, active_position = filter_panel.display_filters()
 
-        with data_col:
-            # Always sort by points DESC (best default)
-            sort_col = "points"
-            sort_dir = "DESC"
+        sort_col, sort_dir = "points", "DESC"
+        with st.spinner("Loading season data..."):
+            position_filter = filters.get('position') or filters.get('nfl_position')
+            if isinstance(position_filter, list) and len(position_filter) == 1:
+                position_filter = position_filter[0]
+            elif isinstance(position_filter, list) and len(position_filter) > 1:
+                position_filter = None
 
-            # Load and display data
-            with st.spinner("Loading season data..."):
-                # Extract position from filters - handle both list and string
-                # Check 'position' first (from quick filters), then fall back to 'nfl_position'
-                position_filter = filters.get('position') or filters.get('nfl_position')
-                if isinstance(position_filter, list) and len(position_filter) == 1:
-                    position_filter = position_filter[0]
-                elif isinstance(position_filter, list) and len(position_filter) > 1:
-                    position_filter = None  # Multiple positions selected
+            season_data = load_players_season_data(
+                position=position_filter,
+                player_query=filters.get('player_query'),
+                manager_query=filters.get('manager_query'),
+                manager=filters.get('manager'),
+                nfl_team=filters.get('nfl_team'),
+                opponent=filters.get('opponent'),
+                opponent_nfl_team=filters.get('opponent_nfl_team'),
+                year=filters.get('year'),
+                rostered_only=filters.get('rostered_only', False),
+                started_only=filters.get('started_only', False),
+                exclude_postseason=filters.get('exclude_postseason', False),
+                sort_column=sort_col,
+                sort_direction=sort_dir
+            )
 
-                season_data = load_players_season_data(
-                    position=position_filter,
-                    player_query=filters.get('player_query'),
-                    manager_query=filters.get('manager_query'),
-                    manager=filters.get('manager'),
-                    nfl_team=filters.get('nfl_team'),
-                    opponent=filters.get('opponent'),
-                    opponent_nfl_team=filters.get('opponent_nfl_team'),
-                    year=filters.get('year'),
-                    rostered_only=filters.get('rostered_only', False),
-                    started_only=filters.get('started_only', False),
-                    exclude_postseason=filters.get('exclude_postseason', False),
-                    sort_column=sort_col,
-                    sort_direction=sort_dir
-                )
-
-                if season_data is not None and not season_data.empty:
-                    basic_stats_df = get_basic_stats(season_data, active_position or "All")
-
-                    # Use full dataframe (no column selection UI)
-                    display_df = basic_stats_df
-
-                    # Get total count
-                    total_count = len(display_df)
-
-                    # Display with load more
-                    self.display_basic.display_table_with_load_more(
-                        display_df,
-                        total_available=total_count
-                    )
-                else:
-                    st.warning("No data available for the selected filters.")
+            if season_data is not None and not season_data.empty:
+                basic_stats_df = get_basic_stats(season_data, active_position or "All")
+                self.display_basic.display_table_with_load_more(basic_stats_df, total_available=len(basic_stats_df))
+            else:
+                st.warning("No data available for the selected filters.")
 
     @st.fragment
     def _display_advanced_stats_tab(self):
         """Display Advanced Stats tab."""
-        st.header("Advanced Season Statistics")
-
-        filter_col, data_col = st.columns([1, 3])
-
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
+        # Collapsible filters
+        with st.expander("🔎 Filters", expanded=False):
             filter_panel = SmartFilterPanel("season_advanced", self)
             filters, active_position = filter_panel.display_filters()
 
-        with data_col:
-            # Always sort by points DESC (best default)
-            sort_col = "points"
-            sort_dir = "DESC"
+        sort_col, sort_dir = "points", "DESC"
+        with st.spinner("Loading advanced season data..."):
+            position_filter = filters.get('position') or filters.get('nfl_position')
+            if isinstance(position_filter, list) and len(position_filter) == 1:
+                position_filter = position_filter[0]
+            elif isinstance(position_filter, list) and len(position_filter) > 1:
+                position_filter = None
 
-            with st.spinner("Loading advanced season data..."):
-                # Extract position from filters - handle both list and string
-                # Check 'position' first (from quick filters), then fall back to 'nfl_position'
-                position_filter = filters.get('position') or filters.get('nfl_position')
-                if isinstance(position_filter, list) and len(position_filter) == 1:
-                    position_filter = position_filter[0]
-                elif isinstance(position_filter, list) and len(position_filter) > 1:
-                    position_filter = None  # Multiple positions selected
+            season_data = load_players_season_data(
+                position=position_filter,
+                player_query=filters.get('player_query'),
+                manager_query=filters.get('manager_query'),
+                manager=filters.get('manager'),
+                nfl_team=filters.get('nfl_team'),
+                opponent=filters.get('opponent'),
+                opponent_nfl_team=filters.get('opponent_nfl_team'),
+                year=filters.get('year'),
+                rostered_only=filters.get('rostered_only', False),
+                started_only=filters.get('started_only', False),
+                exclude_postseason=filters.get('exclude_postseason', False),
+                sort_column=sort_col,
+                sort_direction=sort_dir
+            )
 
-                season_data = load_players_season_data(
-                    position=position_filter,
-                    player_query=filters.get('player_query'),
-                    manager_query=filters.get('manager_query'),
-                    manager=filters.get('manager'),
-                    nfl_team=filters.get('nfl_team'),
-                    opponent=filters.get('opponent'),
-                    opponent_nfl_team=filters.get('opponent_nfl_team'),
-                    year=filters.get('year'),
-                    rostered_only=filters.get('rostered_only', False),
-                    started_only=filters.get('started_only', False),
-                    exclude_postseason=filters.get('exclude_postseason', False),
-                    sort_column=sort_col,
-                    sort_direction=sort_dir
-                )
-
-                if season_data is not None and not season_data.empty:
-                    advanced_stats_df = get_advanced_stats(season_data, active_position or "All")
-
-                    # Use full dataframe (no column selection UI)
-                    display_df = advanced_stats_df
-                    total_count = len(display_df)
-
-                    self.display_advanced.display_table_with_load_more(
-                        display_df,
-                        total_available=total_count
-                    )
-                else:
-                    st.warning("No data available for the selected filters.")
+            if season_data is not None and not season_data.empty:
+                advanced_stats_df = get_advanced_stats(season_data, active_position or "All")
+                self.display_advanced.display_table_with_load_more(advanced_stats_df, total_available=len(advanced_stats_df))
+            else:
+                st.warning("No data available for the selected filters.")
 
     @st.fragment
     def _display_matchup_stats_tab(self):
         """Display Matchup Stats tab."""
-        st.header("Season Matchup Statistics")
-
-        st.info("📌 **Season Matchup Stats**: Shows only rostered players with full season matchup context. All rows are displayed (no pagination).")
-
-        filter_col, data_col = st.columns([1, 3])
-
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
+        # Collapsible filters
+        with st.expander("🔎 Filters", expanded=False):
             filter_panel = SmartFilterPanel("season_matchup", self)
             filters, active_position = filter_panel.display_filters()
 
-        with data_col:
-            # Always sort by year DESC (most recent first)
-            sort_col = "year"
-            sort_dir = "DESC"
+        sort_col, sort_dir = "year", "DESC"
+        with st.spinner("Loading matchup season data..."):
+            position_filter = filters.get('position') or filters.get('nfl_position')
+            if isinstance(position_filter, list) and len(position_filter) == 1:
+                position_filter = position_filter[0]
+            elif isinstance(position_filter, list) and len(position_filter) > 1:
+                position_filter = None
 
-            with st.spinner("Loading matchup season data..."):
-                # Extract position from filters - handle both list and string
-                # Check 'position' first (from quick filters), then fall back to 'nfl_position'
-                position_filter = filters.get('position') or filters.get('nfl_position')
-                if isinstance(position_filter, list) and len(position_filter) == 1:
-                    position_filter = position_filter[0]
-                elif isinstance(position_filter, list) and len(position_filter) > 1:
-                    position_filter = None  # Multiple positions selected
+            season_data = load_players_season_data(
+                position=position_filter,
+                player_query=filters.get('player_query'),
+                manager_query=filters.get('manager_query'),
+                manager=filters.get('manager'),
+                nfl_team=filters.get('nfl_team'),
+                opponent=filters.get('opponent'),
+                opponent_nfl_team=filters.get('opponent_nfl_team'),
+                year=filters.get('year'),
+                rostered_only=True,
+                started_only=filters.get('started_only', False),
+                exclude_postseason=filters.get('exclude_postseason', False),
+                sort_column=sort_col,
+                sort_direction=sort_dir
+            )
 
-                season_data = load_players_season_data(
-                    position=position_filter,
-                    player_query=filters.get('player_query'),
-                    manager_query=filters.get('manager_query'),
-                    manager=filters.get('manager'),
-                    nfl_team=filters.get('nfl_team'),
-                    opponent=filters.get('opponent'),
-                    opponent_nfl_team=filters.get('opponent_nfl_team'),
-                    year=filters.get('year'),
-                    # For matchup/tab we only need rostered players (have a manager) — filter at SQL level for performance
-                    rostered_only=True,
-                    started_only=filters.get('started_only', False),
-                    exclude_postseason=filters.get('exclude_postseason', False),
-                    sort_column=sort_col,
-                    sort_direction=sort_dir
-                )
-
-                if season_data is not None and not season_data.empty:
-                    # Show row count
-                    st.success(f"✅ Showing all {len(season_data):,} season matchup rows")
-
-                    # Use matchup viewer - directly display
-                    matchup_viewer = CombinedMatchupStatsViewer(season_data)
-                    matchup_viewer.display(prefix="season_matchup")
-                else:
-                    st.warning("No data available for the selected filters.")
+            if season_data is not None and not season_data.empty:
+                st.markdown(f"**{len(season_data):,} season matchup rows**")
+                matchup_viewer = CombinedMatchupStatsViewer(season_data)
+                matchup_viewer.display(prefix="season_matchup")
+            else:
+                st.warning("No data available for the selected filters.")

@@ -221,15 +221,8 @@ class OptimizedWeeklyPlayerViewer:
     def display(self):
         apply_modern_styles()
 
-        st.markdown("""
-        <div class="hero-section">
-        <h2>⚡ Weekly Player Stats</h2>
-        <p style="margin: 0.5rem 0 0 0;">Use quick filters for faster results. Click 'Load More' to see additional data.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Create tabs
-        tabs = st.tabs(["📊 Basic Stats", "📈 Advanced Stats", "🎯 Matchup Stats", "⚔️ Head-to-Head"])
+        # Create tabs (no hero section - cleaner mobile UI)
+        tabs = st.tabs(["Basic Stats", "Advanced Stats", "Matchup Stats", "Head-to-Head"])
 
         # ==================== BASIC STATS TAB ====================
         with tabs[0]:
@@ -250,211 +243,93 @@ class OptimizedWeeklyPlayerViewer:
     @st.fragment
     def _display_basic_stats_tab(self):
         """Display Basic Stats tab with optimized layout."""
-        st.header("Basic Player Statistics")
-
-        # Create two-column layout: filters on left, data on right
-        filter_col, data_col = st.columns([1, 3])
-
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
+        # Collapsible filters (matching matchups style)
+        with st.expander("🔎 Filters", expanded=False):
             filter_panel = SmartFilterPanel("basic", self)
             filters, active_position = filter_panel.display_filters()
 
-        with data_col:
-            # Always sort by points DESC (best default)
-            sort_col = "points"
-            sort_dir = "DESC"
+        # Data display (full width)
+        sort_col = "points"
+        sort_dir = "DESC"
 
-            # Load and display data
-            if self.has_active_filters(filters):
-                with st.spinner("Loading filtered data..."):
-                    # Get how many rows to load
-                    limit = st.session_state.get("weekly_basic_displayed_rows", 5000)
-
-                    filtered_data = load_filtered_weekly_data(
-                        filters,
-                        limit=limit,
-                        sort_column=sort_col,
-                        sort_direction=sort_dir
-                    )
-
-                    if filtered_data is not None:
-                        # Apply toggle filters
-                        if filters.get("rostered_only") and "rostered" in filtered_data.columns:
-                            filtered_data = filtered_data[filtered_data["rostered"] == True]
-                        if filters.get("started_only") and "started" in filtered_data.columns:
-                            filtered_data = filtered_data[filtered_data["started"] == True]
-
-                        basic_stats_df = get_basic_stats(filtered_data, active_position or "All")
-
-                        # Use full dataframe (no column selection UI)
-                        display_df = basic_stats_df
-
-                        # Get total count
-                        total_count = getattr(filtered_data, 'attrs', {}).get('total_count', len(filtered_data))
-
-                        # Display with load more
-                        self.display_basic.display_table_with_load_more(
-                            display_df,
-                            total_available=total_count,
-                            height=600
-                        )
-
-                        # Export option
-                        self.display_basic.display_quick_export(display_df, "weekly_basic_stats")
-            else:
-                # No filters - load with offset/limit
+        if self.has_active_filters(filters):
+            with st.spinner("Loading filtered data..."):
                 limit = st.session_state.get("weekly_basic_displayed_rows", 5000)
-
-                with st.spinner("Loading player data..."):
-                    sorted_data = load_players_weekly_data(
-                        year=None,
-                        week=None,
-                        limit=limit,
-                        offset=0,
-                        sort_column=sort_col,
-                        sort_direction=sort_dir
-                    )
-
-                    if sorted_data is not None:
-                        basic_stats_df = get_basic_stats(sorted_data, active_position or "All")
-
-                        # Use full dataframe (no column selection UI)
-                        display_df = basic_stats_df
-
-                        # Get total count
-                        total_count = getattr(sorted_data, 'attrs', {}).get('total_count', len(sorted_data))
-
-                        # Display with load more
-                        self.display_basic.display_table_with_load_more(
-                            display_df,
-                            total_available=total_count,
-                            height=600
-                        )
-
-                        # Export option
-                        self.display_basic.display_quick_export(display_df, "weekly_basic_stats")
+                filtered_data = load_filtered_weekly_data(
+                    filters, limit=limit, sort_column=sort_col, sort_direction=sort_dir
+                )
+                if filtered_data is not None:
+                    if filters.get("rostered_only") and "rostered" in filtered_data.columns:
+                        filtered_data = filtered_data[filtered_data["rostered"] == True]
+                    if filters.get("started_only") and "started" in filtered_data.columns:
+                        filtered_data = filtered_data[filtered_data["started"] == True]
+                    basic_stats_df = get_basic_stats(filtered_data, active_position or "All")
+                    total_count = getattr(filtered_data, 'attrs', {}).get('total_count', len(filtered_data))
+                    self.display_basic.display_table_with_load_more(basic_stats_df, total_available=total_count, height=600)
+                    self.display_basic.display_quick_export(basic_stats_df, "weekly_basic_stats")
+        else:
+            limit = st.session_state.get("weekly_basic_displayed_rows", 5000)
+            with st.spinner("Loading player data..."):
+                sorted_data = load_players_weekly_data(year=None, week=None, limit=limit, offset=0, sort_column=sort_col, sort_direction=sort_dir)
+                if sorted_data is not None:
+                    basic_stats_df = get_basic_stats(sorted_data, active_position or "All")
+                    total_count = getattr(sorted_data, 'attrs', {}).get('total_count', len(sorted_data))
+                    self.display_basic.display_table_with_load_more(basic_stats_df, total_available=total_count, height=600)
+                    self.display_basic.display_quick_export(basic_stats_df, "weekly_basic_stats")
 
     @st.fragment
     def _display_advanced_stats_tab(self):
         """Display Advanced Stats tab with optimized layout."""
-        st.header("Advanced Player Statistics")
-
-        filter_col, data_col = st.columns([1, 3])
-
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
+        # Collapsible filters
+        with st.expander("🔎 Filters", expanded=False):
             filter_panel = SmartFilterPanel("advanced", self)
             filters, active_position = filter_panel.display_filters()
 
-        with data_col:
-            # Always sort by points DESC (best default)
-            sort_col = "points"
-            sort_dir = "DESC"
+        sort_col, sort_dir = "points", "DESC"
 
-            # Load and display data
-            if self.has_active_filters(filters):
-                with st.spinner("Loading filtered data..."):
-                    limit = st.session_state.get("weekly_advanced_displayed_rows", 5000)
-
-                    filtered_data = load_filtered_weekly_data(
-                        filters,
-                        limit=limit,
-                        sort_column=sort_col,
-                        sort_direction=sort_dir
-                    )
-
-                    if filtered_data is not None:
-                        advanced_stats_df = get_advanced_stats(filtered_data, active_position or "All")
-
-                        # Use full dataframe (no column selection UI)
-                        display_df = advanced_stats_df
-
-                        total_count = getattr(filtered_data, 'attrs', {}).get('total_count', len(filtered_data))
-
-                        self.display_advanced.display_table_with_load_more(
-                            display_df,
-                            total_available=total_count,
-                            height=600
-                        )
-
-                        self.display_advanced.display_quick_export(display_df, "weekly_advanced_stats")
-                    else:
-                        st.warning("No data returned from query. Please try adjusting your filters.")
-            else:
+        if self.has_active_filters(filters):
+            with st.spinner("Loading filtered data..."):
                 limit = st.session_state.get("weekly_advanced_displayed_rows", 5000)
-
-                with st.spinner("Loading player data..."):
-                    sorted_data = load_players_weekly_data(
-                        year=None,
-                        week=None,
-                        limit=limit,
-                        offset=0,
-                        sort_column=sort_col,
-                        sort_direction=sort_dir
-                    )
-
-                    if sorted_data is not None:
-                        advanced_stats_df = get_advanced_stats(sorted_data, active_position or "All")
-
-                        # Use full dataframe (no column selection UI)
-                        display_df = advanced_stats_df
-
-                        total_count = getattr(sorted_data, 'attrs', {}).get('total_count', len(sorted_data))
-
-                        self.display_advanced.display_table_with_load_more(
-                            display_df,
-                            total_available=total_count,
-                            height=600
-                        )
-
-                        self.display_advanced.display_quick_export(display_df, "weekly_advanced_stats")
+                filtered_data = load_filtered_weekly_data(filters, limit=limit, sort_column=sort_col, sort_direction=sort_dir)
+                if filtered_data is not None:
+                    advanced_stats_df = get_advanced_stats(filtered_data, active_position or "All")
+                    total_count = getattr(filtered_data, 'attrs', {}).get('total_count', len(filtered_data))
+                    self.display_advanced.display_table_with_load_more(advanced_stats_df, total_available=total_count, height=600)
+                    self.display_advanced.display_quick_export(advanced_stats_df, "weekly_advanced_stats")
+                else:
+                    st.warning("No data returned from query. Please try adjusting your filters.")
+        else:
+            limit = st.session_state.get("weekly_advanced_displayed_rows", 5000)
+            with st.spinner("Loading player data..."):
+                sorted_data = load_players_weekly_data(year=None, week=None, limit=limit, offset=0, sort_column=sort_col, sort_direction=sort_dir)
+                if sorted_data is not None:
+                    advanced_stats_df = get_advanced_stats(sorted_data, active_position or "All")
+                    total_count = getattr(sorted_data, 'attrs', {}).get('total_count', len(sorted_data))
+                    self.display_advanced.display_table_with_load_more(advanced_stats_df, total_available=total_count, height=600)
+                    self.display_advanced.display_quick_export(advanced_stats_df, "weekly_advanced_stats")
 
     @st.fragment
     def _display_matchup_stats_tab(self):
         """Display Matchup Stats tab with optimized layout."""
-        st.header("Matchup Statistics")
-
-        st.info("📌 **Matchup Stats**: Shows only rostered players with full matchup context. All rows are displayed (no pagination).")
-
-        filter_col, data_col = st.columns([1, 3])
-
-        with filter_col:
-            st.markdown("### 🎛️ Filters")
+        # Collapsible filters
+        with st.expander("🔎 Filters", expanded=False):
             filter_panel = SmartFilterPanel("matchup", self)
             filters, active_position = filter_panel.display_filters()
-
-            # Force rostered_only for matchup stats
             filters['rostered_only'] = True
 
-        with data_col:
-            # Always sort by Year DESC, Week DESC, Points DESC (most recent matchups first)
-            sort_col = "year"
-            sort_dir = "DESC"
-
-            # Matchup stats always shows rostered players and loads ALL rows (no limit)
-            with st.spinner("Loading matchup data..."):
-                filtered_data = load_filtered_weekly_data(
-                    filters,
-                    limit=100000,  # Very large limit to get all matchup data
-                    sort_column=sort_col,
-                    sort_direction=sort_dir
-                )
-
-                if filtered_data is not None and not filtered_data.empty:
-                    # Show row count
-                    st.success(f"✅ Showing all {len(filtered_data):,} matchup rows")
-
-                    viewer = CombinedMatchupStatsViewer(filtered_data)
-                    viewer.display(prefix="matchup_stats")
-                else:
-                    st.warning("No matchup data available with current filters.")
+        sort_col, sort_dir = "year", "DESC"
+        with st.spinner("Loading matchup data..."):
+            filtered_data = load_filtered_weekly_data(filters, limit=100000, sort_column=sort_col, sort_direction=sort_dir)
+            if filtered_data is not None and not filtered_data.empty:
+                st.markdown(f"**{len(filtered_data):,} matchup rows**")
+                viewer = CombinedMatchupStatsViewer(filtered_data)
+                viewer.display(prefix="matchup_stats")
+            else:
+                st.warning("No matchup data available with current filters.")
 
     @st.fragment
     def _display_h2h_tab(self):
         """Display Head-to-Head tab."""
-        st.header("Head-to-Head Comparisons")
-
         col1, col2 = st.columns(2)
         with col1:
             seasons = list_player_seasons()
