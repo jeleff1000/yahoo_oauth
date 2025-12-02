@@ -325,7 +325,6 @@ def render_transactions_tab():
         AllTransactionsViewer(
             data["transactions"],
             data["player_data"],
-            data["injury_data"],
             data["draft_data"]
         ).display()
     else:

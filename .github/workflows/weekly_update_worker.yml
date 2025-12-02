@@ -29,12 +29,13 @@ permissions:
   contents: read
 
 jobs:
-  # First, discover all leagues that need updating
+  # First, discover all leagues and detect current NFL week (ONE API call for all)
   discover-leagues:
     runs-on: ubuntu-latest
     outputs:
       leagues: ${{ steps.list.outputs.leagues }}
       league_count: ${{ steps.list.outputs.count }}
+      current_week: ${{ steps.week.outputs.current_week }}
 
     steps:
       - name: Checkout code
@@ -45,8 +46,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install duckdb
-        run: pip install duckdb
+      - name: Install dependencies
+        run: pip install duckdb yahoo_oauth requests
 
       - name: List registered leagues
         id: list
@@ -109,6 +110,165 @@ jobs:
               with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                   f.write('leagues=[]\n')
                   f.write('count=0\n')
+          PYEOF
+
+      - name: Detect current NFL week (once for all leagues)
+        id: week
+        env:
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CREDENTIAL_ENCRYPTION_KEY }}
+          MANUAL_WEEK: ${{ github.event.inputs.week || '' }}
+        run: |
+          # If week manually specified, use that
+          if [ -n "$MANUAL_WEEK" ]; then
+            echo "current_week=${MANUAL_WEEK}" >> $GITHUB_OUTPUT
+            echo "Using manually specified week: ${MANUAL_WEEK}"
+            exit 0
+          fi
+
+          python - <<'PYEOF'
+          import os
+          import sys
+          import json
+          import time
+          from datetime import date, timedelta
+          from pathlib import Path
+
+          def date_based_week_estimate():
+              """Fallback: estimate NFL week from date (Week 1 ~= Thursday after Labor Day)"""
+              today = date.today()
+              year = today.year
+
+              # Find Labor Day (first Monday of September)
+              sept1 = date(year, 9, 1)
+              days_to_monday = (7 - sept1.weekday()) % 7
+              if sept1.weekday() == 0:
+                  labor_day = sept1
+              else:
+                  labor_day = sept1 + timedelta(days=days_to_monday)
+
+              # Week 1 starts Thursday after Labor Day
+              week1_start = labor_day + timedelta(days=3)
+
+              if today < week1_start:
+                  return 1  # Preseason
+
+              days_since_week1 = (today - week1_start).days
+              current_week = (days_since_week1 // 7) + 1
+              return min(max(current_week, 1), 18)  # Clamp to 1-18
+
+          def get_week_from_yahoo():
+              """Get current week from Yahoo API using stored credentials"""
+              try:
+                  # Try to get credentials from any league
+                  sys.path.insert(0, 'fantasy_football_data_scripts')
+                  from multi_league.utils.credential_store import retrieve_league_credentials
+                  import duckdb
+
+                  token = os.environ.get('MOTHERDUCK_TOKEN', '')
+                  if not token:
+                      return None
+
+                  # Find first league with credentials
+                  conn = duckdb.connect(f"md:?motherduck_token={token}")
+                  dbs = conn.execute("SELECT database_name FROM information_schema.schemata WHERE schema_name = 'public'").fetchall()
+                  conn.close()
+
+                  refresh_token = None
+                  league_key = None
+
+                  for (db_name,) in dbs:
+                      if db_name in ('information_schema', 'my_db', 'sample_data'):
+                          continue
+                      try:
+                          creds = retrieve_league_credentials(db_name)
+                          if creds and creds.get('refresh_token'):
+                              refresh_token = creds['refresh_token']
+                              # Try to get league_key from league_settings
+                              conn = duckdb.connect(f"md:{db_name}?motherduck_token={token}")
+                              try:
+                                  result = conn.execute("SELECT league_key FROM league_settings ORDER BY year DESC LIMIT 1").fetchone()
+                                  if result:
+                                      league_key = result[0]
+                              except:
+                                  pass
+                              conn.close()
+                              if league_key:
+                                  print(f"Using credentials from {db_name}, league_key: {league_key}")
+                                  break
+                      except:
+                          continue
+
+                  if not refresh_token:
+                      print("No stored credentials found")
+                      return None
+
+                  # Create OAuth file and get current week
+                  consumer_key = os.environ.get('YAHOO_CLIENT_ID')
+                  consumer_secret = os.environ.get('YAHOO_CLIENT_SECRET')
+
+                  if not consumer_key or not consumer_secret:
+                      print("Missing Yahoo credentials")
+                      return None
+
+                  # Create temp OAuth file
+                  oauth_data = {
+                      'consumer_key': consumer_key,
+                      'consumer_secret': consumer_secret,
+                      'refresh_token': refresh_token,
+                      'token_time': time.time() - 7200,
+                  }
+
+                  Path("oauth").mkdir(exist_ok=True)
+                  with open("oauth/Oauth.json", 'w') as f:
+                      json.dump(oauth_data, f)
+
+                  # Query Yahoo for current week
+                  from yahoo_oauth import OAuth2
+                  oauth = OAuth2(None, None, from_file="oauth/Oauth.json")
+
+                  if not oauth.token_is_valid():
+                      oauth.refresh_access_token()
+
+                  # Get current NFL game info
+                  year = date.today().year
+                  url = f"https://fantasysports.yahooapis.com/fantasy/v2/game/nfl"
+                  resp = oauth.session.get(url)
+
+                  if resp.status_code == 200:
+                      import re
+                      # Parse current_week from XML response
+                      match = re.search(r'<current_week>(\d+)</current_week>', resp.text)
+                      if match:
+                          week = int(match.group(1))
+                          print(f"Yahoo API returned current_week: {week}")
+                          return week
+
+                  print(f"Yahoo API call failed: {resp.status_code}")
+                  return None
+
+              except Exception as e:
+                  print(f"Error getting week from Yahoo: {e}")
+                  return None
+
+          # Try Yahoo first, fall back to date-based estimate
+          current_week = get_week_from_yahoo()
+
+          if current_week is None:
+              current_week = date_based_week_estimate()
+              print(f"Using date-based estimate: week {current_week}")
+
+          # Output the week (last COMPLETED week = current - 1)
+          # But we fetch current week's data after games complete (Tuesday run)
+          # So we want the week that just finished
+          target_week = max(1, current_week - 1) if current_week > 1 else 1
+
+          print(f"Current NFL week: {current_week}, targeting completed week: {target_week}")
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'current_week={target_week}\n')
           PYEOF
 
   # Update each league
@@ -338,18 +498,20 @@ jobs:
         id: update
         env:
           DATABASE_NAME: ${{ matrix.database }}
-          FORCE_WEEK: ${{ github.event.inputs.week || '' }}
+          DETECTED_WEEK: ${{ needs.discover-leagues.outputs.current_week }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         working-directory: fantasy_football_data_scripts
         run: |
           echo "========================================"
           echo "Running weekly update for: ${DATABASE_NAME}"
+          echo "Using pre-detected week: ${DETECTED_WEEK}"
           echo "========================================"
 
           ARGS="--context ../league_context.json"
 
-          if [ -n "$FORCE_WEEK" ]; then
-            ARGS="$ARGS --week $FORCE_WEEK"
+          # Use the week detected once in discover-leagues (no per-league API call)
+          if [ -n "$DETECTED_WEEK" ]; then
+            ARGS="$ARGS --week $DETECTED_WEEK"
           fi
 
           if [ "$DRY_RUN" == "true" ]; then
@@ -416,7 +578,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Database**: \`${{ matrix.database }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Dry Run**: ${{ github.event.inputs.dry_run || 'false' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Forced Week**: ${{ github.event.inputs.week || 'auto-detect' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Week**: ${{ needs.discover-leagues.outputs.current_week }}" >> $GITHUB_STEP_SUMMARY
 
   # Summary job
   summary:
@@ -431,4 +593,5 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Time**: $(date -Iseconds)" >> $GITHUB_STEP_SUMMARY
+          echo "- **NFL Week**: ${{ needs.discover-leagues.outputs.current_week }} (detected once for all leagues)" >> $GITHUB_STEP_SUMMARY
           echo "- **Leagues Processed**: ${{ needs.discover-leagues.outputs.league_count }}" >> $GITHUB_STEP_SUMMARY

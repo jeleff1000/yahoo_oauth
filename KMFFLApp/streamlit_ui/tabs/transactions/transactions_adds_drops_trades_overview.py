@@ -26,10 +26,9 @@ from .career_trade_data import display_career_trade_data
 
 
 class AllTransactionsViewer:
-    def __init__(self, transaction_df, player_df, injury_df, draft_history_df):
+    def __init__(self, transaction_df, player_df, draft_history_df):
         self.transaction_df = transaction_df
         self.player_df = player_df
-        self.injury_df = injury_df
         self.draft_history_df = draft_history_df
 
     @st.fragment
