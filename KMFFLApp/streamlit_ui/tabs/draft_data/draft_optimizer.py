@@ -2143,6 +2143,27 @@ def run_optimization(agg_data, budget, num_qb, num_rb, num_wr, num_te, num_flex,
 
     if prob.status != 1:
         st.error("❌ No optimal solution found. Try relaxing constraints or increasing budget.")
+        # Debug: show constraint analysis
+        with st.expander("🔍 Constraint Analysis"):
+            bench_rows = dual_data[dual_data['slot_type'] == 'bench'] if 'slot_type' in dual_data.columns else pd.DataFrame()
+            starter_rows = dual_data[dual_data['slot_type'] == 'starter'] if 'slot_type' in dual_data.columns else dual_data
+
+            st.write(f"**Data rows:** {len(dual_data)} total, {len(starter_rows)} starter, {len(bench_rows)} bench")
+
+            if not bench_rows.empty:
+                st.write(f"**Bench costs:** min=${bench_rows['avg_cost'].min():.1f}, max=${bench_rows['avg_cost'].max():.1f}")
+                st.write(f"**Bench positions:** {bench_rows['yahoo_position'].unique().tolist()}")
+                # Count bench-eligible rows
+                bench_eligible_mask = bench_rows['yahoo_position'].isin(['QB', 'RB', 'WR', 'TE'])
+                st.write(f"**Bench-eligible rows (QB/RB/WR/TE):** {bench_eligible_mask.sum()}")
+                if bench_eligible_mask.any():
+                    cheap_bench = bench_rows[bench_eligible_mask & (bench_rows['avg_cost'] <= 3)]
+                    st.write(f"**Cheap bench options (≤$3):** {len(cheap_bench)}")
+
+            st.write(f"**Budget:** total=${budget}, starter=${starter_budget}, bench=${bench_budget}")
+            st.write(f"**Slots needed:** {total_starters} starters, {bench_count} bench")
+            st.write(f"**Avg bench budget per slot:** ${bench_budget/max(1,bench_count):.1f}")
+
         return None
 
     # Extract selected tiers from dual_data

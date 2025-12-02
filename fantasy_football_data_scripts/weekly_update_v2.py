@@ -46,6 +46,7 @@ from multi_league.data_fetchers.aggregators import (
     normalize_transactions_parquet,
     ensure_fantasy_points_alias
 )
+from multi_league.core.yahoo_league_settings import discover_league_history
 
 # Script directory
 SCRIPT_DIR = Path(__file__).parent
@@ -501,6 +502,94 @@ def verify_update(ctx: LeagueContext, year: int, week: int) -> Dict:
     return summary
 
 
+def ensure_year_in_context(ctx: LeagueContext, year: int, context_path: Path) -> bool:
+    """
+    Ensure the context file includes the specified year.
+
+    If the year is beyond the context's end_year or missing from league_ids,
+    this function will:
+    1. Discover the league ID for the new year via Yahoo API
+    2. Update ctx.end_year if needed
+    3. Add the new year to ctx.league_ids
+    4. Save the updated context
+
+    Args:
+        ctx: LeagueContext instance
+        year: The year we want to process
+        context_path: Path to the context file (for saving updates)
+
+    Returns:
+        True if year is now available, False if discovery failed
+    """
+    year_str = str(year)
+    current_end_year = ctx.end_year or datetime.now().year
+
+    # Check if we already have this year
+    if year <= current_end_year and year_str in ctx.league_ids:
+        return True
+
+    # New year detected - need to discover league ID
+    log(f"[YEAR TRANSITION] Year {year} not in context (end_year={current_end_year})")
+    log(f"[YEAR TRANSITION] Discovering league ID for {year}...")
+
+    try:
+        # Get the most recent known league key to start discovery from
+        if ctx.league_ids:
+            # Use the most recent year's league ID
+            recent_years = sorted([int(y) for y in ctx.league_ids.keys()], reverse=True)
+            start_key = ctx.league_ids[str(recent_years[0])]
+        else:
+            start_key = ctx.league_id
+
+        # Discover league history (will follow the 'renewed' chain to find new years)
+        oauth_path = ctx.oauth_file_path or os.environ.get("OAUTH_PATH")
+        if not oauth_path:
+            log("[YEAR TRANSITION] ERROR: No OAuth path available for discovery")
+            return False
+
+        discovered = discover_league_history(
+            league_key=start_key,
+            oauth_file=Path(oauth_path),
+            start_year=ctx.start_year,
+            end_year=year  # Discover up to the requested year
+        )
+
+        if not discovered:
+            log(f"[YEAR TRANSITION] WARNING: Could not discover any leagues")
+            return False
+
+        if year_str not in discovered:
+            log(f"[YEAR TRANSITION] WARNING: Year {year} not found in discovered leagues")
+            log(f"[YEAR TRANSITION] This may mean the league hasn't been renewed for {year} yet")
+            return False
+
+        # Update context with discovered leagues
+        ctx.league_ids.update(discovered)
+
+        # Update end_year if we found a newer year
+        discovered_years = [int(y) for y in discovered.keys()]
+        max_discovered = max(discovered_years)
+        if max_discovered > current_end_year:
+            ctx.end_year = max_discovered
+            log(f"[YEAR TRANSITION] Updated end_year: {current_end_year} -> {max_discovered}")
+
+        # Update the main league_id to the most recent
+        ctx.league_id = discovered[str(max_discovered)]
+
+        # Save updated context
+        ctx.save(context_path)
+        log(f"[YEAR TRANSITION] Saved updated context with {len(ctx.league_ids)} league IDs")
+        log(f"[YEAR TRANSITION] New year {year} league ID: {discovered[year_str]}")
+
+        return True
+
+    except Exception as e:
+        log(f"[YEAR TRANSITION] ERROR: Failed to discover league for year {year}: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="Weekly Update V2 - Incremental data pipeline")
     parser.add_argument("--context", required=True, help="Path to league_context.json")
@@ -513,11 +602,30 @@ def main():
     args = parser.parse_args()
 
     # Load context - use absolute path so child scripts can find it
+    context_path = Path(args.context).resolve()
     ctx = LeagueContext.load(args.context)
-    ctx._source_path = Path(args.context).resolve()
+    ctx._source_path = context_path
 
     # Determine year
     year = args.year or datetime.now().year
+
+    # CRITICAL: Ensure context includes the current year
+    # This handles year transitions (e.g., when 2025 season starts but context only has through 2024)
+    if not ensure_year_in_context(ctx, year, context_path):
+        log(f"[ERROR] Cannot process year {year} - league not found or not renewed yet")
+        log(f"[INFO] If the new season hasn't started, this is expected behavior")
+        log(f"[INFO] Once the commissioner renews the league, re-run this script")
+        # Don't fail hard - maybe they just want to update old data
+        if args.year:
+            return 1  # Fail if they explicitly requested a missing year
+        else:
+            # Try falling back to the most recent year we have
+            if ctx.league_ids:
+                fallback_year = max(int(y) for y in ctx.league_ids.keys())
+                log(f"[INFO] Falling back to most recent available year: {fallback_year}")
+                year = fallback_year
+            else:
+                return 1
 
     # Determine week to fetch
     if args.week:
