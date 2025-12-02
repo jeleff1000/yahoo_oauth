@@ -121,9 +121,18 @@ def get_current_week_from_yahoo(ctx: LeagueContext, year: int) -> Tuple[Optional
             current_week = int(cw() if callable(cw) else cw)
 
         if current_week:
-            # Last completed week is current - 1 (games still in progress this week)
-            last_completed = max(0, current_week - 1)
-            log(f"[INFO] Yahoo current_week: {current_week}, last completed: {last_completed}")
+            # Determine last completed week based on day of week
+            # On Tuesday-Saturday: current week's games are complete (MNF ended Monday night)
+            # On Sunday-Monday: games still in progress
+            today = datetime.now()
+            weekday = today.weekday()  # 0=Monday, 1=Tuesday, ..., 6=Sunday
+
+            if weekday >= 1 and weekday <= 5:  # Tuesday-Saturday
+                last_completed = current_week
+            else:  # Sunday or Monday
+                last_completed = max(0, current_week - 1)
+
+            log(f"[INFO] Yahoo current_week: {current_week}, weekday: {weekday}, last completed: {last_completed}")
             return current_week, last_completed
         else:
             log("[WARN] Could not get current_week from Yahoo league object")
@@ -162,7 +171,13 @@ def _get_current_week_direct_api(ctx: LeagueContext, year: int) -> Tuple[Optiona
             current_week = league_data.get("current_week")
             if current_week:
                 cw = int(current_week)
-                return cw, max(0, cw - 1)
+                # Determine last completed week based on day of week
+                today = datetime.now()
+                weekday = today.weekday()  # 0=Monday, 1=Tuesday, ..., 6=Sunday
+                if weekday >= 1 and weekday <= 5:  # Tuesday-Saturday
+                    return cw, cw
+                else:  # Sunday or Monday
+                    return cw, max(0, cw - 1)
     except Exception as e:
         log(f"[WARN] Direct API call failed: {e}")
 
@@ -250,7 +265,7 @@ def fetch_week_data(
         log("[ERROR] Cannot find league_context.json")
         return {"error": False}
 
-    setup_oauth_environment(ctx)
+    setup_oauth_environment(context_path)
 
     # 1. Fetch matchup data for this week
     log(f"\n[FETCH] Matchup data for week {week}...")
@@ -421,7 +436,7 @@ def run_transformations(
     log("RUNNING TRANSFORMATIONS")
     log("=" * 80)
 
-    setup_oauth_environment(ctx)
+    setup_oauth_environment(context_path)
 
     for script_path, label, timeout in WEEKLY_TRANSFORMATIONS:
         log(f"\n[TRANSFORM] {label}...")

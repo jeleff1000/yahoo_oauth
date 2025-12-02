@@ -70,6 +70,8 @@ DRAFT_COLS_TO_IMPORT = [
     "cost",  # Auction cost or draft value
     "is_keeper_status",
     "kept_next_year",  # Whether player was kept in following season (from draft_value_metrics_v3)
+    "keeper_price",  # Calculated keeper price for next year (from keeper_economics_v2)
+    "keeper_year",  # Consecutive years player has been kept (from keeper_economics_v2)
     "spar",  # Season Points Above Replacement (from draft_value_metrics_v3)
     "pgvor",  # Per-Game Value Over Replacement (from draft_value_metrics_v3)
     "draft_roi",  # Return on Investment (from draft_value_metrics_v3)
@@ -282,13 +284,13 @@ def import_draft_to_player(
     for col in available_cols:
         if col in player.columns:
             # Convert is_keeper_status and similar columns to Int64 (nullable integer)
-            if col in ['is_keeper_status', 'kept_next_year', 'round', 'pick']:
+            if col in ['is_keeper_status', 'kept_next_year', 'round', 'pick', 'keeper_year']:
                 try:
                     player[col] = pd.to_numeric(player[col], errors='coerce').astype('Int64')
                 except Exception as e:
                     print(f"  Warning: Could not convert {col} to Int64: {e}")
-            # Convert cost to float
-            elif col in ['cost']:
+            # Convert cost and keeper_price to float
+            elif col in ['cost', 'keeper_price']:
                 try:
                     player[col] = pd.to_numeric(player[col], errors='coerce')
                 except Exception as e:

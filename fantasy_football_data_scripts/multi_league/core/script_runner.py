@@ -307,7 +307,7 @@ def run_scripts_parallel(
 
     results = {}
     for script_path, label in scripts:
-        ok = run_script(script_path, label, context_path, additional_args, timeout, oauth_env)
+        ok, _ = run_script(script_path, label, context_path, additional_args, timeout, oauth_env)
         results[label] = ok
 
     return results
