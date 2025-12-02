@@ -149,29 +149,5 @@ def display_head_to_head(df_dict: Dict[str, Any]):
         if player_week_df is None or player_week_df.empty:
             st.warning("No Head-to-Head data available for this Week/Year.")
         else:
-            # Calculate and show score summary
-            raw_matchup = sel_matchup.replace(" vs ", "__vs__")
-            matchup_data = player_week_df[player_week_df["matchup_name"] == raw_matchup]
-            if not matchup_data.empty and "team_1" in matchup_data.columns and "team_2" in matchup_data.columns:
-                team_1 = matchup_data["team_1"].dropna().iloc[0] if matchup_data["team_1"].notna().any() else "Team 1"
-                team_2 = matchup_data["team_2"].dropna().iloc[0] if matchup_data["team_2"].notna().any() else "Team 2"
-
-                # Get starting lineup points only (exclude BN, IR)
-                if "lineup_position" in matchup_data.columns:
-                    starters = matchup_data[~matchup_data["lineup_position"].astype(str).str.startswith(("BN", "IR"))]
-                else:
-                    starters = matchup_data
-
-                team_1_pts = starters[starters["manager"] == team_1]["points"].sum() if "points" in starters.columns else 0
-                team_2_pts = starters[starters["manager"] == team_2]["points"].sum() if "points" in starters.columns else 0
-
-                # Score summary
-                col1, col2, col3 = st.columns([2, 1, 2])
-                with col1:
-                    st.markdown(f"<div style='text-align: center; font-size: 1.3rem;'><b>{team_1}</b><br><span style='font-size: 2rem; color: {'#4ade80' if team_1_pts > team_2_pts else '#f87171' if team_1_pts < team_2_pts else 'white'};'>{team_1_pts:.2f}</span></div>", unsafe_allow_html=True)
-                with col2:
-                    st.markdown("<div style='text-align: center; font-size: 1.5rem; padding-top: 1rem;'>vs</div>", unsafe_allow_html=True)
-                with col3:
-                    st.markdown(f"<div style='text-align: center; font-size: 1.3rem;'><b>{team_2}</b><br><span style='font-size: 2rem; color: {'#4ade80' if team_2_pts > team_1_pts else '#f87171' if team_2_pts < team_1_pts else 'white'};'>{team_2_pts:.2f}</span></div>", unsafe_allow_html=True)
-
+            # Use the H2HViewer which now has built-in score headers for both actual and optimal tabs
             H2HViewer(player_week_df).display(prefix="home_h2h", matchup_name=sel_matchup)

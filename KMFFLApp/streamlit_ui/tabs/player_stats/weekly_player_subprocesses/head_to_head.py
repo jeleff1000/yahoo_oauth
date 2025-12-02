@@ -451,6 +451,9 @@ class H2HViewer:
         # Calculate total
         total_points = opt["points"].sum()
 
+        # Display score header
+        self.display_optimal_score_header(total_points)
+
         # Render with spinner
         with st.spinner("Loading optimal lineup..."):
             # Build HTML table with dark/light mode support
@@ -744,6 +747,42 @@ class H2HViewer:
             rows.append("</tbody></table></div>")
             st.markdown("".join(rows), unsafe_allow_html=True)
 
+    # ---- score display helpers ------------------------------------------------
+
+    def display_matchup_score_header(self, team_1: str, team_2: str, team_1_pts: float, team_2_pts: float):
+        """Display score header for a matchup."""
+        col1, col2, col3 = st.columns([2, 1, 2])
+        with col1:
+            color1 = '#4ade80' if team_1_pts > team_2_pts else '#f87171' if team_1_pts < team_2_pts else 'white'
+            st.markdown(f"<div style='text-align:center;'><b style='font-size:1.1rem;'>{team_1}</b><br><span style='font-size:1.8rem;color:{color1};font-weight:bold;'>{team_1_pts:.2f}</span></div>", unsafe_allow_html=True)
+        with col2:
+            st.markdown("<div style='text-align:center;font-size:1.3rem;padding-top:0.8rem;'>vs</div>", unsafe_allow_html=True)
+        with col3:
+            color2 = '#4ade80' if team_2_pts > team_1_pts else '#f87171' if team_2_pts < team_1_pts else 'white'
+            st.markdown(f"<div style='text-align:center;'><b style='font-size:1.1rem;'>{team_2}</b><br><span style='font-size:1.8rem;color:{color2};font-weight:bold;'>{team_2_pts:.2f}</span></div>", unsafe_allow_html=True)
+
+    def display_optimal_score_header(self, total_pts: float):
+        """Display score header for optimal lineup."""
+        st.markdown(f"<div style='text-align:center;margin-bottom:1rem;'><span style='font-size:1rem;opacity:0.8;'>League Optimal Total</span><br><span style='font-size:2rem;color:#4ade80;font-weight:bold;'>{total_pts:.2f}</span></div>", unsafe_allow_html=True)
+
+    def _calculate_lineup_points(self, df: pd.DataFrame, manager: str, use_optimal: bool = False) -> float:
+        """Calculate total points for a manager's starting lineup."""
+        pos_col = "optimal_position" if use_optimal and "optimal_position" in df.columns else "fantasy_position"
+        if "lineup_position" in df.columns:
+            pos_col = "lineup_position"
+
+        team_df = df[df["manager"] == manager].copy()
+        if team_df.empty:
+            return 0.0
+
+        # Exclude bench/IR
+        if pos_col in team_df.columns:
+            starters = team_df[~team_df[pos_col].astype(str).str.upper().str.startswith(("BN", "IR"))]
+        else:
+            starters = team_df
+
+        return starters["points"].sum() if "points" in starters.columns else 0.0
+
     # ---- public API (H2H) ----------------------------------------------------
 
     def display(self, prefix: str, matchup_name: str):
@@ -779,6 +818,11 @@ class H2HViewer:
 
         # Actual Lineups tab
         with lineup_tabs[0]:
+            # Calculate and display actual scores
+            team_1_pts = self._calculate_lineup_points(dfm, team_1, use_optimal=False)
+            team_2_pts = self._calculate_lineup_points(dfm, team_2, use_optimal=False)
+            self.display_matchup_score_header(team_1, team_2, team_1_pts, team_2_pts)
+
             team_1_main = self._prepare_team_duckdb(dfm, team_1, "team_1", MAIN_POSITIONS)
             team_2_main = self._prepare_team_duckdb(dfm, team_2, "team_2", MAIN_POSITIONS)
             team_1_bench = self._prepare_team_duckdb(dfm, team_1, "team_1", BENCH_IR)
@@ -805,6 +849,11 @@ class H2HViewer:
                 else:
                     dfm_optimal = dfm.copy()
                     dfm_optimal["fantasy_position"] = dfm_optimal["optimal_position"]
+
+                    # Calculate and display optimal scores
+                    team_1_opt_pts = self._calculate_lineup_points(dfm_optimal, team_1, use_optimal=True)
+                    team_2_opt_pts = self._calculate_lineup_points(dfm_optimal, team_2, use_optimal=True)
+                    self.display_matchup_score_header(team_1, team_2, team_1_opt_pts, team_2_opt_pts)
 
                     team_1_main = self._prepare_team_duckdb(dfm_optimal, team_1, "team_1", MAIN_POSITIONS)
                     team_2_main = self._prepare_team_duckdb(dfm_optimal, team_2, "team_2", MAIN_POSITIONS)
