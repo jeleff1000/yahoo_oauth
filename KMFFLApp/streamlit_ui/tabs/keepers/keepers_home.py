@@ -21,13 +21,6 @@ class KeeperDataViewer:
         df['year'] = df['year'].astype(str)
         df['manager'] = df['manager'].astype(str)
 
-        st.markdown("""
-        <div class="hero-section">
-        <h2>🏆 Keeper Analysis</h2>
-        <p style="margin: 0.5rem 0 0 0;">Analyze keeper decisions, values, and outcomes across all seasons.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
         # Summary metrics - FIXED calculations
         col1, col2, col3, col4 = st.columns(4)
 
@@ -430,7 +423,6 @@ class KeeperDataViewer:
             )
 
         # Additional analytics
-        st.markdown("---")
         col3, col4 = st.columns(2)
 
         with col3:
@@ -479,7 +471,7 @@ class KeeperDataViewer:
 
             st.dataframe(manager_stats, hide_index=True, use_container_width=True)
 
-        # Note about missing data
+        # Note about missing data (compact)
         missing_count = len(keepers) - len(keepers_with_data)
         if missing_count > 0:
             st.info(f"ℹ️ Note: {missing_count} keeper(s) excluded due to missing performance data")

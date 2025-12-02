@@ -35,13 +35,6 @@ class AllTransactionsViewer:
     def display(self):
         apply_modern_styles()
 
-        st.markdown("""
-        <div class="hero-section">
-        <h2>Transactions</h2>
-        <p style="margin: 0.5rem 0 0 0;">Track all trades, waiver pickups, and roster moves.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
         # Top-level tabs: Weekly / Season / Career
         main_tabs = st.tabs(["Weekly", "Season", "Career"])
 

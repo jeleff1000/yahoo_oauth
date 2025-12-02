@@ -20,20 +20,13 @@ def display_team_names(team_names_data):
     """
     apply_modern_styles()
 
-    st.markdown("""
-    <div class="hero-section">
-    <h2>🏷️ Team Names</h2>
-    <p style="margin: 0.5rem 0 0 0;">View team names by manager and year, with optional division grouping.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
     # Expecting columns: manager, year, team_name, division_id
     if team_names_data is None or not {'manager', 'year', 'team_name'}.issubset(team_names_data.columns):
         st.error("Team Names Data not found or missing required columns (manager, year, team_name).")
         return
 
     # View selector
-    view_mode = st.radio("View Mode", ["All Managers", "By Division"], horizontal=True)
+    view_mode = st.radio("View", ["All Managers", "By Division"], horizontal=True, label_visibility="collapsed")
 
     data = team_names_data.copy()
     data = data[['manager', 'team_name', 'year', 'division_id']].dropna(subset=['manager', 'team_name'])
@@ -61,16 +54,19 @@ def _render_all_managers_view(data):
     # Ensure consistent column order (sorted alphabetically)
     pivot = pivot.reindex(sorted(pivot.columns), axis=1)
 
-    # Add minimal CSS and render HTML
+    # Add dark-mode compatible CSS
     st.markdown("""
     <style>
-    .team-matrix { border-collapse: collapse; width: 100%; table-layout: fixed; font-family: Inter, system-ui, Arial; }
-    .team-matrix th, .team-matrix td { border: 1px solid #eceff4; padding: 6px 8px; text-align: left; vertical-align: top; word-break: break-word; }
-    .team-matrix th { position: sticky; top: 0; background: #4c51bf; color: #fff; z-index: 3; }
-    .team-matrix .year-col { position: sticky; left: 0; background: #fff; font-weight:700; z-index: 4; }
+    .team-matrix { border-collapse: collapse; width: 100%; table-layout: fixed; font-family: Inter, system-ui, Arial; background: #1e293b; }
+    .team-matrix th, .team-matrix td { border: 1px solid #334155; padding: 6px 8px; text-align: left; vertical-align: top; word-break: break-word; color: white; }
+    .team-matrix th { position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; z-index: 3; }
+    .team-matrix .year-col { position: sticky; left: 0; background: #334155; font-weight:700; z-index: 4; color: white; }
     .team-matrix .manager-col { min-width: 140px; }
-    .team-matrix .badge { display:inline-block; padding:4px 8px; border-radius:8px; background: rgba(76,81,191,0.08); margin:2px 0; }
-    .team-matrix-wrapper { overflow: auto; max-height: 72vh; border-radius:6px; }
+    .team-matrix .badge { display:inline-block; padding:4px 8px; border-radius:8px; background: rgba(102,126,234,0.3); margin:2px 0; color: white; }
+    .team-matrix-wrapper { overflow: auto; max-height: 72vh; border-radius:6px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .team-matrix tbody tr:nth-child(even) td { background: #334155; }
+    .team-matrix tbody tr:nth-child(odd) td { background: #1e293b; }
+    .team-matrix tbody tr:nth-child(even) .year-col { background: #475569; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -106,7 +102,7 @@ def _render_division_view(data):
     # Get unique divisions
     divisions = sorted(data['division_id'].unique())
 
-    # Add CSS
+    # Add dark-mode compatible CSS
     st.markdown("""
     <style>
     .division-section { margin-bottom: 2rem; }
@@ -115,16 +111,20 @@ def _render_division_view(data):
         font-weight: 700;
         margin-bottom: 0.5rem;
         padding: 0.5rem;
-        background: #f5f5f5;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 6px;
+        color: white;
     }
-    .team-matrix { border-collapse: collapse; width: 100%; table-layout: fixed; font-family: Inter, system-ui, Arial; }
-    .team-matrix th, .team-matrix td { border: 1px solid #eceff4; padding: 6px 8px; text-align: left; vertical-align: top; word-break: break-word; }
-    .team-matrix th { position: sticky; top: 0; background: #4c51bf; color: #fff; z-index: 3; }
-    .team-matrix .year-col { position: sticky; left: 0; background: #fff; font-weight:700; z-index: 4; }
+    .team-matrix { border-collapse: collapse; width: 100%; table-layout: fixed; font-family: Inter, system-ui, Arial; background: #1e293b; }
+    .team-matrix th, .team-matrix td { border: 1px solid #334155; padding: 6px 8px; text-align: left; vertical-align: top; word-break: break-word; color: white; }
+    .team-matrix th { position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; z-index: 3; }
+    .team-matrix .year-col { position: sticky; left: 0; background: #334155; font-weight:700; z-index: 4; color: white; }
     .team-matrix .manager-col { min-width: 140px; }
-    .team-matrix .badge { display:inline-block; padding:4px 8px; border-radius:8px; background: rgba(76,81,191,0.08); margin:2px 0; }
-    .team-matrix-wrapper { overflow: auto; max-height: 50vh; border-radius:6px; margin-bottom: 1rem; }
+    .team-matrix .badge { display:inline-block; padding:4px 8px; border-radius:8px; background: rgba(102,126,234,0.3); margin:2px 0; color: white; }
+    .team-matrix-wrapper { overflow: auto; max-height: 50vh; border-radius:6px; margin-bottom: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .team-matrix tbody tr:nth-child(even) td { background: #334155; }
+    .team-matrix tbody tr:nth-child(odd) td { background: #1e293b; }
+    .team-matrix tbody tr:nth-child(even) .year-col { background: #475569; }
     </style>
     """, unsafe_allow_html=True)
 

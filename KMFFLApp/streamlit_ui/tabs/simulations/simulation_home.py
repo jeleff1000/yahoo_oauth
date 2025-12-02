@@ -48,10 +48,6 @@ class SimulationDataViewer:
             st.info("📊 No matchup data available. Please ensure data is loaded.")
             return
 
-        # Compact header - matching modern style
-        st.header("🎲 Season Simulations")
-        st.caption("Monte Carlo simulations (100K iterations) and ML predictions for playoff odds, schedule luck, and season outcomes.")
-
         # Two main category tabs for clear separation
         main_tabs = st.tabs(["📊 Predictive Analytics", "🔀 What-If Scenarios"])
 
