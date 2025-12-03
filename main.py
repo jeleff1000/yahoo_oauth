@@ -154,7 +154,7 @@ def render_keeper_rules_ui() -> Optional[dict]:
     # Step 2: Basic Settings
     st.markdown("#### 2. Basic Settings")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         max_keepers = st.number_input(
             "Max keepers per team",
@@ -175,25 +175,24 @@ def render_keeper_rules_ui() -> Optional[dict]:
                 min_value=5, max_value=25, value=15,
                 key="total_rounds"
             )
-
-    col1, col2 = st.columns(2)
-    with col1:
-        unlimited_years = st.checkbox("Players can be kept forever", value=False, key="unlimited_keeper_years")
-    with col2:
+    with col3:
+        unlimited_years = st.checkbox("Kept forever", value=False, key="unlimited_keeper_years", help="Players can be kept indefinitely")
         if unlimited_years:
             max_years = 99
-            st.info("No year limit")
         else:
-            max_years = st.number_input("Max years kept", min_value=1, max_value=20, value=3, key="max_keeper_years")
+            max_years = st.number_input("Max years kept", min_value=1, max_value=20, value=3, key="max_keeper_years", label_visibility="collapsed" if unlimited_years else "visible")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         min_price = st.number_input("Min keeper price ($)", min_value=0, max_value=50, value=1, key="min_keeper_price")
     with col2:
         no_max_price = st.checkbox("No max price", value=True, key="no_max_keeper_price")
-        max_price = None if no_max_price else st.number_input("Max price ($)", min_value=1, max_value=500, value=100, key="max_keeper_price")
-
-    round_to_integer = st.checkbox("Round to whole dollars", value=True, key="round_to_integer")
+        if not no_max_price:
+            max_price = st.number_input("Max price ($)", min_value=1, max_value=500, value=100, key="max_keeper_price", label_visibility="collapsed")
+        else:
+            max_price = None
+    with col3:
+        round_to_integer = st.checkbox("Round to whole $", value=True, key="round_to_integer", help="Round keeper prices to whole dollars")
 
     st.markdown("---")
 
@@ -285,59 +284,33 @@ def render_keeper_rules_ui() -> Optional[dict]:
     st.markdown("#### 4. Price Change Each Year Kept")
 
     if is_auction:
-        st.caption("How does the keeper price change year to year?")
+        st.caption("How does the keeper price change year to year? (e.g., 1.0× + $5 means add $5 each year)")
 
-        escalation_type = st.selectbox(
-            "Each year:",
-            [
-                "No change",
-                "Add flat amount (e.g., +$5)",
-                "Multiply (e.g., 1.5×)",
-                "Multiply + add (e.g., 1.5× + $7.50)",
-            ],
-            key="escalation_type"
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            esc_mult = st.number_input("Multiply previous price by", min_value=0.5, max_value=5.0, value=1.0, step=0.1, key="esc_mult", help="1.0 = no multiplier, 1.5 = 50% increase each year")
+        with col2:
+            esc_flat = st.number_input("Then add ($)", min_value=0.0, max_value=100.0, value=5.0, step=0.5, key="esc_flat", help="Flat amount added after multiplying")
+
+        # Show formula preview
+        if esc_mult == 1.0 and esc_flat == 0.0:
+            st.info("No change each year")
+        elif esc_mult == 1.0:
+            st.success(f"Each year: +${esc_flat:.0f}")
+        elif esc_flat == 0.0:
+            st.success(f"Each year: ×{esc_mult}")
+        else:
+            st.success(f"Each year: ×{esc_mult} + ${esc_flat:.0f}")
 
         formulas_by_keeper_year = {}
-
-        if escalation_type == "No change":
-            formulas_by_keeper_year["1"] = {"expression": "base_cost", "description": "Base price"}
-            formulas_by_keeper_year["2+"] = {"expression": "base_cost", "description": "Same each year"}
-
-        elif escalation_type == "Add flat amount (e.g., +$5)":
-            flat_inc = st.number_input("Add per year ($)", min_value=0.0, max_value=100.0, value=5.0, step=0.5, key="flat_inc")
-            formulas_by_keeper_year["1"] = {"expression": "base_cost", "description": "Base price"}
-            formulas_by_keeper_year["2+"] = {
-                "expression": f"base_cost + {flat_inc} * (keeper_year - 1)",
-                "description": f"+${flat_inc:.2f}/year",
-                "flat_per_year": flat_inc
-            }
-
-        elif escalation_type == "Multiply (e.g., 1.5×)":
-            mult = st.number_input("Multiply by", min_value=1.0, max_value=5.0, value=1.5, step=0.1, key="esc_mult")
-            formulas_by_keeper_year["1"] = {"expression": "base_cost", "description": "Base price"}
-            formulas_by_keeper_year["2+"] = {
-                "expression": f"base_cost * ({mult} ** (keeper_year - 1))",
-                "description": f"×{mult}/year",
-                "multiplier": mult,
-                "recursive": True
-            }
-
-        else:  # Multiply + add
-            col1, col2 = st.columns(2)
-            with col1:
-                esc_mult = st.number_input("Multiply by", min_value=0.5, max_value=5.0, value=1.5, step=0.1, key="esc_mult2")
-            with col2:
-                esc_flat = st.number_input("Then add ($)", min_value=0.0, max_value=100.0, value=7.5, step=0.5, key="esc_flat")
-
-            formulas_by_keeper_year["1"] = {"expression": "base_cost", "description": "Base price"}
-            formulas_by_keeper_year["2+"] = {
-                "expression": f"prev_cost * {esc_mult} + {esc_flat}",
-                "description": f"{esc_mult}× + ${esc_flat:.2f}",
-                "multiplier": esc_mult,
-                "flat_add": esc_flat,
-                "recursive": True
-            }
+        formulas_by_keeper_year["1"] = {"expression": "base_cost", "description": "Base price"}
+        formulas_by_keeper_year["2+"] = {
+            "expression": f"prev_cost * {esc_mult} + {esc_flat}",
+            "description": f"{esc_mult}× + ${esc_flat:.2f}",
+            "multiplier": esc_mult,
+            "flat_add": esc_flat,
+            "recursive": True
+        }
 
     else:  # Snake draft escalation
         st.caption("How does the keeper round change year to year?")
@@ -553,6 +526,23 @@ def render_external_data_ui() -> Optional[dict]:
                         else:
                             st.error(f"Unsupported file type: {file.name}")
                             continue
+
+                        # Normalize column names - accept common aliases
+                        column_aliases = {
+                            "player_name": "player",
+                            "Player": "player",
+                            "Player Name": "player",
+                            "Manager": "manager",
+                            "manager_name": "manager",
+                            "Team": "team_name",
+                            "team": "team_name",
+                            "Week": "week",
+                            "Year": "year",
+                            "Season": "year",
+                            "Points": "points",
+                            "fantasy_points": "points",
+                        }
+                        df.columns = [column_aliases.get(col, col) for col in df.columns]
 
                         # Validate required columns
                         missing_cols = set(template["required_columns"]) - set(df.columns)
@@ -1335,8 +1325,18 @@ def run_register_flow():
                                 st.markdown("---")
                                 st.markdown("## Advanced Settings")
 
-                                # Hidden Manager Detection - Check automatically when opening advanced settings
-                                with st.expander("Identify Hidden Managers", expanded=True):
+                                # Keeper Rules Tab (first - most common setting)
+                                with st.expander("Keeper Rules", expanded=False):
+                                    keeper_rules = render_keeper_rules_ui()
+                                    st.session_state.configured_keeper_rules = keeper_rules
+
+                                # External Data Files Tab
+                                with st.expander("Import Historical Data (ESPN, other years, etc.)", expanded=False):
+                                    external_data = render_external_data_ui()
+                                    st.session_state.configured_external_data = external_data
+
+                                # Hidden Manager Detection - LAST so it loads in background while you configure above
+                                with st.expander("Identify Hidden Managers", expanded=False):
                                     # Fetch teams across ALL years if not already done
                                     cache_key = f"teams_all_years_{selected_league.get('name')}"
                                     if cache_key not in st.session_state:
@@ -1357,16 +1357,6 @@ def run_register_flow():
                                     else:
                                         st.success("No hidden managers found!")
                                         st.session_state.configured_manager_overrides = {}
-
-                                # Keeper Rules Tab
-                                with st.expander("Keeper Rules", expanded=False):
-                                    keeper_rules = render_keeper_rules_ui()
-                                    st.session_state.configured_keeper_rules = keeper_rules
-
-                                # External Data Files Tab
-                                with st.expander("Import Historical Data (ESPN, other years, etc.)", expanded=False):
-                                    external_data = render_external_data_ui()
-                                    st.session_state.configured_external_data = external_data
 
                                 st.markdown("---")
 
