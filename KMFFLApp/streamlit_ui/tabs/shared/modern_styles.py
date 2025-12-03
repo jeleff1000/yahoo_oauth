@@ -171,9 +171,58 @@ def apply_modern_styles():
         margin: 0.5rem 0 !important;
     }
 
-    /* Reduce gap between all Streamlit blocks */
-    [data-testid="stVerticalBlock"] > div {
+    /* ===========================================
+       CRITICAL: Reduce gaps between major sections
+       =========================================== */
+    /* Target Streamlit's vertical block gaps directly */
+    [data-testid="stVerticalBlock"] {
         gap: 0.25rem !important;
+    }
+
+    [data-testid="stVerticalBlock"] > div {
+        margin-bottom: 0.25rem !important;
+    }
+
+    /* TOP TABS to FILTERS gap */
+    .stTabs {
+        margin-bottom: 0.5rem !important;
+    }
+
+    /* FILTERS (expander) spacing */
+    [data-testid="stExpander"] {
+        margin-top: 0.25rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    /* SUBTABS spacing (nested tabs) */
+    .stTabs .stTabs {
+        margin-top: 0.25rem !important;
+    }
+
+    /* Tab content area */
+    [data-testid="stTabContent"] {
+        padding-top: 0.25rem !important;
+    }
+
+    /* Reduce ALL gaps in the main content area */
+    .main [data-testid="stVerticalBlockBorderWrapper"] {
+        margin-bottom: 0.25rem !important;
+    }
+
+    /* Target the specific gap after tabs */
+    [data-baseweb="tab-panel"] {
+        padding-top: 0.25rem !important;
+        margin-top: 0 !important;
+    }
+
+    /* Reduce space around markdown elements */
+    [data-testid="stMarkdown"] {
+        margin-bottom: 0.25rem !important;
+    }
+
+    /* Target column gaps */
+    [data-testid="column"] {
+        padding: 0 0.25rem !important;
     }
 
     /* ===========================================
