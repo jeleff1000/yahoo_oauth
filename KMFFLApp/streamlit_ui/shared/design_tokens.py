@@ -116,16 +116,16 @@ COLORS = {
 
 
 # =============================================================================
-# SPACING SCALE
+# SPACING SCALE - REDUCED FOR TIGHTER LAYOUT
 # =============================================================================
 
 SPACING = {
     'xs': '0.25rem',    # 4px
-    'sm': '0.5rem',     # 8px
-    'md': '1rem',       # 16px
-    'lg': '1.5rem',     # 24px
-    'xl': '2rem',       # 32px
-    'xxl': '3rem',      # 48px
+    'sm': '0.375rem',   # 6px (reduced from 8px)
+    'md': '0.625rem',   # 10px (reduced from 16px)
+    'lg': '1rem',       # 16px (reduced from 24px)
+    'xl': '1.25rem',    # 20px (reduced from 32px)
+    'xxl': '1.5rem',    # 24px (reduced from 48px)
 }
 
 
