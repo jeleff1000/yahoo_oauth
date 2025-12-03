@@ -17,7 +17,9 @@ from ..shared.simulation_styles import (
     render_section_header,
     render_group_card,
     close_card,
-    compact_week_selector
+    compact_week_selector,
+    render_summary_panel,
+    render_manager_filter
 )
 
 # Import chart theming for light/dark mode support
@@ -101,6 +103,27 @@ def _render_playoff_dashboard(playoff_data: pd.DataFrame, year: int, week: int, 
     if week_data.empty:
         st.info("No data available for selected year/week.")
         return
+
+    # Simulation Summary Panel (collapsible context)
+    current_week_data = week_data[week_data['week'] == week]
+    if not current_week_data.empty:
+        num_managers = current_week_data['manager'].nunique()
+        max_week = int(week_data['week'].max())
+        avg_playoff_odds = current_week_data['p_playoffs'].mean()
+        clinched = len(current_week_data[current_week_data['p_playoffs'] >= 99])
+        eliminated = len(current_week_data[current_week_data['p_playoffs'] <= 1])
+
+        render_summary_panel(
+            "Simulation Context",
+            [
+                {"label": "Season Progress", "value": f"Week {week}"},
+                {"label": "Teams", "value": str(num_managers)},
+                {"label": "Avg Playoff Odds", "value": f"{avg_playoff_odds:.1f}%"},
+                {"label": "Clinched", "value": str(clinched)},
+                {"label": "Eliminated", "value": str(eliminated)},
+            ],
+            expanded=False
+        )
 
     # Create tabs - focused on unique analytics only
     tab1, tab2 = st.tabs([
@@ -215,6 +238,16 @@ def _display_championship_path(data, year, week, prefix):
         'p_final': 'mean',
         'p_champ': 'mean'
     }).sort_values('avg_seed', ascending=True)
+
+    # Manager filter - optional highlight
+    all_managers = list(final_data.index)
+    col_filter, col_spacer = st.columns([1, 3])
+    with col_filter:
+        selected_manager = render_manager_filter(
+            all_managers,
+            key=f"{prefix}_champ_manager_filter",
+            label="Highlight Manager"
+        )
 
     # Render metric tiles first
     _render_metric_cards(final_data)

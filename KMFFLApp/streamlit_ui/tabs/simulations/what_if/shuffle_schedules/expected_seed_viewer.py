@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from .table_styles import render_modern_table
+from ...shared.simulation_styles import render_section_header
 
 
 def _select_week(base_df):
@@ -129,8 +130,8 @@ def _render_expected_seed(base_df, year, week):
     # Sort by Playoff% descending (best to worst)
     df = df.sort_values('Playoff%', ascending=False)
 
-    st.subheader("📊 Expected Seeding Distribution")
-    st.caption("Probability of finishing at each playoff seed based on schedule shuffles.")
+    render_section_header("Expected Seeding Distribution", "")
+    st.caption("Probability of each playoff seed based on schedule shuffles.")
 
     # Create format specs
     fmt = {c: '{:.1f}' for c in numeric_percent_cols}

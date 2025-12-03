@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from .table_styles import render_modern_table
+from ...shared.simulation_styles import render_section_header
 
 
 def _select_week(base_df):
@@ -130,7 +131,7 @@ def _render_expected_record(base_df, year, week):
         df = df.join(wins_series.rename('_sort_wins'))
         df = df.sort_values('_sort_wins', ascending=False).drop(columns=['_sort_wins'])
 
-    st.subheader("📊 Expected Record Distribution")
+    render_section_header("Expected Record Distribution", "")
     st.caption("Probability of achieving each win-loss record based on opponent strength.")
 
     # Identify numeric columns for gradient (all except Actual Record)
