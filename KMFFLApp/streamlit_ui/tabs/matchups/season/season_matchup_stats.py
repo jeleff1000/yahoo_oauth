@@ -200,7 +200,7 @@ class SeasonMatchupStatsViewer:
 
             if 'Playoffs' in display_df.columns:
                 display_df['Playoffs'] = display_df['Playoffs'].apply(
-                    lambda x: '✓' if x else ''
+                    lambda x: 'Yes' if x else ''
                 )
 
             if 'Champ' in display_df.columns:
