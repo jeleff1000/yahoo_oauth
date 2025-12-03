@@ -1,2 +1,0 @@
-cd C:\Users\joeye\OneDrive\Desktop\analytics_app\streamlit_ui
-streamlit run app_homepage_optimized.py
