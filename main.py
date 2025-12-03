@@ -1299,31 +1299,8 @@ def run_register_flow():
                                 if st.session_state.get("import_job_id"):
                                     st.info(f"Job ID: `{st.session_state.import_job_id}`")
                             else:
-                                # Two options: Quick Start or Advanced Settings
-                                col_start, col_advanced = st.columns(2)
-
-                                with col_start:
-                                    if st.button("Start Import Now", key="start_import_btn", type="primary", use_container_width=True):
-                                        mark_import_started()
-                                        # Quick start - no keeper rules
-                                        league_info = {
-                                            "league_key": selected_league.get("league_key"),
-                                            "name": selected_league.get("name"),
-                                            "season": selected_league.get("season"),
-                                            "num_teams": selected_league.get("num_teams"),
-                                            "keeper_rules": None,
-                                        }
-                                        perform_import_flow(league_info)
-                                        return  # Don't continue rendering - import flow handles display
-
-                                with col_advanced:
-                                    if st.button("Advanced Settings", key="advanced_settings_btn", type="secondary", use_container_width=True):
-                                        st.session_state.show_advanced_settings = True
-
-                            # Advanced Settings Section
-                            if st.session_state.get("show_advanced_settings", False):
-                                st.markdown("---")
-                                st.markdown("## Advanced Settings")
+                                # Optional Settings (collapsed by default)
+                                st.markdown("##### Optional Settings")
 
                                 # Keeper Rules Tab (first - most common setting)
                                 with st.expander("Keeper Rules", expanded=False):
@@ -1360,13 +1337,8 @@ def run_register_flow():
 
                                 st.markdown("---")
 
-                                # Import button with advanced settings
-                                can_import_adv, block_reason_adv = can_start_import(league_name=selected_league.get('name'))
-                                if not can_import_adv:
-                                    st.warning(f"⏳ {block_reason_adv}")
-                                    if st.session_state.get("import_job_id"):
-                                        st.info(f"Job ID: `{st.session_state.import_job_id}`")
-                                elif st.button("Start Import with Settings", key="start_import_advanced_btn", type="primary", use_container_width=True):
+                                # Single import button that uses all configured settings
+                                if st.button("Start Import", key="start_import_btn", type="primary", use_container_width=True):
                                     mark_import_started()
                                     league_info = {
                                         "league_key": selected_league.get("league_key"),
