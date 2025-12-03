@@ -10,7 +10,7 @@ import streamlit as st
 from .matchup_data import load_simulation_matchup_data
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_optimized_simulations_data() -> Dict[str, Any]:
     """
     Load all data for simulations tab in one optimized call.

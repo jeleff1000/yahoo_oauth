@@ -10,7 +10,7 @@ import pandas as pd
 from .keeper_data import load_keeper_data
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_optimized_keepers_data(
     all_years: bool = True,
     year: int = None,

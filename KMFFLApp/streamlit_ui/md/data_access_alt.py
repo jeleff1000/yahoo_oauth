@@ -133,7 +133,7 @@ def list_player_positions() -> Sequence[str]:
 # Players - Weekly (raw)
 # ---------------------------------------
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_player_week(year: int, week: int):
     q = f"""
         SELECT *
@@ -143,7 +143,7 @@ def load_player_week(year: int, week: int):
     """
     return run_query(q)
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_player_two_week_slice(year: int, week: int):
     cum_query = f"""
         WITH current_cum AS (
@@ -189,7 +189,7 @@ def load_player_two_week_slice(year: int, week: int):
         ORDER BY cumulative_week DESC, points DESC NULLS LAST
     """)
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def list_optimal_seasons() -> list[int]:
     df = run_query(f"""
         SELECT DISTINCT year
@@ -199,7 +199,7 @@ def list_optimal_seasons() -> list[int]:
     """)
     return [] if df.empty else df["year"].astype(int).tolist()
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def list_optimal_weeks(year: int) -> list[int]:
     df = run_query(f"""
         SELECT DISTINCT week
@@ -210,7 +210,7 @@ def list_optimal_weeks(year: int) -> list[int]:
     """)
     return [] if df.empty else df["week"].astype(int).tolist()
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_optimal_week(year: int, week: int):
     q = f"""
         SELECT *
@@ -236,7 +236,7 @@ def load_optimal_week(year: int, week: int):
 # Homepage
 # ---------------------------------------
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_homepage_data():
     try:
         summary = {}
@@ -268,7 +268,7 @@ def load_homepage_data():
 # Managers
 # ---------------------------------------
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_managers_data():
     try:
         matchup_summary = run_query(f"""
@@ -317,7 +317,7 @@ def load_managers_data():
 # Players - Weekly (raw list/paginated helpers for other pages)
 # ---------------------------------------
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_players_weekly_data(
     year: int | None = None,
     week: int | None = None,
@@ -364,7 +364,7 @@ def load_players_weekly_data(
         st.error(f"Failed to load weekly player data: {e}")
         return None
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_filtered_weekly_data(
     filters: dict,
     limit: int = 500,
@@ -437,7 +437,7 @@ def load_filtered_weekly_data(
 # ================================================================
 # SEASON OVERVIEW (group by bridged player_key + year)
 # ================================================================
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_players_season_data(
     position: str | None = None,
     player_query: str | None = None,
@@ -613,7 +613,7 @@ def load_players_season_data(
 # ================================================================
 # CAREER OVERVIEW (group across years by bridged player_key)
 # ================================================================
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_players_career_data(
     position: str | None = None,
     player_query: str | None = None,
@@ -776,7 +776,7 @@ def load_players_career_data(
 # Draft / Transactions / Simulations / Graphs / Keepers / Team Names
 # ---------------------------------------
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_draft_data(all_years: bool = True):
     try:
         draft_summary = run_query(f"""
@@ -818,7 +818,7 @@ def load_draft_data(all_years: bool = True):
         st.error(f"Failed to load draft data: {e}")
         return {"error": str(e)}
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_transactions_data(limit: Optional[int] = 1000):
     try:
         recent_sql = f"SELECT * FROM {T['transactions']} ORDER BY year DESC, week DESC"
@@ -853,7 +853,7 @@ def load_transactions_data(limit: Optional[int] = 1000):
         st.error(f"Failed to load transactions data: {e}")
         return {"error": str(e)}
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_simulations_data(include_all_years: bool = True):
     try:
         if include_all_years:
@@ -887,7 +887,7 @@ def load_simulations_data(include_all_years: bool = True):
         st.error(f"Failed to load simulations data: {e}")
         return {"error": str(e)}
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_graphs_data():
     try:
         season_totals = run_query(f"""
@@ -917,7 +917,7 @@ def load_graphs_data():
         st.error(f"Failed to load graphs data: {e}")
         return {"error": str(e)}
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_keepers_data(all_years: bool = True, year: int = None, week: int = None):
     """
     Load keeper data from the player table.
@@ -983,7 +983,7 @@ def load_keepers_data(all_years: bool = True, year: int = None, week: int = None
         st.error(traceback.format_exc())
         return None
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_team_names_data():
     try:
         team_names = run_query(f"""

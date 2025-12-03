@@ -8,7 +8,7 @@ import streamlit as st
 from md.data_access import run_query, T
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_weekly_team_data_by_lineup_position(
     year: int | None = None,
     week: int | None = None,

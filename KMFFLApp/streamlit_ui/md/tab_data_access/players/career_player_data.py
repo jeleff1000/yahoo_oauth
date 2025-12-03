@@ -154,7 +154,7 @@ CAREER_PLAYER_SOURCE_COLUMNS = [
 ]
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_career_player_data(
     position=None,
     player_query="",

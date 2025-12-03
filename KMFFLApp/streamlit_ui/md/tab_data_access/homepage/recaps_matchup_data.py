@@ -100,7 +100,7 @@ RECAPS_MATCHUP_COLUMNS = [
 ]
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_recaps_matchup_data() -> Dict[str, Any]:
     """
     Load matchup data for recaps with ONLY the columns needed.

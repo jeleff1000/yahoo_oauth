@@ -28,7 +28,7 @@ import pandas as pd
 from md.data_access import run_query, T
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_keeper_data(all_years: bool = True, year: int = None, week: int = None) -> pd.DataFrame | None:
     """
     Load keeper data from player table with column selection optimization.

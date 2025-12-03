@@ -19,7 +19,7 @@ def _safe_count(table_name: str) -> int:
         return 0
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_homepage_summary_stats() -> Dict[str, Any]:
     """
     Load summary statistics for homepage overview.

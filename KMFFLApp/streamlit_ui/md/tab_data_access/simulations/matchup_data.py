@@ -39,7 +39,7 @@ import streamlit as st
 from md.data_access import run_query, T
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_simulation_matchup_data() -> Dict[str, Any]:
     """
     Load matchup data for simulations.
@@ -66,7 +66,7 @@ def load_simulation_matchup_data() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_playoff_machine_data() -> Dict[str, Any]:
     """
     Load data specifically for the Playoff Machine.
@@ -103,7 +103,7 @@ def load_playoff_machine_data() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_critical_matchups_data() -> Dict[str, Any]:
     """
     Load data for critical matchups / year-in-review analysis.
@@ -138,7 +138,7 @@ def load_critical_matchups_data() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_playoff_machine_schedule() -> Dict[str, Any]:
     """
     Load schedule data for remaining games in Playoff Machine.
@@ -168,7 +168,7 @@ def load_playoff_machine_schedule() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_clinch_scenarios_data() -> Dict[str, Any]:
     """
     Load data for clinch/elimination scenarios.

@@ -88,7 +88,7 @@ def get_motherduck_connection():
         st.error(f"Failed to create MotherDuck connection: {e}")
         raise
 
-@st.cache_data(ttl=600, show_spinner=True)
+@st.cache_data(ttl=120, show_spinner=True)
 def _execute_query(sql: str, retry_count: int = 0):
     """Cached query execution - uses retry_count to bust cache on retry."""
     conn = get_motherduck_connection()
@@ -362,7 +362,7 @@ def detect_roster_structure() -> Optional[Dict]:
 # Players - Weekly (raw)
 # ---------------------------------------
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_player_week(year: int, week: int):
     """
     OPTIMIZED: Now uses tab_data_access.players.weekly_player_data
@@ -371,7 +371,7 @@ def load_player_week(year: int, week: int):
     from .tab_data_access.players import load_h2h_week_data
     return load_h2h_week_data(year, week)
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_player_two_week_slice(year: int, week: int):
     cum_query = f"""
         WITH current_cum AS (
@@ -417,7 +417,7 @@ def load_player_two_week_slice(year: int, week: int):
         ORDER BY cumulative_week DESC, points DESC NULLS LAST
     """)
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def list_optimal_seasons() -> list[int]:
     df = run_query(f"""
         SELECT DISTINCT year
@@ -427,7 +427,7 @@ def list_optimal_seasons() -> list[int]:
     """)
     return [] if df.empty else df["year"].astype(int).tolist()
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def list_optimal_weeks(year: int) -> list[int]:
     df = run_query(f"""
         SELECT DISTINCT week
@@ -438,7 +438,7 @@ def list_optimal_weeks(year: int) -> list[int]:
     """)
     return [] if df.empty else df["week"].astype(int).tolist()
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_optimal_week(year: int, week: int):
     """
     OPTIMIZED: Now uses tab_data_access.players.weekly_player_data
@@ -451,7 +451,7 @@ def load_optimal_week(year: int, week: int):
 # Homepage
 # ---------------------------------------
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_homepage_data():
     try:
         summary = {}
@@ -487,7 +487,7 @@ def load_homepage_data():
 # Managers
 # ---------------------------------------
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_managers_data():
     try:
         matchup_summary = run_query(f"""
@@ -532,7 +532,7 @@ def load_managers_data():
 # Players - Weekly (raw list/paginated helpers for other pages)
 # ---------------------------------------
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_players_weekly_data(
     year: int | None = None,
     week: int | None = None,
@@ -548,7 +548,7 @@ def load_players_weekly_data(
     from .tab_data_access.players import load_weekly_player_data
     return load_weekly_player_data(year, week, limit, offset, sort_column, sort_direction)
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_filtered_weekly_data(
     filters: dict,
     limit: int = 500,
@@ -829,7 +829,7 @@ def get_season_query(
         ORDER BY {sort_column} {sort_direction} NULLS LAST, player
     """
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_players_season_data(
     position: str | None = None,
     player_query: str | None = None,
@@ -893,7 +893,7 @@ def load_players_season_data(
         st.error(f"Failed to load season player data: {e}")
         return pd.DataFrame()
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_players_career_data(
     position: str | None = None,
     player_query: str | None = None,
@@ -963,7 +963,7 @@ def load_players_career_data(
 # Draft / Transactions / Simulations / Graphs / Keepers / Team Names
 # ---------------------------------------
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_draft_data(all_years: bool = True):
     try:
         # Check if draft table has been enriched with player stats (schema check only, no data)
@@ -1014,7 +1014,7 @@ def load_draft_data(all_years: bool = True):
         st.error(f"Failed to load draft data: {e}")
         return {"error": str(e)}
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_transactions_data(limit: Optional[int] = 1000):
     try:
         # Pull full transaction table (all source columns)
@@ -1166,7 +1166,7 @@ def load_transactions_data(limit: Optional[int] = 1000):
         st.error(f"Failed to load transactions data: {e}")
         return {"error": str(e)}
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_simulations_data(include_all_years: bool = True, max_rows: int = None):
     """
     Load simulation data with optional row limit for performance.
@@ -1209,7 +1209,7 @@ def load_simulations_data(include_all_years: bool = True, max_rows: int = None):
         st.error(f"Failed to load simulations data: {e}")
         return {"error": str(e)}
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_graphs_data():
     try:
         season_totals = run_query(f"""
@@ -1239,7 +1239,7 @@ def load_graphs_data():
         st.error(f"Failed to load graphs data: {e}")
         return {"error": str(e)}
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_keepers_data(all_years: bool = True, year: int = None, week: int = None):
     """
     Load keeper data from the player table.
@@ -1360,7 +1360,7 @@ def load_keepers_data(all_years: bool = True, year: int = None, week: int = None
         st.error(traceback.format_exc())
         return None
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_team_names_data():
     """
     DEPRECATED: Use md.tab_data_access.team_names.load_optimized_team_names_data() instead.

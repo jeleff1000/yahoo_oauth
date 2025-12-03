@@ -151,7 +151,7 @@ SEASON_PLAYER_SOURCE_COLUMNS = [
 ]
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_season_player_data(
     position: str | None = None,
     player_query: str | None = None,

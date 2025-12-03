@@ -381,7 +381,7 @@ def load_filtered_weekly_player_data(
         return None
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_player_week_data(year: int, week: int):
     """
     Load all player data for a specific year/week with ONLY needed columns.
@@ -447,7 +447,7 @@ H2H_COLUMNS = [
 ]
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_h2h_week_data(year: int, week: int):
     """
     Load H2H player data for a specific year/week with ONLY H2H columns.
@@ -477,7 +477,7 @@ def load_h2h_week_data(year: int, week: int):
         return None
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_optimal_week_data(year: int, week: int):
     """
     Load optimal lineup data for a specific year/week.
@@ -521,7 +521,7 @@ def load_optimal_week_data(year: int, week: int):
         return None
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_h2h_optimal_week_data(year: int, week: int):
     """
     Load H2H optimal lineup data for a specific year/week with ONLY H2H columns.

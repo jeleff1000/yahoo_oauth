@@ -23,7 +23,7 @@ import pandas as pd
 from md.data_access import run_query, T
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_team_name_data() -> pd.DataFrame | None:
     """
     Load team name data from matchup table with column selection optimization.

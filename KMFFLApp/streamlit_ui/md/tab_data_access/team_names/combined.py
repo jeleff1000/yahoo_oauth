@@ -10,7 +10,7 @@ import pandas as pd
 from .team_name_data import load_team_name_data
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_optimized_team_names_data() -> pd.DataFrame | None:
     """
     Load all data for team names tab in one optimized call.

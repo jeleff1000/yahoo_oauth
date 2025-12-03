@@ -116,7 +116,7 @@ TRANSACTION_COLUMNS = [
 ]
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_transaction_data() -> Dict[str, Any]:
     """
     Load transaction data with optimized column selection.

@@ -175,7 +175,7 @@ def get_available_columns() -> list:
         return core_cols
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_draft_data() -> Dict[str, Any]:
     """
     Load draft data with optimized column selection.

@@ -7,7 +7,7 @@ import streamlit as st
 from md.data_access import run_query, T
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_career_team_data_by_manager(
     include_regular_season: bool = True,
     include_playoffs: bool = True,

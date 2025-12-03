@@ -1169,6 +1169,8 @@ def render_landing_page():
 
             if selected_db:
                 if st.button("View Analytics", type="primary", use_container_width=True, key="view_analytics_btn"):
+                    # Clear cached data when switching leagues to free memory
+                    st.cache_data.clear()
                     # Store selected database in session state
                     st.session_state.selected_league_db = selected_db
                     st.session_state.app_mode = "analytics"

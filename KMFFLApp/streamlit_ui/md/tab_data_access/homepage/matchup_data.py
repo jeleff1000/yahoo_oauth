@@ -64,7 +64,7 @@ HOMEPAGE_MATCHUP_COLUMNS = [
 ]
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_homepage_matchup_data() -> Dict[str, Any]:
     """
     Load matchup data for homepage with ONLY the columns needed.

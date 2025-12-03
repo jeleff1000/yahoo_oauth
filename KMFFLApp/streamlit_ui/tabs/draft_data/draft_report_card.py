@@ -26,7 +26,7 @@ def get_league_name() -> str:
         return 'Fantasy League'
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=120)
 def get_player_headshots() -> dict:
     """Get player headshots from the player table."""
     try:

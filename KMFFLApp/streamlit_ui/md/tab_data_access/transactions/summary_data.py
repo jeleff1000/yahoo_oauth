@@ -11,7 +11,7 @@ import streamlit as st
 from md.data_access import run_query, T
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_transaction_summary() -> Dict[str, Any]:
     """
     Load transaction summary statistics by year with engagement metrics.
@@ -92,7 +92,7 @@ def load_transaction_summary() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_manager_transaction_summary() -> Dict[str, Any]:
     """
     Load transaction summary statistics by manager (career-level).

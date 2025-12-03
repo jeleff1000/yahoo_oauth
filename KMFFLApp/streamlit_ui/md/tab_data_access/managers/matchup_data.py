@@ -135,7 +135,7 @@ MANAGERS_MATCHUP_COLUMNS = [
 ]
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_managers_matchup_data() -> Dict[str, Any]:
     """
     Load matchup data for managers tab with ONLY the columns needed.

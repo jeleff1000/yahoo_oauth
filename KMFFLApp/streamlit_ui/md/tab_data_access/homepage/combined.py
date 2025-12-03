@@ -11,7 +11,7 @@ from .matchup_data import load_homepage_matchup_data
 from .summary_stats import load_homepage_summary_stats
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_optimized_homepage_data() -> Dict[str, Any]:
     """
     Load all data needed for homepage in one optimized call.

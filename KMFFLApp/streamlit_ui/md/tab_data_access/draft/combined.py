@@ -67,7 +67,7 @@ def is_dedicated_slot(slot_name: str) -> bool:
     return not is_flex_slot(slot_name) and not is_bench_slot(slot_name)
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_optimized_draft_data() -> Dict[str, Any]:
     """
     Load all data for draft tab in one optimized call.
@@ -91,7 +91,7 @@ def load_optimized_draft_data() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-@st.cache_data(show_spinner=False, ttl=600)
+@st.cache_data(show_spinner=False, ttl=120)
 def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
     """
     Load roster configuration for the draft optimizer.

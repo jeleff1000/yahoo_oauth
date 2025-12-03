@@ -13,7 +13,7 @@ from .summary_data import load_transaction_summary, load_manager_transaction_sum
 from md.data_access import run_query, T, get_current_league_db
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_optimized_transactions_data() -> Dict[str, Any]:
     """
     Load all data for transactions tab in one optimized call.

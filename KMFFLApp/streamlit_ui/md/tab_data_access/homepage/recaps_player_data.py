@@ -54,7 +54,7 @@ RECAPS_PLAYER_COLUMNS = [
 ]
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_player_two_week_slice(year: int, week: int) -> pd.DataFrame:
     """
     Load only the 2-week player slice needed for recaps with optimized column selection.

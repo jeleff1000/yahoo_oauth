@@ -102,7 +102,7 @@ WEEKLY_TEAM_COLUMNS = [
 ]
 
 
-@st.cache_data(show_spinner=True, ttl=600)
+@st.cache_data(show_spinner=True, ttl=120)
 def load_weekly_team_data(
     year: int | None = None,
     week: int | None = None,
