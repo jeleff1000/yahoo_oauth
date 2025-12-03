@@ -1055,18 +1055,24 @@ def apply_modern_styles():
        RESPONSIVE - MOBILE (600px) - KEY MOBILE FIXES
        =========================================== */
     @media (max-width: 600px) {
-        /* ===== FIX #1: SHRINK TOP NAV TABS ===== */
-        /* These are the big Weekly/Seasons/Career/Visualize buttons */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 0.25rem;
-            padding: 0 0 0.25rem 0;
-            margin-bottom: 0.25rem;
-        }
-        .stTabs [data-baseweb="tab"] {
-            padding: 0.35rem 0.6rem !important;
+        /* ===== FIX #1: SHRINK TOP NAV BUTTONS (Weekly/Seasons/Career/Visualize) ===== */
+        /* These are st.button() in st.columns(), NOT st.tabs() */
+        [data-testid="stHorizontalBlock"] button,
+        [data-testid="column"] button,
+        .stButton > button {
+            padding: 0.375rem 0.5rem !important;
             font-size: 0.8rem !important;
             min-height: auto !important;
             height: auto !important;
+            line-height: 1.2 !important;
+        }
+
+        /* Tighter column gaps for button row */
+        [data-testid="stHorizontalBlock"] {
+            gap: 0.25rem !important;
+        }
+        [data-testid="column"] {
+            padding: 0 0.125rem !important;
         }
 
         /* ===== FIX #2: REDUCE FILTERS BLOCK ===== */
@@ -1084,21 +1090,27 @@ def apply_modern_styles():
             font-size: 0.8rem !important;
         }
 
-        /* ===== FIX #3: HORIZONTAL SCROLLING SUBTABS ===== */
+        /* ===== FIX #3: HORIZONTAL SCROLLING SUBTABS (st.tabs) ===== */
         .stTabs [data-baseweb="tab-list"] {
             display: flex !important;
             flex-wrap: nowrap !important;
             overflow-x: auto !important;
             -webkit-overflow-scrolling: touch;
-            scrollbar-width: none; /* Hide scrollbar Firefox */
-            -ms-overflow-style: none; /* Hide scrollbar IE/Edge */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            gap: 0.25rem;
+            padding: 0 0 0.25rem 0;
+            margin-bottom: 0.25rem;
         }
         .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
-            display: none; /* Hide scrollbar Chrome/Safari */
+            display: none;
         }
         .stTabs [data-baseweb="tab"] {
             flex-shrink: 0 !important;
             white-space: nowrap !important;
+            padding: 0.3rem 0.5rem !important;
+            font-size: 0.75rem !important;
+            min-height: auto !important;
         }
 
         /* ===== FIX #4: TABLE HORIZONTAL SCROLL ===== */
