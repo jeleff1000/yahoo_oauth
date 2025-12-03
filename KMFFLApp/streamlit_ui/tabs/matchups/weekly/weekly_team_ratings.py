@@ -72,7 +72,6 @@ class WeeklyTeamRatingsViewer:
         stats = self._calculate_stats(display_df)
 
         # === ENHANCED TABLE DISPLAY ===
-        st.markdown(f"**Viewing {len(display_df):,} team ratings**")
         st.caption("💡 **Power Rating** measures team strength. **Playoff probabilities** show likelihood of advancing based on simulations.")
         self._render_overview_table(display_df, prefix)
 

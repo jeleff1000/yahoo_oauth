@@ -51,8 +51,6 @@ class WeeklyProjectedStatsViewer:
         stats = self._calculate_stats(display_df)
 
         # === ENHANCED TABLE DISPLAY ===
-        st.markdown(f"**Viewing {len(display_df):,} matchups**")
-
         # Accuracy tiers legend in styled box
         render_legend_box("Accuracy Tiers", [
             ("Excellent (<5 pts)", "#10B981"),

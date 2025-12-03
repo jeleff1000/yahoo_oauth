@@ -39,7 +39,6 @@ class WeeklyAdvancedStatsViewer:
         stats = self._calculate_stats(display_df)
 
         # === ENHANCED TABLE DISPLAY ===
-        st.markdown(f"**Viewing {len(display_df):,} matchups**")
         self._render_enhanced_table(display_df, prefix)
 
         # === QUICK STATS SECTION (Below Table) ===

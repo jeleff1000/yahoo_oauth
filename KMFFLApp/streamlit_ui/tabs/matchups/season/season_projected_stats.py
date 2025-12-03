@@ -62,7 +62,6 @@ class SeasonProjectedStatsViewer:
         )
 
         # === ENHANCED TABLE DISPLAY ===
-        st.markdown(f"**Viewing {len(display_df):,} seasons**")
         self._render_enhanced_table(display_df, prefix, aggregation_type)
 
         # === QUICK STATS SECTION (Below Table) ===

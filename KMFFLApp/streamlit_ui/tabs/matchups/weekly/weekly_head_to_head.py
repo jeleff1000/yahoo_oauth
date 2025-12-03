@@ -35,11 +35,6 @@ class WeeklyHeadToHeadViewer:
             st.error("❌ Required columns are missing from the data source")
             return
 
-        # Display viewing count
-        total_matchups = len(self.df)
-        unique_matchups = len(self.df.groupby(['manager', 'opponent']))
-        st.markdown(f"**Viewing {total_matchups:,} total matchups ({unique_matchups:,} unique pairings)**")
-
         # Stat type selector
         st.markdown("""
         **Choose what to display:** Select how you want to compare managers head-to-head.

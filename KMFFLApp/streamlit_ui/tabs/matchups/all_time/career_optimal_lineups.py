@@ -41,7 +41,6 @@ def display_alltime_optimal_lineup(matchup_df: pd.DataFrame):
     stats = _calculate_stats(display_df)
 
     # === ENHANCED TABLE DISPLAY ===
-    st.markdown(f"**Viewing {len(display_df):,} managers**")
     _render_enhanced_table(display_df)
 
     # === QUICK STATS SECTION (Below Table) ===
