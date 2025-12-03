@@ -1055,69 +1055,34 @@ def apply_modern_styles():
        RESPONSIVE - MOBILE (600px) - KEY MOBILE FIXES
        =========================================== */
     @media (max-width: 600px) {
-        /* ===== FIX #1: TOP NAV BUTTONS AS 2x2 GRID ===== */
-        /* Make the columns container wrap into 2x2 grid */
-        [data-testid="stHorizontalBlock"]:first-of-type,
-        .main [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"]:first-child {
-            display: flex !important;
+        /* ===== FIX #1: SHRINK TOP NAV BUTTONS (2x2 grid) ===== */
+        /* Target buttons inside horizontal blocks */
+        div[data-testid="stHorizontalBlock"] button {
+            padding-top: 0.3rem !important;
+            padding-bottom: 0.3rem !important;
+            font-size: 0.9rem !important;
+            border-radius: 0.6rem !important;
+        }
+
+        /* Make top nav wrap into 2x2 grid */
+        div[data-testid="stHorizontalBlock"] {
             flex-wrap: wrap !important;
             gap: 6px !important;
         }
-
-        /* Each column takes 50% width minus gap */
-        [data-testid="stHorizontalBlock"]:first-of-type > [data-testid="column"],
-        .main [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"]:first-child > [data-testid="column"] {
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
             flex: 0 0 calc(50% - 3px) !important;
             width: calc(50% - 3px) !important;
-            min-width: calc(50% - 3px) !important;
             max-width: calc(50% - 3px) !important;
-            padding: 0 !important;
         }
 
-        /* Compact buttons inside */
-        button[kind="primary"],
-        button[kind="secondary"],
-        button[data-testid="baseButton-primary"],
-        button[data-testid="baseButton-secondary"],
-        [data-testid="stBaseButton-primary"],
-        [data-testid="stBaseButton-secondary"],
-        .stButton button,
-        .stButton > button,
-        [data-testid="column"] button,
-        [data-testid="stHorizontalBlock"] button {
-            padding: 8px 12px !important;
-            font-size: 0.85rem !important;
-            min-height: unset !important;
-            height: auto !important;
-            line-height: 1.3 !important;
+        /* ===== FIX #2: COMPACT FILTERS EXPANDER ===== */
+        div.streamlit-expanderHeader {
+            padding-top: 0.4rem !important;
+            padding-bottom: 0.4rem !important;
         }
-
-        /* Other horizontal blocks (not nav) - keep normal */
-        [data-testid="stHorizontalBlock"]:not(:first-of-type) {
-            gap: 4px !important;
-        }
-        [data-testid="stHorizontalBlock"]:not(:first-of-type) > [data-testid="column"] {
-            padding: 0 2px !important;
-        }
-
-        /* ===== FIX #2: REDUCE FILTERS BLOCK - MINIMAL ===== */
-        div[data-testid="stExpander"] {
-            margin: 4px 0 !important;
-        }
-        /* Expander header - super compact */
-        div[data-testid="stExpander"] > div:first-child,
-        [data-testid="stExpanderToggleIcon"],
-        .streamlit-expanderHeader {
-            padding: 4px 8px !important;
-            min-height: unset !important;
-        }
-        div[data-testid="stExpander"] summary,
-        div[data-testid="stExpander"] span {
-            font-size: 0.75rem !important;
-        }
-        /* Expander content - tight */
-        div[data-testid="stExpander"] > div:last-child {
-            padding: 6px 8px !important;
+        div.streamlit-expanderContent {
+            padding-top: 0.4rem !important;
+            padding-bottom: 0.4rem !important;
         }
 
         /* ===== FIX #3: HORIZONTAL SCROLLING SUBTABS ===== */
@@ -1126,11 +1091,11 @@ def apply_modern_styles():
             flex-wrap: nowrap !important;
             overflow-x: auto !important;
             -webkit-overflow-scrolling: touch;
+            white-space: nowrap;
+            gap: 0.5rem;
+            padding-bottom: 0.25rem;
             scrollbar-width: none;
             -ms-overflow-style: none;
-            gap: 4px !important;
-            padding: 0 0 4px 0 !important;
-            margin-bottom: 4px !important;
         }
         .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
             display: none;
@@ -1138,79 +1103,61 @@ def apply_modern_styles():
         .stTabs [data-baseweb="tab"] {
             flex-shrink: 0 !important;
             white-space: nowrap !important;
-            padding: 4px 8px !important;
-            font-size: 0.7rem !important;
-            min-height: unset !important;
-            height: auto !important;
+            padding: 0.25rem 0.5rem !important;
+            font-size: 0.75rem !important;
         }
 
         /* ===== FIX #4: TABLE HORIZONTAL SCROLL ===== */
         .stDataFrame,
-        [data-testid="stDataFrame"],
-        [data-testid="stDataFrameResizable"] {
+        .stTable {
             overflow-x: auto !important;
+            white-space: nowrap !important;
             -webkit-overflow-scrolling: touch;
-            max-width: 100% !important;
         }
         .stDataFrame table,
-        [data-testid="stDataFrame"] table {
-            display: block !important;
-            overflow-x: auto !important;
-            white-space: nowrap;
+        .stTable table {
             font-size: 0.7rem !important;
         }
         .stDataFrame th,
-        [data-testid="stDataFrame"] th {
-            padding: 4px 6px !important;
+        .stTable th {
+            padding: 0.25rem 0.4rem !important;
             font-size: 0.65rem !important;
         }
         .stDataFrame td,
-        [data-testid="stDataFrame"] td {
-            padding: 3px 5px !important;
+        .stTable td {
+            padding: 0.2rem 0.35rem !important;
             font-size: 0.65rem !important;
         }
 
-        /* ===== FIX #5: KILL ALL EXCESS SPACING ===== */
+        /* ===== FIX #5: TIGHTEN SPACING ===== */
         .tab-header {
-            margin: 4px 0 !important;
-            padding: 2px 0 !important;
+            margin: 0.25rem 0 !important;
+            padding: 0.125rem 0 !important;
         }
         .tab-header h2 {
-            font-size: 0.8rem !important;
+            font-size: 0.85rem !important;
             margin: 0 !important;
         }
         .tab-header p {
-            font-size: 0.6rem !important;
+            font-size: 0.65rem !important;
             margin: 0 !important;
         }
 
-        /* Container - minimal padding */
+        /* Container padding */
         .main .block-container {
-            padding: 4px 8px 8px 8px !important;
+            padding: 0.25rem 0.5rem 0.5rem 0.5rem !important;
         }
 
-        /* Kill ALL vertical gaps */
+        /* Reduce vertical gaps */
         [data-testid="stVerticalBlock"] {
-            gap: 2px !important;
-        }
-        [data-testid="stVerticalBlock"] > div {
-            margin-bottom: 2px !important;
+            gap: 0.25rem !important;
         }
         .element-container {
-            margin-bottom: 1px !important;
+            margin-bottom: 0.125rem !important;
         }
 
-        /* Remove spacer divs */
         hr {
-            margin: 4px 0 !important;
-        }
-
-        /* Tighten markdown spacing */
-        [data-testid="stMarkdown"] {
-            margin-bottom: 2px !important;
-        }
-        [data-testid="stMarkdown"] p {
-            margin-bottom: 2px !important;
+            margin: 0.25rem 0 !important;
         }
     }
 
