@@ -56,20 +56,8 @@ class WeeklyTeamRatingsViewer:
             st.info("No team ratings data available with current filters")
             return
 
-        # View mode selector
-        st.markdown("**View Mode:**")
-        view_mode = st.radio(
-            "Select what to display",
-            ["Overview", "Seed Distribution"],
-            horizontal=True,
-            key=f"{prefix}_view_mode",
-            help="Overview shows playoff odds, Seed Distribution shows probability of each final seed"
-        )
-
-        if view_mode == "Overview":
-            self._display_overview(prefix)
-        else:
-            self._display_seed_distribution(prefix)
+        # Display overview directly (seed distribution removed)
+        self._display_overview(prefix)
 
     def _display_overview(self, prefix: str):
         """Display overview with power ratings and playoff odds."""
@@ -108,34 +96,6 @@ class WeeklyTeamRatingsViewer:
                 use_container_width=True
             )
 
-    def _display_seed_distribution(self, prefix: str):
-        """Display detailed seed probability distribution."""
-        # Prepare data
-        display_df = self._prepare_seed_distribution_data()
-
-        if display_df.empty:
-            st.info("No seed distribution data available")
-            return
-
-        st.markdown(f"**Viewing {len(display_df):,} team seed probabilities**")
-        st.caption("💡 Each column shows the probability (%) of finishing in that playoff seed position")
-        self._render_seed_distribution_table(display_df, prefix)
-
-        # === DOWNLOAD SECTION ===
-        st.markdown("---")
-        col1, col2, col3 = st.columns([2, 1, 1])
-        with col1:
-            st.markdown("**💾 Export Data**")
-        with col2:
-            csv = display_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 CSV",
-                data=csv,
-                file_name=f"seed_distribution_{pd.Timestamp.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv",
-                key=f"{prefix}_download_seed_csv",
-                use_container_width=True
-            )
 
     def _prepare_overview_data(self) -> pd.DataFrame:
         """Prepare overview data with power ratings and playoff odds."""
@@ -199,49 +159,6 @@ class WeeklyTeamRatingsViewer:
                 # Check if values are between 0 and 1 (need conversion)
                 if display_df[col].dropna().between(0, 1).all():
                     display_df[col] = display_df[col] * 100
-
-        return display_df
-
-    def _prepare_seed_distribution_data(self) -> pd.DataFrame:
-        """Prepare seed distribution data."""
-        df = self.base_df.copy()
-
-        # Select seed distribution columns
-        seed_cols = [f"x{i}_seed" for i in range(1, 11)]
-        available_seed_cols = [c for c in seed_cols if c in df.columns]
-
-        if not available_seed_cols:
-            return pd.DataFrame()
-
-        priority_order = ["manager", "week", "year"] + available_seed_cols
-        show_cols = self._present(priority_order)
-
-        display_df = df[show_cols].copy()
-
-        # Rename columns
-        rename_map = {
-            'manager': 'Manager',
-            'week': 'Week',
-            'year': 'Year',
-        }
-
-        # Add seed column renames
-        for i in range(1, 11):
-            old_name = f"x{i}_seed"
-            if old_name in display_df.columns:
-                rename_map[old_name] = f"Seed {i} %"
-
-        display_df = display_df.rename(columns=rename_map)
-
-        # Format year and week
-        if 'Year' in display_df.columns:
-            display_df['Year'] = display_df['Year'].astype(int)
-        if 'Week' in display_df.columns:
-            display_df['Week'] = display_df['Week'].astype(int)
-
-        # Sort by most likely top seed
-        if 'Seed 1 %' in display_df.columns:
-            display_df = display_df.sort_values('Seed 1 %', ascending=False)
 
         return display_df
 
@@ -356,50 +273,6 @@ class WeeklyTeamRatingsViewer:
                 width='small'
             ),
         }
-
-        # Display the enhanced dataframe
-        st.dataframe(
-            df,
-            column_config=column_config,
-            hide_index=True,
-            use_container_width=True,
-            height=500  # Fixed height for better scrolling
-        )
-
-    def _render_seed_distribution_table(self, df: pd.DataFrame, prefix: str):
-        """Render seed distribution table with column configuration."""
-
-        # Configure column display
-        column_config = {
-            'Year': st.column_config.NumberColumn(
-                'Year',
-                help='Season year',
-                format='%d',
-                width='small'
-            ),
-            'Week': st.column_config.NumberColumn(
-                'Week',
-                help='Week number',
-                format='%d',
-                width='small'
-            ),
-            'Manager': st.column_config.TextColumn(
-                'Manager',
-                help='Manager name',
-                width='medium'
-            ),
-        }
-
-        # Add seed columns
-        for i in range(1, 11):
-            col_name = f"Seed {i} %"
-            if col_name in df.columns:
-                column_config[col_name] = st.column_config.NumberColumn(
-                    col_name,
-                    help=f'Probability of finishing as {i} seed',
-                    format='%.1f%%',
-                    width='small'
-                )
 
         # Display the enhanced dataframe
         st.dataframe(

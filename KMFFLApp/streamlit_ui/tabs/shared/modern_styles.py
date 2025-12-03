@@ -141,33 +141,39 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       GLOBAL SPACING OVERRIDES - Reduce Streamlit defaults
+       GLOBAL SPACING OVERRIDES - Tight, consistent layout
        =========================================== */
-    /* Reduce gap between main container elements */
+    /* Consistent left margin for all content */
     .main .block-container {
-        padding-top: 1rem !important;
+        padding-top: 0.5rem !important;
         padding-bottom: 1rem !important;
+        max-width: 100% !important;
     }
 
-    /* Reduce spacing between stacked elements */
+    /* Reduce spacing between ALL stacked elements */
     .element-container {
-        margin-bottom: 0.25rem !important;
+        margin-bottom: 0.125rem !important;
     }
 
-    /* Reduce heading margins */
+    /* Very tight heading margins */
     h1, h2, h3, h4, h5, h6 {
-        margin-top: 0.5rem !important;
-        margin-bottom: 0.375rem !important;
+        margin-top: 0.25rem !important;
+        margin-bottom: 0.25rem !important;
     }
 
     /* Tighter paragraph spacing */
     p {
-        margin-bottom: 0.375rem !important;
+        margin-bottom: 0.25rem !important;
     }
 
     /* Reduce markdown divider spacing */
     hr {
-        margin: 0.75rem 0 !important;
+        margin: 0.5rem 0 !important;
+    }
+
+    /* Reduce gap between all Streamlit blocks */
+    [data-testid="stVerticalBlock"] > div {
+        gap: 0.25rem !important;
     }
 
     /* ===========================================
@@ -196,23 +202,26 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       TAB HEADERS - Reduced spacing
+       TAB HEADERS - Very tight spacing
        =========================================== */
     .tab-header {
-        margin-bottom: var(--space-md);
-        padding-bottom: var(--space-sm);
+        margin-top: 0 !important;
+        margin-bottom: 0.375rem;
+        padding-bottom: 0.25rem;
         border-bottom: 1px solid var(--border);
     }
     .tab-header h2 {
-        font-size: 1.25rem;
+        font-size: 1.1rem;
         font-weight: 600;
         color: var(--text-primary);
-        margin: 0 0 var(--space-xs) 0 !important;
+        margin: 0 !important;
+        line-height: 1.3;
     }
     .tab-header p {
-        font-size: 0.875rem;
+        font-size: 0.8rem;
         color: var(--text-secondary);
-        margin: 0 !important;
+        margin: 0.125rem 0 0 0 !important;
+        line-height: 1.3;
     }
 
     /* ===========================================
@@ -285,15 +294,43 @@ def apply_modern_styles():
         margin: 0 !important;
     }
 
-    /* Style Streamlit's native expander for filters */
+    /* Style Streamlit's native expander for filters - COMPACT */
     div[data-testid="stExpander"] {
         background: var(--bg-secondary);
         border: 1px solid var(--border);
-        border-radius: var(--radius-lg);
-        margin-bottom: var(--space-md);
+        border-radius: var(--radius-md);
+        margin-bottom: 0.375rem !important;
+        margin-top: 0.25rem !important;
     }
+
+    /* Expander header - compact with title bar feel */
     div[data-testid="stExpander"] > div:first-child {
-        padding: var(--space-sm) var(--space-md);
+        padding: 0.375rem 0.75rem !important;
+        background: linear-gradient(to bottom, var(--bg-tertiary), var(--bg-secondary));
+        border-bottom: 1px solid var(--border);
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+    }
+
+    /* Expander header text */
+    div[data-testid="stExpander"] summary {
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+    }
+
+    /* Expander content - reduced padding */
+    div[data-testid="stExpander"] > div:last-child {
+        padding: 0.5rem 0.75rem !important;
+    }
+
+    /* Reduce internal spacing in expanders */
+    div[data-testid="stExpander"] .stMultiSelect,
+    div[data-testid="stExpander"] .stSelectbox,
+    div[data-testid="stExpander"] .stCheckbox {
+        margin-bottom: 0.25rem !important;
+    }
+
+    div[data-testid="stExpander"] [data-testid="column"] {
+        padding: 0 0.25rem !important;
     }
 
     /* ===========================================
@@ -559,27 +596,36 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       STREAMLIT NATIVE TABS - IMPROVED PILLS STYLE
+       STREAMLIT NATIVE TABS - COMPACT PILLS
        =========================================== */
+    /* Container for top-level tabs */
+    .stTabs {
+        margin-bottom: 0.25rem !important;
+    }
+
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0.5rem;
+        gap: 0.375rem;
         border-bottom: 1px solid var(--border);
-        padding-bottom: var(--space-sm);
-        margin-bottom: var(--space-md);
+        padding-bottom: 0.375rem;
+        margin-bottom: 0.375rem;
         flex-wrap: wrap;
+        background: var(--bg-secondary);
+        padding: 0.375rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
     }
 
     .stTabs [data-baseweb="tab"] {
         height: auto;
-        padding: 0.5rem 1rem;
-        border-radius: var(--radius-md);
+        padding: 0.35rem 0.75rem;
+        border-radius: var(--radius-sm);
         font-weight: 500;
-        font-size: 0.875rem;
-        background-color: var(--bg-secondary);
+        font-size: 0.8rem;
+        background-color: transparent;
         color: var(--text-secondary);
-        border: 1px solid var(--border);
+        border: 1px solid transparent;
         margin-bottom: 0;
-        transition: all var(--transition-normal);
+        transition: all var(--transition-fast);
         white-space: nowrap;
     }
 
@@ -588,12 +634,13 @@ def apply_modern_styles():
         color: white;
         border-color: var(--accent);
         font-weight: 600;
+        box-shadow: var(--shadow-sm);
     }
 
     .stTabs [data-baseweb="tab"]:hover:not([aria-selected="true"]) {
         color: var(--text-primary);
         background-color: var(--bg-tertiary);
-        border-color: var(--border-strong);
+        border-color: var(--border);
     }
 
     /* Force consistent text in tabs */
@@ -601,9 +648,18 @@ def apply_modern_styles():
         color: inherit !important;
     }
 
-    /* Tab panel spacing */
+    /* Tab panel - minimal top spacing */
     .stTabs [data-baseweb="tab-panel"] {
-        padding-top: var(--space-md);
+        padding-top: 0.375rem !important;
+    }
+
+    /* Subtabs divider line */
+    .stTabs [data-baseweb="tab-panel"]::before {
+        content: '';
+        display: block;
+        height: 1px;
+        background: var(--border);
+        margin-bottom: 0.5rem;
     }
 
     /* ===========================================
