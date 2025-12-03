@@ -1,8 +1,13 @@
+"""
+Injury Data Overview - Main entry point for injury stats tab.
+"""
 import streamlit as st
 import pandas as pd
+from ..shared.modern_styles import apply_modern_styles
 from .weekly_injury_stats import WeeklyInjuryStatsViewer
 from .season_injury_stats import SeasonInjuryStatsViewer
 from .career_injury_stats import CareerInjuryStatsViewer
+
 
 @st.fragment
 def display_injury_overview(df_dict):
@@ -47,6 +52,8 @@ def display_injury_overview(df_dict):
         st.error("Injury data or Player data not found.")
 
 class InjuryStatsViewer:
+    """Viewer for injury statistics with Weekly/Season/Career breakdown."""
+
     def __init__(self):
         self.weekly_viewer = WeeklyInjuryStatsViewer()
         self.season_viewer = SeasonInjuryStatsViewer()
@@ -54,13 +61,26 @@ class InjuryStatsViewer:
 
     @st.fragment
     def display(self, merged_data):
-        tab_names = ["Weekly Injury Stats", "Season Injury Stats", "Career Injury Stats"]
-        tabs = st.tabs(tab_names)
-        for i, tab_name in enumerate(tab_names):
-            with tabs[i]:
-                if tab_name == "Weekly Injury Stats":
-                    self.weekly_viewer.display(merged_data)
-                elif tab_name == "Season Injury Stats":
-                    self.season_viewer.display(merged_data)
-                elif tab_name == "Career Injury Stats":
-                    self.career_viewer.display(merged_data)
+        apply_modern_styles()
+
+        # Top-level navigation buttons (consistent with other tabs)
+        main_tab_names = ["Weekly", "Season", "Career"]
+        current_main_idx = st.session_state.get("subtab_Injury", 0)
+
+        cols = st.columns(len(main_tab_names))
+        for idx, (col, name) in enumerate(zip(cols, main_tab_names)):
+            with col:
+                is_active = (idx == current_main_idx)
+                btn_type = "primary" if is_active else "secondary"
+                if st.button(name, key=f"injury_main_{idx}", use_container_width=True, type=btn_type):
+                    if not is_active:
+                        st.session_state["subtab_Injury"] = idx
+                        st.rerun()
+
+        # Render only the active subtab (lazy loading)
+        if current_main_idx == 0:
+            self.weekly_viewer.display(merged_data)
+        elif current_main_idx == 1:
+            self.season_viewer.display(merged_data)
+        elif current_main_idx == 2:
+            self.career_viewer.display(merged_data)

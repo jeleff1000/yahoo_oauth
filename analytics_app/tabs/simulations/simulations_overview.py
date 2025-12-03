@@ -202,6 +202,10 @@ class SimulationDataViewer:
 
 
 @st.fragment
-def display_simulations_viewer(matchup_data_df: pd.DataFrame | None, player_data_df=None):
-    """Main entry point for simulations viewer"""
+def display_simulations_overview(matchup_data_df: pd.DataFrame | None, player_data_df=None):
+    """Main entry point for simulations tab."""
     SimulationDataViewer(matchup_data_df).display()
+
+
+# Backward compatibility alias
+display_simulations_viewer = display_simulations_overview

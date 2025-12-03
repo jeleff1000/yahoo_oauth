@@ -54,7 +54,7 @@ jobs:
           import sys
           import json
           import time
-          import tempfile
+          import requests
           import duckdb
 
           # Get inputs
@@ -77,33 +77,37 @@ jobs:
           print("STEP 1: Validating refresh token with Yahoo")
           print("=" * 60)
 
-          # Create temp OAuth file and test the token
-          oauth_data = {
-              'consumer_key': consumer_key,
-              'consumer_secret': consumer_secret,
-              'access_token': 'expired_placeholder',
-              'refresh_token': refresh_token,
-              'token_time': 0,  # Force refresh
-          }
-
-          with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-              json.dump(oauth_data, f)
-              test_file = f.name
+          # Use direct HTTP request to refresh token (avoids yahoo_oauth interactive fallback)
+          token_url = "https://api.login.yahoo.com/oauth2/get_token"
 
           try:
-              from yahoo_oauth import OAuth2
-              oauth = OAuth2(None, None, from_file=test_file)
+              response = requests.post(
+                  token_url,
+                  data={
+                      'grant_type': 'refresh_token',
+                      'refresh_token': refresh_token,
+                      'client_id': consumer_key,
+                      'client_secret': consumer_secret,
+                  },
+                  headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                  timeout=30
+              )
 
-              if not oauth.token_is_valid():
-                  oauth.refresh_access_token()
+              if response.status_code != 200:
+                  print(f"❌ Token refresh failed: {response.status_code}")
+                  print(f"   Response: {response.text[:500]}")
+                  print("\nCommon causes:")
+                  print("  1. Refresh token was created with different Yahoo app credentials")
+                  print("  2. Refresh token has expired")
+                  print("  3. Yahoo app was deleted or modified")
+                  sys.exit(1)
 
-              # Get the refreshed tokens
-              new_access_token = getattr(oauth, 'access_token', None)
-              new_refresh_token = getattr(oauth, 'refresh_token', refresh_token)
+              tokens = response.json()
+              new_access_token = tokens.get('access_token')
+              new_refresh_token = tokens.get('refresh_token', refresh_token)
 
               if not new_access_token:
-                  print("❌ Token refresh failed - no access_token returned")
-                  print("   Make sure the refresh_token matches your YAHOO_CLIENT_ID/SECRET")
+                  print(f"❌ No access_token in response: {tokens}")
                   sys.exit(1)
 
               print(f"✅ Token validated successfully!")
@@ -112,23 +116,20 @@ jobs:
 
               # Test an API call
               print("\n   Testing Yahoo API call...")
-              url = "https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games?format=json"
-              resp = oauth.session.get(url)
-              if resp.status_code == 200:
+              test_url = "https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games?format=json"
+              test_resp = requests.get(
+                  test_url,
+                  headers={'Authorization': f'Bearer {new_access_token}'},
+                  timeout=30
+              )
+              if test_resp.status_code == 200:
                   print("   ✅ API call successful - token is fully working!")
               else:
-                  print(f"   ⚠️ API call returned {resp.status_code} - token may have limited access")
+                  print(f"   ⚠️ API call returned {test_resp.status_code} - token may have limited access")
 
           except Exception as e:
               print(f"❌ Token validation failed: {e}")
-              print("\nCommon causes:")
-              print("  1. Refresh token was created with different Yahoo app credentials")
-              print("  2. Refresh token has expired (they last ~30 days if unused)")
-              print("  3. Yahoo app was deleted or modified")
-              print("\nSolution: Re-authenticate in Streamlit to get a fresh token")
               sys.exit(1)
-          finally:
-              os.unlink(test_file)
 
           print("\n" + "=" * 60)
           print("STEP 2: Discovering league databases")

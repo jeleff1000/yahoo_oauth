@@ -21,7 +21,7 @@ from .career_add_drop import display_career_add_drop
 from .career_trade_data import display_career_trade_data
 
 # Main entry point
-from .transactions_adds_drops_trades_overview import AllTransactionsViewer
+from .transactions_overview import AllTransactionsViewer, display_transactions_overview
 
 __all__ = [
     # Weekly
@@ -37,4 +37,5 @@ __all__ = [
     "display_career_trade_data",
     # Main
     "AllTransactionsViewer",
+    "display_transactions_overview",
 ]

@@ -485,3 +485,9 @@ class KeeperDataViewer:
         missing_count = len(keepers) - len(keepers_with_data)
         if missing_count > 0:
             st.info(f"ℹ️ Note: {missing_count} keeper(s) excluded due to missing performance data")
+
+
+@st.fragment
+def display_keepers_overview(keeper_data):
+    """Main entry point for keepers tab."""
+    KeeperDataViewer(keeper_data).display()

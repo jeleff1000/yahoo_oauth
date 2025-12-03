@@ -108,3 +108,9 @@ class AllTransactionsViewer:
             with career_subtabs[2]:
                 # Career report card - pass flag to show all-time view
                 display_transaction_report_card(self.transaction_df, self.player_df, career_view=True)
+
+
+@st.fragment
+def display_transactions_overview(transaction_df, player_df, draft_history_df):
+    """Main entry point for transactions tab."""
+    AllTransactionsViewer(transaction_df, player_df, draft_history_df).display()

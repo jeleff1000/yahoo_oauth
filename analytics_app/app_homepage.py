@@ -321,12 +321,12 @@ def render_transactions_tab():
     data = load_transactions_tab()
 
     if "error" not in data:
-        from tabs.transactions.transactions_adds_drops_trades_overview import AllTransactionsViewer
-        AllTransactionsViewer(
+        from tabs.transactions.transactions_overview import display_transactions_overview
+        display_transactions_overview(
             data["transactions"],
             data["player_data"],
             data["draft_data"]
-        ).display()
+        )
     else:
         st.error(f"Failed to load transactions data: {data['error']}")
 
@@ -337,8 +337,8 @@ def render_simulations_tab():
     data = load_simulations_tab()
 
     if "error" not in data:
-        from tabs.simulations.simulation_home import display_simulations_viewer
-        display_simulations_viewer(data["matchups"])
+        from tabs.simulations.simulations_overview import display_simulations_overview
+        display_simulations_overview(data["matchups"])
     else:
         st.error(f"Failed to load simulations data: {data['error']}")
 
@@ -350,12 +350,12 @@ def render_extras_tab():
 
     if subtab_idx == 0:
         from md.tab_data_access.keepers import load_optimized_keepers_data
-        from tabs.keepers.keepers_home import KeeperDataViewer
+        from tabs.keepers.keepers_overview import display_keepers_overview
 
         with st.spinner("Loading keepers data..."):
             keepers_data = load_optimized_keepers_data()
             if keepers_data is not None:
-                KeeperDataViewer(keepers_data).display()
+                display_keepers_overview(keepers_data)
             else:
                 render_empty_state("Failed to load keepers data")
 
