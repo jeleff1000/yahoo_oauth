@@ -248,7 +248,7 @@ class WeeklyMatchupStatsViewer:
             )
 
         with col3:
-            margin_delta = "✓" if stats['avg_margin'] > 0 else "✗"
+            margin_delta = "+" if stats['avg_margin'] > 0 else "-"
             st.metric(
                 "Avg Margin",
                 f"{stats['avg_margin']:.2f}",
@@ -307,9 +307,9 @@ class WeeklyMatchupStatsViewer:
         # Create display dataframe with formatted values
         display_df = df.copy()
 
-        # Add visual indicators for Result column
+        # Add visual indicators for Result column - using quieter indicators
         display_df['Result'] = display_df['Result'].apply(
-            lambda x: '✓ Win' if x else '✗ Loss'
+            lambda x: 'W' if x else 'L'
         )
 
         # Format playoff result column with emoji
@@ -395,7 +395,7 @@ class WeeklyMatchupStatsViewer:
 
         if 'Above Avg' in display_df.columns:
             display_df['Above Avg'] = display_df['Above Avg'].apply(
-                lambda x: '✓' if x else '✗'
+                lambda x: 'Yes' if x else 'No'
             )
             column_config['Above Avg'] = st.column_config.TextColumn(
                 'Above Avg',
@@ -421,14 +421,14 @@ class WeeklyMatchupStatsViewer:
 
         with col1:
             # Best performance
-            if len(df[df['Result'] == '✓ Win']) > 0:
-                wins_df = df[df['Result'] == '✓ Win'].copy()
-                wins_df['Margin_num'] = df[df['Result'] == '✓ Win']['Margin']
+            if len(df[df['Result'] == 'W']) > 0:
+                wins_df = df[df['Result'] == 'W'].copy()
+                wins_df['Margin_num'] = df[df['Result'] == 'W']['Margin']
                 best_win = wins_df.nlargest(1, 'Margin_num').iloc[0]
 
                 st.markdown("""
                 <div class="theme-success">
-                <strong>🏆 Best Win</strong><br>
+                <strong>Best Win</strong><br>
                 Week {week}, {year}: <strong>{manager}</strong> defeated {opponent}<br>
                 Score: {pf:.2f} - {pa:.2f} (Margin: +{margin:.2f})
                 </div>
@@ -444,14 +444,14 @@ class WeeklyMatchupStatsViewer:
 
         with col2:
             # Worst performance
-            if len(df[df['Result'] == '✗ Loss']) > 0:
-                losses_df = df[df['Result'] == '✗ Loss'].copy()
-                losses_df['Margin_num'] = df[df['Result'] == '✗ Loss']['Margin']
+            if len(df[df['Result'] == 'L']) > 0:
+                losses_df = df[df['Result'] == 'L'].copy()
+                losses_df['Margin_num'] = df[df['Result'] == 'L']['Margin']
                 worst_loss = losses_df.nsmallest(1, 'Margin_num').iloc[0]
 
                 st.markdown("""
                 <div class="theme-warning">
-                <strong>💔 Toughest Loss</strong><br>
+                <strong>Toughest Loss</strong><br>
                 Week {week}, {year}: <strong>{manager}</strong> lost to {opponent}<br>
                 Score: {pf:.2f} - {pa:.2f} (Margin: {margin:.2f})
                 </div>
@@ -473,23 +473,23 @@ class WeeklyMatchupStatsViewer:
         with insight_col1:
             # Playoff record
             if 'Playoff Result' in df.columns:
-                playoff_games = df[df['Playoff Result'].str.contains('🏆', na=False)]
+                playoff_games = df[df['Playoff Result'].str.len() > 0]
                 if len(playoff_games) > 0:
-                    playoff_df_wins = playoff_games[playoff_games['Result'] == '✓ Win']
+                    playoff_df_wins = playoff_games[playoff_games['Result'] == 'W']
                     playoff_wins = len(playoff_df_wins)
                     playoff_total = len(playoff_games)
-                    st.info(f"🏆 **Playoff Record:** {playoff_wins}-{playoff_total - playoff_wins}")
+                    st.info(f"**Playoff Record:** {playoff_wins}-{playoff_total - playoff_wins}")
 
         with insight_col2:
             # Close games (within 10 points)
             close_games = df[abs(df['Margin']) <= 10]
             if len(close_games) > 0:
-                close_wins = len(close_games[close_games['Result'] == '✓ Win'])
-                st.info(f"⚖️ **Close Games (<10 pts):** {close_wins}-{len(close_games) - close_wins}")
+                close_wins = len(close_games[close_games['Result'] == 'W'])
+                st.info(f"**Close Games (<10 pts):** {close_wins}-{len(close_games) - close_wins}")
 
         with insight_col3:
             # High scoring games (>120 points)
             if df['PF'].max() > 0:
                 high_score_threshold = df['PF'].quantile(0.75)
                 high_scoring = len(df[df['PF'] >= high_score_threshold])
-                st.info(f"🔥 **Top 25% Scores:** {high_scoring} games")
+                st.info(f"**Top 25% Scores:** {high_scoring} games")

@@ -198,17 +198,17 @@ class WeeklyOptimalLineupsViewer:
         # Create display dataframe with formatted values
         display_df = df.copy()
 
-        # Format boolean columns
+        # Format boolean columns - using quieter indicators
         display_df['Result'] = display_df['Result'].apply(
-            lambda x: '✓ Win' if x else '✗ Loss'
+            lambda x: 'W' if x else 'L'
         )
 
         display_df['Opt Result'] = display_df['Opt Result'].apply(
-            lambda x: '✓ Win' if x else '✗ Loss'
+            lambda x: 'W' if x else 'L'
         )
 
         display_df['Changed'] = display_df['Changed'].apply(
-            lambda x: '⚠️ Yes' if x else ''
+            lambda x: 'Yes' if x else ''
         )
 
         # Format efficiency as percentage

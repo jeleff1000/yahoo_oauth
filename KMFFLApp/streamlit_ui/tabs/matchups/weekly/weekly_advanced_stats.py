@@ -184,15 +184,15 @@ class WeeklyAdvancedStatsViewer:
         # Create display dataframe with formatted values
         display_df = df.copy()
 
-        # Format boolean columns
+        # Format boolean columns - using quieter indicators
         if 'Close Game' in display_df.columns:
             display_df['Close Game'] = display_df['Close Game'].apply(
-                lambda x: '✓' if x else ''
+                lambda x: 'Yes' if x else ''
             )
 
         if 'Above Avg' in display_df.columns:
             display_df['Above Avg'] = display_df['Above Avg'].apply(
-                lambda x: '✓' if x else '✗'
+                lambda x: 'Yes' if x else 'No'
             )
 
         # Format playoff round

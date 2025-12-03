@@ -79,21 +79,28 @@ class WeeklyMatchupDataViewer:
         # --- About Tab (Last) ---
         with tabs[6]:
             view_desc = VIEW_DESCRIPTIONS['weekly']
-            st.title(view_desc['title'])
-            st.markdown(f"### {view_desc['subtitle']}")
-            st.markdown("**What can you do here?**")
 
-            # Display features
+            # Build features HTML
+            features_html = ""
             for tab_name, description in view_desc['features'].items():
-                st.markdown(f"- **{tab_name}:** {description}")
+                features_html += f"<li><strong>{tab_name}:</strong> {description}</li>"
 
-            st.markdown("---")
+            # Render about content in styled card
+            st.markdown(f"""
+            <div class="about-content">
+                <h2>{view_desc['title']}</h2>
+                <p style="font-size: 1.1rem; margin-bottom: 1rem;">{view_desc['subtitle']}</p>
+                <h4>What can you do here?</h4>
+                <ul>
+                    {features_html}
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
 
             # Display a random fun fact
-            st.info(f"💡 **Fun Fact:** {random.choice(fun_facts)}")
+            st.info(f"**Fun Fact:** {random.choice(fun_facts)}")
 
             # Success message
             render_info_box(
-                "<strong>Tip:</strong> Use the filter options above to customize your view, then explore the tabs!",
-                icon="👉"
+                "<strong>Tip:</strong> Use the filter options above to customize your view, then explore the tabs!"
             )

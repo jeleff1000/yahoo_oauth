@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from ...shared.modern_styles import apply_modern_styles
-from ..shared.theme import apply_theme_styles
+from ..shared.theme import apply_theme_styles, render_legend_box
 
 
 class WeeklyProjectedStatsViewer:
@@ -52,7 +52,15 @@ class WeeklyProjectedStatsViewer:
 
         # === ENHANCED TABLE DISPLAY ===
         st.markdown(f"**Viewing {len(display_df):,} matchups**")
-        st.caption("💡 **Accuracy Tiers:** Excellent (<5 pts error) • Good (5-10 pts) • Fair (10-20 pts) • Poor (>20 pts)")
+
+        # Accuracy tiers legend in styled box
+        render_legend_box("Accuracy Tiers", [
+            ("Excellent (<5 pts)", "#10B981"),
+            ("Good (5-10 pts)", "#3B82F6"),
+            ("Fair (10-20 pts)", "#F59E0B"),
+            ("Poor (>20 pts)", "#EF4444"),
+        ])
+
         self._render_enhanced_table(display_df, prefix)
 
         # === QUICK STATS SECTION (Below Table) ===
@@ -190,13 +198,13 @@ class WeeklyProjectedStatsViewer:
         if pd.isna(abs_error):
             return 'N/A'
         elif abs_error < 5:
-            return '⭐ Excellent'
+            return 'Excellent'
         elif abs_error < 10:
-            return '✓ Good'
+            return 'Good'
         elif abs_error < 20:
-            return '~ Fair'
+            return 'Fair'
         else:
-            return '✗ Poor'
+            return 'Poor'
 
     def _calculate_stats(self, df: pd.DataFrame) -> dict:
         """Calculate summary statistics."""
@@ -270,35 +278,35 @@ class WeeklyProjectedStatsViewer:
         # Create display dataframe with formatted values
         display_df = df.copy()
 
-        # Format boolean columns
+        # Format boolean columns - using quieter indicators
         if 'Result' in display_df.columns:
             display_df['Result'] = display_df['Result'].apply(
-                lambda x: '✓ Win' if x else '✗ Loss'
+                lambda x: 'W' if x else 'L'
             )
 
         if 'Proj Result' in display_df.columns:
             display_df['Proj Result'] = display_df['Proj Result'].apply(
-                lambda x: '✓ Win' if x else '✗ Loss'
+                lambda x: 'W' if x else 'L'
             )
 
         if 'Beat Proj?' in display_df.columns:
             display_df['Beat Proj?'] = display_df['Beat Proj?'].apply(
-                lambda x: '✓' if x else '✗'
+                lambda x: 'Yes' if x else '-'
             )
 
         if 'Beat Spread?' in display_df.columns:
             display_df['Beat Spread?'] = display_df['Beat Spread?'].apply(
-                lambda x: '✓' if x else '✗'
+                lambda x: 'Yes' if x else '-'
             )
 
         if 'Favored?' in display_df.columns:
             display_df['Favored?'] = display_df['Favored?'].apply(
-                lambda x: '⭐ Yes' if x else 'Underdog'
+                lambda x: 'Fav' if x else 'Dog'
             )
 
         if 'Upset?' in display_df.columns:
             display_df['Upset?'] = display_df['Upset?'].apply(
-                lambda x: '🎯 Upset!' if x else ''
+                lambda x: 'Upset' if x else ''
             )
 
         # Format Win % as percentage
