@@ -198,62 +198,37 @@ def render_keeper_rules_ui() -> Optional[dict]:
 
     # Step 3: First Year Keeper Price
     st.markdown("#### 3. First Year Keeper Price")
+    st.caption("Set the base price for the first year a player is kept (before escalation)")
 
     base_cost_rules = {}
 
     if is_auction:
-        st.caption("How is the keeper price determined the first time you keep a player?")
+        col1, col2 = st.columns(2)
 
-        use_faab_comparison = st.checkbox(
-            "Use higher of: draft price OR FAAB-based price",
-            value=False,
-            key="use_faab_comparison",
-            help="Check if keeper price should be the MAX of draft price and a FAAB-based calculation"
-        )
-
-        if use_faab_comparison:
-            st.markdown("**Keeper price = higher of:**")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**A) Draft price**")
-                draft_mult = st.number_input("Multiply draft by", min_value=0.1, max_value=5.0, value=1.0, step=0.1, key="draft_mult")
-                draft_flat = st.number_input("Then add ($)", min_value=-50.0, max_value=100.0, value=0.0, step=0.5, key="draft_flat")
-            with col2:
-                st.markdown("**B) FAAB calculation**")
-                faab_mult = st.number_input("Multiply FAAB by", min_value=0.1, max_value=5.0, value=0.5, step=0.1, key="faab_mult")
-                faab_flat = st.number_input("Then add ($)", min_value=-50.0, max_value=100.0, value=0.0, step=0.5, key="faab_flat")
-
+        with col1:
+            st.markdown("**Drafted Players**")
+            draft_mult = st.number_input("Multiply draft price by", min_value=0.1, max_value=5.0, value=1.0, step=0.1, key="draft_mult", help="1.0 = use draft price as-is")
+            draft_flat = st.number_input("Then add ($)", min_value=-50.0, max_value=100.0, value=0.0, step=1.0, key="draft_flat")
             # Show formula
-            draft_formula = f"{draft_mult}× draft" + (f" + ${draft_flat}" if draft_flat > 0 else f" - ${abs(draft_flat)}" if draft_flat < 0 else "")
-            faab_formula = f"{faab_mult}× FAAB" + (f" + ${faab_flat}" if faab_flat > 0 else f" - ${abs(faab_flat)}" if faab_flat < 0 else "")
-            st.success(f"Price = MAX({draft_formula}, {faab_formula})")
-
-            base_cost_rules["auction"] = {
-                "source": "max_of_draft_faab",
-                "draft_multiplier": draft_mult,
-                "draft_flat": draft_flat,
-                "faab_multiplier": faab_mult,
-                "faab_flat": faab_flat
-            }
-            base_cost_rules["faab_only"] = base_cost_rules["auction"].copy()
-
-        else:
-            st.markdown("**Draft price adjustment (optional):**")
-            col1, col2 = st.columns(2)
-            with col1:
-                draft_mult = st.number_input("Multiply by", min_value=0.1, max_value=5.0, value=1.0, step=0.1, key="draft_mult_only")
-            with col2:
-                draft_flat = st.number_input("Then add ($)", min_value=-50.0, max_value=100.0, value=0.0, step=0.5, key="draft_flat_only")
-
-            if draft_mult != 1.0 or draft_flat != 0:
-                formula = f"{draft_mult}× draft" + (f" + ${draft_flat}" if draft_flat > 0 else f" - ${abs(draft_flat)}" if draft_flat < 0 else "")
-                st.success(f"First year price = {formula}")
+            if draft_mult == 1.0 and draft_flat == 0:
+                st.caption("Base = draft price")
             else:
-                st.success("First year price = draft price")
+                formula = f"{draft_mult}× draft" + (f" + ${draft_flat:.0f}" if draft_flat >= 0 else f" - ${abs(draft_flat):.0f}")
+                st.caption(f"Base = {formula}")
 
-            base_cost_rules["auction"] = {"source": "draft_price", "multiplier": draft_mult, "flat": draft_flat}
-            base_cost_rules["faab_only"] = {"source": "faab_bid", "multiplier": draft_mult, "flat": draft_flat}
+        with col2:
+            st.markdown("**FAAB Pickups**")
+            faab_mult = st.number_input("Multiply FAAB bid by", min_value=0.1, max_value=5.0, value=1.0, step=0.1, key="faab_mult", help="1.0 = use FAAB bid as-is")
+            faab_flat = st.number_input("Then add ($)", min_value=-50.0, max_value=100.0, value=10.0, step=1.0, key="faab_flat", help="e.g., $10 + FAAB bid")
+            # Show formula
+            if faab_mult == 1.0 and faab_flat == 0:
+                st.caption("Base = FAAB bid")
+            else:
+                formula = f"{faab_mult}× FAAB" + (f" + ${faab_flat:.0f}" if faab_flat >= 0 else f" - ${abs(faab_flat):.0f}")
+                st.caption(f"Base = {formula}")
 
+        base_cost_rules["auction"] = {"source": "draft_price", "multiplier": draft_mult, "flat": draft_flat}
+        base_cost_rules["faab_only"] = {"source": "faab_bid", "multiplier": faab_mult, "flat": faab_flat}
         base_cost_rules["free_agent"] = {"source": "fixed", "value": min_price}
 
     else:  # Snake draft
@@ -284,26 +259,39 @@ def render_keeper_rules_ui() -> Optional[dict]:
     st.markdown("#### 4. Price Change Each Year Kept")
 
     if is_auction:
-        st.caption("How does the keeper price change year to year? (e.g., 1.0× + $5 means add $5 each year)")
-
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns([2, 2, 1])
         with col1:
-            esc_mult = st.number_input("Multiply previous price by", min_value=0.5, max_value=5.0, value=1.0, step=0.1, key="esc_mult", help="1.0 = no multiplier, 1.5 = 50% increase each year")
+            esc_mult = st.number_input("Multiply by", min_value=0.5, max_value=5.0, value=1.0, step=0.1, key="esc_mult", help="1.0 = no multiplier, 1.5 = 50% increase each year")
         with col2:
-            esc_flat = st.number_input("Then add ($)", min_value=0.0, max_value=100.0, value=5.0, step=0.5, key="esc_flat", help="Flat amount added after multiplying")
+            esc_flat = st.number_input("Then add ($)", min_value=0.0, max_value=100.0, value=5.0, step=1.0, key="esc_flat", help="Flat amount added after multiplying")
+        with col3:
+            esc_starts_year1 = st.checkbox("Year 1", value=False, key="esc_starts_year1", help="Apply escalation starting from year 1 (not just year 2+)")
 
         # Show formula preview
+        start_year = "1" if esc_starts_year1 else "2"
         if esc_mult == 1.0 and esc_flat == 0.0:
-            st.info("No change each year")
+            st.caption("No escalation")
         elif esc_mult == 1.0:
-            st.success(f"Each year: +${esc_flat:.0f}")
+            st.caption(f"+${esc_flat:.0f} per year (starting year {start_year})")
         elif esc_flat == 0.0:
-            st.success(f"Each year: ×{esc_mult}")
+            st.caption(f"×{esc_mult} per year (starting year {start_year})")
         else:
-            st.success(f"Each year: ×{esc_mult} + ${esc_flat:.0f}")
+            st.caption(f"×{esc_mult} + ${esc_flat:.0f} per year (starting year {start_year})")
 
         formulas_by_keeper_year = {}
-        formulas_by_keeper_year["1"] = {"expression": "base_cost", "description": "Base price"}
+        if esc_starts_year1:
+            # Escalation applies from year 1
+            formulas_by_keeper_year["1"] = {
+                "expression": f"base_cost * {esc_mult} + {esc_flat}",
+                "description": f"Base × {esc_mult} + ${esc_flat:.0f}",
+                "multiplier": esc_mult,
+                "flat_add": esc_flat,
+                "apply_year1": True
+            }
+        else:
+            # Year 1 is just base cost
+            formulas_by_keeper_year["1"] = {"expression": "base_cost", "description": "Base price"}
+
         formulas_by_keeper_year["2+"] = {
             "expression": f"prev_cost * {esc_mult} + {esc_flat}",
             "description": f"{esc_mult}× + ${esc_flat:.2f}",
