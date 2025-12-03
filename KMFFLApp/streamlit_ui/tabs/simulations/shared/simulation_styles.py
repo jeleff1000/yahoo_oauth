@@ -526,97 +526,67 @@ def apply_simulation_styles():
 
 def render_summary_tiles(tiles: List[Dict[str, Any]]) -> None:
     """
-    Render summary tiles at the top of a section.
+    Render summary tiles at the top of a section using Streamlit columns.
 
     Args:
         tiles: List of dicts with keys: icon, label, value, sublabel (optional)
-
-    Example:
-        render_summary_tiles([
-            {"icon": "🏆", "label": "Championship Favorite", "value": "12.5%", "sublabel": "Jason"},
-            {"icon": "🎯", "label": "Highest Playoff Odds", "value": "94.2%", "sublabel": "Mike"},
-            {"icon": "📊", "label": "Most Likely #1 Seed", "value": "38.1%", "sublabel": "Daniel"},
-        ])
     """
-    tiles_html = ""
-    for tile in tiles:
-        sublabel_html = f'<div class="sim-tile-sublabel">{tile.get("sublabel", "")}</div>' if tile.get("sublabel") else ""
-        tiles_html += f"""
-        <div class="sim-summary-tile">
-            <div class="sim-tile-icon">{tile['icon']}</div>
-            <div class="sim-tile-label">{tile['label']}</div>
-            <div class="sim-tile-value">{tile['value']}</div>
-            {sublabel_html}
-        </div>
-        """
-
-    st.markdown(f'<div class="sim-summary-tiles">{tiles_html}</div>', unsafe_allow_html=True)
+    cols = st.columns(len(tiles))
+    for col, tile in zip(cols, tiles):
+        with col:
+            st.metric(
+                label=tile['label'],
+                value=tile['value'],
+                delta=tile.get('sublabel', None)
+            )
 
 
 def render_section_header(title: str, icon: str = "") -> None:
-    """Render a compact section header with icon."""
-    icon_html = f'<span class="sim-section-icon">{icon}</span>' if icon else ""
-    st.markdown(f'''
-    <div class="sim-section-header">
-        {icon_html}
-        <h3>{title}</h3>
-    </div>
-    ''', unsafe_allow_html=True)
+    """Render a compact section header with icon using native Streamlit."""
+    display_title = f"{icon} {title}" if icon else title
+    st.subheader(display_title)
 
 
 def render_metric_row(metrics: List[Dict[str, Any]]) -> None:
     """
-    Render a row of compact metrics.
+    Render a row of compact metrics using Streamlit columns.
 
     Args:
         metrics: List of dicts with keys: icon, label, value
     """
-    items_html = ""
-    for m in metrics:
-        items_html += f'''
-        <div class="sim-metric-item">
-            <span class="sim-metric-icon">{m.get('icon', '')}</span>
-            <span class="sim-metric-label">{m['label']}:</span>
-            <span class="sim-metric-value">{m['value']}</span>
-        </div>
-        '''
-    st.markdown(f'<div class="sim-metric-row">{items_html}</div>', unsafe_allow_html=True)
+    cols = st.columns(len(metrics))
+    for col, m in zip(cols, metrics):
+        with col:
+            icon = m.get('icon', '')
+            st.caption(f"{icon} **{m['label']}:** {m['value']}")
 
 
 def render_group_card(title: str, icon: str = "") -> None:
     """
-    Start a grouped card section. Use st.markdown to close with </div>.
+    Render a group card header. Uses native Streamlit markdown.
 
     Example:
         render_group_card("Biggest Weekly Gains", "")
         st.dataframe(gains_df)
-        st.markdown('</div>', unsafe_allow_html=True)
     """
-    icon_html = f'{icon} ' if icon else ""
-    st.markdown(f'''
-    <div class="sim-group-card">
-        <div class="sim-group-header">{icon_html}{title}</div>
-    ''', unsafe_allow_html=True)
+    display_title = f"{icon} {title}" if icon else title
+    st.markdown(f"**{display_title}**")
 
 
 def render_odds_card(title: str, icon: str, subtitle: str = "") -> None:
     """
-    Start an odds comparison card. Use with st.container for content.
+    Render an odds card header. Uses native Streamlit markdown.
     """
-    subtitle_html = f'<span style="font-size:0.75rem;color:var(--text-muted);">{subtitle}</span>' if subtitle else ""
-    st.markdown(f'''
-    <div class="sim-odds-card">
-        <div class="sim-odds-header">
-            <span class="sim-odds-icon">{icon}</span>
-            <span class="sim-odds-title">{title}</span>
-            {subtitle_html}
-        </div>
-    ''', unsafe_allow_html=True)
+    display_title = f"{icon} {title}" if icon else title
+    if subtitle:
+        st.markdown(f"**{display_title}** *{subtitle}*")
+    else:
+        st.markdown(f"**{display_title}**")
 
 
 def close_card() -> None:
-    """Close an open card div."""
-    st.markdown('</div>', unsafe_allow_html=True)
+    """No-op - kept for backwards compatibility."""
+    pass
 
 
 def render_summary_panel(
@@ -625,7 +595,7 @@ def render_summary_panel(
     expanded: bool = True
 ) -> None:
     """
-    Render a collapsible summary panel.
+    Render a collapsible summary panel using native Streamlit expander.
 
     Args:
         title: Panel title
@@ -633,13 +603,11 @@ def render_summary_panel(
         expanded: Whether panel starts expanded
     """
     with st.expander(title, expanded=expanded):
-        for stat in stats:
-            st.markdown(f'''
-            <div class="sim-summary-stat">
-                <span class="sim-summary-stat-label">{stat['label']}</span>
-                <span class="sim-summary-stat-value">{stat['value']}</span>
-            </div>
-            ''', unsafe_allow_html=True)
+        cols = st.columns(len(stats))
+        for col, stat in zip(cols, stats):
+            with col:
+                st.caption(stat['label'])
+                st.markdown(f"**{stat['value']}**")
 
 
 def render_manager_filter(
