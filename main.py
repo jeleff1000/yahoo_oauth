@@ -334,13 +334,13 @@ def render_keeper_rules_ui() -> Optional[dict]:
             with col2:
                 preview_faab = st.number_input("FAAB bid ($)", min_value=0, max_value=200, value=20, key="prev_faab")
             with col3:
-                preview_years = st.slider("Years", 1, min(10, max_years if max_years != 99 else 10), 5, key="prev_years")
+                preview_years = st.number_input("Years", min_value=1, max_value=max_years if max_years != 99 else 10, value=5, key="prev_years")
         else:
             col1, col2 = st.columns(2)
             with col1:
                 preview_draft = st.number_input("Draft price ($)", min_value=0, max_value=200, value=25, key="prev_draft")
             with col2:
-                preview_years = st.slider("Years", 1, min(10, max_years if max_years != 99 else 10), 5, key="prev_years")
+                preview_years = st.number_input("Years", min_value=1, max_value=max_years if max_years != 99 else 10, value=5, key="prev_years")
             preview_faab = 0
 
         # Calculate base cost
