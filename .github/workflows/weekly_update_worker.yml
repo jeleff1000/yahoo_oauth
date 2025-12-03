@@ -81,7 +81,7 @@ jobs:
               conn = duckdb.connect(f"md:?motherduck_token={token}")
 
               # Get all databases
-              dbs = conn.execute("SELECT database_name FROM information_schema.schemata WHERE schema_name = 'public'").fetchall()
+              dbs = conn.execute("SELECT DISTINCT catalog_name FROM information_schema.schemata WHERE schema_name = 'public'").fetchall()
               all_dbs = [row[0] for row in dbs]
 
               # Filter to fantasy football databases (have matchup table)
@@ -173,7 +173,7 @@ jobs:
 
                   # Find first league with credentials
                   conn = duckdb.connect(f"md:?motherduck_token={token}")
-                  dbs = conn.execute("SELECT database_name FROM information_schema.schemata WHERE schema_name = 'public'").fetchall()
+                  dbs = conn.execute("SELECT DISTINCT catalog_name FROM information_schema.schemata WHERE schema_name = 'public'").fetchall()
                   conn.close()
 
                   refresh_token = None

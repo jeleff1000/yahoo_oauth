@@ -760,7 +760,7 @@ jobs:
 
           # First, list all databases to verify our target exists
           print("\n📋 Checking available databases...")
-          all_dbs = con.execute("SELECT database_name FROM information_schema.schemata WHERE database_name NOT IN ('memory', 'system', 'temp')").fetchall()
+          all_dbs = con.execute("SELECT DISTINCT catalog_name FROM information_schema.schemata WHERE catalog_name NOT IN ('memory', 'system', 'temp')").fetchall()
           print(f"   Available databases: {[d[0] for d in all_dbs]}")
 
           # USE the database to ensure correct context
