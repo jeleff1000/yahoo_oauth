@@ -740,6 +740,32 @@ def apply_modern_styles():
         margin-top: 0 !important;
     }
 
+    /* NESTED TABS (second level) - smaller, secondary style */
+    .stTabs .stTabs [data-baseweb="tab-list"] {
+        gap: 0.25rem;
+        border-bottom: none;
+        padding-bottom: 0.25rem;
+        margin-bottom: 0.25rem;
+    }
+    .stTabs .stTabs [data-baseweb="tab"] {
+        padding: 0.15rem 0.4rem;
+        font-size: 0.7rem;
+        font-weight: 400;
+        background-color: transparent;
+        border: 1px solid var(--border-subtle);
+        opacity: 0.8;
+    }
+    .stTabs .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background-color: var(--accent-subtle);
+        border-color: var(--accent);
+        opacity: 1;
+        font-weight: 500;
+    }
+    .stTabs .stTabs [data-baseweb="tab"]:hover:not([aria-selected="true"]) {
+        opacity: 1;
+        background-color: var(--bg-tertiary);
+    }
+
     /* ===========================================
        DATAFRAMES & TABLES - IMPROVED
        =========================================== */

@@ -32,7 +32,7 @@ class WeeklyTeamViewer:
         filters = self._render_filter_ui()
 
         # View tabs for different stat types - By Manager first
-        view_tabs = st.tabs(["By Manager", "By Position", "By Lineup Slot", "Visualizations"])
+        view_tabs = st.tabs(["By Manager", "By Position", "By Lineup Slot", "📈 Visualizations"])
 
         with view_tabs[0]:
             self._display_by_manager(filters)
