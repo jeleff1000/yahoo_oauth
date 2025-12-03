@@ -22,9 +22,9 @@ if str(app_dir) not in sys.path:
 os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
 
 import streamlit as st
-from utils.performance import PerformanceMonitor, DataLoader, perf_monitor
-from utils.ui_components import render_header, render_empty_state, render_loading_skeleton
-from md.data_cache import cached_data_loader, invalidate_tab_cache, render_cache_stats
+from utils.performance import PerformanceMonitor
+from utils.ui_components import render_empty_state
+from md.data_cache import cached_data_loader
 
 # Performance monitor
 monitor = PerformanceMonitor()
@@ -57,13 +57,6 @@ def _init_session_defaults():
 
     # Tab tracking for lazy loading
     st.session_state.setdefault("active_main_tab", 0)
-    st.session_state.setdefault("active_players_subtab", 0)
-    st.session_state.setdefault("active_draft_subtab", 0)
-    st.session_state.setdefault("active_extras_subtab", 0)
-
-    # Performance settings
-    st.session_state.setdefault("show_performance_stats", False)
-    st.session_state.setdefault("enable_progressive_loading", True)
 
 
 # ============= Lazy Tab Loaders =============

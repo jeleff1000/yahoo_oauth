@@ -1,59 +1,51 @@
 #!/usr/bin/env python3
+"""
+CLI wrapper for MotherDuck upload.
+
+This is a thin wrapper around streamlit_helpers.database.upload_to_motherduck
+for use by GitHub Actions workflows.
+
+Usage: python motherduck_upload.py <db_name> [data_dir]
+"""
 from __future__ import annotations
 
 import os
-import re
 import sys
 from pathlib import Path
-from typing import Callable
 
-import duckdb
+# Add parent directory to path so we can import from streamlit_helpers
+sys.path.insert(0, str(Path(__file__).parents[1]))
 
-def _slug(s: str, prefix_if_digit: str) -> str:
-    x = re.sub(r"[^a-zA-Z0-9]+", "_", s.strip().lower()).strip("_")
-    if re.match(r"^\d", x):
-        x = f"{prefix_if_digit}_{x}"
-    return x[:63]
+from streamlit_helpers.database import upload_to_motherduck, collect_parquet_files
 
-def upload_parquets_to_motherduck(
-    data_dir: Path,
-    db_name: str,
-    schema: str = "public",
-    token: str | None = None,
-    status_cb: Callable[[str], None] | None = None
-) -> list[tuple[str, int]]:
-    if token:
-        os.environ["MOTHERDUCK_TOKEN"] = token
-    db_slug = _slug(db_name, "l")
-
-    # Connect to MotherDuck first (without specific database)
-    con = duckdb.connect("md:")
-    # Create the database if it doesn't exist
-    con.execute(f"CREATE DATABASE IF NOT EXISTS {db_slug}")
-    # Switch to the database
-    con.execute(f"USE {db_slug}")
-    con.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
-
-    results: list[tuple[str, int]] = []
-    for pf in sorted(Path(data_dir).glob("*.parquet")):
-        tbl = _slug(pf.stem, "t")
-        if status_cb:
-            status_cb(f"Uploading {pf.name} → {db_slug}.{schema}.{tbl}")
-        con.execute(f"CREATE OR REPLACE TABLE {schema}.{tbl} AS SELECT * FROM read_parquet(?)", [str(pf)])
-        cnt = con.execute(f"SELECT COUNT(*) FROM {schema}.{tbl}").fetchone()[0]
-        results.append((tbl, int(cnt)))
-        if status_cb:
-            status_cb(f"✓ {tbl}: {cnt} rows")
-    return results
 
 if __name__ == "__main__":
-    # Minimal CLI: python motherduck_upload.py <db_name> [data_dir]
     if len(sys.argv) < 2:
         print("Usage: python motherduck_upload.py <db_name> [data_dir]", file=sys.stderr)
         sys.exit(2)
-    db = sys.argv[1]
-    data = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(__file__).parents[1] / "fantasy_football_data"
-    tok = os.getenv("MOTHERDUCK_TOKEN", "")
-    def echo(m): print(m, flush=True)
-    uploaded = upload_parquets_to_motherduck(data, db_name=db, token=tok, status_cb=echo)
-    print(f"Uploaded {len(uploaded)} tables.")
+
+    db_name = sys.argv[1]
+    data_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else Path.cwd()
+    token = os.getenv("MOTHERDUCK_TOKEN", "")
+
+    # Collect parquet files from the data directory
+    files = collect_parquet_files(base_dir=data_dir)
+
+    if not files:
+        print(f"No parquet files found in {data_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Found {len(files)} parquet files to upload")
+    for f in files:
+        print(f"  - {f.name}")
+
+    # Upload to MotherDuck
+    uploaded = upload_to_motherduck(files, db_name=db_name, token=token)
+
+    if uploaded:
+        print(f"\nUploaded {len(uploaded)} tables:")
+        for tbl, cnt in uploaded:
+            print(f"  - {tbl}: {cnt:,} rows")
+    else:
+        print("No tables uploaded", file=sys.stderr)
+        sys.exit(1)

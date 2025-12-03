@@ -475,21 +475,68 @@ jobs:
                   print(json.dumps(context, indent=2))
                   exit(0)
 
-          # LAST RESORT: create minimal context
-          print(f"⚠️ No settings files found - creating minimal context")
+          # LAST RESORT: create minimal context but try to infer years from matchup data
+          print(f"⚠️ No settings files found - creating context from matchup data")
+
+          # Try to get year range from matchup table (should always exist)
+          start_year = 2020
+          end_year = 2024
+          league_ids = {}
+
+          matchup_file = data_dir / "matchup.parquet"
+          if matchup_file.exists():
+              try:
+                  mdf = pd.read_parquet(matchup_file)
+                  if 'year' in mdf.columns:
+                      start_year = int(mdf['year'].min())
+                      end_year = int(mdf['year'].max())
+                      print(f"   Inferred years from matchup data: {start_year} - {end_year}")
+
+                      # Try to get league_key per year for league_ids mapping
+                      if 'league_key' in mdf.columns:
+                          for year in range(start_year, end_year + 1):
+                              year_data = mdf[mdf['year'] == year]
+                              if not year_data.empty and 'league_key' in year_data.columns:
+                                  lk = year_data['league_key'].iloc[0]
+                                  if pd.notna(lk):
+                                      league_ids[str(year)] = lk
+                          if league_ids:
+                              print(f"   Inferred {len(league_ids)} league IDs from matchup data")
+              except Exception as e:
+                  print(f"   Could not read matchup data: {e}")
+
           context = {
               "league_id": db_name,
               "league_name": league_name,
               "oauth_file_path": None,
               "oauth_credentials": None,
               "game_code": "nfl",
-              "start_year": 2020,
-              "end_year": 2024,
+              "start_year": start_year,
+              "end_year": end_year,
               "data_directory": str(data_dir.resolve()),
+              "max_workers": 5,
+              "enable_caching": True,
+              "rate_limit_per_sec": 4.0,
           }
+
+          if league_ids:
+              context['league_ids'] = league_ids
 
           with open("league_context.json", 'w') as f:
               json.dump(context, f, indent=2)
+
+          # Also save as parquet so it persists to MotherDuck after this run
+          row = {
+              'league_id': context['league_id'],
+              'league_name': context['league_name'],
+              'game_code': context.get('game_code', 'nfl'),
+              'start_year': context.get('start_year'),
+              'end_year': context.get('end_year'),
+              'league_ids_json': json.dumps(league_ids) if league_ids else '{}',
+          }
+          ctx_df = pd.DataFrame([row])
+          ctx_df.to_parquet(data_dir / "league_context.parquet", index=False)
+          print(f"   ✅ Created league_context.parquet (will be saved to MotherDuck)")
 
           print(json.dumps(context, indent=2))
           PYEOF

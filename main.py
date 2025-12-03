@@ -74,6 +74,7 @@ from streamlit_helpers.database import (
     create_import_job_in_motherduck,
     get_job_status,
     get_motherduck_progress,
+    upload_to_motherduck,
 )
 from streamlit_helpers.import_flow import (
     can_start_import as _can_start_import,
@@ -696,62 +697,6 @@ def collect_parquet_files(base_dir: Optional[Path] = None) -> list[Path]:
                 seen.add(resolved)
 
     return files
-
-
-# =========================
-# MotherDuck Upload
-# =========================
-def _slug(s: str, lead_prefix: str) -> str:
-    """Create a valid database/table name from a string"""
-    x = re.sub(r"[^a-zA-Z0-9]+", "_", (s or "").strip().lower()).strip("_")
-    if not x:
-        x = "db"
-    if re.match(r"^\d", x):
-        x = f"{lead_prefix}_{x}"
-    return x[:63]
-
-
-def upload_to_motherduck(files: list[Path], db_name: str, token: str) -> list[tuple[str, int]]:
-    """Upload parquet files directly to MotherDuck"""
-    if not files:
-        return []
-
-    if token:
-        os.environ["MOTHERDUCK_TOKEN"] = token
-
-    db = _slug(db_name, "l")
-
-    con = duckdb.connect("md:")
-    con.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
-    con.execute(f"USE {db}")
-    con.execute(f"CREATE SCHEMA IF NOT EXISTS public")
-
-    # Table name mapping (handle common aliases)
-    aliases = {
-        "players_by_year": "player",
-        "yahoo_player_stats_multi_year_all_weeks": "player",
-        "matchups": "matchup",
-        "schedules": "schedule",
-        "transaction": "transactions",
-    }
-
-    results = []
-    for pf in files:
-        stem = pf.stem.lower()
-        stem = aliases.get(stem, stem)
-        tbl = _slug(stem, "t")
-
-        try:
-            st.info(f"📤 Uploading {pf.name} → {db}.public.{tbl}...")
-            con.execute(f"CREATE OR REPLACE TABLE public.{tbl} AS SELECT * FROM read_parquet(?)", [str(pf)])
-            cnt = con.execute(f"SELECT COUNT(*) FROM public.{tbl}").fetchone()[0]
-            results.append((tbl, int(cnt)))
-            st.success(f"✅ {tbl}: {cnt:,} rows")
-        except Exception as e:
-            st.error(f"❌ Failed to upload {pf.name}: {e}")
-
-    con.close()
-    return results
 
 
 # =========================
