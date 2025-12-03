@@ -6,7 +6,6 @@ import pandas as pd
 from .weekly_team_subprocesses.weekly_team_basic_stats import get_basic_stats as get_basic_stats_by_pos
 from .weekly_team_subprocesses.weekly_team_advanced_stats import get_advanced_stats as get_advanced_stats_by_pos
 from .weekly_team_subprocesses.weekly_team_basic_stats_by_manager import get_basic_stats as get_basic_stats_by_mgr
-from .team_stats_visualizations import TeamStatsVisualizer
 
 from .shared.theme import apply_theme_styles, render_empty_state
 from ..shared.modern_styles import apply_modern_styles
@@ -32,7 +31,7 @@ class WeeklyTeamViewer:
         filters = self._render_filter_ui()
 
         # View tabs for different stat types - By Manager first
-        view_tabs = st.tabs(["By Manager", "By Position", "By Lineup Slot", "📈 Visualizations"])
+        view_tabs = st.tabs(["By Manager", "By Position", "By Lineup Slot"])
 
         with view_tabs[0]:
             self._display_by_manager(filters)
@@ -42,9 +41,6 @@ class WeeklyTeamViewer:
 
         with view_tabs[2]:
             self._display_by_lineup_position(filters)
-
-        with view_tabs[3]:
-            self._display_visualizations(filters)
 
     def _render_filter_ui(self) -> dict:
         """Render compact collapsible filter UI matching matchups style."""
@@ -242,18 +238,6 @@ class WeeklyTeamViewer:
 
         df = get_basic_stats_by_mgr(filtered_data)
         self._render_data_table(df, "weekly_manager", "All")
-
-    def _display_visualizations(self, filters: dict):
-        """Display visualizations."""
-        filtered_pos_data = self._apply_filters(self.team_data_by_position, filters)
-        filtered_mgr_data = self._apply_filters(self.team_data_by_manager, filters, filter_position=False)
-
-        if filtered_pos_data.empty and filtered_mgr_data.empty:
-            st.info("No data available for visualizations with the selected filters.")
-            return
-
-        visualizer = TeamStatsVisualizer(filtered_pos_data, filtered_mgr_data)
-        visualizer.display_weekly_visualizations()
 
     def _get_basic_stats_by_lineup_pos(self, data: pd.DataFrame) -> pd.DataFrame:
         """Get basic stats formatted for lineup position view."""
