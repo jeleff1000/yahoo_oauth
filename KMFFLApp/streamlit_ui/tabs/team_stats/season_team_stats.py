@@ -30,17 +30,17 @@ class SeasonTeamViewer:
         # Collapsible filters expander (like matchups)
         filters = self._render_filter_ui()
 
-        # View tabs for different stat types
-        view_tabs = st.tabs(["By Position", "By Lineup Slot", "By Manager", "Visualizations"])
+        # View tabs for different stat types - By Manager first
+        view_tabs = st.tabs(["By Manager", "By Position", "By Lineup Slot", "Visualizations"])
 
         with view_tabs[0]:
-            self._display_by_position(filters)
+            self._display_by_manager(filters)
 
         with view_tabs[1]:
-            self._display_by_lineup_position(filters)
+            self._display_by_position(filters)
 
         with view_tabs[2]:
-            self._display_by_manager(filters)
+            self._display_by_lineup_position(filters)
 
         with view_tabs[3]:
             self._display_visualizations(filters)
@@ -297,9 +297,6 @@ class SeasonTeamViewer:
                 icon="🔍"
             )
             return
-
-        # Show count
-        st.markdown(f"**{len(df):,} records**")
 
         # Get column config
         column_config = get_column_config_for_position(position)
