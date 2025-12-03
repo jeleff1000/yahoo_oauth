@@ -65,27 +65,27 @@ sys.path.insert(0, str(_scripts_dir))
 sys.path.insert(0, str(_multi_league_dir))
 
 from core.league_context import LeagueContext
-from multi_league.transformations.draft_enrichment.modules.spar_calculator import (
+from multi_league.transformations.draft.modules.spar_calculator import (
     calculate_all_draft_metrics
 )
-from multi_league.transformations.draft_enrichment.modules.draft_grade_calculator import (
+from multi_league.transformations.draft.modules.draft_grade_calculator import (
     calculate_draft_grades
 )
-from multi_league.transformations.draft_enrichment.modules.value_tier_calculator import (
+from multi_league.transformations.draft.modules.value_tier_calculator import (
     calculate_value_tiers
 )
-from multi_league.transformations.draft_enrichment.modules.draft_flags_calculator import (
+from multi_league.transformations.draft.modules.draft_flags_calculator import (
     calculate_all_draft_flags
 )
-from multi_league.transformations.draft_enrichment.modules.manager_draft_grade_calculator import (
+from multi_league.transformations.draft.modules.manager_draft_grade_calculator import (
     calculate_manager_draft_grades,
     get_manager_draft_leaderboard
 )
-from multi_league.transformations.draft_enrichment.modules.starter_designation_calculator import (
+from multi_league.transformations.draft.modules.starter_designation_calculator import (
     calculate_starter_designation,
     get_spar_by_starter_designation
 )
-from multi_league.transformations.draft_enrichment.modules.bench_insurance_calculator import (
+from multi_league.transformations.draft.modules.bench_insurance_calculator import (
     calculate_bench_insurance_metrics,
     get_position_bench_discount,
     calculate_bench_value_by_rank

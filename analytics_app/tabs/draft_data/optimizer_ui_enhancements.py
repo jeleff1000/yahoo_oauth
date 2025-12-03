@@ -38,7 +38,6 @@ except ImportError:
 # Try to import plotly for visualizations (graceful fallback if not available)
 try:
     import plotly.graph_objects as go
-    import plotly.express as px
 
     PLOTLY_AVAILABLE = True
 except ImportError:

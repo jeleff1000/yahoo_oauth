@@ -542,7 +542,7 @@ def transform_cumulative_stats(
     # Import playoff_flags module first (before using it in except block)
     playoff_flags_module = None
     try:
-        from multi_league.transformations.base.modules import playoff_flags as playoff_flags_module
+        from multi_league.transformations.matchup.modules import playoff_flags as playoff_flags_module
     except ImportError:
         try:
             import playoff_flags as playoff_flags_module

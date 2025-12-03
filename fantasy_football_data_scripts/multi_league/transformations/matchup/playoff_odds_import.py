@@ -33,7 +33,7 @@ sys.path.insert(0, str(_scripts_dir))  # Allows: from multi_league.core.XXX
 sys.path.insert(0, str(_multi_league_dir))  # Allows: from core.XXX
 
 from core.league_context import LeagueContext
-from transformations.base.modules.playoff_helpers import (
+from transformations.matchup.modules.playoff_helpers import (
     add_match_key,
     canonicalize,
     wins_points_to_date,
@@ -43,7 +43,7 @@ from transformations.base.modules.playoff_helpers import (
     p_playoffs_from_seeds,
     p_bye_from_seeds,
 )
-from transformations.base.modules.playoff_bracket import load_league_settings
+from transformations.matchup.modules.playoff_bracket import load_league_settings
 
 # =========================================================
 # Playoff Odds Engine – Multi-League Generic Version
@@ -748,7 +748,7 @@ def calc_regular_week_outputs(df_season, df_sched, season, week, history_df, inf
     played_raw = reg_to_date.copy()
 
     # Load year-specific playoff configuration
-    from transformations.base.modules.playoff_bracket import load_league_settings
+    from transformations.matchup.modules.playoff_bracket import load_league_settings
     settings = load_league_settings(season, data_directory=str(data_directory) if data_directory else None, df=df_to_date)
 
     num_playoff_teams = settings.get('num_playoff_teams', PLAYOFF_SLOTS)
@@ -949,7 +949,7 @@ def calc_playoff_week_outputs(df_season, df_sched, season, week, inflation_rate=
 
     # [1.1] Load year-specific playoff configuration from league settings
     # CRITICAL FIX: Load settings per year instead of using globals
-    from transformations.base.modules.playoff_bracket import load_league_settings
+    from transformations.matchup.modules.playoff_bracket import load_league_settings
 
     settings = load_league_settings(season, data_directory=str(data_directory) if data_directory else None, df=df_to_date)
 
@@ -1562,7 +1562,7 @@ def process_parquet_files(ctx: LeagueContext):
     # These require p_playoffs column to exist, which was just calculated above
     print("\nAdding playoff scenario columns (changes, critical matchups)...")
     try:
-        from transformations.base.modules.playoff_scenarios import add_playoff_scenario_columns
+        from transformations.matchup.modules.playoff_scenarios import add_playoff_scenario_columns
         df_all = add_playoff_scenario_columns(df_all, data_directory=str(ctx.data_directory))
         print("  [OK] Playoff scenario columns added")
     except Exception as e:

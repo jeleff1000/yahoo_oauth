@@ -84,7 +84,7 @@ sys.path.insert(0, str(_scripts_dir))
 sys.path.insert(0, str(_multi_league_dir))
 
 from core.league_context import LeagueContext
-from multi_league.transformations.player_enrichment.modules.replacement_calculator_dynamic import (
+from multi_league.transformations.player.modules.replacement_calculator_dynamic import (
     calculate_all_replacements
 )
 

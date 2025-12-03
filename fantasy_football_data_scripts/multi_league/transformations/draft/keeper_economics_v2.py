@@ -55,7 +55,7 @@ from multi_league.core.league_context import LeagueContext
 
 # Import draft type detection utilities
 try:
-    from multi_league.transformations.draft_enrichment.modules.draft_type_utils import (
+    from multi_league.transformations.draft.modules.draft_type_utils import (
         detect_draft_type_for_year
     )
 except ImportError:

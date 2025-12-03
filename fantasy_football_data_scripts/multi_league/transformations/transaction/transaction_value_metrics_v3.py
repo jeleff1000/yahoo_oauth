@@ -62,7 +62,7 @@ sys.path.insert(0, str(_scripts_dir))
 sys.path.insert(0, str(_multi_league_dir))
 
 from core.league_context import LeagueContext
-from multi_league.transformations.transaction_enrichment.modules.transaction_spar_calculator import (
+from multi_league.transformations.transaction.modules.transaction_spar_calculator import (
     calculate_all_transaction_metrics
 )
 

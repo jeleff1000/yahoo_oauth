@@ -1064,7 +1064,6 @@ class LeagueIntelligence:
         """
         try:
             from scipy.optimize import minimize
-            from scipy.stats import linregress
         except ImportError:
             return {"error": "scipy required for mathematical optimization"}
 

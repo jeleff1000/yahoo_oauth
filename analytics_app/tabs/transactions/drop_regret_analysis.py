@@ -14,7 +14,6 @@ import plotly.graph_objects as go
 try:
     from shared.chart_themes import (
         apply_chart_theme,
-        get_chart_colors,
         create_regret_bar_chart,
         create_horizontal_bar_chart,
         REGRET_COLORS,

@@ -805,6 +805,11 @@ def run_initial_import() -> bool:
                     league_data_dir = DATA_DIR / safe_league_name
 
                     # Create context with league-isolated data directory
+                    # Get keeper rules from session state (if configured via advanced settings)
+                    keeper_rules = None
+                    if "league_info" in st.session_state:
+                        keeper_rules = st.session_state.league_info.get("keeper_rules")
+
                     ctx = LeagueContext(
                         league_id=league_key,
                         league_name=league_name,
@@ -813,6 +818,7 @@ def run_initial_import() -> bool:
                         end_year=end_year,  # Full history for this league
                         num_teams=int(num_teams) if num_teams else None,
                         data_directory=league_data_dir,
+                        keeper_rules=keeper_rules,
                     )
 
                     # Save context file in the league-specific directory

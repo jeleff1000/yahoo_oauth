@@ -52,19 +52,19 @@ sys.path.insert(0, str(_scripts_dir))  # Allows: from multi_league.core.XXX
 sys.path.insert(0, str(_multi_league_dir))  # Allows: from core.XXX
 
 from core.league_context import LeagueContext
-from multi_league.transformations.player_enrichment.modules.scoring_calculator import (
+from multi_league.transformations.player.modules.scoring_calculator import (
     load_scoring_rules,
     load_roster_settings,
     calculate_fantasy_points
 )
-from multi_league.transformations.player_enrichment.modules.optimal_lineup import (
+from multi_league.transformations.player.modules.optimal_lineup import (
     load_roster_settings_from_json,
     compute_league_wide_optimal_players,
     compute_manager_optimal_players,
     calculate_optimal_lineup_metrics,
     calculate_bench_points
 )
-from multi_league.transformations.player_enrichment.modules.player_rankings import (
+from multi_league.transformations.player.modules.player_rankings import (
     add_manager_player_ranks,
     add_lineup_position,
     add_optimal_lineup_position,
@@ -77,7 +77,7 @@ from multi_league.transformations.player_enrichment.modules.player_rankings impo
     add_league_wide_position_ranks,
     add_all_players_alltime_ranks
 )
-from multi_league.transformations.player_enrichment.modules.ppg_calculator import (
+from multi_league.transformations.player.modules.ppg_calculator import (
     calculate_season_ppg,
     calculate_alltime_ppg,
     calculate_rolling_avg,

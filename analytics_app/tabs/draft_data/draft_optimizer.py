@@ -18,31 +18,22 @@ from typing import Dict, Optional
 
 # League Intelligence imports
 try:
-    from analytics_app.tabs.draft_data.league_intelligence import LeagueIntelligence
     from analytics_app.tabs.draft_data.optimizer_ui_enhancements import (
         render_league_insights_panel,
-        render_position_efficiency_badges,
-        enhance_bench_recommendations,
     )
 
     LEAGUE_INTELLIGENCE_AVAILABLE = True
 except ImportError:
     try:
-        from .league_intelligence import LeagueIntelligence
         from .optimizer_ui_enhancements import (
             render_league_insights_panel,
-            render_position_efficiency_badges,
-            enhance_bench_recommendations,
         )
 
         LEAGUE_INTELLIGENCE_AVAILABLE = True
     except ImportError:
         try:
-            from league_intelligence import LeagueIntelligence
             from optimizer_ui_enhancements import (
                 render_league_insights_panel,
-                render_position_efficiency_badges,
-                enhance_bench_recommendations,
             )
 
             LEAGUE_INTELLIGENCE_AVAILABLE = True
