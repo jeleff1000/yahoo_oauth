@@ -1055,42 +1055,58 @@ def apply_modern_styles():
        RESPONSIVE - MOBILE (600px) - KEY MOBILE FIXES
        =========================================== */
     @media (max-width: 600px) {
-        /* ===== FIX #1: SHRINK TOP NAV BUTTONS (Weekly/Seasons/Career/Visualize) ===== */
-        /* These are st.button() in st.columns(), NOT st.tabs() */
-        [data-testid="stHorizontalBlock"] button,
+        /* ===== FIX #1: SHRINK TOP NAV BUTTONS - AGGRESSIVE ===== */
+        /* Target ALL Streamlit button variants with maximum specificity */
+        button[kind="primary"],
+        button[kind="secondary"],
+        button[data-testid="baseButton-primary"],
+        button[data-testid="baseButton-secondary"],
+        [data-testid="stBaseButton-primary"],
+        [data-testid="stBaseButton-secondary"],
+        .stButton button,
+        .stButton > button,
         [data-testid="column"] button,
-        .stButton > button {
-            padding: 0.375rem 0.5rem !important;
+        [data-testid="stHorizontalBlock"] button {
+            padding-top: 6px !important;
+            padding-bottom: 6px !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
             font-size: 0.8rem !important;
-            min-height: auto !important;
+            min-height: unset !important;
             height: auto !important;
-            line-height: 1.2 !important;
+            line-height: 1.3 !important;
         }
 
-        /* Tighter column gaps for button row */
-        [data-testid="stHorizontalBlock"] {
-            gap: 0.25rem !important;
+        /* Tighter column gaps */
+        [data-testid="stHorizontalBlock"],
+        [data-testid="stColumns"] {
+            gap: 4px !important;
         }
         [data-testid="column"] {
-            padding: 0 0.125rem !important;
+            padding: 0 2px !important;
         }
 
-        /* ===== FIX #2: REDUCE FILTERS BLOCK ===== */
+        /* ===== FIX #2: REDUCE FILTERS BLOCK - MINIMAL ===== */
         div[data-testid="stExpander"] {
-            margin-bottom: 0.25rem !important;
-            margin-top: 0.125rem !important;
+            margin: 4px 0 !important;
         }
-        div[data-testid="stExpander"] > div:first-child {
-            padding: 0.25rem 0.5rem !important;
+        /* Expander header - super compact */
+        div[data-testid="stExpander"] > div:first-child,
+        [data-testid="stExpanderToggleIcon"],
+        .streamlit-expanderHeader {
+            padding: 4px 8px !important;
+            min-height: unset !important;
         }
+        div[data-testid="stExpander"] summary,
+        div[data-testid="stExpander"] span {
+            font-size: 0.75rem !important;
+        }
+        /* Expander content - tight */
         div[data-testid="stExpander"] > div:last-child {
-            padding: 0.375rem 0.5rem !important;
-        }
-        div[data-testid="stExpander"] summary {
-            font-size: 0.8rem !important;
+            padding: 6px 8px !important;
         }
 
-        /* ===== FIX #3: HORIZONTAL SCROLLING SUBTABS (st.tabs) ===== */
+        /* ===== FIX #3: HORIZONTAL SCROLLING SUBTABS ===== */
         .stTabs [data-baseweb="tab-list"] {
             display: flex !important;
             flex-wrap: nowrap !important;
@@ -1098,9 +1114,9 @@ def apply_modern_styles():
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
             -ms-overflow-style: none;
-            gap: 0.25rem;
-            padding: 0 0 0.25rem 0;
-            margin-bottom: 0.25rem;
+            gap: 4px !important;
+            padding: 0 0 4px 0 !important;
+            margin-bottom: 4px !important;
         }
         .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
             display: none;
@@ -1108,9 +1124,10 @@ def apply_modern_styles():
         .stTabs [data-baseweb="tab"] {
             flex-shrink: 0 !important;
             white-space: nowrap !important;
-            padding: 0.3rem 0.5rem !important;
-            font-size: 0.75rem !important;
-            min-height: auto !important;
+            padding: 4px 8px !important;
+            font-size: 0.7rem !important;
+            min-height: unset !important;
+            height: auto !important;
         }
 
         /* ===== FIX #4: TABLE HORIZONTAL SCROLL ===== */
@@ -1126,58 +1143,60 @@ def apply_modern_styles():
             display: block !important;
             overflow-x: auto !important;
             white-space: nowrap;
-            font-size: 0.75rem;
+            font-size: 0.7rem !important;
         }
         .stDataFrame th,
         [data-testid="stDataFrame"] th {
-            padding: 0.3rem 0.4rem !important;
-            font-size: 0.7rem !important;
+            padding: 4px 6px !important;
+            font-size: 0.65rem !important;
         }
         .stDataFrame td,
         [data-testid="stDataFrame"] td {
-            padding: 0.25rem 0.35rem !important;
-            font-size: 0.7rem !important;
-        }
-
-        /* Scroll fade indicator on right edge */
-        [data-testid="stDataFrameResizable"]::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            width: 20px;
-            background: linear-gradient(to left, var(--bg-primary) 0%, transparent 100%);
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        /* ===== FIX #5: TITLE/HEADER SPACING ===== */
-        .tab-header {
-            margin-top: 0.375rem !important;
-            margin-bottom: 0.375rem !important;
-            padding-top: 0.125rem !important;
-        }
-        .tab-header h2 {
-            font-size: 0.85rem !important;
-        }
-        .tab-header p {
+            padding: 3px 5px !important;
             font-size: 0.65rem !important;
         }
 
-        /* General mobile spacing tightening */
-        .main .block-container {
-            padding-top: 0.25rem !important;
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+        /* ===== FIX #5: KILL ALL EXCESS SPACING ===== */
+        .tab-header {
+            margin: 4px 0 !important;
+            padding: 2px 0 !important;
+        }
+        .tab-header h2 {
+            font-size: 0.8rem !important;
+            margin: 0 !important;
+        }
+        .tab-header p {
+            font-size: 0.6rem !important;
+            margin: 0 !important;
         }
 
-        /* Tighter vertical gaps */
+        /* Container - minimal padding */
+        .main .block-container {
+            padding: 4px 8px 8px 8px !important;
+        }
+
+        /* Kill ALL vertical gaps */
         [data-testid="stVerticalBlock"] {
-            gap: 0.125rem !important;
+            gap: 2px !important;
+        }
+        [data-testid="stVerticalBlock"] > div {
+            margin-bottom: 2px !important;
         }
         .element-container {
-            margin-bottom: 0.0625rem !important;
+            margin-bottom: 1px !important;
+        }
+
+        /* Remove spacer divs */
+        hr {
+            margin: 4px 0 !important;
+        }
+
+        /* Tighten markdown spacing */
+        [data-testid="stMarkdown"] {
+            margin-bottom: 2px !important;
+        }
+        [data-testid="stMarkdown"] p {
+            margin-bottom: 2px !important;
         }
     }
 
@@ -1185,34 +1204,50 @@ def apply_modern_styles():
        RESPONSIVE - SMALL MOBILE (480px)
        =========================================== */
     @media (max-width: 480px) {
-        .hero-section {
-            padding: var(--space-sm);
-        }
-        .hero-section h1 { font-size: 1.15rem !important; }
-        .hero-section h2 { font-size: 1rem !important; }
-
-        .static-card,
-        .feature-card,
-        .interactive-card {
-            padding: var(--space-sm);
-        }
-
-        /* Even smaller tabs on tiny screens */
-        .stTabs [data-baseweb="tab"] {
-            padding: 0.25rem 0.4rem !important;
+        /* Even smaller buttons */
+        button[kind="primary"],
+        button[kind="secondary"],
+        .stButton button {
+            padding: 4px 6px !important;
             font-size: 0.7rem !important;
         }
 
-        h1 { font-size: 1.15rem !important; }
-        h2 { font-size: 1rem !important; }
-        h3 { font-size: 0.9rem !important; }
+        /* Tiny tabs */
+        .stTabs [data-baseweb="tab"] {
+            padding: 3px 6px !important;
+            font-size: 0.65rem !important;
+        }
 
-        .stDataFrame table { font-size: 0.65rem !important; }
-        .stDataFrame th { font-size: 0.6rem !important; padding: 0.2rem !important; }
-        .stDataFrame td { padding: 0.15rem !important; }
+        /* Super compact expander */
+        div[data-testid="stExpander"] > div:first-child {
+            padding: 3px 6px !important;
+        }
+        div[data-testid="stExpander"] summary {
+            font-size: 0.7rem !important;
+        }
 
-        .stat-value { font-size: 1.15rem; }
-        .metric-card-value { font-size: 1.1rem; }
+        /* Minimal content padding */
+        .main .block-container {
+            padding: 2px 4px 4px 4px !important;
+        }
+
+        /* Tiny fonts */
+        h1 { font-size: 1rem !important; }
+        h2 { font-size: 0.9rem !important; }
+        h3 { font-size: 0.8rem !important; }
+
+        .tab-header h2 { font-size: 0.75rem !important; }
+        .tab-header p { font-size: 0.55rem !important; }
+
+        /* Tiny table */
+        .stDataFrame table { font-size: 0.6rem !important; }
+        .stDataFrame th { font-size: 0.55rem !important; padding: 2px 4px !important; }
+        .stDataFrame td { padding: 2px 3px !important; font-size: 0.55rem !important; }
+
+        .stat-value { font-size: 1rem; }
+        .metric-card-value { font-size: 0.95rem; }
+
+        .hero-section { padding: 4px; }
 
         /* Stack filter toggles vertically */
         .stRadio > div {
