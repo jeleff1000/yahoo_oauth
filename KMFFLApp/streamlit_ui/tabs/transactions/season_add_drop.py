@@ -104,41 +104,112 @@ def display_season_add_drop(
     best = season_agg.nlargest(1, 'total_score')[['manager', 'year', 'total_score', 'net_spar']].iloc[0] if len(
         season_agg) > 0 else None
 
+    # Compact CSS for season transactions
+    st.markdown("""
+    <style>
+    .season-stat-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
+        border: 1px solid rgba(100, 116, 139, 0.3);
+        border-radius: 12px;
+        padding: 1rem;
+    }
+    .season-stat-card h4 {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.6;
+        margin: 0 0 0.5rem 0;
+    }
+    .season-stat-row {
+        display: flex;
+        justify-content: space-around;
+    }
+    .season-stat-item { text-align: center; }
+    .season-stat-value {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #4ade80;
+    }
+    .season-stat-value.neutral { color: #94a3b8; }
+    .season-stat-value.faab { color: #fbbf24; }
+    .season-stat-label { font-size: 0.65rem; opacity: 0.7; }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("### 📊 Season Add/Drop Summary")
 
     tab1, tab2, tab3 = st.tabs(["📋 Season Stats", "📈 Analytics", "🏆 Rankings"])
 
     with tab1:
-        col1, col2, col3, col4, col5 = st.columns(5)
+        # Grouped stats in cards
+        col1, col2, col3 = st.columns(3)
+
         with col1:
-            st.metric("Total Seasons", total_seasons)
+            st.markdown("""
+            <div class="season-stat-card">
+                <h4>📊 Overview</h4>
+                <div class="season-stat-row">
+                    <div class="season-stat-item">
+                        <div class="season-stat-value neutral">{}</div>
+                        <div class="season-stat-label">Seasons</div>
+                    </div>
+                    <div class="season-stat-item">
+                        <div class="season-stat-value neutral">{:.1f}</div>
+                        <div class="season-stat-label">Avg Moves</div>
+                    </div>
+                </div>
+            </div>
+            """.format(total_seasons, avg_transactions), unsafe_allow_html=True)
+
         with col2:
-            st.metric("Avg Transactions/Season", f"{avg_transactions:.1f}")
+            st.markdown("""
+            <div class="season-stat-card">
+                <h4>💰 FAAB</h4>
+                <div class="season-stat-row">
+                    <div class="season-stat-item">
+                        <div class="season-stat-value faab">${:.0f}</div>
+                        <div class="season-stat-label">Avg/Season</div>
+                    </div>
+                </div>
+            </div>
+            """.format(avg_faab), unsafe_allow_html=True)
+
         with col3:
-            st.metric("Avg FAAB/Season", f"${avg_faab:.1f}")
-        with col4:
-            st.metric("Avg Total Score", f"{avg_total_score:.1f}", help="Weighted score accounting for timing, FAAB efficiency, regret")
-        with col5:
-            st.metric("Avg Net SPAR/Season", f"{avg_net_spar:.1f}", help="Net SPAR = Managed SPAR Added - Total SPAR Dropped")
+            net_class = "" if avg_net_spar >= 0 else "negative"
+            st.markdown("""
+            <div class="season-stat-card">
+                <h4>📈 Performance</h4>
+                <div class="season-stat-row">
+                    <div class="season-stat-item">
+                        <div class="season-stat-value">{:.0f}</div>
+                        <div class="season-stat-label">Avg Score</div>
+                    </div>
+                    <div class="season-stat-item">
+                        <div class="season-stat-value {}">{:+.1f}</div>
+                        <div class="season-stat-label">Avg Net SPAR</div>
+                    </div>
+                </div>
+            </div>
+            """.format(avg_total_score, net_class, avg_net_spar), unsafe_allow_html=True)
 
         if best is not None:
-            st.success(f"🏆 **Best Season:** {best['manager']} ({best['year']}) - **{best['total_score']:.0f} Score** ({best['net_spar']:.1f} Net SPAR)")
+            st.success(f"🏆 **Best:** {best['manager']} ({best['year']}) - {best['total_score']:.0f} Score, {best['net_spar']:.1f} Net SPAR")
 
-        st.divider()
+        st.markdown("<div style='margin: 0.5rem 0; border-top: 1px solid rgba(100,116,139,0.3);'></div>", unsafe_allow_html=True)
 
-        # Filters
-        col1, col2, col3, col4 = st.columns(4)
+        # Compact filters in one row
+        col1, col2, col3, col4 = st.columns([1.5, 2, 1.5, 2])
         with col1:
             year_filter = st.selectbox("Year", ["All"] + sorted(season_agg['year'].unique().tolist(), reverse=True),
-                                       key=f"{key_prefix}_year")
+                                       key=f"{key_prefix}_year", label_visibility="collapsed")
         with col2:
-            manager_search = st.text_input("Manager", key=f"{key_prefix}_mgr")
+            manager_search = st.text_input("Manager", placeholder="Search manager...", key=f"{key_prefix}_mgr", label_visibility="collapsed")
         with col3:
             grade_filter = st.selectbox("Grade", ["All", "Elite", "Great", "Good", "Average", "Poor"],
-                                        key=f"{key_prefix}_grade")
+                                        key=f"{key_prefix}_grade", label_visibility="collapsed")
         with col4:
-            sort_by = st.selectbox("Sort by", ["Total Score", "Net SPAR", "Net Points", "Transactions", "FAAB", "SPAR Efficiency", "Recent"],
-                                   key=f"{key_prefix}_sort")
+            sort_by = st.selectbox("Sort", ["Total Score", "Net SPAR", "Net Points", "Transactions", "FAAB", "SPAR Efficiency", "Recent"],
+                                   key=f"{key_prefix}_sort", label_visibility="collapsed")
 
         filtered = season_agg.copy()
         if year_filter != "All":

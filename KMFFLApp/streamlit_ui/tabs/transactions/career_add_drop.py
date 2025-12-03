@@ -59,37 +59,108 @@ def display_career_add_drop(transaction_df, player_df):
         else "📉 Poor"
     )
 
+    # Compact CSS for career transactions
+    st.markdown("""
+    <style>
+    .career-stat-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
+        border: 1px solid rgba(100, 116, 139, 0.3);
+        border-radius: 12px;
+        padding: 1rem;
+    }
+    .career-stat-card h4 {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.6;
+        margin: 0 0 0.5rem 0;
+    }
+    .career-stat-row { display: flex; justify-content: space-around; }
+    .career-stat-item { text-align: center; }
+    .career-stat-value { font-size: 1.4rem; font-weight: 700; color: #4ade80; }
+    .career-stat-value.neutral { color: #94a3b8; }
+    .career-stat-value.faab { color: #fbbf24; }
+    .career-stat-label { font-size: 0.65rem; opacity: 0.7; }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("### 🏆 Career Add/Drop Summary")
 
     tab1, tab2, tab3 = st.tabs(["📊 Career Stats", "📈 Analytics", "👥 Comparisons"])
 
     with tab1:
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
-        with col1:
-            st.metric("Total Managers", len(career_agg))
-        with col2:
-            st.metric("Total Moves", f"{career_agg['total_moves'].sum():,.0f}")
-        with col3:
-            st.metric("Total FAAB", f"${career_agg['total_faab'].sum():,.0f}")
-        with col4:
-            st.metric("Avg Career Score", f"{career_agg['career_total_score'].mean():.0f}", help="Weighted score")
-        with col5:
-            st.metric("Avg Career Net SPAR", f"{career_agg['career_net_spar'].mean():.1f}")
-        with col6:
-            st.metric("Avg Efficiency", f"{career_agg['efficiency'].mean():.2f} SPAR/move")
-
-        st.divider()
-
-        # Filters
+        # Grouped stats in cards
         col1, col2, col3 = st.columns(3)
+
+        total_moves = career_agg['total_moves'].sum()
+        total_faab = career_agg['total_faab'].sum()
+        avg_score = career_agg['career_total_score'].mean()
+        avg_net_spar = career_agg['career_net_spar'].mean()
+        avg_efficiency = career_agg['efficiency'].mean()
+
         with col1:
-            manager_search = st.text_input("Search Manager", key="career_mgr_search")
+            st.markdown("""
+            <div class="career-stat-card">
+                <h4>📊 Volume</h4>
+                <div class="career-stat-row">
+                    <div class="career-stat-item">
+                        <div class="career-stat-value neutral">{}</div>
+                        <div class="career-stat-label">Managers</div>
+                    </div>
+                    <div class="career-stat-item">
+                        <div class="career-stat-value neutral">{:,}</div>
+                        <div class="career-stat-label">Total Moves</div>
+                    </div>
+                </div>
+            </div>
+            """.format(len(career_agg), int(total_moves)), unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("""
+            <div class="career-stat-card">
+                <h4>💰 FAAB</h4>
+                <div class="career-stat-row">
+                    <div class="career-stat-item">
+                        <div class="career-stat-value faab">${:,.0f}</div>
+                        <div class="career-stat-label">Total Spent</div>
+                    </div>
+                </div>
+            </div>
+            """.format(total_faab), unsafe_allow_html=True)
+
+        with col3:
+            st.markdown("""
+            <div class="career-stat-card">
+                <h4>📈 Performance</h4>
+                <div class="career-stat-row">
+                    <div class="career-stat-item">
+                        <div class="career-stat-value">{:.0f}</div>
+                        <div class="career-stat-label">Avg Score</div>
+                    </div>
+                    <div class="career-stat-item">
+                        <div class="career-stat-value">{:+.1f}</div>
+                        <div class="career-stat-label">Avg Net SPAR</div>
+                    </div>
+                    <div class="career-stat-item">
+                        <div class="career-stat-value">{:.2f}</div>
+                        <div class="career-stat-label">SPAR/Move</div>
+                    </div>
+                </div>
+            </div>
+            """.format(avg_score, avg_net_spar, avg_efficiency), unsafe_allow_html=True)
+
+        st.markdown("<div style='margin: 0.5rem 0; border-top: 1px solid rgba(100,116,139,0.3);'></div>", unsafe_allow_html=True)
+
+        # Compact filters in one row
+        col1, col2, col3 = st.columns([2, 1.5, 2])
+        with col1:
+            manager_search = st.text_input("Manager", placeholder="Search manager...", key="career_mgr_search", label_visibility="collapsed")
         with col2:
             grade_filter = st.selectbox("Grade", ["All", "Elite", "Great", "Good", "Average", "Poor"],
-                                        key="career_grade")
+                                        key="career_grade", label_visibility="collapsed")
         with col3:
-            sort_by = st.selectbox("Sort by", ["Rank", "Total Score", "Net SPAR", "Efficiency", "Total Moves", "SPAR/FAAB"],
-                                   key="career_sort")
+            sort_by = st.selectbox("Sort", ["Rank", "Total Score", "Net SPAR", "Efficiency", "Total Moves", "SPAR/FAAB"],
+                                   key="career_sort", label_visibility="collapsed")
 
         filtered = career_agg.copy()
         if manager_search:
