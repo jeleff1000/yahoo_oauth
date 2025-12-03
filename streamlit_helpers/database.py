@@ -45,6 +45,18 @@ def format_league_display_name(db_name: str) -> str:
     return db_name
 
 
+def _get_motherduck_connection(token: str = None):
+    """
+    Get a MotherDuck connection using token in connection string (not env var).
+    This avoids global state mutation that could affect concurrent requests.
+    """
+    token = token or MOTHERDUCK_TOKEN
+    if not token:
+        raise ValueError("No MotherDuck token available")
+    # Use connection string with token to avoid setting os.environ
+    return duckdb.connect(f"md:?motherduck_token={token}")
+
+
 def get_existing_league_databases() -> list[str]:
     """
     Discover existing league databases in MotherDuck.
@@ -54,8 +66,7 @@ def get_existing_league_databases() -> list[str]:
         return []
 
     try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
+        con = _get_motherduck_connection()
 
         # Query all databases
         result = con.execute("SHOW DATABASES").fetchall()
@@ -83,8 +94,7 @@ def validate_league_database(db_name: str) -> bool:
         return False
 
     try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
+        con = _get_motherduck_connection()
 
         # Check if required tables exist
         result = con.execute(f"SHOW TABLES IN {db_name}").fetchall()
@@ -107,8 +117,7 @@ def create_import_job_in_motherduck(league_info: dict) -> Optional[str]:
         return None
 
     try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
+        con = _get_motherduck_connection()
 
         # Create table if it doesn't exist
         con.execute("""
@@ -119,7 +128,7 @@ def create_import_job_in_motherduck(league_info: dict) -> Optional[str]:
         """)
 
         job_id = str(uuid.uuid4())
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         con.execute("INSERT INTO ops.import_status VALUES (?,?,?,?,?,?,?)",
                     [job_id, league_info.get("league_key"), league_info.get("name"),
@@ -136,8 +145,7 @@ def get_job_status(job_id: str) -> dict:
         return {"status": "error"}
 
     try:
-        os.environ.setdefault("MOTHERDUCK_TOKEN", MOTHERDUCK_TOKEN)
-        con = duckdb.connect("md:")
+        con = _get_motherduck_connection()
         result = con.execute(
             "SELECT status, updated_at FROM ops.import_status WHERE job_id = ?",
             [job_id]
@@ -159,7 +167,7 @@ def get_motherduck_progress(job_id: str) -> Optional[dict]:
         return None
 
     try:
-        con = duckdb.connect("md:")
+        con = _get_motherduck_connection()
 
         result = con.execute("""
             SELECT job_id, league_name, phase, stage, stage_detail,
@@ -271,12 +279,13 @@ def upload_to_motherduck(files: list[Path], db_name: str, token: str = None) -> 
         return []
 
     token = token or MOTHERDUCK_TOKEN
-    if token:
-        os.environ["MOTHERDUCK_TOKEN"] = token
+    if not token:
+        print("No MotherDuck token available")
+        return []
 
     db = _slug(db_name, "l")
 
-    con = duckdb.connect("md:")
+    con = _get_motherduck_connection(token)
     con.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
     con.execute(f"USE {db}")
     con.execute(f"CREATE SCHEMA IF NOT EXISTS public")
@@ -345,11 +354,10 @@ def upload_external_data_to_staging(
     if not token:
         return {"success": False, "error": "MotherDuck token not configured"}
 
-    os.environ["MOTHERDUCK_TOKEN"] = token
     db = _slug(db_name, "l")
 
     try:
-        con = duckdb.connect("md:")
+        con = _get_motherduck_connection(token)
         con.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
         con.execute(f"USE {db}")
         con.execute(f"CREATE SCHEMA IF NOT EXISTS staging")
@@ -412,9 +420,8 @@ def check_staging_tables(db_name: str, token: str = None) -> list[str]:
         return []
 
     try:
-        os.environ["MOTHERDUCK_TOKEN"] = token
         db = _slug(db_name, "l")
-        con = duckdb.connect("md:")
+        con = _get_motherduck_connection(token)
 
         # Check if staging schema exists
         result = con.execute(f"""

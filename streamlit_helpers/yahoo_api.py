@@ -9,17 +9,92 @@ This module handles all Yahoo Fantasy Sports API operations including:
 - Discovering league seasons
 """
 
+import time
 from typing import Optional
 import requests
 
 
-def yahoo_api_call(access_token: str, endpoint: str):
-    """Make authenticated call to Yahoo Fantasy API."""
+def yahoo_api_call(
+    access_token: str,
+    endpoint: str,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+):
+    """
+    Make authenticated call to Yahoo Fantasy API with retry logic.
+
+    Uses exponential backoff for transient failures and rate limits.
+
+    Args:
+        access_token: Yahoo OAuth access token
+        endpoint: API endpoint (e.g., "users;use_login=1/games")
+        max_retries: Maximum number of retry attempts (default 3)
+        base_delay: Base delay in seconds for exponential backoff (default 1.0)
+
+    Returns:
+        JSON response from the API
+
+    Raises:
+        requests.HTTPError: If all retries are exhausted
+    """
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"https://fantasysports.yahooapis.com/fantasy/v2/{endpoint}"
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    return resp.json()
+
+    last_exception = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.get(url, headers=headers, timeout=30)
+
+            # Success
+            if resp.status_code == 200:
+                return resp.json()
+
+            # Rate limited - wait and retry
+            if resp.status_code == 429:
+                delay = base_delay * (2 ** attempt)  # Exponential backoff
+                retry_after = resp.headers.get('Retry-After')
+                if retry_after:
+                    try:
+                        delay = max(delay, float(retry_after))
+                    except ValueError:
+                        pass
+                print(f"Rate limited (429), waiting {delay:.1f}s before retry {attempt + 1}/{max_retries}")
+                time.sleep(delay)
+                continue
+
+            # Server errors (5xx) - retry with backoff
+            if 500 <= resp.status_code < 600:
+                delay = base_delay * (2 ** attempt)
+                print(f"Server error ({resp.status_code}), waiting {delay:.1f}s before retry {attempt + 1}/{max_retries}")
+                time.sleep(delay)
+                continue
+
+            # Client errors (4xx except 429) - don't retry, raise immediately
+            resp.raise_for_status()
+
+        except requests.exceptions.Timeout:
+            delay = base_delay * (2 ** attempt)
+            print(f"Request timeout, waiting {delay:.1f}s before retry {attempt + 1}/{max_retries}")
+            time.sleep(delay)
+            last_exception = requests.exceptions.Timeout(f"Timeout for {endpoint}")
+            continue
+
+        except requests.exceptions.ConnectionError as e:
+            delay = base_delay * (2 ** attempt)
+            print(f"Connection error, waiting {delay:.1f}s before retry {attempt + 1}/{max_retries}")
+            time.sleep(delay)
+            last_exception = e
+            continue
+
+        except requests.exceptions.HTTPError as e:
+            # Non-retryable HTTP errors
+            raise
+
+    # All retries exhausted
+    if last_exception:
+        raise last_exception
+    raise requests.exceptions.HTTPError(f"Failed after {max_retries} retries for {endpoint}")
 
 
 def get_user_games(access_token: str):

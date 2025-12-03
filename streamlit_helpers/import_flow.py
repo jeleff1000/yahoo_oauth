@@ -11,19 +11,64 @@ Note: Most import execution logic remains in main.py due to tight
 integration with Streamlit session state and UI.
 """
 
+import os
 import time
 from typing import Optional
 
 
-def can_start_import(session_state) -> tuple[bool, str]:
+def check_active_import_in_motherduck(league_name: str) -> tuple[bool, Optional[str]]:
+    """
+    Check MotherDuck for active imports for this league.
+    Returns (has_active_import, job_id_if_active).
+    """
+    try:
+        import duckdb
+
+        token = os.environ.get("MOTHERDUCK_TOKEN")
+        if not token:
+            try:
+                import streamlit as st
+                token = st.secrets.get("MOTHERDUCK_TOKEN")
+            except:
+                pass
+
+        if not token:
+            return False, None
+
+        con = duckdb.connect(f"md:?motherduck_token={token}")
+
+        # Check for running imports for this league (within last 3 hours)
+        result = con.execute("""
+            SELECT user_id, workflow_run_id, started_at
+            FROM ops.import_jobs
+            WHERE league_name = ?
+            AND status = 'running'
+            AND started_at > NOW() - INTERVAL 3 HOUR
+            ORDER BY started_at DESC
+            LIMIT 1
+        """, [league_name]).fetchone()
+
+        con.close()
+
+        if result:
+            return True, result[0]  # Return user_id
+        return False, None
+
+    except Exception:
+        # If we can't check, allow the import (fail open)
+        return False, None
+
+
+def can_start_import(session_state, league_name: str = None) -> tuple[bool, str]:
     """
     Check if a new import can be started.
     Returns (can_start, reason_if_blocked).
 
     Args:
         session_state: Streamlit session state object.
+        league_name: Optional league name to check for server-side active imports.
     """
-    # Check if import is flagged as in progress
+    # Check if import is flagged as in progress (local session state)
     if session_state.get("import_in_progress", False):
         return False, "Import already in progress"
 
@@ -34,9 +79,16 @@ def can_start_import(session_state) -> tuple[bool, str]:
         remaining = int(30 - elapsed)
         return False, f"Please wait {remaining}s before starting another import"
 
-    # Check if we already have a job for this league
+    # Check if we already have a job for this league (local session state)
     if session_state.get("import_job_id"):
         return False, "An import job was already started. Check the status below."
+
+    # Server-side check: Query MotherDuck for active imports for this league
+    # This prevents duplicates even if user refreshes or opens multiple tabs
+    if league_name:
+        has_active, active_job_id = check_active_import_in_motherduck(league_name)
+        if has_active:
+            return False, f"An import is already running for this league (job: {active_job_id})"
 
     return True, ""
 

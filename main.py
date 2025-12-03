@@ -93,9 +93,9 @@ from streamlit_helpers.ui_components import (
 # =========================
 # Import Protection (wrappers for session state)
 # =========================
-def can_start_import() -> tuple[bool, str]:
+def can_start_import(league_name: str = None) -> tuple[bool, str]:
     """Check if a new import can be started. Wrapper for session state."""
-    return _can_start_import(st.session_state)
+    return _can_start_import(st.session_state, league_name=league_name)
 
 
 def mark_import_started():
@@ -1347,8 +1347,8 @@ def run_register_flow():
                             </div>
                             """, unsafe_allow_html=True)
 
-                            # Check if import can be started
-                            can_import, block_reason = can_start_import()
+                            # Check if import can be started (pass league name for server-side check)
+                            can_import, block_reason = can_start_import(league_name=selected_league.get('name'))
 
                             if not can_import:
                                 # Show status instead of buttons
@@ -1418,7 +1418,7 @@ def run_register_flow():
                                 st.markdown("---")
 
                                 # Import button with advanced settings
-                                can_import_adv, block_reason_adv = can_start_import()
+                                can_import_adv, block_reason_adv = can_start_import(league_name=selected_league.get('name'))
                                 if not can_import_adv:
                                     st.warning(f"⏳ {block_reason_adv}")
                                     if st.session_state.get("import_job_id"):
@@ -1611,8 +1611,9 @@ def perform_import_flow(league_info: dict):
                 st.session_state.workflow_run_url = result['workflow_run_url']
 
                 # Try to get the actual run ID (poll for a few seconds)
+                # Pass user_id to enable MotherDuck-based lookup (more reliable than timestamp)
                 with st.spinner("Finding workflow run..."):
-                    run_id = get_workflow_run_id(github_token, trigger_time)
+                    run_id = get_workflow_run_id(github_token, trigger_time, user_id=result['user_id'])
                     if run_id:
                         st.session_state.workflow_run_id = run_id
                         st.session_state.github_token_for_status = github_token

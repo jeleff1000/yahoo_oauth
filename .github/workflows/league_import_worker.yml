@@ -152,6 +152,58 @@ jobs:
           if db_name and db_name[0].isdigit():
               db_name = f"l_{db_name}"
 
+          # Add collision prevention: if league_id looks like "449.l.123456", extract the unique part
+          # This helps prevent two leagues with the same name from colliding
+          import hashlib
+          if league_id:
+              # Create a short hash of the league_id to make names unique
+              league_id_hash = hashlib.md5(league_id.encode()).hexdigest()[:6]
+              # We'll pass both - main.py can check for collisions
+              db_name_with_hash = f"{db_name}_{league_id_hash}"
+          else:
+              db_name_with_hash = db_name
+
+          print(f"   Database name: {db_name}")
+          print(f"   Database name (with hash): {db_name_with_hash}")
+
+          # Check for database name collision and resolve if needed
+          final_db_name = db_name
+          try:
+              import duckdb
+              md_token = os.environ.get('MOTHERDUCK_TOKEN')
+              if md_token:
+                  con = duckdb.connect(f"md:?motherduck_token={md_token}")
+                  # Check if this database already exists
+                  existing = con.execute(f"""
+                      SELECT COUNT(*) FROM information_schema.schemata
+                      WHERE catalog_name = '{db_name}'
+                  """).fetchone()[0]
+
+                  if existing > 0:
+                      # Database exists - check if it's for the same league
+                      try:
+                          ctx_result = con.execute(f"""
+                              SELECT league_id FROM {db_name}.public.league_context LIMIT 1
+                          """).fetchone()
+                          existing_league_id = ctx_result[0] if ctx_result else None
+
+                          if existing_league_id and existing_league_id != league_id:
+                              # Different league! Use hashed name
+                              print(f"⚠️ Database '{db_name}' exists for different league ({existing_league_id})")
+                              print(f"   Using unique name: {db_name_with_hash}")
+                              final_db_name = db_name_with_hash
+                          else:
+                              print(f"✓ Database '{db_name}' exists for same league - will update")
+                      except:
+                          # No context table - assume it's the same league (legacy data)
+                          print(f"✓ Database '{db_name}' exists (no context table) - will update")
+                  else:
+                      print(f"✓ Database '{db_name}' is new")
+                  con.close()
+          except Exception as e:
+              print(f"⚠️ Could not check for collision: {e}")
+              # If we can't check, use the base name
+
           # Set outputs for next steps
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write(f"user_id={user_id}\n")
@@ -159,7 +211,7 @@ jobs:
               f.write(f"league_name={league_name}\n")
               f.write(f"season={season}\n")
               f.write(f"start_year={start_year}\n")
-              f.write(f"database_name={db_name}\n")
+              f.write(f"database_name={final_db_name}\n")
 
           # Save OAuth token to file (now includes consumer credentials)
           os.makedirs("oauth", exist_ok=True)
@@ -177,6 +229,8 @@ jobs:
           PYEOF
 
       - name: Update job status - Starting
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: |
           mkdir -p job_status
           cat > job_status/${{ steps.parse.outputs.user_id }}.json <<EOF
@@ -188,9 +242,130 @@ jobs:
             "status": "running",
             "phase": "starting",
             "message": "Initializing import...",
-            "started_at": "$(date -Iseconds)"
+            "started_at": "$(date -Iseconds)",
+            "workflow_run_id": "${{ github.run_id }}"
           }
           EOF
+
+          # Write job tracking to MotherDuck so Streamlit can find the run_id
+          python - <<'PYEOF'
+          import os
+          import duckdb
+          from datetime import datetime
+
+          token = os.environ.get('MOTHERDUCK_TOKEN')
+          if not token:
+              print("⚠️ No MOTHERDUCK_TOKEN - skipping job tracking")
+              exit(0)
+
+          user_id = "${{ steps.parse.outputs.user_id }}"
+          league_name = "${{ steps.parse.outputs.league_name }}"
+          run_id = "${{ github.run_id }}"
+
+          try:
+              os.environ['MOTHERDUCK_TOKEN'] = token
+              con = duckdb.connect("md:")
+
+              # Create ops database and table if needed
+              con.execute("CREATE DATABASE IF NOT EXISTS ops")
+              con.execute("""
+                  CREATE TABLE IF NOT EXISTS ops.import_jobs (
+                      user_id TEXT PRIMARY KEY,
+                      workflow_run_id TEXT,
+                      league_name TEXT,
+                      status TEXT,
+                      started_at TIMESTAMP,
+                      updated_at TIMESTAMP
+                  )
+              """)
+
+              # Insert or update job record
+              now = datetime.utcnow()
+              con.execute("""
+                  INSERT OR REPLACE INTO ops.import_jobs
+                  (user_id, workflow_run_id, league_name, status, started_at, updated_at)
+                  VALUES (?, ?, ?, 'running', ?, ?)
+              """, [user_id, run_id, league_name, now, now])
+
+              con.close()
+              print(f"✅ Job tracking saved: user_id={user_id}, run_id={run_id}")
+          except Exception as e:
+              print(f"⚠️ Could not save job tracking: {e}")
+          PYEOF
+
+      - name: Refresh OAuth token
+        env:
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
+        run: |
+          echo "========================================"
+          echo "Refreshing OAuth token"
+          echo "========================================"
+          python - <<'PYEOF'
+          import json
+          import os
+          import time
+          import requests
+
+          # Read current OAuth data
+          with open("oauth/Oauth.json", 'r') as f:
+              oauth_data = json.load(f)
+
+          refresh_token = oauth_data.get('refresh_token')
+          if not refresh_token:
+              print("⚠️ No refresh_token found - will try with existing access_token")
+              exit(0)
+
+          consumer_key = os.environ.get('YAHOO_CLIENT_ID')
+          consumer_secret = os.environ.get('YAHOO_CLIENT_SECRET')
+
+          if not consumer_key or not consumer_secret:
+              print("⚠️ Missing Yahoo credentials - cannot refresh token")
+              exit(0)
+
+          print(f"Refreshing token using refresh_token...")
+
+          # Yahoo OAuth token refresh endpoint
+          token_url = "https://api.login.yahoo.com/oauth2/get_token"
+
+          try:
+              response = requests.post(
+                  token_url,
+                  data={
+                      'grant_type': 'refresh_token',
+                      'refresh_token': refresh_token,
+                      'client_id': consumer_key,
+                      'client_secret': consumer_secret,
+                  },
+                  headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                  timeout=30
+              )
+
+              if response.status_code == 200:
+                  new_tokens = response.json()
+
+                  # Update OAuth data with fresh tokens
+                  oauth_data['access_token'] = new_tokens.get('access_token')
+                  oauth_data['refresh_token'] = new_tokens.get('refresh_token', refresh_token)  # May return new refresh_token
+                  oauth_data['token_time'] = time.time()  # Reset token_time to NOW
+                  oauth_data['expires_in'] = new_tokens.get('expires_in', 3600)
+
+                  # Save updated OAuth data
+                  with open("oauth/Oauth.json", 'w') as f:
+                      json.dump(oauth_data, f, indent=2)
+
+                  print(f"✅ Token refreshed successfully!")
+                  print(f"   New token_time: {oauth_data['token_time']}")
+                  print(f"   Expires in: {oauth_data['expires_in']} seconds")
+              else:
+                  print(f"⚠️ Token refresh failed: {response.status_code}")
+                  print(f"   Response: {response.text[:500]}")
+                  print("   Will try with existing access_token (may fail if expired)")
+
+          except Exception as e:
+              print(f"⚠️ Token refresh error: {e}")
+              print("   Will try with existing access_token (may fail if expired)")
+          PYEOF
 
       - name: Create league context
         run: |
@@ -791,8 +966,71 @@ jobs:
           print(json.dumps(manifest, indent=2))
           PYEOF
 
+      - name: Cleanup on failure
+        if: failure()
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          DATABASE_NAME: ${{ steps.parse.outputs.database_name }}
+        run: |
+          echo "========================================"
+          echo "Cleaning up after failed import"
+          echo "========================================"
+
+          python - <<'PYEOF'
+          import os
+          import duckdb
+          import re
+
+          token = os.environ.get('MOTHERDUCK_TOKEN')
+          db_name = os.environ.get('DATABASE_NAME', '')
+
+          if not token or not db_name:
+              print("⚠️ Missing token or database name - skipping cleanup")
+              exit(0)
+
+          def _slug(s, prefix_if_digit="l"):
+              x = re.sub(r"[^a-zA-Z0-9]+", "_", s.strip().lower()).strip("_")
+              if re.match(r"^\d", x):
+                  x = f"{prefix_if_digit}_{x}"
+              return x[:63]
+
+          db = _slug(db_name, "l") if db_name else None
+
+          try:
+              con = duckdb.connect(f"md:?motherduck_token={token}")
+
+              # Clean up staging tables if any exist
+              try:
+                  staging_tables = con.execute(f"""
+                      SELECT table_name
+                      FROM information_schema.tables
+                      WHERE table_catalog = '{db}'
+                      AND table_schema = 'staging'
+                  """).fetchall()
+
+                  if staging_tables:
+                      print(f"🧹 Found {len(staging_tables)} staging tables to clean up")
+                      for (table_name,) in staging_tables:
+                          try:
+                              con.execute(f"DROP TABLE IF EXISTS {db}.staging.{table_name}")
+                              print(f"   ✓ Dropped {table_name}")
+                          except Exception as e:
+                              print(f"   ✗ Could not drop {table_name}: {e}")
+                  else:
+                      print("ℹ️ No staging tables to clean up")
+              except Exception as e:
+                  print(f"ℹ️ Could not check staging tables: {e}")
+
+              con.close()
+              print("✅ Cleanup complete")
+          except Exception as e:
+              print(f"⚠️ Cleanup failed: {e}")
+          PYEOF
+
       - name: Update job status - Complete
         if: always()
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: |
           if [ "${{ steps.import.outputs.exit_code }}" == "0" ] && [ "${{ steps.motherduck.outputs.upload_success }}" == "true" ]; then
             STATUS="complete"
@@ -818,6 +1056,36 @@ jobs:
             "completed_at": "$(date -Iseconds)"
           }
           EOF
+
+          # Update job status in MotherDuck
+          python - <<'PYEOF'
+          import os
+          import duckdb
+          from datetime import datetime
+
+          token = os.environ.get('MOTHERDUCK_TOKEN')
+          if not token:
+              print("⚠️ No MOTHERDUCK_TOKEN - skipping job status update")
+              exit(0)
+
+          user_id = "${{ steps.parse.outputs.user_id }}"
+          status = "${STATUS}"
+
+          try:
+              con = duckdb.connect(f"md:?motherduck_token={token}")
+              now = datetime.utcnow()
+
+              con.execute("""
+                  UPDATE ops.import_jobs
+                  SET status = ?, updated_at = ?
+                  WHERE user_id = ?
+              """, [status, now, user_id])
+
+              con.close()
+              print(f"✅ Job status updated in MotherDuck: {status}")
+          except Exception as e:
+              print(f"⚠️ Could not update job status: {e}")
+          PYEOF
 
       - name: Upload artifacts
         if: always()

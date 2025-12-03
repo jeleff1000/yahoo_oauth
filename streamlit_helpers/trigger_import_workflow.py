@@ -10,13 +10,13 @@ import os
 import json
 import requests
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 
 
 def generate_user_id(league_id: str, season: int) -> str:
     """Generate a unique user ID based on league and season"""
-    input_str = f"{league_id}_{season}_{datetime.now().isoformat()}"
+    input_str = f"{league_id}_{season}_{datetime.now(timezone.utc).isoformat()}"
     return hashlib.sha256(input_str.encode()).hexdigest()[:16]
 
 
@@ -125,15 +125,78 @@ def trigger_import_workflow(
         }
 
 
+def get_workflow_run_id_from_motherduck(
+    user_id: str,
+    max_attempts: int = 10,
+) -> Optional[int]:
+    """
+    Get workflow run ID from MotherDuck job tracking table.
+
+    This is the preferred method as it uses the user_id to find the exact run,
+    avoiding race conditions when multiple users trigger workflows simultaneously.
+
+    Args:
+        user_id: The unique user ID passed to the workflow
+        max_attempts: Number of times to poll before giving up
+
+    Returns:
+        Run ID if found, None otherwise
+    """
+    import time
+    import os
+
+    try:
+        import duckdb
+    except ImportError:
+        return None
+
+    # Try to get token from environment or streamlit secrets
+    token = os.environ.get("MOTHERDUCK_TOKEN")
+    if not token:
+        try:
+            import streamlit as st
+            token = st.secrets.get("MOTHERDUCK_TOKEN")
+        except:
+            pass
+
+    if not token:
+        return None
+
+    for attempt in range(max_attempts):
+        try:
+            # Use connection string with token to avoid global env mutation
+            con = duckdb.connect(f"md:?motherduck_token={token}")
+            result = con.execute("""
+                SELECT workflow_run_id
+                FROM ops.import_jobs
+                WHERE user_id = ?
+            """, [user_id]).fetchone()
+            con.close()
+
+            if result and result[0]:
+                return int(result[0])
+
+            # Wait before next attempt (workflow may not have started yet)
+            time.sleep(3)
+        except Exception:
+            time.sleep(3)
+
+    return None
+
+
 def get_workflow_run_id(
     github_token: str,
     triggered_after: str,
     repo_owner: str = "jeleff1000",
     repo_name: str = "yahoo_oauth",
     max_attempts: int = 5,
+    user_id: str = None,
 ) -> Optional[int]:
     """
     Find the workflow run ID that was triggered after a given time.
+
+    DEPRECATED: Prefer get_workflow_run_id_from_motherduck() which uses user_id
+    for exact matching instead of timestamp-based guessing.
 
     Args:
         github_token: GitHub personal access token
@@ -141,12 +204,20 @@ def get_workflow_run_id(
         repo_owner: GitHub repository owner
         repo_name: GitHub repository name
         max_attempts: Number of times to poll before giving up
+        user_id: Optional user_id to try MotherDuck lookup first
 
     Returns:
         Run ID if found, None otherwise
     """
     import time
 
+    # Try MotherDuck first if we have user_id (more reliable)
+    if user_id:
+        run_id = get_workflow_run_id_from_motherduck(user_id, max_attempts=max_attempts)
+        if run_id:
+            return run_id
+
+    # Fallback to timestamp-based matching (less reliable with concurrent users)
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/league_import_worker.yml/runs"
     headers = {
         'Accept': 'application/vnd.github.v3+json',
