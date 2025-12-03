@@ -36,8 +36,8 @@ def main():
     """Fetch all ROSTER data for all years (2014-2024)."""
 
     # Configuration
-    oauth_file = Path(r"C:\Users\joeye\OneDrive\Desktop\KMFFLApp\secrets.json")
-    discovered_leagues_file = Path(r"C:\Users\joeye\OneDrive\Desktop\KMFFLApp\discovered_leagues.json")
+    oauth_file = Path(r"C:\Users\joeye\OneDrive\Desktop\analytics_app\secrets.json")
+    discovered_leagues_file = Path(r"C:\Users\joeye\OneDrive\Desktop\analytics_app\discovered_leagues.json")
     output_dir = Path(r"C:\Users\joeye\OneDrive\Desktop\fantasy_football_data_downloads\data\kmffl\roster_data")
     league_name = "KMFFL"
 

@@ -3,8 +3,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Streamlit
+# Streamlit secrets (all locations)
 .streamlit/secrets.toml
+**/secrets.toml
+!**/secrets.toml.template
+
+# Credentials and tokens
+secrets.json
+**/secrets.json
+oauthlogin.txt
+*.pem
+Oauth.json
 
 # Environment
 .env

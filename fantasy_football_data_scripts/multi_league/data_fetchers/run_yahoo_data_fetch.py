@@ -2,7 +2,7 @@
 """
 Quick runner script for Yahoo Fantasy data fetcher.
 
-This script makes it easy to run the yahoo_fantasy_data.py script from the KMFFLApp directory.
+This script makes it easy to run the yahoo_fantasy_data.py script from the analytics_app directory.
 """
 
 import sys

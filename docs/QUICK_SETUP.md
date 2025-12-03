@@ -219,7 +219,7 @@ Views:
 Once workflow succeeds:
 
 1. **Access your data** in MotherDuck
-2. **Clone KMFFLApp** template
+2. **Clone analytics_app** template
 3. **Configure** to use your database
 4. **Deploy** your custom analytics site
 

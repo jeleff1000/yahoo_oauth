@@ -19,8 +19,8 @@ from typing import Dict, Optional
 
 # League Intelligence imports
 try:
-    from KMFFLApp.streamlit_ui.tabs.draft_data.league_intelligence import LeagueIntelligence
-    from KMFFLApp.streamlit_ui.tabs.draft_data.optimizer_ui_enhancements import (
+    from analytics_app.streamlit_ui.tabs.draft_data.league_intelligence import LeagueIntelligence
+    from analytics_app.streamlit_ui.tabs.draft_data.optimizer_ui_enhancements import (
         render_league_insights_panel,
         render_position_efficiency_badges,
         enhance_bench_recommendations

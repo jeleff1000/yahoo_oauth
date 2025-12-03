@@ -45,7 +45,7 @@ except ImportError:
 
 # Import league intelligence
 try:
-    from KMFFLApp.streamlit_ui.tabs.draft_data.league_intelligence import LeagueIntelligence
+    from analytics_app.streamlit_ui.tabs.draft_data.league_intelligence import LeagueIntelligence
     INTELLIGENCE_AVAILABLE = True
 except ImportError:
     try:

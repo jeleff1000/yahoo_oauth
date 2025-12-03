@@ -357,7 +357,7 @@ League is a first-class entity:
 ```
 /home/user/yahoo_oauth/
 ├── main.py                              # Streamlit entry point
-├── run_motherduck_upload.py             # Direct MD upload
+├── scripts/run_motherduck_upload.py             # Direct MD upload
 ├── fantasy_football_data/               # Output data directory
 │   ├── {league_id}/                     # Per-league subdirectory
 │   │   ├── league_context.json          # League config

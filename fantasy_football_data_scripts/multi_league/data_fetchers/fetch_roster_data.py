@@ -580,7 +580,7 @@ def main():
 
     # Configuration
     oauth_file = Path(r"C:\Users\joeye\OneDrive\Desktop\fantasy_football_data_downloads\fantasy_football_data_scripts\multi_league\data_fetchers\secrets.json")
-    discovered_leagues_file = Path(r"C:\Users\joeye\OneDrive\Desktop\fantasy_football_data_downloads\KMFFLApp\discovered_leagues.json")
+    discovered_leagues_file = Path(r"C:\Users\joeye\OneDrive\Desktop\fantasy_football_data_downloads\analytics_app\discovered_leagues.json")
     output_dir = Path(r"C:\Users\joeye\OneDrive\Desktop\fantasy_football_data_downloads\data\kmffl\roster_data")
     league_name = "KMFFL"
 

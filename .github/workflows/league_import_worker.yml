@@ -977,7 +977,7 @@ jobs:
               "status": "ready",
               "weekly_updates_enabled": os.environ.get('CREDENTIAL_ENCRYPTION_KEY') is not None,
               "next_steps": [
-                  "Create KMFFLApp-based UI repository",
+                  "Create analytics_app-based UI repository",
                   "Configure MotherDuck connection",
                   "Deploy Streamlit site"
               ]
@@ -1150,7 +1150,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
             echo "1. Data is now available in MotherDuck" >> $GITHUB_STEP_SUMMARY
-            echo "2. Create custom analytics site based on KMFFLApp" >> $GITHUB_STEP_SUMMARY
+            echo "2. Create custom analytics site based on analytics_app" >> $GITHUB_STEP_SUMMARY
             echo "3. Configure site to use database: \`${{ steps.parse.outputs.database_name }}\`" >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ Import Status: FAILED" >> $GITHUB_STEP_SUMMARY

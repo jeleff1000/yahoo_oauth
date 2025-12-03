@@ -121,7 +121,7 @@ def discover_leagues():
             print(json.dumps(context, indent=4))
 
     # Save all discovered leagues to a file
-    output_file = Path(__file__).parent.parent.parent.parent / "KMFFLApp" / "discovered_leagues.json"
+    output_file = Path(__file__).parent.parent.parent.parent / "analytics_app" / "discovered_leagues.json"
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, 'w') as f:
         json.dump(leagues_found, f, indent=4)

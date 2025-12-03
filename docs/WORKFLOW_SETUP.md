@@ -19,7 +19,7 @@ All parquet files (player.parquet, matchup.parquet, etc.) are created
     ↓
 Files are uploaded to MotherDuck with unique database name (e.g., "users_league_2024")
     ↓
-User gets their own custom analytics site based on KMFFLApp template
+User gets their own custom analytics site based on analytics_app template
 ```
 
 ## Files Created by initial_import_v2.py
@@ -284,7 +284,7 @@ Once the workflow completes:
    - All tables populated
 
 2. **Create user's analytics site**
-   - Clone KMFFLApp template
+   - Clone analytics_app template
    - Configure to use user's MotherDuck database
    - Deploy to Streamlit Cloud or other hosting
 

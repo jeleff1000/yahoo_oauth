@@ -14,15 +14,15 @@ numpy>=1.24.0,<2
 lxml>=4.9.0
 polars>=0.20.0
 
-# Visualization (for KMFFLApp)
+# Visualization (for analytics_app)
 plotly
 matplotlib
 scipy
 
-# Optimization (for KMFFLApp)
+# Optimization (for analytics_app)
 pulp
 
-# Streamlit extras (for KMFFLApp)
+# Streamlit extras (for analytics_app)
 streamlit-aggrid>=1.0.0
 
 # Optional but recommended

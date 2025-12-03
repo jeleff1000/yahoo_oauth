@@ -1224,10 +1224,10 @@ def run_analytics_app():
     # Set environment variable for the selected database BEFORE importing
     os.environ["SELECTED_LEAGUE_DB"] = selected_db
 
-    # Import and run the KMFFL app
+    # Import and run the analytics app
     try:
         # Path to the app_homepage.py file
-        app_homepage_path = ROOT_DIR / "KMFFLApp" / "streamlit_ui" / "app_homepage.py"
+        app_homepage_path = ROOT_DIR / "analytics_app" / "streamlit_ui" / "app_homepage.py"
 
         if not app_homepage_path.exists():
             st.error(f"Analytics app not found at: {app_homepage_path}")
@@ -1237,7 +1237,7 @@ def run_analytics_app():
             return
 
         # Add required directories to path for the app's imports to work
-        streamlit_ui_dir = ROOT_DIR / "KMFFLApp" / "streamlit_ui"
+        streamlit_ui_dir = ROOT_DIR / "analytics_app" / "streamlit_ui"
         if str(streamlit_ui_dir) not in sys.path:
             sys.path.insert(0, str(streamlit_ui_dir))
 

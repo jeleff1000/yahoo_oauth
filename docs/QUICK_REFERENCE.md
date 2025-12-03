@@ -6,7 +6,7 @@
 |------|---------|---------|
 | `main.py` | Streamlit web UI | `streamlit run main.py` |
 | `initial_import_v2.py` | Data pipeline orchestrator | `python initial_import_v2.py --context {path}` |
-| `run_motherduck_upload.py` | Direct MotherDuck upload | `python run_motherduck_upload.py` |
+| `run_motherduck_upload.py` | Direct MotherDuck upload | `python scripts/run_motherduck_upload.py` |
 
 ---
 

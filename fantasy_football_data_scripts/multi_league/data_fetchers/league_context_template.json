@@ -1,7 +1,7 @@
 {
     "league_id": "nfl.l.REPLACE_WITH_YOUR_LEAGUE_ID",
     "league_name": "KMFFL",
-    "oauth_file_path": "C:\\Users\\joeye\\OneDrive\\Desktop\\KMFFLApp\\secrets.json",
+    "oauth_file_path": "C:\\Users\\joeye\\OneDrive\\Desktop\\analytics_app\\secrets.json",
     "game_code": "nfl",
     "start_year": 2014,
     "end_year": 2024,
