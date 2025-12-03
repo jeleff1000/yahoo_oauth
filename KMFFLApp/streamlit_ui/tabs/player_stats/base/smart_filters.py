@@ -14,37 +14,60 @@ class SmartFilterPanel:
         self.data_loader = data_loader
 
     def display_filters(self, show_advanced: bool = False) -> tuple[Dict[str, Any], str]:
-        """Display compact filter panel. Returns (filters dict, active_position)."""
+        """Display ultra-compact filter panel. Returns (filters dict, active_position)."""
         filters = {}
         active_position = None
 
-        # Compact CSS
+        # Ultra-compact CSS for player stats filters
         st.markdown("""
         <style>
-        [data-testid="stExpander"] .stTextInput,
-        [data-testid="stExpander"] .stMultiSelect,
-        [data-testid="stExpander"] .stSelectbox,
-        [data-testid="stExpander"] .stNumberInput {
+        /* Ultra-compact filter styling */
+        .player-filters .stTextInput,
+        .player-filters .stMultiSelect,
+        .player-filters .stSelectbox,
+        .player-filters .stNumberInput {
+            margin-bottom: 0.15rem !important;
+        }
+        .player-filters [data-testid="column"] {
+            padding: 0 0.15rem !important;
+        }
+        .player-filters label {
+            font-size: 0.75rem !important;
+            margin-bottom: 0 !important;
+            opacity: 0.7;
+        }
+        .player-filters .stCheckbox {
+            margin-bottom: 0 !important;
+            margin-top: -0.25rem !important;
+        }
+        .player-filters .stCheckbox label span {
+            font-size: 0.75rem !important;
+        }
+        .player-filters .stTextInput input,
+        .player-filters .stSelectbox > div > div,
+        .player-filters .stMultiSelect > div > div {
+            padding: 0.25rem 0.5rem !important;
+            min-height: 2rem !important;
+            font-size: 0.85rem !important;
+        }
+        .player-filters .stNumberInput input {
+            padding: 0.25rem !important;
+            min-height: 2rem !important;
+        }
+        /* Reduce expander padding */
+        .player-filters [data-testid="stExpander"] {
             margin-bottom: 0.25rem !important;
         }
-        [data-testid="stExpander"] [data-testid="column"] {
-            padding: 0 0.25rem !important;
-        }
-        [data-testid="stExpander"] label {
-            font-size: 0.85rem !important;
-            margin-bottom: 0.1rem !important;
-        }
-        [data-testid="stExpander"] .stCheckbox {
-            margin-bottom: 0 !important;
-        }
-        [data-testid="stExpander"] .stCheckbox label span {
+        .player-filters [data-testid="stExpander"] summary {
+            padding: 0.25rem 0.5rem !important;
             font-size: 0.8rem !important;
         }
         </style>
+        <div class="player-filters">
         """, unsafe_allow_html=True)
 
-        # Row 1: Search + Position
-        c1, c2 = st.columns([2, 1])
+        # Row 1: Search + Position + Manager (all in one row)
+        c1, c2, c3 = st.columns([3, 1, 2])
         with c1:
             player_query = st.text_input(
                 "Player",
@@ -62,52 +85,53 @@ class SmartFilterPanel:
                 active_position = pos
                 filters['nfl_position'] = [pos]
 
-        # Row 2: Manager + Year range
-        c1, c2, c3 = st.columns([2, 1, 1])
-        with c1:
+        with c3:
             managers = self._get_managers()
             mgr = st.multiselect("Manager", managers, key=f"{self.key_prefix}_mgr", placeholder="Manager", label_visibility="collapsed")
             if mgr:
                 filters['manager'] = mgr
 
+        # Row 2: Year range + Toggles (all in one compact row)
         current_year = datetime.now().year
-        with c2:
+        c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1])
+        with c1:
             start_yr = st.number_input("From", min_value=1999, max_value=current_year, value=1999, key=f"{self.key_prefix}_yr1", label_visibility="collapsed")
-        with c3:
+        with c2:
             end_yr = st.number_input("To", min_value=int(start_yr), max_value=current_year, value=current_year, key=f"{self.key_prefix}_yr2", label_visibility="collapsed")
 
         if start_yr or end_yr:
             filters['year'] = list(range(int(start_yr), int(end_yr) + 1))
 
-        # Row 3: Toggles (compact inline)
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            if st.checkbox("Rostered Only", key=f"{self.key_prefix}_rost"):
-                filters['rostered_only'] = True
-        with c2:
-            if st.checkbox("Started Only", key=f"{self.key_prefix}_start"):
-                filters['started_only'] = True
         with c3:
-            if not st.checkbox("Include NFL Playoffs", value=True, key=f"{self.key_prefix}_post"):
+            if st.checkbox("Rostered", key=f"{self.key_prefix}_rost"):
+                filters['rostered_only'] = True
+        with c4:
+            if st.checkbox("Started", key=f"{self.key_prefix}_start"):
+                filters['started_only'] = True
+        with c5:
+            if not st.checkbox("Playoffs", value=True, key=f"{self.key_prefix}_post"):
                 filters['exclude_postseason'] = True
 
-        # Row 4: Advanced (optional, collapsed by default)
-        with st.expander("More filters", expanded=False):
-            c1, c2 = st.columns(2)
+        # More filters (collapsed, very compact)
+        with st.expander("More ▼", expanded=False):
+            c1, c2, c3 = st.columns(3)
             with c1:
                 nfl_teams = self._get_nfl_teams()
-                team = st.multiselect("NFL Team", nfl_teams, key=f"{self.key_prefix}_team", placeholder="All")
+                team = st.multiselect("NFL Team", nfl_teams, key=f"{self.key_prefix}_team", placeholder="Team")
                 if team:
                     filters['nfl_team'] = team
 
             with c2:
-                opp_team = st.multiselect("Opponent", nfl_teams, key=f"{self.key_prefix}_opp", placeholder="All")
+                opp_team = st.multiselect("vs Team", nfl_teams, key=f"{self.key_prefix}_opp", placeholder="Opponent")
                 if opp_team:
                     filters['opponent_nfl_team'] = opp_team
 
-            weeks = st.multiselect("Weeks", list(range(1, 22)), key=f"{self.key_prefix}_wk", placeholder="All weeks")
-            if weeks:
-                filters['week'] = weeks
+            with c3:
+                weeks = st.multiselect("Weeks", list(range(1, 22)), key=f"{self.key_prefix}_wk", placeholder="Weeks")
+                if weeks:
+                    filters['week'] = weeks
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
         return filters, active_position
 

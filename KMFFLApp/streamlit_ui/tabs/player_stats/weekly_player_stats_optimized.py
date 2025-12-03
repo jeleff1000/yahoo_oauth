@@ -221,8 +221,46 @@ class OptimizedWeeklyPlayerViewer:
     def display(self):
         apply_modern_styles()
 
-        # Create tabs (no hero section - cleaner mobile UI)
+        # Compact CSS for player stats page
+        st.markdown("""
+        <style>
+        /* Reduce spacing above tabs */
+        .player-stats-view .stTabs {
+            margin-top: -0.5rem !important;
+        }
+        .player-stats-view .stTabs [data-baseweb="tab-list"] {
+            gap: 0.25rem !important;
+        }
+        /* View mode label */
+        .view-mode-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.6;
+            margin-bottom: 0.25rem;
+        }
+        /* Compact metrics row */
+        .player-stats-view [data-testid="stMetricValue"] {
+            font-size: 1.1rem !important;
+        }
+        .player-stats-view [data-testid="stMetricLabel"] {
+            font-size: 0.7rem !important;
+        }
+        /* Tighter table cell padding */
+        .player-stats-view [data-testid="stDataFrame"] td {
+            padding: 0.2rem 0.4rem !important;
+        }
+        </style>
+        <div class="player-stats-view">
+        """, unsafe_allow_html=True)
+
+        # View mode label above tabs
+        st.markdown('<p class="view-mode-label">View Mode</p>', unsafe_allow_html=True)
+
+        # Create tabs
         tabs = st.tabs(["Basic Stats", "Advanced Stats", "Matchup Stats", "Head-to-Head"])
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
         # ==================== BASIC STATS TAB ====================
         with tabs[0]:
@@ -329,48 +367,72 @@ class OptimizedWeeklyPlayerViewer:
 
     @st.fragment
     def _display_h2h_tab(self):
-        """Display Head-to-Head tab."""
-        col1, col2 = st.columns(2)
+        """Display Head-to-Head tab with compact selectors."""
+        # Compact CSS for H2H selectors
+        st.markdown("""
+        <style>
+        .h2h-selectors .stSelectbox {
+            margin-bottom: 0 !important;
+        }
+        .h2h-selectors .stSelectbox > div > div {
+            padding: 0.25rem 0.5rem !important;
+            min-height: 2rem !important;
+        }
+        .h2h-selectors label {
+            font-size: 0.75rem !important;
+            margin-bottom: 0 !important;
+        }
+        </style>
+        <div class="h2h-selectors">
+        """, unsafe_allow_html=True)
+
+        # All selectors in one row
+        col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
             seasons = list_player_seasons()
-            # Default to most recent season (last in list)
             default_season_idx = len(seasons) - 1 if seasons else 0
-            selected_season = st.selectbox("Select Season", seasons, index=default_season_idx, key="h2h_season")
+            selected_season = st.selectbox("Season", seasons, index=default_season_idx, key="h2h_season", label_visibility="collapsed")
         with col2:
             weeks = list_player_weeks(selected_season) if selected_season else []
-            # Default to most recent week (last in list)
             default_week_idx = len(weeks) - 1 if weeks else 0
-            selected_week = st.selectbox("Select Week", weeks, index=default_week_idx, key="h2h_week")
+            selected_week = st.selectbox("Week", weeks, index=default_week_idx, key="h2h_week", label_visibility="collapsed")
+        with col3:
+            # Pre-load matchup options
+            if selected_season and selected_week:
+                player_week_data = load_player_week(selected_season, selected_week)
+                if player_week_data is not None and not player_week_data.empty:
+                    viewer = H2HViewer(player_week_data)
+                    matchup_names = viewer.get_matchup_names()
+                    optimal_weeks = list_optimal_weeks(selected_season)
+                    if selected_week in optimal_weeks:
+                        matchup_options = ["League Optimal"] + matchup_names
+                    else:
+                        matchup_options = matchup_names
+                else:
+                    matchup_options = []
+            else:
+                matchup_options = []
 
-        if selected_season and selected_week:
-            player_week_data = load_player_week(selected_season, selected_week)
+            selected_matchup = st.selectbox("Matchup", matchup_options, key="h2h_selected_matchup", label_visibility="collapsed") if matchup_options else None
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # Display the matchup immediately (no extra spacing)
+        if selected_season and selected_week and selected_matchup:
+            if 'player_week_data' not in dir() or player_week_data is None:
+                player_week_data = load_player_week(selected_season, selected_week)
 
             if player_week_data is not None and not player_week_data.empty:
                 viewer = H2HViewer(player_week_data)
 
-                # Get matchup names
-                matchup_names = viewer.get_matchup_names()
-
-                # Check if we have optimal data
-                optimal_weeks = list_optimal_weeks(selected_season)
-                if selected_week in optimal_weeks:
-                    matchup_options = ["League Optimal"] + matchup_names
-                else:
-                    matchup_options = matchup_names
-
-                selected_matchup = st.selectbox(
-                    "Select Matchup",
-                    matchup_options,
-                    key="h2h_selected_matchup"
-                )
-
                 if selected_matchup == "League Optimal":
                     optimal_data = load_optimal_week(selected_season, selected_week)
                     if optimal_data is not None and not optimal_data.empty:
-                        # Use ONLY optimal_data, not combined - this prevents duplicates
                         viewer_optimal = H2HViewer(optimal_data)
                         viewer_optimal.display_league_optimal(prefix="h2h_optimal")
                 else:
                     viewer.display(prefix="h2h_matchup", matchup_name=selected_matchup)
             else:
                 st.warning("No player data available for this week/season.")
+        elif not matchup_options:
+            st.info("Select a season and week to view matchups.")

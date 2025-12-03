@@ -146,8 +146,46 @@ class OptimizedCareerPlayerViewer:
     def display(self):
         apply_modern_styles()
 
-        # Create tabs (no hero section - cleaner mobile UI)
+        # Compact CSS for player stats page
+        st.markdown("""
+        <style>
+        /* Reduce spacing above tabs */
+        .player-stats-view .stTabs {
+            margin-top: -0.5rem !important;
+        }
+        .player-stats-view .stTabs [data-baseweb="tab-list"] {
+            gap: 0.25rem !important;
+        }
+        /* View mode label */
+        .view-mode-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.6;
+            margin-bottom: 0.25rem;
+        }
+        /* Compact metrics row */
+        .player-stats-view [data-testid="stMetricValue"] {
+            font-size: 1.1rem !important;
+        }
+        .player-stats-view [data-testid="stMetricLabel"] {
+            font-size: 0.7rem !important;
+        }
+        /* Tighter table cell padding */
+        .player-stats-view [data-testid="stDataFrame"] td {
+            padding: 0.2rem 0.4rem !important;
+        }
+        </style>
+        <div class="player-stats-view">
+        """, unsafe_allow_html=True)
+
+        # View mode label above tabs
+        st.markdown('<p class="view-mode-label">View Mode</p>', unsafe_allow_html=True)
+
+        # Create tabs
         tabs = st.tabs(["Basic Stats", "Advanced Stats", "Matchup Stats", "Optimal Lineup"])
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
         # ==================== BASIC STATS TAB ====================
         with tabs[0]:

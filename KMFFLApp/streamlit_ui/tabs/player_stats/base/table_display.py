@@ -293,6 +293,12 @@ class EnhancedTableDisplay:
             st.warning(f"Warning: Duplicate columns detected: {dup_cols}")
             display_df = display_df.loc[:, ~display_df.columns.duplicated(keep='first')]
 
+        # Replace None/NaN with "—" for cleaner display
+        display_df = display_df.fillna("—")
+        # Also replace string "None" values
+        display_df = display_df.replace("None", "—")
+        display_df = display_df.replace("none", "—")
+
         st.dataframe(
             display_df,
             hide_index=True,
