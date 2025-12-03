@@ -24,7 +24,7 @@ def as_dataframe(obj: Any) -> Optional[pd.DataFrame]:
 
     Example:
         ```python
-        from streamlit_ui.shared.dataframe_utils import as_dataframe
+        from shared.dataframe_utils import as_dataframe
 
         data = [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]
         df = as_dataframe(data)
@@ -57,7 +57,7 @@ def get_matchup_df(df_dict: Optional[Dict[str, Any]]) -> Optional[pd.DataFrame]:
 
     Example:
         ```python
-        from streamlit_ui.shared.dataframe_utils import get_matchup_df
+        from shared.dataframe_utils import get_matchup_df
 
         data = {"Matchup Data": [...], "Other Data": [...]}
         matchup_df = get_matchup_df(data)
@@ -87,7 +87,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     Example:
         ```python
-        from streamlit_ui.shared.dataframe_utils import clean_dataframe
+        from shared.dataframe_utils import clean_dataframe
 
         df = load_data()
         df = clean_dataframe(df)  # Remove duplicates, fix types

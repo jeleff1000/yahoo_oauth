@@ -1227,7 +1227,7 @@ def run_analytics_app():
     # Import and run the analytics app
     try:
         # Path to the app_homepage.py file
-        app_homepage_path = ROOT_DIR / "analytics_app" / "streamlit_ui" / "app_homepage.py"
+        app_homepage_path = ROOT_DIR / "analytics_app" / "app_homepage.py"
 
         if not app_homepage_path.exists():
             st.error(f"Analytics app not found at: {app_homepage_path}")
@@ -1237,9 +1237,9 @@ def run_analytics_app():
             return
 
         # Add required directories to path for the app's imports to work
-        streamlit_ui_dir = ROOT_DIR / "analytics_app" / "streamlit_ui"
-        if str(streamlit_ui_dir) not in sys.path:
-            sys.path.insert(0, str(streamlit_ui_dir))
+        analytics_app_dir = ROOT_DIR / "analytics_app"
+        if str(analytics_app_dir) not in sys.path:
+            sys.path.insert(0, str(analytics_app_dir))
 
         # Also add the root directory for fantasy_football_data_scripts imports
         if str(ROOT_DIR) not in sys.path:

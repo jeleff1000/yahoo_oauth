@@ -16,7 +16,7 @@ import streamlit as st
 from md.data_access import load_players_season_data, load_players_career_data, run_query, T
 
 # Import theme system
-from streamlit_ui.shared.themes import inject_theme_css
+from shared.themes import inject_theme_css
 
 DEFAULT_HEADSHOT = "https://static.www.nfl.com/image/private/f_auto,q_auto/league/mdrlzgankwwjldxllgcx"
 

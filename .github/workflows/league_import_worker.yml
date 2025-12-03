@@ -843,12 +843,19 @@ jobs:
                               main_type = main_col_types[col].upper()
                               staging_type = staging_col_types[col].upper()
 
+                              # Check if staging column is a string type (can have empty strings)
+                              staging_is_string = 'VARCHAR' in staging_type or 'TEXT' in staging_type or 'CHAR' in staging_type or 'STRING' in staging_type
+                              main_is_numeric = 'INT' in main_type or 'DOUBLE' in main_type or 'FLOAT' in main_type or 'DECIMAL' in main_type or 'BIGINT' in main_type
+
                               # If types match, just use column directly
                               if main_type == staging_type:
                                   select_parts.append(col)
-                              # Handle empty string → NULL for numeric types
-                              elif 'INT' in main_type or 'DOUBLE' in main_type or 'FLOAT' in main_type or 'DECIMAL' in main_type:
+                              # String → Numeric: handle empty strings as NULL
+                              elif staging_is_string and main_is_numeric:
                                   select_parts.append(f"CASE WHEN TRIM({col}) = '' OR {col} IS NULL THEN NULL ELSE TRY_CAST({col} AS {main_type}) END AS {col}")
+                              # Numeric → Numeric: just cast (no TRIM needed)
+                              elif main_is_numeric:
+                                  select_parts.append(f"TRY_CAST({col} AS {main_type}) AS {col}")
                               # Handle date/timestamp conversions
                               elif 'DATE' in main_type or 'TIME' in main_type:
                                   select_parts.append(f"TRY_CAST({col} AS {main_type}) AS {col}")

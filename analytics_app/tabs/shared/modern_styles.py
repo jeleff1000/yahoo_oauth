@@ -10,7 +10,7 @@ Key principles:
 - Consistent light/dark mode support via CSS variables and media queries
 
 Usage:
-    from streamlit_ui.tabs.shared.modern_styles import apply_modern_styles
+    from tabs.shared.modern_styles import apply_modern_styles
     apply_modern_styles()
 """
 

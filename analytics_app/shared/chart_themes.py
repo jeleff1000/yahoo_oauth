@@ -5,7 +5,7 @@ Provides theme-aware chart configurations that automatically adapt to the curren
 Uses the existing theme detection from themes.py.
 
 Usage:
-    from streamlit_ui.shared.chart_themes import get_chart_theme, apply_chart_theme
+    from shared.chart_themes import get_chart_theme, apply_chart_theme
 
     # Option 1: Get theme dict and pass to Plotly
     fig = px.bar(data, template=get_chart_theme())

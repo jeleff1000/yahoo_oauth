@@ -10,7 +10,7 @@ Key principles:
 - All components use CSS variables from design tokens
 
 Usage:
-    from streamlit_ui.shared.components import hero_section, static_card, section_header
+    from shared.components import hero_section, static_card, section_header
 """
 
 import streamlit as st

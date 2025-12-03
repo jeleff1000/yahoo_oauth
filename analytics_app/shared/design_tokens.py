@@ -5,7 +5,7 @@ This module provides standardized values for colors, spacing, typography,
 and other design elements used throughout the KMFFL application.
 
 Usage:
-    from streamlit_ui.shared.design_tokens import COLORS, SPACING, get_theme_tokens
+    from shared.design_tokens import COLORS, SPACING, get_theme_tokens
 """
 
 from typing import Dict, Literal

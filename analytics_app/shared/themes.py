@@ -7,7 +7,7 @@ This module provides:
 - Theme-aware utility functions
 
 Usage:
-    from streamlit_ui.shared.themes import inject_theme_css, detect_theme
+    from shared.themes import inject_theme_css, detect_theme
 """
 
 import streamlit as st
