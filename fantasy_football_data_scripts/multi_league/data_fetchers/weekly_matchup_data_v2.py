@@ -384,7 +384,8 @@ def parse_matchups_for_week(
     year_val: int,
     week: int,
     manager_overrides: Dict[str, str] = None,
-    debug_xml: bool = False
+    debug_xml: bool = False,
+    max_retries: int = 3
 ) -> List[Dict[str, Any]]:
     """
     Parse matchups for a specific week.
@@ -396,6 +397,7 @@ def parse_matchups_for_week(
         week: Week number
         manager_overrides: Dictionary of manager name overrides
         debug_xml: If True, save raw XML response to file for debugging
+        max_retries: Maximum number of retries on token expiration
 
     Returns:
         List of matchup row dictionaries
@@ -403,8 +405,57 @@ def parse_matchups_for_week(
     url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{yearid}/scoreboard;week={week}"
     print(f"[week {week}] Fetching matchups...")
 
-    resp = oauth.session.get(url)
-    resp.raise_for_status()
+    # Retry loop for token expiration
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = oauth.session.get(url)
+
+            # Check for token expiration errors in response
+            if resp.status_code in (401, 403) or 'Invalid cookie' in resp.text or 'please log in again' in resp.text.lower():
+                raise RuntimeError(f"Token expired: {resp.text[:200]}")
+
+            resp.raise_for_status()
+            break  # Success - exit retry loop
+
+        except Exception as e:
+            last_error = e
+            error_str = str(e).lower()
+
+            # Check if this is a token expiration error
+            is_token_error = (
+                'invalid cookie' in error_str or
+                'please log in again' in error_str or
+                'token expired' in error_str or
+                '401' in error_str or
+                'unauthorized' in error_str
+            )
+
+            if is_token_error and attempt < max_retries:
+                print(f"[week {week}] Token expired (attempt {attempt}/{max_retries}), refreshing...")
+
+                # Try to refresh the token
+                try:
+                    if hasattr(oauth, 'refresh_access_token'):
+                        oauth.refresh_access_token()
+                        print(f"[week {week}] Token refreshed successfully")
+                    elif hasattr(oauth, 'token') and hasattr(oauth.token, 'refresh'):
+                        oauth.token.refresh()
+                        print(f"[week {week}] Token refreshed successfully")
+                    else:
+                        print(f"[week {week}] Warning: No refresh method available")
+                except Exception as refresh_error:
+                    print(f"[week {week}] Warning: Token refresh failed: {refresh_error}")
+
+                # Wait before retry
+                time.sleep(2 * attempt)
+                continue
+            else:
+                # Not a token error or max retries reached - re-raise
+                raise
+
+    if last_error and 'resp' not in dir():
+        raise last_error
 
     # Save raw XML for debugging if requested
     if debug_xml:
@@ -769,11 +820,36 @@ def weekly_matchup_data(
         if logger:
             logger.complete_step()
 
-        # Get league settings
+        # Get league settings (with retry on token expiration)
         if logger:
             logger.start_step("get_league_settings")
 
-        settings = league.settings() if hasattr(league, 'settings') else {}
+        settings = {}
+        for settings_attempt in range(1, 4):
+            try:
+                settings = league.settings() if hasattr(league, 'settings') else {}
+                break
+            except Exception as settings_error:
+                error_str = str(settings_error).lower()
+                is_token_error = (
+                    'invalid cookie' in error_str or
+                    'please log in again' in error_str or
+                    '401' in error_str or
+                    'unauthorized' in error_str
+                )
+                if is_token_error and settings_attempt < 3:
+                    print(f"[settings] Token expired (attempt {settings_attempt}/3), refreshing...")
+                    try:
+                        if hasattr(oauth, 'refresh_access_token'):
+                            oauth.refresh_access_token()
+                            print(f"[settings] Token refreshed successfully")
+                    except Exception:
+                        pass
+                    time.sleep(2)
+                    # Re-create league object with fresh token
+                    league = gm.to_league(yearid)
+                    continue
+                raise
 
         if logger:
             logger.complete_step()

@@ -14,10 +14,10 @@ import os
 import sys
 from pathlib import Path
 
-# Ensure the streamlit_ui directory is in the Python path
-streamlit_ui_dir = Path(__file__).parent.resolve()
-if str(streamlit_ui_dir) not in sys.path:
-    sys.path.insert(0, str(streamlit_ui_dir))
+# Ensure the analytics_app directory is in the Python path
+app_dir = Path(__file__).parent.resolve()
+if str(app_dir) not in sys.path:
+    sys.path.insert(0, str(app_dir))
 
 os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
 

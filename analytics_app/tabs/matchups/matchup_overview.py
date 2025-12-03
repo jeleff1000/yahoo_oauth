@@ -1,4 +1,4 @@
-# streamlit_ui/tabs/matchup_data_and_simulations/matchups/matchup_overview.py
+# analytics_app/tabs/matchups/matchup_overview.py
 
 from .weekly.weekly_matchup_overview import WeeklyMatchupDataViewer
 from .season.season_matchup_overview import SeasonMatchupOverviewViewer

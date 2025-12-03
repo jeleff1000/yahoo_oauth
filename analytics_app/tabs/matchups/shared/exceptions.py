@@ -123,7 +123,7 @@ def safe_import_graph_module(
     try:
         # Import the module
         from importlib import import_module
-        module = import_module(module_path, package='streamlit_ui.tabs.matchups')
+        module = import_module(module_path, package='tabs.matchups')
 
         # Get the function
         if hasattr(module, function_name):

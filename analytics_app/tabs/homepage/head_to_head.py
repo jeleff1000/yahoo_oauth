@@ -7,10 +7,10 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-# Ensure streamlit_ui directory is in path for imports
-_streamlit_ui_dir = Path(__file__).parent.parent.parent.resolve()
-if str(_streamlit_ui_dir) not in sys.path:
-    sys.path.insert(0, str(_streamlit_ui_dir))
+# Ensure analytics_app directory is in path for imports
+_app_dir = Path(__file__).parent.parent.parent.resolve()
+if str(_app_dir) not in sys.path:
+    sys.path.insert(0, str(_app_dir))
 
 # Reuse the proven viewer from player_stats
 from ..player_stats.weekly_player_subprocesses.head_to_head import H2HViewer, filter_h2h_data

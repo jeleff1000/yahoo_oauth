@@ -26,10 +26,10 @@ from ..shared.simulation_styles import (
 import sys
 from pathlib import Path
 
-# Ensure streamlit_ui is in path for imports
-_streamlit_ui_dir = Path(__file__).parent.parent.parent.parent.resolve()
-if str(_streamlit_ui_dir) not in sys.path:
-    sys.path.insert(0, str(_streamlit_ui_dir))
+# Ensure analytics_app is in path for imports
+_app_dir = Path(__file__).parent.parent.parent.parent.resolve()
+if str(_app_dir) not in sys.path:
+    sys.path.insert(0, str(_app_dir))
 
 from shared.chart_themes import get_chart_theme, apply_chart_theme, get_chart_colors
 

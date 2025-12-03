@@ -9,10 +9,10 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-# Ensure streamlit_ui directory is in path for imports
-_streamlit_ui_dir = Path(__file__).parent.parent.parent.parent.resolve()
-if str(_streamlit_ui_dir) not in sys.path:
-    sys.path.insert(0, str(_streamlit_ui_dir))
+# Ensure analytics_app directory is in path for imports
+_app_dir = Path(__file__).parent.parent.parent.parent.resolve()
+if str(_app_dir) not in sys.path:
+    sys.path.insert(0, str(_app_dir))
 
 from .displays import weekly_recap, season_recap, player_recap
 from md.tab_data_access.homepage.recaps_player_data import load_player_two_week_slice  # ✅ Optimized: 18 cols vs 270+
