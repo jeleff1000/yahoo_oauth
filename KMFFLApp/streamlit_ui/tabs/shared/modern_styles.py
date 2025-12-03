@@ -1020,29 +1020,6 @@ def apply_modern_styles():
             font-size: 0.85rem;
         }
 
-        /* Tabs become scrollable horizontal pills */
-        .stTabs [data-baseweb="tab-list"] {
-            flex-wrap: nowrap;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            padding-bottom: var(--space-sm);
-            scrollbar-width: thin;
-        }
-        .stTabs [data-baseweb="tab"] {
-            padding: 0.375rem 0.75rem;
-            font-size: 0.8rem;
-            flex-shrink: 0;
-        }
-
-        /* Add scroll indicator shadow */
-        .stTabs [data-baseweb="tab-list"]::after {
-            content: '';
-            position: sticky;
-            right: 0;
-            width: 20px;
-            background: linear-gradient(to left, var(--bg-primary), transparent);
-        }
-
         /* Full width buttons */
         .stButton > button {
             width: 100%;
@@ -1063,15 +1040,6 @@ def apply_modern_styles():
         h3 { font-size: 1rem !important; }
         h4 { font-size: 0.9rem !important; }
 
-        /* Scrollable tables with indicator */
-        .stDataFrame {
-            overflow-x: auto;
-            position: relative;
-        }
-        .stDataFrame table { font-size: 0.8rem; }
-        .stDataFrame th { padding: 0.375rem !important; font-size: 0.75rem !important; }
-        .stDataFrame td { padding: 0.3rem !important; }
-
         .stat-value { font-size: 1.3rem; }
         .metric-card-value { font-size: 1.25rem; }
 
@@ -1084,14 +1052,127 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       RESPONSIVE - MOBILE (480px)
+       RESPONSIVE - MOBILE (600px) - KEY MOBILE FIXES
        =========================================== */
-    @media (max-width: 480px) {
+    @media (max-width: 600px) {
+        /* ===== FIX #1: SHRINK TOP NAV TABS ===== */
+        /* These are the big Weekly/Seasons/Career/Visualize buttons */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.25rem;
+            padding: 0 0 0.25rem 0;
+            margin-bottom: 0.25rem;
+        }
+        .stTabs [data-baseweb="tab"] {
+            padding: 0.35rem 0.6rem !important;
+            font-size: 0.8rem !important;
+            min-height: auto !important;
+            height: auto !important;
+        }
+
+        /* ===== FIX #2: REDUCE FILTERS BLOCK ===== */
+        div[data-testid="stExpander"] {
+            margin-bottom: 0.25rem !important;
+            margin-top: 0.125rem !important;
+        }
+        div[data-testid="stExpander"] > div:first-child {
+            padding: 0.25rem 0.5rem !important;
+        }
+        div[data-testid="stExpander"] > div:last-child {
+            padding: 0.375rem 0.5rem !important;
+        }
+        div[data-testid="stExpander"] summary {
+            font-size: 0.8rem !important;
+        }
+
+        /* ===== FIX #3: HORIZONTAL SCROLLING SUBTABS ===== */
+        .stTabs [data-baseweb="tab-list"] {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Hide scrollbar Firefox */
+            -ms-overflow-style: none; /* Hide scrollbar IE/Edge */
+        }
+        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
+            display: none; /* Hide scrollbar Chrome/Safari */
+        }
+        .stTabs [data-baseweb="tab"] {
+            flex-shrink: 0 !important;
+            white-space: nowrap !important;
+        }
+
+        /* ===== FIX #4: TABLE HORIZONTAL SCROLL ===== */
+        .stDataFrame,
+        [data-testid="stDataFrame"],
+        [data-testid="stDataFrameResizable"] {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            max-width: 100% !important;
+        }
+        .stDataFrame table,
+        [data-testid="stDataFrame"] table {
+            display: block !important;
+            overflow-x: auto !important;
+            white-space: nowrap;
+            font-size: 0.75rem;
+        }
+        .stDataFrame th,
+        [data-testid="stDataFrame"] th {
+            padding: 0.3rem 0.4rem !important;
+            font-size: 0.7rem !important;
+        }
+        .stDataFrame td,
+        [data-testid="stDataFrame"] td {
+            padding: 0.25rem 0.35rem !important;
+            font-size: 0.7rem !important;
+        }
+
+        /* Scroll fade indicator on right edge */
+        [data-testid="stDataFrameResizable"]::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 20px;
+            background: linear-gradient(to left, var(--bg-primary) 0%, transparent 100%);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* ===== FIX #5: TITLE/HEADER SPACING ===== */
+        .tab-header {
+            margin-top: 0.375rem !important;
+            margin-bottom: 0.375rem !important;
+            padding-top: 0.125rem !important;
+        }
+        .tab-header h2 {
+            font-size: 0.85rem !important;
+        }
+        .tab-header p {
+            font-size: 0.65rem !important;
+        }
+
+        /* General mobile spacing tightening */
         .main .block-container {
+            padding-top: 0.25rem !important;
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
         }
 
+        /* Tighter vertical gaps */
+        [data-testid="stVerticalBlock"] {
+            gap: 0.125rem !important;
+        }
+        .element-container {
+            margin-bottom: 0.0625rem !important;
+        }
+    }
+
+    /* ===========================================
+       RESPONSIVE - SMALL MOBILE (480px)
+       =========================================== */
+    @media (max-width: 480px) {
         .hero-section {
             padding: var(--space-sm);
         }
@@ -1104,18 +1185,19 @@ def apply_modern_styles():
             padding: var(--space-sm);
         }
 
+        /* Even smaller tabs on tiny screens */
         .stTabs [data-baseweb="tab"] {
-            padding: 0.3rem 0.5rem;
-            font-size: 0.75rem;
+            padding: 0.25rem 0.4rem !important;
+            font-size: 0.7rem !important;
         }
 
         h1 { font-size: 1.15rem !important; }
         h2 { font-size: 1rem !important; }
         h3 { font-size: 0.9rem !important; }
 
-        .stDataFrame table { font-size: 0.7rem; }
-        .stDataFrame th { font-size: 0.65rem !important; padding: 0.25rem !important; }
-        .stDataFrame td { padding: 0.2rem !important; }
+        .stDataFrame table { font-size: 0.65rem !important; }
+        .stDataFrame th { font-size: 0.6rem !important; padding: 0.2rem !important; }
+        .stDataFrame td { padding: 0.15rem !important; }
 
         .stat-value { font-size: 1.15rem; }
         .metric-card-value { font-size: 1.1rem; }
