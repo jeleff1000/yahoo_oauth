@@ -9,7 +9,9 @@ _this_dir = Path(__file__).parent
 _source = _this_dir.parent / "top_players.py"
 
 if _source.exists():
-    spec = importlib.util.spec_from_file_location("tabs.hall_of_fame._top_players_impl", str(_source))
+    spec = importlib.util.spec_from_file_location(
+        "tabs.hall_of_fame._top_players_impl", str(_source)
+    )
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)  # type: ignore

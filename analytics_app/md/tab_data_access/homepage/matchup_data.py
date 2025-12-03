@@ -21,13 +21,11 @@ HOMEPAGE_MATCHUP_COLUMNS = [
     "team_name",
     "opponent",
     "opponent_team",
-
     # Scoring
     "team_points",
     "opponent_points",
     "margin",
     "total_matchup_score",
-
     # Projections
     "team_projected_points",
     "opponent_projected_points",
@@ -35,7 +33,6 @@ HOMEPAGE_MATCHUP_COLUMNS = [
     "abs_proj_score_error",
     "above_proj_score",
     "below_proj_score",
-
     # Expected/Spread Stats
     "expected_spread",
     "expected_odds",
@@ -43,15 +40,12 @@ HOMEPAGE_MATCHUP_COLUMNS = [
     "lose_vs_spread",
     "underdog_wins",
     "favorite_losses",
-
     # League Context
     "league_weekly_mean",
     "league_weekly_median",
-
     # Results
     "win",
     "loss",
-
     # Playoff/Season Info
     "is_playoffs",
     "is_consolation",
@@ -98,9 +92,15 @@ def load_homepage_matchup_data() -> Dict[str, Any]:
         df = run_query(query)
 
         # Add column aliases for backward compatibility with existing tabs
-        if "team_projected_points" in df.columns and "manager_proj_score" not in df.columns:
+        if (
+            "team_projected_points" in df.columns
+            and "manager_proj_score" not in df.columns
+        ):
             df["manager_proj_score"] = df["team_projected_points"]
-        if "opponent_projected_points" in df.columns and "opponent_proj_score" not in df.columns:
+        if (
+            "opponent_projected_points" in df.columns
+            and "opponent_proj_score" not in df.columns
+        ):
             df["opponent_proj_score"] = df["opponent_projected_points"]
         if "team_name" in df.columns and "manager_team" not in df.columns:
             df["manager_team"] = df["team_name"]

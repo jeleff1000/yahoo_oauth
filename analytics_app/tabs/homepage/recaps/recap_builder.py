@@ -5,7 +5,7 @@ Builds flowing paragraph text from the config tables.
 No colored boxes, no bubbles - just clean text.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 import pandas as pd
 
 from .recap_config import (
@@ -15,7 +15,6 @@ from .recap_config import (
     SEASON_RECORD_TEMPLATE,
     SEASON_CONTEXT_CRITERIA,
     PLAYER_INTRO_TEMPLATE,
-    PLAYER_HIGHLIGHT_CRITERIA,
 )
 
 
@@ -32,12 +31,18 @@ def _format_template(template: str, row: Dict) -> str:
     safe_dict = dict(row) if not isinstance(row, pd.Series) else row.to_dict()
 
     # Add computed helper values
-    safe_dict['margin'] = abs(_safe_get(row, 'margin', 0) or 0)
-    safe_dict['winning_streak'] = _safe_get(row, 'winning_streak') or _safe_get(row, 'win_streak') or 0
-    safe_dict['losing_streak'] = _safe_get(row, 'losing_streak') or _safe_get(row, 'loss_streak') or 0
-    safe_dict['p_playoffs_pct'] = int((_safe_get(row, 'p_playoffs') or 0) * 100)
-    safe_dict['p_champ_pct'] = int((_safe_get(row, 'p_champ') or 0) * 100)
-    safe_dict['wins_vs_shuffle_wins_abs'] = abs(_safe_get(row, 'wins_vs_shuffle_wins') or 0)
+    safe_dict["margin"] = abs(_safe_get(row, "margin", 0) or 0)
+    safe_dict["winning_streak"] = (
+        _safe_get(row, "winning_streak") or _safe_get(row, "win_streak") or 0
+    )
+    safe_dict["losing_streak"] = (
+        _safe_get(row, "losing_streak") or _safe_get(row, "loss_streak") or 0
+    )
+    safe_dict["p_playoffs_pct"] = int((_safe_get(row, "p_playoffs") or 0) * 100)
+    safe_dict["p_champ_pct"] = int((_safe_get(row, "p_champ") or 0) * 100)
+    safe_dict["wins_vs_shuffle_wins_abs"] = abs(
+        _safe_get(row, "wins_vs_shuffle_wins") or 0
+    )
 
     try:
         return template.format(**safe_dict)
@@ -65,10 +70,12 @@ def _evaluate_criteria(criteria_list: List[Dict], row: Dict) -> List[str]:
                     seen_categories.add(category)
 
                 text = _format_template(criterion["text"], row)
-                matches.append({
-                    "text": text,
-                    "standalone": criterion.get("standalone", False),
-                })
+                matches.append(
+                    {
+                        "text": text,
+                        "standalone": criterion.get("standalone", False),
+                    }
+                )
         except Exception:
             # Skip criteria that fail to evaluate
             continue
@@ -79,6 +86,7 @@ def _evaluate_criteria(criteria_list: List[Dict], row: Dict) -> List[str]:
 # =============================================================================
 # WEEKLY RECAP BUILDER
 # =============================================================================
+
 
 def build_weekly_recap(row: Dict) -> str:
     """
@@ -92,7 +100,7 @@ def build_weekly_recap(row: Dict) -> str:
     parts = []
 
     # 1. Core result sentence
-    win = _safe_get(row, 'win')
+    win = _safe_get(row, "win")
     if win == 1:
         result = _format_template(WEEKLY_RESULT_TEMPLATES["win"], row)
     else:
@@ -142,6 +150,7 @@ def build_weekly_recap(row: Dict) -> str:
 # SEASON RECAP BUILDER
 # =============================================================================
 
+
 def build_season_recap(row: Dict) -> str:
     """
     Build a season recap paragraph from matchup data.
@@ -186,6 +195,7 @@ def build_season_recap(row: Dict) -> str:
 # PLAYER RECAP BUILDER
 # =============================================================================
 
+
 def build_player_recap(players_df: pd.DataFrame, top_n: int = 3) -> str:
     """
     Build a player recap paragraph from player data.
@@ -206,7 +216,7 @@ def build_player_recap(players_df: pd.DataFrame, top_n: int = 3) -> str:
 
     # Get top scorers
     points_col = None
-    for col in ['points', 'player_points', 'fantasy_points']:
+    for col in ["points", "player_points", "fantasy_points"]:
         if col in players_df.columns:
             points_col = col
             break
@@ -221,9 +231,9 @@ def build_player_recap(players_df: pd.DataFrame, top_n: int = 3) -> str:
     # Build top performer sentences
     player_sentences = []
     for i, (_, player) in enumerate(top_players.iterrows()):
-        name = player.get('player', player.get('player_name', 'Unknown'))
+        name = player.get("player", player.get("player_name", "Unknown"))
         points = player.get(points_col, 0)
-        position = player.get('fantasy_position', player.get('position', ''))
+        position = player.get("fantasy_position", player.get("position", ""))
 
         if i == 0:
             player_sentences.append(f"{name} led the way with {points:.2f} points")
@@ -240,18 +250,20 @@ def build_player_recap(players_df: pd.DataFrame, top_n: int = 3) -> str:
         elif len(player_sentences) == 2:
             parts.append(f"{player_sentences[0]}, and {player_sentences[1]}.")
         else:
-            parts.append(f"{player_sentences[0]}, {', '.join(player_sentences[1:-1])}, and {player_sentences[-1]}.")
+            parts.append(
+                f"{player_sentences[0]}, {', '.join(player_sentences[1:-1])}, and {player_sentences[-1]}."
+            )
 
     # Add position totals if available
     position_col = None
-    for col in ['fantasy_position', 'position', 'pos']:
+    for col in ["fantasy_position", "position", "pos"]:
         if col in players_df.columns:
             position_col = col
             break
 
     if position_col:
         position_totals = []
-        for pos in ['QB', 'RB', 'WR', 'TE']:
+        for pos in ["QB", "RB", "WR", "TE"]:
             pos_df = players_df[players_df[position_col] == pos]
             if not pos_df.empty:
                 total = pos_df[points_col].sum()
@@ -267,14 +279,17 @@ def build_player_recap(players_df: pd.DataFrame, top_n: int = 3) -> str:
 # COMBINED RECAP BUILDER
 # =============================================================================
 
-def build_full_recap(matchup_row: Dict, players_df: Optional[pd.DataFrame] = None) -> Dict[str, str]:
+
+def build_full_recap(
+    matchup_row: Dict, players_df: Optional[pd.DataFrame] = None
+) -> Dict[str, str]:
     """
     Build all three recap paragraphs.
 
     Returns dict with keys: 'weekly', 'season', 'players'
     """
     return {
-        'weekly': build_weekly_recap(matchup_row),
-        'season': build_season_recap(matchup_row),
-        'players': build_player_recap(players_df) if players_df is not None else "",
+        "weekly": build_weekly_recap(matchup_row),
+        "season": build_season_recap(matchup_row),
+        "players": build_player_recap(players_df) if players_df is not None else "",
     }

@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 import random
 from datetime import datetime
 from ...shared.modern_styles import apply_modern_styles
@@ -36,10 +35,7 @@ class SeasonMatchupOverviewViewer:
 
         # Render filter UI (no weeks for season view)
         filters = render_filter_ui(
-            df=self.matchup_df,
-            prefix=prefix,
-            show_weeks=False,
-            show_positions=False
+            df=self.matchup_df, prefix=prefix, show_weeks=False, show_positions=False
         )
 
         # Apply filters with loading indicator
@@ -47,7 +43,9 @@ class SeasonMatchupOverviewViewer:
 
         # Check if we have data after filtering
         if filtered_df.empty:
-            st.warning("⚠️ No matchups found with the selected filters. Try adjusting your filter criteria.")
+            st.warning(
+                "⚠️ No matchups found with the selected filters. Try adjusting your filter criteria."
+            )
             return
 
         # Create tabs
@@ -55,21 +53,21 @@ class SeasonMatchupOverviewViewer:
 
         # --- Data Tabs ---
         tab_viewers = {
-            0: ('matchup_stats', SeasonMatchupStatsViewer),
-            1: ('advanced_stats', SeasonAdvancedStatsViewer),
-            2: ('projected_stats', SeasonProjectedStatsViewer),
-            3: ('team_ratings', SeasonTeamRatingsViewer),
-            4: ('optimal_lineups', None),  # Special handling
-            5: ('head_to_head', SeasonHeadToHeadViewer),
+            0: ("matchup_stats", SeasonMatchupStatsViewer),
+            1: ("advanced_stats", SeasonAdvancedStatsViewer),
+            2: ("projected_stats", SeasonProjectedStatsViewer),
+            3: ("team_ratings", SeasonTeamRatingsViewer),
+            4: ("optimal_lineups", None),  # Special handling
+            5: ("head_to_head", SeasonHeadToHeadViewer),
         }
 
         for tab_idx, (tab_key, viewer_class) in tab_viewers.items():
             with tabs[tab_idx]:
                 try:
-                    if tab_key == 'optimal_lineups':
+                    if tab_key == "optimal_lineups":
                         # Special case: function instead of class
                         display_season_optimal_lineup(filtered_df)
-                    elif tab_key == 'projected_stats':
+                    elif tab_key == "projected_stats":
                         # Season projected stats needs both filtered and original df
                         viewer = viewer_class(filtered_df, self.matchup_df)
                         viewer.display(prefix=f"{prefix}_{tab_key}")
@@ -81,13 +79,13 @@ class SeasonMatchupOverviewViewer:
 
         # --- About Tab (Last) ---
         with tabs[6]:
-            view_desc = VIEW_DESCRIPTIONS['season']
-            st.title(view_desc['title'])
+            view_desc = VIEW_DESCRIPTIONS["season"]
+            st.title(view_desc["title"])
             st.markdown(f"### {view_desc['subtitle']}")
             st.markdown("**What can you do here?**")
 
             # Display features
-            for tab_name, description in view_desc['features'].items():
+            for tab_name, description in view_desc["features"].items():
                 st.markdown(f"- **{tab_name}:** {description}")
 
             st.markdown("---")
@@ -98,5 +96,5 @@ class SeasonMatchupOverviewViewer:
             # Success message
             render_info_box(
                 "<strong>Tip:</strong> Use the filter options above to customize your view, then explore the tabs!",
-                icon="👉"
+                icon="👉",
             )

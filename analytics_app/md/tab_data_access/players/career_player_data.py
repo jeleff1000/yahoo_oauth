@@ -30,26 +30,21 @@ CAREER_PLAYER_SOURCE_COLUMNS = [
     "manager",
     "opponent",
     "headshot_url",
-
     # === Time/Period (2) ===
     "year",
     "week",
-
     # === Positions (2) ===
     "nfl_position",
     "fantasy_position",
-
     # === Core Stats (3) ===
     # Note: total_points, ppg_all_time, games_started, games_played, fantasy_games are computed in aggregation
     "points",
     "season_ppg",
     "is_started",
-
     # === SPAR Metrics (3) ===
-    "spar",             # Legacy SPAR
-    "player_spar",      # Total SPAR produced
-    "manager_spar",     # SPAR while on manager's roster
-
+    "spar",  # Legacy SPAR
+    "player_spar",  # Total SPAR produced
+    "manager_spar",  # SPAR while on manager's roster
     # === Matchup Context (12) ===
     "win",
     "loss",
@@ -64,7 +59,6 @@ CAREER_PLAYER_SOURCE_COLUMNS = [
     "sacko",
     "optimal_player",
     "league_wide_optimal_player",
-
     # === Passing Stats (11) ===
     "completions",
     "attempts",
@@ -77,7 +71,6 @@ CAREER_PLAYER_SOURCE_COLUMNS = [
     "passing_epa",
     "passing_cpoe",
     "pacr",
-
     # === Rushing Stats (8) ===
     "carries",
     "rushing_yards",
@@ -87,7 +80,6 @@ CAREER_PLAYER_SOURCE_COLUMNS = [
     "rushing_first_downs",
     "rushing_epa",
     "rushing_2pt_conversions",
-
     # === Receiving Stats (14) ===
     "receptions",
     "targets",
@@ -104,7 +96,6 @@ CAREER_PLAYER_SOURCE_COLUMNS = [
     "wopr",
     "racr",
     "air_yards_share",
-
     # === Kicker Stats (13) ===
     "fg_made",
     "fg_att",
@@ -119,7 +110,6 @@ CAREER_PLAYER_SOURCE_COLUMNS = [
     "pat_made",
     "pat_att",
     "pat_missed",
-
     # === Defense/IDP Stats (14) ===
     "def_sacks",
     "def_sack_yards",
@@ -136,7 +126,6 @@ CAREER_PLAYER_SOURCE_COLUMNS = [
     "def_fumbles_forced",
     "def_safeties",
     "def_tds",
-
     # === DST Stats (9) ===
     "pts_allow",
     "dst_points_allowed",
@@ -147,7 +136,6 @@ CAREER_PLAYER_SOURCE_COLUMNS = [
     "fumble_recovery_opp",
     "fumble_recovery_tds",
     "special_teams_tds",
-
     # === Other (2) ===
     "season_type",
     "passing_2pt_conversions",
@@ -168,7 +156,7 @@ def load_career_player_data(
     started_only=False,
     exclude_postseason=False,
     sort_column="points",
-    sort_direction="DESC"
+    sort_direction="DESC",
 ) -> pd.DataFrame:
     """
     Load career player data with ONLY the columns needed.
@@ -231,7 +219,9 @@ def load_career_player_data(
 
         # Rostered only
         if rostered_only:
-            where.append("manager IS NOT NULL AND manager <> '' AND manager <> 'Unrostered'")
+            where.append(
+                "manager IS NOT NULL AND manager <> '' AND manager <> 'Unrostered'"
+            )
 
         # Started only
         if started_only:
@@ -259,7 +249,11 @@ def load_career_player_data(
             where.append(f"opponent IN ({sql_in_list(opponent)})")
 
         # Opponent NFL team filter
-        if opponent_nfl_team and isinstance(opponent_nfl_team, list) and opponent_nfl_team:
+        if (
+            opponent_nfl_team
+            and isinstance(opponent_nfl_team, list)
+            and opponent_nfl_team
+        ):
             where.append(f"opponent_nfl_team IN ({sql_in_list(opponent_nfl_team)})")
 
         where_sql = "WHERE " + " AND ".join(where) if where else ""
@@ -525,7 +519,7 @@ def load_career_player_data(
         # CRITICAL: Remove any duplicate columns to prevent React error #185
         if result is not None and not result.empty:
             if result.columns.duplicated().any():
-                result = result.loc[:, ~result.columns.duplicated(keep='first')]
+                result = result.loc[:, ~result.columns.duplicated(keep="first")]
 
         return result
 

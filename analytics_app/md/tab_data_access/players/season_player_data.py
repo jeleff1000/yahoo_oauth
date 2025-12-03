@@ -15,7 +15,15 @@ IMPORTANT: Column names verified against actual players_by_year table schema.
 from __future__ import annotations
 from typing import Sequence
 import streamlit as st
-from md.core import run_query, T, sql_quote, sql_in_list, sql_upper, sql_upper_in_list, sql_manager_norm
+from md.core import (
+    run_query,
+    T,
+    sql_quote,
+    sql_in_list,
+    sql_upper,
+    sql_upper_in_list,
+    sql_manager_norm,
+)
 import pandas as pd
 
 # Columns needed for season player stats (~116 out of 237 columns = 51% reduction)
@@ -30,27 +38,22 @@ SEASON_PLAYER_SOURCE_COLUMNS = [
     "manager",
     "opponent",
     "headshot_url",
-
     # === Time/Period (2) ===
     "year",
     "week",
-
     # === Positions (2) ===
     "nfl_position",
     "fantasy_position",
-
     # === Core Stats (5) ===
     "points",
     "season_ppg",
     "is_started",
     "win",
     "season_type",
-
     # === SPAR Metrics (3) ===
-    "spar",             # Legacy SPAR
-    "player_spar",      # Total SPAR produced
-    "manager_spar",     # SPAR while on manager's roster
-
+    "spar",  # Legacy SPAR
+    "player_spar",  # Total SPAR produced
+    "manager_spar",  # SPAR while on manager's roster
     # === Matchup Context (11) ===
     "team_points",
     "opponent_points",
@@ -65,7 +68,6 @@ SEASON_PLAYER_SOURCE_COLUMNS = [
     "league_wide_optimal_player",
     "loss",
     "position_season_rank",
-
     # === Passing Stats (11) ===
     "passing_yards",
     "passing_tds",
@@ -78,7 +80,6 @@ SEASON_PLAYER_SOURCE_COLUMNS = [
     "passing_epa",
     "passing_cpoe",
     "pacr",
-
     # === Rushing Stats (8) ===
     "rushing_yards",
     "carries",
@@ -88,7 +89,6 @@ SEASON_PLAYER_SOURCE_COLUMNS = [
     "rushing_first_downs",
     "rushing_epa",
     "rushing_2pt_conversions",
-
     # === Receiving Stats (14) ===
     "receptions",
     "receiving_yards",
@@ -105,7 +105,6 @@ SEASON_PLAYER_SOURCE_COLUMNS = [
     "receiving_air_yards",
     "receiving_yards_after_catch",
     "air_yards_share",
-
     # === Kicking Stats (13) ===
     "fg_made",
     "fg_att",
@@ -120,7 +119,6 @@ SEASON_PLAYER_SOURCE_COLUMNS = [
     "pat_made",
     "pat_att",
     "pat_missed",
-
     # === Defense Stats (21) ===
     "def_sacks",
     "def_sack_yards",
@@ -203,7 +201,7 @@ def load_season_player_data(
         Defense (21): sacks, tackles, INTs, fumbles, TFL, points/yards allowed
     """
     try:
-        sort_column = (sort_column or "points")
+        sort_column = sort_column or "points"
         sort_direction = (sort_direction or "DESC").upper()
         if sort_direction not in ("ASC", "DESC"):
             sort_direction = "DESC"
@@ -235,7 +233,9 @@ def load_season_player_data(
                 where.append("year IN (" + nums + ")")
 
         if rostered_only:
-            where.append("manager IS NOT NULL AND manager <> '' AND manager <> 'Unrostered'")
+            where.append(
+                "manager IS NOT NULL AND manager <> '' AND manager <> 'Unrostered'"
+            )
         if started_only:
             where.append("started = 1")
         if exclude_postseason:
@@ -490,7 +490,7 @@ def load_season_player_data(
 
         # CRITICAL: Remove any duplicate columns to prevent React error #185
         if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='first')]
+            df = df.loc[:, ~df.columns.duplicated(keep="first")]
 
         # Add compatibility aliases
         if "nfl_position" in df.columns and "position" not in df.columns:

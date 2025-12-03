@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import os
 from typing import Optional, Sequence, Tuple, Dict
-import pandas as pd
 import streamlit as st
 from .motherduck_connection import MotherDuckConnection
 
 # ---------------------------------------
 # Dynamic Database Configuration
 # ---------------------------------------
+
 
 def get_current_league_db() -> str:
     """
@@ -92,6 +92,7 @@ T = _TableDict()
 # Connection + Query Helpers
 # ---------------------------------------
 
+
 @st.cache_resource
 def get_motherduck_connection():
     try:
@@ -100,15 +101,18 @@ def get_motherduck_connection():
         st.error(f"Failed to create MotherDuck connection: {e}")
         raise
 
+
 @st.cache_data(ttl=120, show_spinner=True)
 def _execute_query(sql: str, retry_count: int = 0):
     """Cached query execution - uses retry_count to bust cache on retry."""
     conn = get_motherduck_connection()
     return conn.query(sql, ttl=0)  # No caching in connection layer
 
+
 def run_query(sql: str, ttl: int = 600):
     """Execute query and return DataFrame with error handling and retry logic for catalog changes."""
     import time
+
     max_retries = 3
 
     for attempt in range(max_retries):
@@ -136,26 +140,34 @@ def run_query(sql: str, ttl: int = 600):
                 continue
             else:
                 # Final failure after all retries
-                st.error(f"Query failed after {max_retries} attempts: {sql[:100]}... Error: {e}")
+                st.error(
+                    f"Query failed after {max_retries} attempts: {sql[:100]}... Error: {e}"
+                )
                 raise
+
 
 # ---------------------------------------
 # SQL helpers (safe quoting + normalization)
 # ---------------------------------------
 
+
 def sql_quote(s: str) -> str:
     return "'" + str(s).replace("'", "''") + "'"
+
 
 # Accept Sequence[str] to match callers (they may pass Sequence)
 def sql_in_list(values: Sequence[str]) -> str:
     return ", ".join(sql_quote(v) for v in values)
 
+
 def sql_upper(col: str) -> str:
     return f"UPPER(NULLIF(TRIM({col}), ''))"
+
 
 # Accept Sequence[str] for the upper-case in-list helper as well
 def sql_upper_in_list(values: Sequence[str]) -> str:
     return ", ".join(f"UPPER({sql_quote(v)})" for v in values)
+
 
 def sql_manager_norm(col: str = "manager") -> str:
     """
@@ -169,6 +181,7 @@ def sql_manager_norm(col: str = "manager") -> str:
         f"ELSE TRIM({col}) END"
     )
 
+
 # Placeholder used in SQL templates where callers may inject ORDER/BY clauses.
 # Kept as empty string to avoid f-string NameError when templates are defined.
 SORT_MARKER = ""
@@ -176,6 +189,7 @@ SORT_MARKER = ""
 # ---------------------------------------
 # Basic lists / helpers
 # ---------------------------------------
+
 
 def latest_season_and_week() -> Tuple[int, int]:
     sql = f"""
@@ -188,47 +202,63 @@ def latest_season_and_week() -> Tuple[int, int]:
         return (0, 0)
     return int(df.loc[0, "year"]), int(df.loc[0, "week"])
 
+
 def list_seasons() -> Sequence[int]:
     df = run_query(f"SELECT DISTINCT year FROM {T['matchup']} ORDER BY year DESC")
     return df["year"].tolist()
 
+
 def list_weeks(year: int) -> Sequence[int]:
-    df = run_query(f"SELECT DISTINCT week FROM {T['matchup']} WHERE year = {int(year)} ORDER BY week")
+    df = run_query(
+        f"SELECT DISTINCT week FROM {T['matchup']} WHERE year = {int(year)} ORDER BY week"
+    )
     return df["week"].tolist()
+
 
 def list_managers(year: Optional[int] = None) -> Sequence[str]:
     if year is None:
         df = run_query(f"SELECT DISTINCT manager FROM {T['matchup']} ORDER BY manager")
     else:
-        df = run_query(f"SELECT DISTINCT manager FROM {T['matchup']} WHERE year = {int(year)} ORDER BY manager")
+        df = run_query(
+            f"SELECT DISTINCT manager FROM {T['matchup']} WHERE year = {int(year)} ORDER BY manager"
+        )
     return df["manager"].tolist()
 
+
 def list_player_seasons() -> list[int]:
-    df = run_query(f"""
+    df = run_query(
+        f"""
         SELECT DISTINCT year
         FROM {T['player']}
         WHERE year IS NOT NULL
         ORDER BY year
-    """)
+    """
+    )
     return [] if df.empty else df["year"].astype(int).tolist()
 
+
 def list_player_weeks(year: int) -> list[int]:
-    df = run_query(f"""
+    df = run_query(
+        f"""
         SELECT DISTINCT week
         FROM {T['player']}
         WHERE year = {int(year)} AND week IS NOT NULL
         ORDER BY week
-    """)
+    """
+    )
     return [] if df.empty else df["week"].astype(int).tolist()
+
 
 def list_player_positions() -> Sequence[str]:
     """Used by the Season overview to populate the Position select."""
-    df = run_query(f"""
+    df = run_query(
+        f"""
         SELECT DISTINCT nfl_position
         FROM {T['players_by_year']}
         WHERE nfl_position IS NOT NULL
         ORDER BY nfl_position
-    """)
+    """
+    )
     return [] if df.empty else df["nfl_position"].astype(str).tolist()
 
 
@@ -236,25 +266,31 @@ def list_player_positions() -> Sequence[str]:
 # Optimal Week Helpers
 # ---------------------------------------
 
+
 @st.cache_data(show_spinner=True, ttl=120)
 def list_optimal_seasons() -> list[int]:
-    df = run_query(f"""
+    df = run_query(
+        f"""
         SELECT DISTINCT year
         FROM {get_current_league_db()}.public.players_by_year
         WHERE COALESCE(league_wide_optimal_player, 0) = 1
         ORDER BY year
-    """)
+    """
+    )
     return [] if df.empty else df["year"].astype(int).tolist()
+
 
 @st.cache_data(show_spinner=True, ttl=120)
 def list_optimal_weeks(year: int) -> list[int]:
-    df = run_query(f"""
+    df = run_query(
+        f"""
         SELECT DISTINCT week
         FROM {get_current_league_db()}.public.players_by_year
         WHERE year = {int(year)}
           AND COALESCE(league_wide_optimal_player, 0) = 1
         ORDER BY week
-    """)
+    """
+    )
     return [] if df.empty else df["week"].astype(int).tolist()
 
 
@@ -297,11 +333,15 @@ def detect_roster_structure() -> Optional[Dict]:
         """
         df = run_query(sql)
 
-        if df is not None and not df.empty and 'settings_json' in df.columns:
-            settings_str = df.iloc[0]['settings_json']
+        if df is not None and not df.empty and "settings_json" in df.columns:
+            settings_str = df.iloc[0]["settings_json"]
             if settings_str:
-                settings = json.loads(settings_str) if isinstance(settings_str, str) else settings_str
-                roster_positions = settings.get('roster_positions', [])
+                settings = (
+                    json.loads(settings_str)
+                    if isinstance(settings_str, str)
+                    else settings_str
+                )
+                roster_positions = settings.get("roster_positions", [])
 
                 if roster_positions:
                     position_counts = {}
@@ -310,8 +350,8 @@ def detect_roster_structure() -> Optional[Dict]:
                     flex_positions = []
 
                     for slot in roster_positions:
-                        pos = slot.get('position', '').upper()
-                        count = int(slot.get('count', 0))
+                        pos = slot.get("position", "").upper()
+                        count = int(slot.get("count", 0))
                         if pos and count > 0:
                             position_counts[pos] = count
 
@@ -320,16 +360,16 @@ def detect_roster_structure() -> Optional[Dict]:
                                 bench_count += count
                             else:
                                 starter_count += count
-                                if '/' in pos:
+                                if "/" in pos:
                                     flex_positions.append(pos)
 
                     if position_counts:
                         return {
-                            'starter_count': starter_count,
-                            'bench_count': bench_count,
-                            'position_counts': position_counts,
-                            'total_roster': starter_count + bench_count,
-                            'flex_positions': flex_positions
+                            "starter_count": starter_count,
+                            "bench_count": bench_count,
+                            "position_counts": position_counts,
+                            "total_roster": starter_count + bench_count,
+                            "flex_positions": flex_positions,
                         }
 
     except Exception:
@@ -365,8 +405,8 @@ def detect_roster_structure() -> Optional[Dict]:
         flex_positions = []
 
         for _, row in df.iterrows():
-            pos = str(row['fantasy_position']).upper().strip()
-            count = int(row['slot_count'])
+            pos = str(row["fantasy_position"]).upper().strip()
+            count = int(row["slot_count"])
             position_counts[pos] = count
 
             is_bench = pos in BENCH_POSITIONS
@@ -374,15 +414,15 @@ def detect_roster_structure() -> Optional[Dict]:
                 bench_count += count
             else:
                 starter_count += count
-                if '/' in pos and pos not in flex_positions:
+                if "/" in pos and pos not in flex_positions:
                     flex_positions.append(pos)
 
         return {
-            'starter_count': starter_count,
-            'bench_count': bench_count,
-            'position_counts': position_counts,
-            'total_roster': starter_count + bench_count,
-            'flex_positions': flex_positions
+            "starter_count": starter_count,
+            "bench_count": bench_count,
+            "position_counts": position_counts,
+            "total_roster": starter_count + bench_count,
+            "flex_positions": flex_positions,
         }
 
     except Exception:

@@ -27,7 +27,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
 # Import data access
@@ -36,7 +36,6 @@ from ..shared.simulation_styles import (
     render_section_header,
     render_odds_card,
     close_card,
-    render_manager_filter
 )
 
 # Slim simulation settings
@@ -49,7 +48,7 @@ def _simulate_season_slim(
     picks: Dict[Tuple[int, str, str], str],
     num_playoff_teams: int = 6,
     num_bye_teams: int = 2,
-    n_sims: int = SLIM_N_SIMS
+    n_sims: int = SLIM_N_SIMS,
 ) -> pd.DataFrame:
     """
     Run slim Monte Carlo simulation to get playoff odds.
@@ -65,29 +64,30 @@ def _simulate_season_slim(
     if current_standings.empty:
         return pd.DataFrame()
 
-    managers = current_standings['manager'].tolist()
-    n_managers = len(managers)
-    mgr_to_idx = {m: i for i, m in enumerate(managers)}
+    managers = current_standings["manager"].tolist()
+    len(managers)
+    {m: i for i, m in enumerate(managers)}
 
     # Get power ratings (mu) from standings
-    mu_map = dict(zip(
-        current_standings['manager'],
-        current_standings['team_mu'].fillna(100)
-    ))
+    mu_map = dict(
+        zip(current_standings["manager"], current_standings["team_mu"].fillna(100))
+    )
 
     # Get current wins/losses
-    base_wins = current_standings.set_index('manager')['wins_to_date'].to_dict()
-    base_losses = current_standings.set_index('manager')['losses_to_date'].to_dict()
-    base_pf = current_standings.set_index('manager')['points_for_to_date'].fillna(0).to_dict()
+    base_wins = current_standings.set_index("manager")["wins_to_date"].to_dict()
+    base_losses = current_standings.set_index("manager")["losses_to_date"].to_dict()
+    base_pf = (
+        current_standings.set_index("manager")["points_for_to_date"].fillna(0).to_dict()
+    )
 
     # Identify picked vs unpicked games
     picked_games = []
     unpicked_games = []
 
     for _, game in remaining_games.iterrows():
-        week = int(game['week'])
-        team_a = game['manager']
-        team_b = game['opponent']
+        week = int(game["week"])
+        team_a = game["manager"]
+        team_b = game["opponent"]
         key = (week, team_a, team_b)
         alt_key = (week, team_b, team_a)
 
@@ -133,10 +133,7 @@ def _simulate_season_slim(
                 sim_losses[team_a] = sim_losses.get(team_a, 0) + 1
 
         # Rank teams by wins (tiebreaker: points for)
-        standings_list = [
-            (m, sim_wins.get(m, 0), sim_pf.get(m, 0))
-            for m in managers
-        ]
+        standings_list = [(m, sim_wins.get(m, 0), sim_pf.get(m, 0)) for m in managers]
         standings_list.sort(key=lambda x: (-x[1], -x[2]))
 
         # Assign seeds and track stats
@@ -151,7 +148,10 @@ def _simulate_season_slim(
 
         # Simple championship simulation (top seeds have advantage)
         # Weight by inverse seed (seed 1 = weight 6, seed 6 = weight 1)
-        playoff_teams = [standings_list[i][0] for i in range(min(num_playoff_teams, len(standings_list)))]
+        playoff_teams = [
+            standings_list[i][0]
+            for i in range(min(num_playoff_teams, len(standings_list)))
+        ]
         if playoff_teams:
             weights = [num_playoff_teams - i for i in range(len(playoff_teams))]
             weights = np.array(weights) / sum(weights)
@@ -161,16 +161,18 @@ def _simulate_season_slim(
     # Build results DataFrame
     results = []
     for mgr in managers:
-        results.append({
-            'manager': mgr,
-            'p_playoffs': round(100 * playoff_counts[mgr] / n_sims, 1),
-            'p_bye': round(100 * bye_counts[mgr] / n_sims, 1),
-            'p_champ': round(100 * champ_counts[mgr] / n_sims, 1),
-            'avg_seed': round(seed_totals[mgr] / n_sims, 2),
-            'exp_final_wins': round(wins_totals[mgr] / n_sims, 1),
-        })
+        results.append(
+            {
+                "manager": mgr,
+                "p_playoffs": round(100 * playoff_counts[mgr] / n_sims, 1),
+                "p_bye": round(100 * bye_counts[mgr] / n_sims, 1),
+                "p_champ": round(100 * champ_counts[mgr] / n_sims, 1),
+                "avg_seed": round(seed_totals[mgr] / n_sims, 2),
+                "exp_final_wins": round(wins_totals[mgr] / n_sims, 1),
+            }
+        )
 
-    return pd.DataFrame(results).sort_values('avg_seed')
+    return pd.DataFrame(results).sort_values("avg_seed")
 
 
 def _render_scenario_odds_table(
@@ -178,7 +180,7 @@ def _render_scenario_odds_table(
     num_playoff_teams: int = 6,
     num_bye_teams: int = 2,
     color_scheme: str = "adjusted",
-    table_key: str = "odds_table"
+    table_key: str = "odds_table",
 ):
     """
     Render playoff odds table using AgGrid.
@@ -192,32 +194,32 @@ def _render_scenario_odds_table(
 
     # Prepare DataFrame for display
     display_df = odds_df.copy()
-    display_df = display_df.set_index('manager')
+    display_df = display_df.set_index("manager")
 
     # Define columns to show and color
-    color_columns = ['p_playoffs', 'p_bye', 'p_champ']
-    reverse_columns = ['avg_seed']  # Lower is better
+    color_columns = ["p_playoffs", "p_bye", "p_champ"]
+    reverse_columns = ["avg_seed"]  # Lower is better
 
     # Column display names
     column_names = {
-        'avg_seed': 'Avg Seed',
-        'p_playoffs': 'Playoff %',
-        'p_bye': 'Bye %',
-        'p_champ': 'Champ %',
-        'exp_final_wins': 'Exp Wins',
+        "avg_seed": "Avg Seed",
+        "p_playoffs": "Playoff %",
+        "p_bye": "Bye %",
+        "p_champ": "Champ %",
+        "exp_final_wins": "Exp Wins",
     }
 
     # Format specs
     format_specs = {
-        'avg_seed': '{:.2f}',
-        'p_playoffs': '{:.1f}',
-        'p_bye': '{:.1f}',
-        'p_champ': '{:.1f}',
-        'exp_final_wins': '{:.1f}',
+        "avg_seed": "{:.2f}",
+        "p_playoffs": "{:.1f}",
+        "p_bye": "{:.1f}",
+        "p_champ": "{:.1f}",
+        "exp_final_wins": "{:.1f}",
     }
 
     # Filter to relevant columns
-    cols_to_show = ['avg_seed', 'p_playoffs', 'p_bye', 'p_champ', 'exp_final_wins']
+    cols_to_show = ["avg_seed", "p_playoffs", "p_bye", "p_champ", "exp_final_wins"]
     cols_available = [c for c in cols_to_show if c in display_df.columns]
     display_df = display_df[cols_available]
 
@@ -229,12 +231,12 @@ def _render_scenario_odds_table(
     all_gradient_cols = list(set(color_columns + reverse_columns))
     for col in all_gradient_cols:
         if col in display_df.columns:
-            numeric_vals = pd.to_numeric(display_df[col], errors='coerce').dropna()
+            numeric_vals = pd.to_numeric(display_df[col], errors="coerce").dropna()
             if len(numeric_vals) > 0:
                 gradients[col] = {
-                    'min': numeric_vals.min(),
-                    'max': numeric_vals.max(),
-                    'reverse': col in reverse_columns
+                    "min": numeric_vals.min(),
+                    "max": numeric_vals.max(),
+                    "reverse": col in reverse_columns,
                 }
 
     # Rename columns for display
@@ -243,14 +245,14 @@ def _render_scenario_odds_table(
         renamed_cols[orig_col] = column_names.get(orig_col, orig_col)
 
     display_df = display_df.rename(columns=column_names)
-    color_columns_renamed = [column_names.get(c, c) for c in color_columns]
-    reverse_columns_renamed = [column_names.get(c, c) for c in reverse_columns]
+    [column_names.get(c, c) for c in color_columns]
+    [column_names.get(c, c) for c in reverse_columns]
 
     # Build GridOptions
     gb = GridOptionsBuilder.from_dataframe(display_df)
 
     for idx, col in enumerate(display_df.columns):
-        col_config = {'sortable': True, 'filter': False}
+        col_config = {"sortable": True, "filter": False}
 
         # Get original column name
         original_col = col
@@ -261,26 +263,26 @@ def _render_scenario_odds_table(
 
         # Column width
         if idx == 0:
-            col_config.update({'width': 100, 'minWidth': 80, 'maxWidth': 140})
+            col_config.update({"width": 100, "minWidth": 80, "maxWidth": 140})
         else:
-            col_config.update({'width': 70, 'minWidth': 50, 'maxWidth': 90})
+            col_config.update({"width": 70, "minWidth": 50, "maxWidth": 90})
 
         # Number formatting
         if original_col in format_specs:
             fmt = format_specs[original_col]
-            decimals = 2 if '.2f' in fmt else 1
-            no_percent = original_col in ['avg_seed', 'exp_final_wins']
-            col_config['type'] = 'numericColumn'
-            col_config['valueFormatter'] = JsCode(
+            decimals = 2 if ".2f" in fmt else 1
+            no_percent = original_col in ["avg_seed", "exp_final_wins"]
+            col_config["type"] = "numericColumn"
+            col_config["valueFormatter"] = JsCode(
                 f"(params) => params.value !== null ? params.value.toFixed({decimals}) + "
                 f"({'\"\"' if no_percent else '\"%\"'}) : '—'"
             )
 
         # Gradient coloring based on color scheme
         if original_col in gradients:
-            is_reverse = gradients[original_col]['reverse']
-            col_min = gradients[original_col]['min']
-            col_max = gradients[original_col]['max']
+            is_reverse = gradients[original_col]["reverse"]
+            col_min = gradients[original_col]["min"]
+            col_max = gradients[original_col]["max"]
 
             if color_scheme == "original":
                 # Blue-green gradient (matching Championship Odds table)
@@ -359,18 +361,20 @@ def _render_scenario_odds_table(
                 }};
             }}
             """
-            col_config['cellStyle'] = JsCode(cell_style_js)
+            col_config["cellStyle"] = JsCode(cell_style_js)
 
         gb.configure_column(col, **col_config)
 
-    gb.configure_default_column(resizable=True, filterable=False, sortable=True, editable=False)
+    gb.configure_default_column(
+        resizable=True, filterable=False, sortable=True, editable=False
+    )
     gb.configure_grid_options(
-        domLayout='normal',
+        domLayout="normal",
         enableCellTextSelection=True,
         rowHeight=36,
         headerHeight=38,
         suppressColumnVirtualisation=True,
-        suppressHorizontalScroll=False
+        suppressHorizontalScroll=False,
     )
 
     # Custom CSS based on color scheme
@@ -387,14 +391,14 @@ def _render_scenario_odds_table(
             "font-size": "0.85em",
             "padding": "4px 6px",
             "background": header_bg,
-            "color": "white"
+            "color": "white",
         },
         ".ag-cell": {"font-size": "0.85em", "padding": "4px 6px"},
         ".ag-root-wrapper": {
             "border-radius": "8px",
             "overflow": "hidden",
-            "box-shadow": f"0 2px 8px {shadow_color}"
-        }
+            "box-shadow": f"0 2px 8px {shadow_color}",
+        },
     }
 
     grid_options = gb.build()
@@ -407,12 +411,10 @@ def _render_scenario_odds_table(
         allow_unsafe_jscode=True,
         custom_css=custom_css,
         height=table_height,
-        theme='streamlit',
+        theme="streamlit",
         fit_columns_on_grid_load=True,
-        key=table_key
+        key=table_key,
     )
-
-
 
 
 def _get_remaining_schedule_from_schedule_table(year: int) -> pd.DataFrame:
@@ -437,11 +439,10 @@ def _get_remaining_schedule_from_schedule_table(year: int) -> pd.DataFrame:
             return remaining
 
         # Deduplicate matchups (each game appears twice - once per team)
-        remaining['matchup_key'] = remaining.apply(
-            lambda r: tuple(sorted([str(r['manager']), str(r['opponent'])])),
-            axis=1
+        remaining["matchup_key"] = remaining.apply(
+            lambda r: tuple(sorted([str(r["manager"]), str(r["opponent"])])), axis=1
         )
-        remaining = remaining.drop_duplicates(subset=['year', 'week', 'matchup_key'])
+        remaining = remaining.drop_duplicates(subset=["year", "week", "matchup_key"])
 
         return remaining
 
@@ -453,48 +454,51 @@ def _get_remaining_schedule_from_schedule_table(year: int) -> pd.DataFrame:
 def _get_current_standings(df: pd.DataFrame, year: int, week: int) -> pd.DataFrame:
     """Get current standings as of specified week."""
     current = df[
-        (df['year'] == year) &
-        (df['week'] == week) &
-        (df['is_playoffs'] == 0) &
-        (df['is_consolation'] == 0)
+        (df["year"] == year)
+        & (df["week"] == week)
+        & (df["is_playoffs"] == 0)
+        & (df["is_consolation"] == 0)
     ].copy()
 
     if current.empty:
         return pd.DataFrame()
 
     # Determine points column name (could be points_for_to_date or points_scored_to_date)
-    pts_col = 'points_scored_to_date' if 'points_scored_to_date' in current.columns else 'points_for_to_date'
+    pts_col = (
+        "points_scored_to_date"
+        if "points_scored_to_date" in current.columns
+        else "points_for_to_date"
+    )
 
     # Build aggregation dict dynamically based on available columns
     agg_dict = {
-        'wins_to_date': 'max',
-        'losses_to_date': 'max',
+        "wins_to_date": "max",
+        "losses_to_date": "max",
     }
 
     if pts_col in current.columns:
-        agg_dict[pts_col] = 'max'
-    if 'team_mu' in current.columns:
-        agg_dict['team_mu'] = 'mean'
-    if 'team_sigma' in current.columns:
-        agg_dict['team_sigma'] = 'mean'
+        agg_dict[pts_col] = "max"
+    if "team_mu" in current.columns:
+        agg_dict["team_mu"] = "mean"
+    if "team_sigma" in current.columns:
+        agg_dict["team_sigma"] = "mean"
 
-    standings = current.groupby('manager').agg(agg_dict).reset_index()
+    standings = current.groupby("manager").agg(agg_dict).reset_index()
 
     # Normalize column name to points_for_to_date for consistency
-    if pts_col in standings.columns and pts_col != 'points_for_to_date':
-        standings['points_for_to_date'] = standings[pts_col]
+    if pts_col in standings.columns and pts_col != "points_for_to_date":
+        standings["points_for_to_date"] = standings[pts_col]
 
     # Fill missing columns
-    if 'points_for_to_date' not in standings.columns:
-        standings['points_for_to_date'] = 0
-    if 'team_mu' not in standings.columns:
-        standings['team_mu'] = 100
-    if 'team_sigma' not in standings.columns:
-        standings['team_sigma'] = 20
+    if "points_for_to_date" not in standings.columns:
+        standings["points_for_to_date"] = 0
+    if "team_mu" not in standings.columns:
+        standings["team_mu"] = 100
+    if "team_sigma" not in standings.columns:
+        standings["team_sigma"] = 20
 
     return standings.sort_values(
-        ['wins_to_date', 'points_for_to_date'],
-        ascending=[False, False]
+        ["wins_to_date", "points_for_to_date"], ascending=[False, False]
     ).reset_index(drop=True)
 
 
@@ -505,13 +509,11 @@ def _simulate_game(team_a_mu: float, team_b_mu: float, scale: float = 25.0) -> s
     Uses logistic function: P(A wins) = 1 / (1 + 10^((mu_B - mu_A) / scale))
     """
     p_a_wins = 1 / (1 + 10 ** ((team_b_mu - team_a_mu) / scale))
-    return 'A' if np.random.random() < p_a_wins else 'B'
+    return "A" if np.random.random() < p_a_wins else "B"
 
 
 def _simulate_all_games(
-    remaining_games: pd.DataFrame,
-    standings: pd.DataFrame,
-    mode: str = "simulate"
+    remaining_games: pd.DataFrame, standings: pd.DataFrame, mode: str = "simulate"
 ) -> Dict[Tuple[int, str, str], str]:
     """
     Simulate ALL remaining games (replaces any existing picks).
@@ -524,12 +526,12 @@ def _simulate_all_games(
     new_picks = {}
 
     # Get team power ratings
-    mu_map = dict(zip(standings['manager'], standings['team_mu'].fillna(100)))
+    mu_map = dict(zip(standings["manager"], standings["team_mu"].fillna(100)))
 
     for _, row in remaining_games.iterrows():
-        week = row['week']
-        team_a = row['manager']
-        team_b = row['opponent']
+        week = row["week"]
+        team_a = row["manager"]
+        team_b = row["opponent"]
 
         key = (week, team_a, team_b)
 
@@ -542,7 +544,7 @@ def _simulate_all_games(
             winner = team_a if mu_a < mu_b else team_b
         else:
             result = _simulate_game(mu_a, mu_b)
-            winner = team_a if result == 'A' else team_b
+            winner = team_a if result == "A" else team_b
 
         new_picks[key] = winner
 
@@ -565,22 +567,28 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
     # Load data if not provided
     if matchup_data_df is None:
         with st.spinner("Loading data..."):
-            matchup_data_df = run_query(f"""
+            matchup_data_df = run_query(
+                f"""
                 SELECT * FROM {T['matchup']}
                 WHERE is_playoffs = 0 AND is_consolation = 0
                 ORDER BY year DESC, week DESC
-            """)
+            """
+            )
 
     if matchup_data_df.empty:
         st.info("No matchup data available.")
         return
 
     # Ensure numeric types
-    matchup_data_df['year'] = pd.to_numeric(matchup_data_df['year'], errors='coerce').astype(int)
-    matchup_data_df['week'] = pd.to_numeric(matchup_data_df['week'], errors='coerce').astype(int)
+    matchup_data_df["year"] = pd.to_numeric(
+        matchup_data_df["year"], errors="coerce"
+    ).astype(int)
+    matchup_data_df["week"] = pd.to_numeric(
+        matchup_data_df["week"], errors="coerce"
+    ).astype(int)
 
     # Selection mode with session state buttons
-    years = sorted(matchup_data_df['year'].unique(), reverse=True)
+    years = sorted(matchup_data_df["year"].unique(), reverse=True)
     max_year = years[0] if years else None
 
     mode_key = "pm_mode"
@@ -591,9 +599,13 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
     mode_cols = st.columns(2)
     for idx, (col, name) in enumerate(zip(mode_cols, modes)):
         with col:
-            is_active = (st.session_state[mode_key] == idx)
-            if st.button(name, key=f"pm_mode_btn_{idx}", use_container_width=True,
-                        type="primary" if is_active else "secondary"):
+            is_active = st.session_state[mode_key] == idx
+            if st.button(
+                name,
+                key=f"pm_mode_btn_{idx}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+            ):
                 if not is_active:
                     st.session_state[mode_key] = idx
                     st.rerun()
@@ -604,30 +616,25 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
 
     if mode == "Today's Date":
         selected_year = max_year
-        year_data = matchup_data_df[matchup_data_df['year'] == selected_year]
-        current_week = int(year_data['week'].max())
+        year_data = matchup_data_df[matchup_data_df["year"] == selected_year]
+        current_week = int(year_data["week"].max())
         st.caption(f"📅 Auto-selected Year {selected_year}, Week {current_week}")
         show_machine = True
     else:
         col1, col2, col3 = st.columns([2, 2, 1])
 
         with col1:
-            selected_year = st.selectbox(
-                "Season",
-                years,
-                index=0,
-                key="pm_year"
-            )
+            selected_year = st.selectbox("Season", years, index=0, key="pm_year")
 
-        year_data = matchup_data_df[matchup_data_df['year'] == selected_year]
-        all_weeks = sorted(year_data['week'].unique())
+        year_data = matchup_data_df[matchup_data_df["year"] == selected_year]
+        all_weeks = sorted(year_data["week"].unique())
 
         with col2:
             current_week = st.selectbox(
                 "Week",
                 all_weeks,
                 index=len(all_weeks) - 1 if all_weeks else 0,
-                key="pm_week"
+                key="pm_week",
             )
 
         with col3:
@@ -650,9 +657,9 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
     st.markdown("---")
 
     # Initialize session state for picks and active mode
-    if 'playoff_picks' not in st.session_state:
+    if "playoff_picks" not in st.session_state:
         st.session_state.playoff_picks = {}
-    if 'pm_active_mode' not in st.session_state:
+    if "pm_active_mode" not in st.session_state:
         st.session_state.pm_active_mode = None
 
     # Control buttons - compact layout with active state styling
@@ -664,21 +671,27 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
     with btn_cols[0]:
         sim_type = "primary" if active_mode == "simulate" else "secondary"
         if st.button("🎲 Simulate", key="pm_simulate", type=sim_type):
-            st.session_state.playoff_picks = _simulate_all_games(remaining_games, current_standings, "simulate")
+            st.session_state.playoff_picks = _simulate_all_games(
+                remaining_games, current_standings, "simulate"
+            )
             st.session_state.pm_active_mode = "simulate"
             st.rerun(scope="fragment")
 
     with btn_cols[1]:
         fav_type = "primary" if active_mode == "favorites" else "secondary"
         if st.button("⭐ Favorites", key="pm_favorites", type=fav_type):
-            st.session_state.playoff_picks = _simulate_all_games(remaining_games, current_standings, "favorites")
+            st.session_state.playoff_picks = _simulate_all_games(
+                remaining_games, current_standings, "favorites"
+            )
             st.session_state.pm_active_mode = "favorites"
             st.rerun(scope="fragment")
 
     with btn_cols[2]:
         und_type = "primary" if active_mode == "underdogs" else "secondary"
         if st.button("🐕 Underdogs", key="pm_underdogs", type=und_type):
-            st.session_state.playoff_picks = _simulate_all_games(remaining_games, current_standings, "underdogs")
+            st.session_state.playoff_picks = _simulate_all_games(
+                remaining_games, current_standings, "underdogs"
+            )
             st.session_state.pm_active_mode = "underdogs"
             st.rerun(scope="fragment")
 
@@ -693,7 +706,9 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
 
     st.markdown("---")
 
-    _render_standings(current_standings, remaining_games, st.session_state.playoff_picks)
+    _render_standings(
+        current_standings, remaining_games, st.session_state.playoff_picks
+    )
 
 
 def _render_remaining_games(remaining_games: pd.DataFrame):
@@ -705,7 +720,8 @@ def _render_remaining_games(remaining_games: pd.DataFrame):
         return
 
     # Inject CSS for compact matchup styling
-    st.markdown("""
+    st.markdown(
+        """
     <style>
     .week-label {
         font-size: 0.9em;
@@ -779,28 +795,33 @@ def _render_remaining_games(remaining_games: pd.DataFrame):
         }
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     # Wrap all matchups in matchup-picks class for CSS scoping
     st.markdown('<div class="matchup-picks">', unsafe_allow_html=True)
 
     # Group by week
-    weeks = sorted(remaining_games['week'].unique())
+    weeks = sorted(remaining_games["week"].unique())
     first_week = weeks[0] if weeks else None
 
     for week in weeks:
-        week_games = remaining_games[remaining_games['week'] == week]
-        games_list = week_games.to_dict('records')
+        week_games = remaining_games[remaining_games["week"] == week]
+        games_list = week_games.to_dict("records")
 
         # First week expanded, future weeks in expander
         if week == first_week:
-            st.markdown(f"<div class='week-label'>Week {int(week)}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div class='week-label'>Week {int(week)}</div>",
+                unsafe_allow_html=True,
+            )
             _render_week_matchups(week, games_list)
         else:
             with st.expander(f"Week {int(week)}", expanded=False):
                 _render_week_matchups(week, games_list)
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # Inject JavaScript to style loser buttons after all matchups rendered
     _inject_loser_button_styles()
@@ -812,18 +833,20 @@ def _render_week_matchups(week: int, games_list: list):
     matchups_per_row = 3
 
     for row_start in range(0, num_games, matchups_per_row):
-        row_games = games_list[row_start:row_start + matchups_per_row]
+        row_games = games_list[row_start : row_start + matchups_per_row]
 
         # Always create 3 columns for consistent widths (some may be empty)
         matchup_cols = st.columns(3)
 
         for game_idx, game in enumerate(row_games):
-            team_a = game['manager']
-            team_b = game['opponent']
+            team_a = game["manager"]
+            team_b = game["opponent"]
 
             key = (int(week), team_a, team_b)
             alt_key = (int(week), team_b, team_a)
-            current_pick = st.session_state.playoff_picks.get(key) or st.session_state.playoff_picks.get(alt_key)
+            current_pick = st.session_state.playoff_picks.get(
+                key
+            ) or st.session_state.playoff_picks.get(alt_key)
 
             with matchup_cols[game_idx]:
                 # Framed matchup container
@@ -851,16 +874,24 @@ def _render_week_matchups(week: int, games_list: list):
                             label_a = team_a
                             type_a = "secondary"
 
-                        if st.button(label_a, key=f"pm_{week}_{team_a}_{team_b}_a",
-                                    type=type_a, use_container_width=True):
+                        if st.button(
+                            label_a,
+                            key=f"pm_{week}_{team_a}_{team_b}_a",
+                            type=type_a,
+                            use_container_width=True,
+                        ):
                             st.session_state.playoff_picks[key] = team_a
                             if alt_key in st.session_state.playoff_picks:
                                 del st.session_state.playoff_picks[alt_key]
-                            st.session_state.pm_active_mode = None  # Clear active mode on manual pick
+                            st.session_state.pm_active_mode = (
+                                None  # Clear active mode on manual pick
+                            )
                             st.rerun(scope="fragment")
 
                     with inner_cols[1]:
-                        st.markdown("<div class='vs-text'>vs</div>", unsafe_allow_html=True)
+                        st.markdown(
+                            "<div class='vs-text'>vs</div>", unsafe_allow_html=True
+                        )
 
                     with inner_cols[2]:
                         if b_is_winner:
@@ -873,18 +904,25 @@ def _render_week_matchups(week: int, games_list: list):
                             label_b = team_b
                             type_b = "secondary"
 
-                        if st.button(label_b, key=f"pm_{week}_{team_a}_{team_b}_b",
-                                    type=type_b, use_container_width=True):
+                        if st.button(
+                            label_b,
+                            key=f"pm_{week}_{team_a}_{team_b}_b",
+                            type=type_b,
+                            use_container_width=True,
+                        ):
                             st.session_state.playoff_picks[key] = team_b
                             if alt_key in st.session_state.playoff_picks:
                                 del st.session_state.playoff_picks[alt_key]
-                            st.session_state.pm_active_mode = None  # Clear active mode on manual pick
+                            st.session_state.pm_active_mode = (
+                                None  # Clear active mode on manual pick
+                            )
                             st.rerun(scope="fragment")
 
 
 def _inject_loser_button_styles():
     """Inject JavaScript to style loser buttons (✗) as red."""
-    components.html("""
+    components.html(
+        """
     <script>
     function styleLoserButtons() {
         const buttons = parent.document.querySelectorAll('button');
@@ -902,10 +940,14 @@ def _inject_loser_button_styles():
     setTimeout(styleLoserButtons, 100);
     setTimeout(styleLoserButtons, 300);
     </script>
-    """, height=0)
+    """,
+        height=0,
+    )
 
 
-def _render_standings(current_standings: pd.DataFrame, remaining_games: pd.DataFrame, picks: Dict):
+def _render_standings(
+    current_standings: pd.DataFrame, remaining_games: pd.DataFrame, picks: Dict
+):
     """Render original and adjusted playoff odds tables side by side."""
     st.markdown("**Playoff Odds Comparison**")
 
@@ -926,7 +968,7 @@ def _render_standings(current_standings: pd.DataFrame, remaining_games: pd.DataF
             remaining_games,
             {},  # Empty picks = original odds
             num_playoff_teams=num_playoff_teams,
-            num_bye_teams=num_bye_teams
+            num_bye_teams=num_bye_teams,
         )
 
         # Adjusted odds - with user picks
@@ -935,7 +977,7 @@ def _render_standings(current_standings: pd.DataFrame, remaining_games: pd.DataF
             remaining_games,
             picks,
             num_playoff_teams=num_playoff_teams,
-            num_bye_teams=num_bye_teams
+            num_bye_teams=num_bye_teams,
         )
 
     if original_odds.empty or adjusted_odds.empty:
@@ -947,12 +989,24 @@ def _render_standings(current_standings: pd.DataFrame, remaining_games: pd.DataF
 
     with col1:
         render_odds_card("Original Odds", "", "Before picks")
-        _render_scenario_odds_table(original_odds, num_playoff_teams, num_bye_teams, color_scheme="original", table_key="pm_original_odds")
+        _render_scenario_odds_table(
+            original_odds,
+            num_playoff_teams,
+            num_bye_teams,
+            color_scheme="original",
+            table_key="pm_original_odds",
+        )
         close_card()
 
     with col2:
         render_odds_card("Adjusted Odds", "", "With selections")
-        _render_scenario_odds_table(adjusted_odds, num_playoff_teams, num_bye_teams, color_scheme="original", table_key="pm_adjusted_odds")
+        _render_scenario_odds_table(
+            adjusted_odds,
+            num_playoff_teams,
+            num_bye_teams,
+            color_scheme="original",
+            table_key="pm_adjusted_odds",
+        )
         close_card()
 
 

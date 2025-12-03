@@ -34,11 +34,14 @@ def _safe_boot() -> bool:
     """Cheap health check for MD connectivity."""
     try:
         from md.core import run_query
+
         run_query("SELECT 1")
         return True
     except Exception as e:
         st.error(f"MotherDuck unavailable: {e}")
-        st.info("Check Streamlit Secrets (MOTHERDUCK_TOKEN, MD_ATTACH_URL) and your shared DB path.")
+        st.info(
+            "Check Streamlit Secrets (MOTHERDUCK_TOKEN, MD_ATTACH_URL) and your shared DB path."
+        )
         return False
 
 
@@ -47,6 +50,7 @@ def _init_session_defaults():
     # Only query latest_season_and_week if not already cached
     if "year" not in st.session_state or "week" not in st.session_state:
         from md.core import latest_season_and_week
+
         try:
             y, w = latest_season_and_week()
             st.session_state["year"] = int(y) if y else 0
@@ -60,6 +64,7 @@ def _init_session_defaults():
 
 
 # ============= Lazy Tab Loaders =============
+
 
 @cached_data_loader(ttl=300, spinner_text="Loading homepage...")
 def load_homepage_tab():
@@ -117,6 +122,7 @@ def load_draft_tab():
     """Lazy load draft data with optimized column selection"""
     with monitor.time_operation("load_draft"):
         from md.tab_data_access.draft import load_optimized_draft_data
+
         return load_optimized_draft_data()
 
 
@@ -125,6 +131,7 @@ def load_transactions_tab():
     """Lazy load transactions data with optimized column selection"""
     with monitor.time_operation("load_transactions"):
         from md.tab_data_access.transactions import load_optimized_transactions_data
+
         return load_optimized_transactions_data()
 
 
@@ -133,16 +140,19 @@ def load_simulations_tab():
     """Lazy load simulations data with optimized data access"""
     with monitor.time_operation("load_simulations"):
         from md.tab_data_access.simulations import load_optimized_simulations_data
+
         return load_optimized_simulations_data()
 
 
 # ============= Tab Renderers =============
+
 
 @st.fragment
 def render_home_tab():
     """Render homepage with lazy loading"""
     data = load_homepage_tab()
     from tabs.homepage.homepage_overview import display_homepage_overview
+
     display_homepage_overview(data)
 
 
@@ -152,6 +162,7 @@ def render_managers_tab():
     data = load_managers_tab()
     if "error" not in data:
         from tabs.matchups.matchup_overview import display_matchup_overview
+
         display_matchup_overview(data)
     else:
         st.error(f"Failed to load managers data: {data['error']}")
@@ -161,6 +172,7 @@ def render_managers_tab():
 def render_team_stats_tab():
     """Render team stats tab"""
     from tabs.team_stats.team_stats_overview import display_team_stats_overview
+
     display_team_stats_overview()
 
 
@@ -184,7 +196,9 @@ def render_players_tab():
 def render_players_weekly():
     """Weekly players view"""
     from md.tab_data_access.players import load_weekly_player_data
-    from tabs.player_stats.weekly_player_stats_optimized import OptimizedWeeklyPlayerViewer
+    from tabs.player_stats.weekly_player_stats_optimized import (
+        OptimizedWeeklyPlayerViewer,
+    )
 
     st.session_state.setdefault("weekly_offset", 0)
     st.session_state.setdefault("weekly_limit", 100)
@@ -195,8 +209,7 @@ def render_players_weekly():
 
     with st.spinner("Loading weekly player data..."):
         weekly_data = get_weekly_data(
-            st.session_state.weekly_offset,
-            st.session_state.weekly_limit
+            st.session_state.weekly_offset, st.session_state.weekly_limit
         )
         if weekly_data is not None and not weekly_data.empty:
             OptimizedWeeklyPlayerViewer(weekly_data).display()
@@ -207,7 +220,9 @@ def render_players_weekly():
 @st.fragment
 def render_players_season():
     """Season players view"""
-    from tabs.player_stats.season_player_stats_optimized import OptimizedSeasonPlayerViewer
+    from tabs.player_stats.season_player_stats_optimized import (
+        OptimizedSeasonPlayerViewer,
+    )
 
     st.session_state.setdefault("_current_season_position", "All")
 
@@ -218,7 +233,9 @@ def render_players_season():
 @st.fragment
 def render_players_career():
     """Career players view"""
-    from tabs.player_stats.career_player_stats_optimized import OptimizedCareerPlayerViewer
+    from tabs.player_stats.career_player_stats_optimized import (
+        OptimizedCareerPlayerViewer,
+    )
 
     with st.spinner("Loading career player data..."):
         OptimizedCareerPlayerViewer().display()
@@ -235,61 +252,117 @@ def render_players_visualize():
         with tabs[0]:
             graph_tabs = st.tabs(["Player Card", "Weekly Heatmap", "Scoring Trends"])
             with graph_tabs[0]:
-                from tabs.player_stats.graphs.player_graphs.player_card import display_player_card
+                from tabs.player_stats.graphs.player_graphs.player_card import (
+                    display_player_card,
+                )
+
                 display_player_card(prefix="players_card")
             with graph_tabs[1]:
-                from tabs.player_stats.graphs.player_graphs.weekly_heatmap import display_weekly_performance_heatmap
+                from tabs.player_stats.graphs.player_graphs.weekly_heatmap import (
+                    display_weekly_performance_heatmap,
+                )
+
                 display_weekly_performance_heatmap(prefix="players_heatmap")
             with graph_tabs[2]:
-                from tabs.player_stats.graphs.player_graphs.player_scoring_graph import display_player_scoring_graphs
+                from tabs.player_stats.graphs.player_graphs.player_scoring_graph import (
+                    display_player_scoring_graphs,
+                )
+
                 display_player_scoring_graphs(prefix="players_player_scoring")
 
         # Tab 2: Player Analysis
         with tabs[1]:
             graph_tabs = st.tabs(["Consistency", "Boom/Bust", "Radar Comparison"])
             with graph_tabs[0]:
-                from tabs.player_stats.graphs.player_graphs.player_consistency import display_player_consistency_graph
+                from tabs.player_stats.graphs.player_graphs.player_consistency import (
+                    display_player_consistency_graph,
+                )
+
                 display_player_consistency_graph(prefix="players_consistency")
             with graph_tabs[1]:
-                from tabs.player_stats.graphs.player_graphs.boom_bust_distribution import display_boom_bust_distribution
+                from tabs.player_stats.graphs.player_graphs.boom_bust_distribution import (
+                    display_boom_bust_distribution,
+                )
+
                 display_boom_bust_distribution(prefix="players_boom_bust")
             with graph_tabs[2]:
-                from tabs.player_stats.graphs.player_graphs.player_radar_comparison import display_player_radar_comparison
+                from tabs.player_stats.graphs.player_graphs.player_radar_comparison import (
+                    display_player_radar_comparison,
+                )
+
                 display_player_radar_comparison(prefix="players_radar")
 
         # Tab 3: SPAR Efficiency
         with tabs[2]:
-            graph_tabs = st.tabs(["Capture Rate", "Per Week", "Waterfall", "Scatter", "Cumulative", "vs PPG"])
+            graph_tabs = st.tabs(
+                [
+                    "Capture Rate",
+                    "Per Week",
+                    "Waterfall",
+                    "Scatter",
+                    "Cumulative",
+                    "vs PPG",
+                ]
+            )
             with graph_tabs[0]:
-                from tabs.player_stats.graphs.spar_graphs.manager_capture_rate import display_manager_spar_capture_rate
+                from tabs.player_stats.graphs.spar_graphs.manager_capture_rate import (
+                    display_manager_spar_capture_rate,
+                )
+
                 display_manager_spar_capture_rate(prefix="spar_capture")
             with graph_tabs[1]:
-                from tabs.player_stats.graphs.spar_graphs.spar_per_week import display_spar_per_week_played
+                from tabs.player_stats.graphs.spar_graphs.spar_per_week import (
+                    display_spar_per_week_played,
+                )
+
                 display_spar_per_week_played(prefix="spar_week")
             with graph_tabs[2]:
-                from tabs.player_stats.graphs.spar_graphs.weekly_spar_waterfall import display_weekly_spar_waterfall
+                from tabs.player_stats.graphs.spar_graphs.weekly_spar_waterfall import (
+                    display_weekly_spar_waterfall,
+                )
+
                 display_weekly_spar_waterfall(prefix="spar_waterfall")
             with graph_tabs[3]:
-                from tabs.player_stats.graphs.spar_graphs.spar_consistency_scatter import display_spar_consistency_scatter
+                from tabs.player_stats.graphs.spar_graphs.spar_consistency_scatter import (
+                    display_spar_consistency_scatter,
+                )
+
                 display_spar_consistency_scatter(prefix="spar_consistency")
             with graph_tabs[4]:
-                from tabs.player_stats.graphs.spar_graphs.cumulative_spar import display_cumulative_spar_over_season
+                from tabs.player_stats.graphs.spar_graphs.cumulative_spar import (
+                    display_cumulative_spar_over_season,
+                )
+
                 display_cumulative_spar_over_season(prefix="spar_cumulative")
             with graph_tabs[5]:
-                from tabs.player_stats.graphs.spar_graphs.spar_vs_ppg_efficiency import display_spar_vs_ppg_efficiency
+                from tabs.player_stats.graphs.spar_graphs.spar_vs_ppg_efficiency import (
+                    display_spar_vs_ppg_efficiency,
+                )
+
                 display_spar_vs_ppg_efficiency(prefix="spar_ppg")
 
         # Tab 4: League Trends
         with tabs[3]:
-            graph_tabs = st.tabs(["Position Groups", "SPAR Distribution", "Leaderboard"])
+            graph_tabs = st.tabs(
+                ["Position Groups", "SPAR Distribution", "Leaderboard"]
+            )
             with graph_tabs[0]:
-                from tabs.player_stats.graphs.league_graphs.position_group_scoring import display_position_group_scoring_graphs
+                from tabs.player_stats.graphs.league_graphs.position_group_scoring import (
+                    display_position_group_scoring_graphs,
+                )
+
                 display_position_group_scoring_graphs(prefix="league_pos_group")
             with graph_tabs[1]:
-                from tabs.player_stats.graphs.league_graphs.position_spar_boxplot import display_position_spar_boxplot
+                from tabs.player_stats.graphs.league_graphs.position_spar_boxplot import (
+                    display_position_spar_boxplot,
+                )
+
                 display_position_spar_boxplot(prefix="league_spar_box")
             with graph_tabs[2]:
-                from tabs.player_stats.graphs.league_graphs.manager_spar_leaderboard import display_manager_spar_leaderboard
+                from tabs.player_stats.graphs.league_graphs.manager_spar_leaderboard import (
+                    display_manager_spar_leaderboard,
+                )
+
                 display_manager_spar_leaderboard(prefix="league_manager_board")
 
     except Exception as e:
@@ -303,6 +376,7 @@ def render_draft_tab():
     data = load_draft_tab()
     if "error" not in data:
         from tabs.draft_data.draft_data_overview import display_draft_data_overview
+
         display_draft_data_overview(data)
     else:
         st.error(f"Failed to load draft data: {data['error']}")
@@ -314,11 +388,12 @@ def render_transactions_tab():
     data = load_transactions_tab()
 
     if "error" not in data:
-        from tabs.transactions.transactions_overview import display_transactions_overview
+        from tabs.transactions.transactions_overview import (
+            display_transactions_overview,
+        )
+
         display_transactions_overview(
-            data["transactions"],
-            data["player_data"],
-            data["draft_data"]
+            data["transactions"], data["player_data"], data["draft_data"]
         )
     else:
         st.error(f"Failed to load transactions data: {data['error']}")
@@ -331,6 +406,7 @@ def render_simulations_tab():
 
     if "error" not in data:
         from tabs.simulations.simulations_overview import display_simulations_overview
+
         display_simulations_overview(data["matchups"])
     else:
         st.error(f"Failed to load simulations data: {data['error']}")
@@ -373,7 +449,7 @@ def main():
             page_title="KMFFL Analytics",
             layout="wide",
             page_icon="🏈",
-            initial_sidebar_state="collapsed"
+            initial_sidebar_state="collapsed",
         )
     except st.errors.StreamlitAPIException:
         # Page config already set by parent (main.py)
@@ -381,6 +457,7 @@ def main():
 
     # Apply modern styles
     from tabs.shared.modern_styles import apply_modern_styles
+
     apply_modern_styles()
 
     # Check connectivity
@@ -391,12 +468,28 @@ def main():
     _init_session_defaults()
 
     # Navigation structure: main tabs and their subtabs
-    tab_names = ["Home", "Managers", "Team Stats", "Players", "Draft", "Transactions", "Simulations", "Extras"]
+    tab_names = [
+        "Home",
+        "Managers",
+        "Team Stats",
+        "Players",
+        "Draft",
+        "Transactions",
+        "Simulations",
+        "Extras",
+    ]
     tab_icons = ["🏠", "⚔️", "📊", "👤", "🎯", "💼", "🔮", "⭐"]
 
     # Subtabs for each main section (None = no subtabs)
     subtabs = {
-        "Home": ["Overview", "Hall of Fame", "Standings", "Schedules", "Head-to-Head", "Recaps"],
+        "Home": [
+            "Overview",
+            "Hall of Fame",
+            "Standings",
+            "Schedules",
+            "Head-to-Head",
+            "Recaps",
+        ],
         "Managers": ["Weekly", "Seasons", "Career", "Visualize"],
         "Team Stats": ["Weekly", "Seasons", "Career"],
         "Players": ["Weekly", "Season", "Career", "Visualize"],
@@ -412,7 +505,8 @@ def main():
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
     # Clean hamburger menu - main sections only, subtabs shown as horizontal tabs in content
-    st.markdown("""
+    st.markdown(
+        """
     <style>
     /* Wider popover */
     [data-testid="stPopoverBody"] {
@@ -496,17 +590,27 @@ def main():
         }
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     # Simple hamburger menu - main sections only
     with st.popover("☰ Menu"):
         for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
-            is_current = (i == current_idx)
+            is_current = i == current_idx
 
             if is_current:
-                st.button(f"{icon} {name}", key=f"current_{name}", use_container_width=True, type="primary", disabled=True)
+                st.button(
+                    f"{icon} {name}",
+                    key=f"current_{name}",
+                    use_container_width=True,
+                    type="primary",
+                    disabled=True,
+                )
             else:
-                if st.button(f"{icon} {name}", key=f"main_{i}", use_container_width=True):
+                if st.button(
+                    f"{icon} {name}", key=f"main_{i}", use_container_width=True
+                ):
                     st.session_state["active_main_tab"] = i
                     st.session_state[f"subtab_{name}"] = 0
                     st.rerun()
@@ -520,9 +624,14 @@ def main():
         cols = st.columns(len(section_subtabs))
         for idx, (col, subtab_name) in enumerate(zip(cols, section_subtabs)):
             with col:
-                is_active = (idx == current_subtab_idx)
+                is_active = idx == current_subtab_idx
                 btn_type = "primary" if is_active else "secondary"
-                if st.button(subtab_name, key=f"subtab_btn_{selected_tab}_{idx}", use_container_width=True, type=btn_type):
+                if st.button(
+                    subtab_name,
+                    key=f"subtab_btn_{selected_tab}_{idx}",
+                    use_container_width=True,
+                    type=btn_type,
+                ):
                     if not is_active:
                         st.session_state[f"subtab_{selected_tab}"] = idx
                         st.rerun()

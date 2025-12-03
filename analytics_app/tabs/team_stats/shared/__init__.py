@@ -9,8 +9,8 @@ This package contains reusable components:
 """
 
 __all__ = [
-    'constants',
-    'theme',
-    'modern_styles',
-    'filters',
+    "constants",
+    "theme",
+    "modern_styles",
+    "filters",
 ]

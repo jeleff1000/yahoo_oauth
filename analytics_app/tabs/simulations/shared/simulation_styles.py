@@ -26,7 +26,8 @@ def apply_simulation_styles():
     - Compact controls
     - Mobile-responsive layouts
     """
-    st.markdown("""
+    st.markdown(
+        """
     <style>
     /* ===========================================
        SIMULATION UNIFIED NAVIGATION
@@ -521,7 +522,9 @@ def apply_simulation_styles():
         margin-bottom: 0.25rem !important;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_summary_tiles(tiles: List[Dict[str, Any]]) -> None:
@@ -535,9 +538,9 @@ def render_summary_tiles(tiles: List[Dict[str, Any]]) -> None:
     for col, tile in zip(cols, tiles):
         with col:
             st.metric(
-                label=tile['label'],
-                value=tile['value'],
-                delta=tile.get('sublabel', None)
+                label=tile["label"],
+                value=tile["value"],
+                delta=tile.get("sublabel", None),
             )
 
 
@@ -557,7 +560,7 @@ def render_metric_row(metrics: List[Dict[str, Any]]) -> None:
     cols = st.columns(len(metrics))
     for col, m in zip(cols, metrics):
         with col:
-            icon = m.get('icon', '')
+            icon = m.get("icon", "")
             st.caption(f"{icon} **{m['label']}:** {m['value']}")
 
 
@@ -590,9 +593,7 @@ def close_card() -> None:
 
 
 def render_summary_panel(
-    title: str,
-    stats: List[Dict[str, str]],
-    expanded: bool = True
+    title: str, stats: List[Dict[str, str]], expanded: bool = True
 ) -> None:
     """
     Render a collapsible summary panel using native Streamlit expander.
@@ -606,14 +607,14 @@ def render_summary_panel(
         cols = st.columns(len(stats))
         for col, stat in zip(cols, stats):
             with col:
-                st.caption(stat['label'])
+                st.caption(stat["label"])
                 st.markdown(f"**{stat['value']}**")
 
 
 def render_manager_filter(
     managers: List[str],
     key: str = "sim_manager_filter",
-    label: str = "Filter by Manager"
+    label: str = "Filter by Manager",
 ) -> Optional[str]:
     """
     Render a manager filter dropdown.
@@ -622,19 +623,12 @@ def render_manager_filter(
         Selected manager name or None if "All Managers" selected
     """
     options = ["All Managers"] + sorted(managers)
-    selected = st.selectbox(
-        label,
-        options,
-        key=key,
-        label_visibility="collapsed"
-    )
+    selected = st.selectbox(label, options, key=key, label_visibility="collapsed")
     return None if selected == "All Managers" else selected
 
 
 def compact_week_selector(
-    base_df: pd.DataFrame,
-    prefix: str,
-    show_go_button: bool = False
+    base_df: pd.DataFrame, prefix: str, show_go_button: bool = False
 ) -> Tuple[Optional[int], Optional[int], bool]:
     """
     Compact week selector with Today's Date / Specific Week toggle.
@@ -653,12 +647,12 @@ def compact_week_selector(
 
     for idx, (col, name) in enumerate(zip(cols[:2], modes)):
         with col:
-            is_active = (st.session_state[mode_key] == idx)
+            is_active = st.session_state[mode_key] == idx
             if st.button(
                 name,
                 key=f"{prefix}_mode_{idx}",
                 use_container_width=True,
-                type="primary" if is_active else "secondary"
+                type="primary" if is_active else "secondary",
             ):
                 if not is_active:
                     st.session_state[mode_key] = idx
@@ -667,25 +661,24 @@ def compact_week_selector(
     mode = modes[st.session_state[mode_key]]
 
     if mode == "Today's Date":
-        year = int(base_df['year'].max())
-        week = int(base_df[base_df['year'] == year]['week'].max())
+        year = int(base_df["year"].max())
+        week = int(base_df[base_df["year"] == year]["week"].max())
         st.caption(f"Year {year}, Week {week}")
         return year, week, True
     else:
-        years = sorted(base_df['year'].astype(int).unique(), reverse=True)
+        years = sorted(base_df["year"].astype(int).unique(), reverse=True)
 
         with cols[2] if len(cols) > 2 else st.columns([1, 1])[0]:
             c1, c2 = st.columns(2)
             with c1:
                 year_choice = st.selectbox(
-                    "Year",
-                    years,
-                    key=f"{prefix}_year",
-                    label_visibility="collapsed"
+                    "Year", years, key=f"{prefix}_year", label_visibility="collapsed"
                 )
 
             year = int(year_choice)
-            weeks = sorted(base_df[base_df['year'] == year]['week'].astype(int).unique())
+            weeks = sorted(
+                base_df[base_df["year"] == year]["week"].astype(int).unique()
+            )
 
             with c2:
                 week_choice = st.selectbox(
@@ -693,7 +686,7 @@ def compact_week_selector(
                     weeks,
                     index=len(weeks) - 1 if weeks else 0,
                     key=f"{prefix}_week",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
                 )
 
             week = int(week_choice)
@@ -708,4 +701,4 @@ def start_simulation_container() -> None:
 
 def end_simulation_container() -> None:
     """End the simulation container."""
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)

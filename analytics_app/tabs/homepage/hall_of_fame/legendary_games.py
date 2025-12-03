@@ -9,38 +9,43 @@ class LegendaryGamesViewer:
         # Ensure commonly-referenced columns exist so DuckDB queries don't fail
         if self.df is not None:
             # provide sensible defaults when columns are missing
-            if 'is_consolation' not in self.df.columns:
-                self.df['is_consolation'] = 0
-            if 'manager_proj_score' not in self.df.columns:
-                self.df['manager_proj_score'] = None
-            if 'opponent_proj_score' not in self.df.columns:
-                self.df['opponent_proj_score'] = None
-            if 'win' not in self.df.columns:
-                self.df['win'] = None
+            if "is_consolation" not in self.df.columns:
+                self.df["is_consolation"] = 0
+            if "manager_proj_score" not in self.df.columns:
+                self.df["manager_proj_score"] = None
+            if "opponent_proj_score" not in self.df.columns:
+                self.df["opponent_proj_score"] = None
+            if "win" not in self.df.columns:
+                self.df["win"] = None
         self.con = duckdb.connect(database=":memory:")
         if self.df is not None and not self.df.empty:
             self.con.register("matchups", self.df)
 
     @st.fragment
     def display(self):
-        st.markdown("""
+        st.markdown(
+            """
             <div class='hof-gradient-header hof-header-orange'>
                 <h2>🎮 Legendary Games</h2>
                 <p>Unforgettable matchups, historic showdowns, and epic battles</p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         if self.df is None or self.df.empty:
             st.info("📊 No matchup data available")
             return
 
         # Create subtabs
-        game_tabs = st.tabs([
-            "🔥 Extreme Scoring",
-            "😱 Closest Games",
-            "🎯 Upsets",
-            "⚔️ Classic Rivalries"
-        ])
+        game_tabs = st.tabs(
+            [
+                "🔥 Extreme Scoring",
+                "😱 Closest Games",
+                "🎯 Upsets",
+                "⚔️ Classic Rivalries",
+            ]
+        )
 
         with game_tabs[0]:
             self._display_highest_scoring()
@@ -97,7 +102,8 @@ class LegendaryGamesViewer:
                 st.markdown("#### Regular Season")
                 if not reg_games.empty:
                     for _, row in reg_games.iterrows():
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                             <div class='hof-game-card'>
                                 <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
                                 <span class='game-stat' style='color: var(--success);'>{row['combined']:.1f}</span></div>
@@ -106,7 +112,9 @@ class LegendaryGamesViewer:
                                     <div style='color: var(--text-muted);'>❌ {row['loser']} <span style='float:right;'>{row['lose_pts']:.1f}</span></div>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.info("No games found")
 
@@ -114,7 +122,8 @@ class LegendaryGamesViewer:
                 st.markdown("#### Playoffs")
                 if not playoff_games.empty:
                     for _, row in playoff_games.iterrows():
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                             <div class='hof-game-card hof-game-card-playoff'>
                                 <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
                                 <span class='game-stat' style='color: var(--success);'>{row['combined']:.1f}</span></div>
@@ -123,7 +132,9 @@ class LegendaryGamesViewer:
                                     <div style='color: var(--text-muted);'>❌ {row['loser']} <span style='float:right;'>{row['lose_pts']:.1f}</span></div>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.info("No playoff games found")
 
@@ -135,6 +146,7 @@ class LegendaryGamesViewer:
         st.markdown("### 😱 Closest Games")
 
         try:
+
             def get_closest_games(is_playoff):
                 query = f"""
                     WITH unique_games AS (
@@ -170,7 +182,8 @@ class LegendaryGamesViewer:
                 st.markdown("#### Regular Season")
                 if not reg_games.empty:
                     for _, row in reg_games.iterrows():
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                             <div class='hof-game-card'>
                                 <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
                                 <span class='game-stat' style='color: var(--accent);'>±{row['margin']:.2f}</span></div>
@@ -179,7 +192,9 @@ class LegendaryGamesViewer:
                                     <div style='color: var(--text-muted);'>❌ {row['loser']} <span style='float:right;'>{row['lose_pts']:.1f}</span></div>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.info("No games found")
 
@@ -187,7 +202,8 @@ class LegendaryGamesViewer:
                 st.markdown("#### Playoffs")
                 if not playoff_games.empty:
                     for _, row in playoff_games.iterrows():
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                             <div class='hof-game-card hof-game-card-playoff'>
                                 <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
                                 <span class='game-stat' style='color: var(--accent);'>±{row['margin']:.2f}</span></div>
@@ -196,7 +212,9 @@ class LegendaryGamesViewer:
                                     <div style='color: var(--text-muted);'>❌ {row['loser']} <span style='float:right;'>{row['lose_pts']:.1f}</span></div>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.info("No playoff games found")
 
@@ -207,11 +225,15 @@ class LegendaryGamesViewer:
     def _display_upsets(self):
         st.markdown("### 🎯 Greatest Upsets")
 
-        if 'manager_proj_score' not in self.df.columns or 'opponent_proj_score' not in self.df.columns:
+        if (
+            "manager_proj_score" not in self.df.columns
+            or "opponent_proj_score" not in self.df.columns
+        ):
             st.warning("Upset detection requires projected points data")
             return
 
         try:
+
             def get_upsets(is_playoff):
                 query = f"""
                     WITH unique_games AS (
@@ -255,7 +277,8 @@ class LegendaryGamesViewer:
                 st.markdown("#### Regular Season")
                 if not reg_upsets.empty:
                     for _, row in reg_upsets.iterrows():
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                             <div class='hof-game-card' style='border-left: 3px solid var(--accent);'>
                                 <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
                                 <span class='game-stat' style='color: var(--accent);'>+{row['proj_diff']:.1f} upset</span></div>
@@ -264,7 +287,9 @@ class LegendaryGamesViewer:
                                     <div style='color: var(--text-muted);'>📉 {row['favored']} (favored)</div>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.info("No major upsets found")
 
@@ -272,7 +297,8 @@ class LegendaryGamesViewer:
                 st.markdown("#### Playoffs")
                 if not playoff_upsets.empty:
                     for _, row in playoff_upsets.iterrows():
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                             <div class='hof-game-card hof-game-card-playoff' style='border-left: 3px solid var(--accent);'>
                                 <div class='game-header'><span class='game-date'>{int(row['year'])} Wk{int(row['week'])}</span>
                                 <span class='game-stat' style='color: var(--accent);'>+{row['proj_diff']:.1f} upset</span></div>
@@ -281,7 +307,9 @@ class LegendaryGamesViewer:
                                     <div style='color: var(--text-muted);'>📉 {row['favored']} (favored)</div>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.info("No playoff upsets found")
 
@@ -293,6 +321,7 @@ class LegendaryGamesViewer:
         st.markdown("### ⚔️ Top Rivalries")
 
         try:
+
             def get_rivalries(is_playoff):
                 query = f"""
                     WITH unique_games AS (
@@ -332,7 +361,8 @@ class LegendaryGamesViewer:
                 st.markdown("#### Regular Season")
                 if not reg_rivals.empty:
                     for _, row in reg_rivals.iterrows():
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                             <div class='hof-game-card'>
                                 <div class='game-header'><span class='game-date'>{row['team_a']} vs {row['team_b']}</span>
                                 <span class='game-stat'>{int(row['games'])} games</span></div>
@@ -341,7 +371,9 @@ class LegendaryGamesViewer:
                                     <span>{row['team_b']}: <b>{int(row['b_wins'])}</b></span>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.info("No rivalries found")
 
@@ -349,7 +381,8 @@ class LegendaryGamesViewer:
                 st.markdown("#### Playoffs")
                 if not playoff_rivals.empty:
                     for _, row in playoff_rivals.iterrows():
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                             <div class='hof-game-card hof-game-card-playoff'>
                                 <div class='game-header'><span class='game-date'>{row['team_a']} vs {row['team_b']}</span>
                                 <span class='game-stat'>{int(row['games'])} games</span></div>
@@ -358,7 +391,9 @@ class LegendaryGamesViewer:
                                     <span>{row['team_b']}: <b>{int(row['b_wins'])}</b></span>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.info("No playoff rivalries found")
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from md.core import T, run_query
 from .table_styles import render_modern_table
 from ..shared.simulation_styles import (
@@ -17,9 +16,8 @@ from ..shared.simulation_styles import (
     render_section_header,
     render_group_card,
     close_card,
-    compact_week_selector,
     render_summary_panel,
-    render_manager_filter
+    render_manager_filter,
 )
 
 # Import chart theming for light/dark mode support
@@ -45,9 +43,13 @@ def _select_week_for_playoff(base_df: pd.DataFrame, prefix: str):
     cols = st.columns(2)
     for idx, (col, name) in enumerate(zip(cols, modes)):
         with col:
-            is_active = (st.session_state[mode_key] == idx)
-            if st.button(name, key=f"{prefix}_mode_btn_{idx}", use_container_width=True,
-                        type="primary" if is_active else "secondary"):
+            is_active = st.session_state[mode_key] == idx
+            if st.button(
+                name,
+                key=f"{prefix}_mode_btn_{idx}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+            ):
                 if not is_active:
                     st.session_state[mode_key] = idx
                     st.rerun()
@@ -55,12 +57,12 @@ def _select_week_for_playoff(base_df: pd.DataFrame, prefix: str):
     mode = modes[st.session_state[mode_key]]
 
     if mode == "Today's Date":
-        year = int(base_df['year'].max())
-        week = int(base_df[base_df['year'] == year]['week'].max())
+        year = int(base_df["year"].max())
+        week = int(base_df[base_df["year"] == year]["week"].max())
         st.caption(f"📅 Auto-selected Year {year}, Week {week}")
         return year, week, True
     else:
-        years = sorted(base_df['year'].astype(int).unique(), reverse=True)
+        years = sorted(base_df["year"].astype(int).unique(), reverse=True)
 
         col1, col2 = st.columns([1, 1])
 
@@ -68,20 +70,20 @@ def _select_week_for_playoff(base_df: pd.DataFrame, prefix: str):
             year_choice = st.selectbox(
                 "Year",
                 ["Select Year"] + [str(y) for y in years],
-                key=f"{prefix}_playoff_year"
+                key=f"{prefix}_playoff_year",
             )
 
         if year_choice == "Select Year":
             return None, None, False
 
         year = int(year_choice)
-        weeks = sorted(base_df[base_df['year'] == year]['week'].astype(int).unique())
+        weeks = sorted(base_df[base_df["year"] == year]["week"].astype(int).unique())
 
         with col2:
             week_choice = st.selectbox(
                 "Week",
                 ["Select Week"] + [str(w) for w in weeks],
-                key=f"{prefix}_playoff_week"
+                key=f"{prefix}_playoff_week",
             )
 
         if week_choice == "Select Week":
@@ -92,12 +94,13 @@ def _select_week_for_playoff(base_df: pd.DataFrame, prefix: str):
 
 
 @st.fragment
-def _render_playoff_dashboard(playoff_data: pd.DataFrame, year: int, week: int, prefix: str):
+def _render_playoff_dashboard(
+    playoff_data: pd.DataFrame, year: int, week: int, prefix: str
+):
     """Render the playoff dashboard for a specific year and week."""
     # Filter data up to the selected week
     week_data = playoff_data[
-        (playoff_data['year'] == year) &
-        (playoff_data['week'] <= week)
+        (playoff_data["year"] == year) & (playoff_data["week"] <= week)
     ].copy()
 
     if week_data.empty:
@@ -105,13 +108,13 @@ def _render_playoff_dashboard(playoff_data: pd.DataFrame, year: int, week: int, 
         return
 
     # Simulation Summary Panel (collapsible context)
-    current_week_data = week_data[week_data['week'] == week]
+    current_week_data = week_data[week_data["week"] == week]
     if not current_week_data.empty:
-        num_managers = current_week_data['manager'].nunique()
-        max_week = int(week_data['week'].max())
-        avg_playoff_odds = current_week_data['p_playoffs'].mean()
-        clinched = len(current_week_data[current_week_data['p_playoffs'] >= 99])
-        eliminated = len(current_week_data[current_week_data['p_playoffs'] <= 1])
+        num_managers = current_week_data["manager"].nunique()
+        int(week_data["week"].max())
+        avg_playoff_odds = current_week_data["p_playoffs"].mean()
+        clinched = len(current_week_data[current_week_data["p_playoffs"] >= 99])
+        eliminated = len(current_week_data[current_week_data["p_playoffs"] <= 1])
 
         render_summary_panel(
             "Simulation Context",
@@ -122,14 +125,11 @@ def _render_playoff_dashboard(playoff_data: pd.DataFrame, year: int, week: int, 
                 {"label": "Clinched", "value": str(clinched)},
                 {"label": "Eliminated", "value": str(eliminated)},
             ],
-            expanded=False
+            expanded=False,
         )
 
     # Create tabs - focused on unique analytics only
-    tab1, tab2 = st.tabs([
-        "Championship Path",
-        "Critical Moments"
-    ])
+    tab1, tab2 = st.tabs(["Championship Path", "Critical Moments"])
 
     with tab1:
         _display_championship_path(week_data, year, week, prefix)
@@ -143,11 +143,14 @@ def display_playoff_simulation_dashboard(prefix=""):
     """Enhanced playoff simulation analysis with modern visualizations."""
     render_section_header("Playoff Simulation Dashboard", "")
 
-    st.caption("Championship funnels, critical turning points, and season trajectories.")
+    st.caption(
+        "Championship funnels, critical turning points, and season trajectories."
+    )
 
     # Load data
     with st.spinner("Loading..."):
-        playoff_data = run_query(f"""
+        playoff_data = run_query(
+            f"""
             SELECT
                 year, week, manager,
                 avg_seed,
@@ -160,15 +163,16 @@ def display_playoff_simulation_dashboard(prefix=""):
               AND is_consolation = 0
               AND p_playoffs IS NOT NULL
             ORDER BY year DESC, week DESC, avg_seed
-        """)
+        """
+        )
 
     if playoff_data.empty:
         st.warning("No playoff simulation data available.")
         return
 
     # Type conversion
-    playoff_data['year'] = playoff_data['year'].astype(int)
-    playoff_data['week'] = playoff_data['week'].astype(int)
+    playoff_data["year"] = playoff_data["year"].astype(int)
+    playoff_data["week"] = playoff_data["week"].astype(int)
 
     # Week selection
     year, week, auto_display = _select_week_for_playoff(playoff_data, prefix)
@@ -187,38 +191,40 @@ def display_playoff_simulation_dashboard(prefix=""):
 def _render_metric_cards(final_data: pd.DataFrame):
     """Render compact metric summary tiles at the top."""
     # Get key stats
-    top_playoff = final_data.nlargest(1, 'p_playoffs').iloc[0]
-    top_champ = final_data.nlargest(1, 'p_champ').iloc[0]
-    top_power = final_data.nlargest(1, 'exp_final_wins').iloc[0]
-    top_seed = final_data.nsmallest(1, 'avg_seed').iloc[0]
+    top_playoff = final_data.nlargest(1, "p_playoffs").iloc[0]
+    top_champ = final_data.nlargest(1, "p_champ").iloc[0]
+    top_power = final_data.nlargest(1, "exp_final_wins").iloc[0]
+    top_seed = final_data.nsmallest(1, "avg_seed").iloc[0]
 
     # Use summary tiles for compact, visually consistent display
-    render_summary_tiles([
-        {
-            "icon": "",
-            "label": "Highest Playoff Odds",
-            "value": f"{top_playoff['p_playoffs']:.0f}%",
-            "sublabel": top_playoff.name
-        },
-        {
-            "icon": "",
-            "label": "Championship Favorite",
-            "value": f"{top_champ['p_champ']:.1f}%",
-            "sublabel": top_champ.name
-        },
-        {
-            "icon": "",
-            "label": "Most Likely #1 Seed",
-            "value": f"{top_seed['avg_seed']:.2f}",
-            "sublabel": top_seed.name
-        },
-        {
-            "icon": "",
-            "label": "Projected Most Wins",
-            "value": f"{top_power['exp_final_wins']:.1f}",
-            "sublabel": top_power.name
-        }
-    ])
+    render_summary_tiles(
+        [
+            {
+                "icon": "",
+                "label": "Highest Playoff Odds",
+                "value": f"{top_playoff['p_playoffs']:.0f}%",
+                "sublabel": top_playoff.name,
+            },
+            {
+                "icon": "",
+                "label": "Championship Favorite",
+                "value": f"{top_champ['p_champ']:.1f}%",
+                "sublabel": top_champ.name,
+            },
+            {
+                "icon": "",
+                "label": "Most Likely #1 Seed",
+                "value": f"{top_seed['avg_seed']:.2f}",
+                "sublabel": top_seed.name,
+            },
+            {
+                "icon": "",
+                "label": "Projected Most Wins",
+                "value": f"{top_power['exp_final_wins']:.1f}",
+                "sublabel": top_power.name,
+            },
+        ]
+    )
 
 
 @st.fragment
@@ -228,25 +234,32 @@ def _display_championship_path(data, year, week, prefix):
 
     # Use selected week data
     final_week = week
-    final_data = data[data['week'] == final_week].groupby('manager').agg({
-        'avg_seed': 'mean',
-        'p_playoffs': 'mean',
-        'p_bye': 'mean',
-        'exp_final_wins': 'mean',
-        'exp_final_pf': 'mean',
-        'p_semis': 'mean',
-        'p_final': 'mean',
-        'p_champ': 'mean'
-    }).sort_values('avg_seed', ascending=True)
+    final_data = (
+        data[data["week"] == final_week]
+        .groupby("manager")
+        .agg(
+            {
+                "avg_seed": "mean",
+                "p_playoffs": "mean",
+                "p_bye": "mean",
+                "exp_final_wins": "mean",
+                "exp_final_pf": "mean",
+                "p_semis": "mean",
+                "p_final": "mean",
+                "p_champ": "mean",
+            }
+        )
+        .sort_values("avg_seed", ascending=True)
+    )
 
     # Manager filter - optional highlight
     all_managers = list(final_data.index)
     col_filter, col_spacer = st.columns([1, 3])
     with col_filter:
-        selected_manager = render_manager_filter(
+        render_manager_filter(
             all_managers,
             key=f"{prefix}_champ_manager_filter",
-            label="Highlight Manager"
+            label="Highlight Manager",
         )
 
     # Render metric tiles first
@@ -260,33 +273,33 @@ def _display_championship_path(data, year, week, prefix):
 
     # Prepare data for render_modern_table
     table_df = final_data.copy()
-    table_df = table_df.set_index('manager')
+    table_df = table_df.set_index("manager")
 
     # Define which columns get gradient coloring (probability columns)
-    color_columns = ['p_playoffs', 'p_bye', 'p_semis', 'p_final', 'p_champ']
+    color_columns = ["p_playoffs", "p_bye", "p_semis", "p_final", "p_champ"]
 
     # Define column display names
     column_names = {
-        'avg_seed': 'Avg Seed',
-        'p_playoffs': 'Playoff %',
-        'p_bye': 'Bye %',
-        'exp_final_wins': 'Exp Wins',
-        'exp_final_pf': 'Exp PF',
-        'p_semis': 'Semis %',
-        'p_final': 'Final %',
-        'p_champ': 'Champ %'
+        "avg_seed": "Avg Seed",
+        "p_playoffs": "Playoff %",
+        "p_bye": "Bye %",
+        "exp_final_wins": "Exp Wins",
+        "exp_final_pf": "Exp PF",
+        "p_semis": "Semis %",
+        "p_final": "Final %",
+        "p_champ": "Champ %",
     }
 
     # Define format specs
     format_specs = {
-        'avg_seed': '{:.2f}',
-        'p_playoffs': '{:.1f}',
-        'p_bye': '{:.1f}',
-        'exp_final_wins': '{:.2f}',
-        'exp_final_pf': '{:.1f}',
-        'p_semis': '{:.1f}',
-        'p_final': '{:.1f}',
-        'p_champ': '{:.1f}'
+        "avg_seed": "{:.2f}",
+        "p_playoffs": "{:.1f}",
+        "p_bye": "{:.1f}",
+        "exp_final_wins": "{:.2f}",
+        "exp_final_pf": "{:.1f}",
+        "p_semis": "{:.1f}",
+        "p_final": "{:.1f}",
+        "p_champ": "{:.1f}",
     }
 
     # Display the modern table with column-based gradients
@@ -297,7 +310,7 @@ def _display_championship_path(data, year, week, prefix):
         reverse_columns=[],
         format_specs=format_specs,
         column_names=column_names,
-        gradient_mode="column"
+        gradient_mode="column",
     )
 
     # Visualization section - compact
@@ -305,41 +318,43 @@ def _display_championship_path(data, year, week, prefix):
 
     # Get theme-aware colors
     colors = get_chart_colors()
-    theme_config = get_chart_theme()
+    get_chart_theme()
 
     # Show top 6 managers for cleaner mobile display
-    managers = final_data.head(6)['manager'].tolist()
+    managers = final_data.head(6)["manager"].tolist()
 
     # Create a simpler, more mobile-friendly chart
     fig = go.Figure()
 
     # Championship funnel - horizontal bar chart (better for mobile)
     for i, manager in enumerate(managers):
-        mgr_row = final_data[final_data['manager'] == manager].iloc[0]
-        stages = ['Win Title', 'Reach Final', 'Reach Semis', 'Make Playoffs']
+        mgr_row = final_data[final_data["manager"] == manager].iloc[0]
+        stages = ["Win Title", "Reach Final", "Reach Semis", "Make Playoffs"]
         values = [
-            mgr_row['p_champ'],
-            mgr_row['p_final'],
-            mgr_row['p_semis'],
-            mgr_row['p_playoffs']
+            mgr_row["p_champ"],
+            mgr_row["p_final"],
+            mgr_row["p_semis"],
+            mgr_row["p_playoffs"],
         ]
 
-        fig.add_trace(go.Bar(
-            name=manager,
-            y=stages,
-            x=values,
-            orientation='h',
-            text=[f"{v:.0f}%" for v in values],
-            textposition='outside',
-            hovertemplate='%{y}<br>%{x:.1f}%<extra></extra>',
-            marker_color=colors['categorical'][i % len(colors['categorical'])]
-        ))
+        fig.add_trace(
+            go.Bar(
+                name=manager,
+                y=stages,
+                x=values,
+                orientation="h",
+                text=[f"{v:.0f}%" for v in values],
+                textposition="outside",
+                hovertemplate="%{y}<br>%{x:.1f}%<extra></extra>",
+                marker_color=colors["categorical"][i % len(colors["categorical"])],
+            )
+        )
 
     # Apply theme and update layout
     fig.update_layout(
         height=350,  # Compact height for mobile
-        barmode='group',
-        hovermode='closest',
+        barmode="group",
+        hovermode="closest",
         margin=dict(l=10, r=60, t=30, b=10),
         legend=dict(
             orientation="h",
@@ -347,7 +362,7 @@ def _display_championship_path(data, year, week, prefix):
             y=1.02,
             xanchor="center",
             x=0.5,
-            font=dict(size=10)
+            font=dict(size=10),
         ),
         xaxis=dict(title="Probability (%)", range=[0, 105]),
     )
@@ -367,23 +382,23 @@ def _display_critical_moments(data, year, week, prefix):
     colors = get_chart_colors()
 
     # Calculate changes
-    managers = data['manager'].unique()
+    managers = data["manager"].unique()
     changes_list = []
 
     for manager in managers:
-        mgr_data = data[data['manager'] == manager].sort_values('week')
-        mgr_data['p_change'] = mgr_data['p_playoffs'].diff()
-        mgr_data['champ_change'] = mgr_data['p_champ'].diff()
+        mgr_data = data[data["manager"] == manager].sort_values("week")
+        mgr_data["p_change"] = mgr_data["p_playoffs"].diff()
+        mgr_data["champ_change"] = mgr_data["p_champ"].diff()
         changes_list.append(mgr_data)
 
     all_changes = pd.concat(changes_list)
 
     # Biggest swings
-    biggest_gains = all_changes.nlargest(10, 'p_change')[
-        ['week', 'manager', 'p_change', 'p_playoffs']
+    biggest_gains = all_changes.nlargest(10, "p_change")[
+        ["week", "manager", "p_change", "p_playoffs"]
     ].copy()
-    biggest_losses = all_changes.nsmallest(10, 'p_change')[
-        ['week', 'manager', 'p_change', 'p_playoffs']
+    biggest_losses = all_changes.nsmallest(10, "p_change")[
+        ["week", "manager", "p_change", "p_playoffs"]
     ].copy()
 
     col1, col2 = st.columns([1, 1])
@@ -391,75 +406,91 @@ def _display_critical_moments(data, year, week, prefix):
     with col1:
         render_group_card("Biggest Weekly Gains", "")
         biggest_gains_display = biggest_gains.copy()
-        biggest_gains_display.columns = ['Week', 'Manager', 'Change', 'New Odds']
+        biggest_gains_display.columns = ["Week", "Manager", "Change", "New Odds"]
 
         # Format the data
-        biggest_gains_display['Change'] = biggest_gains_display['Change'].apply(lambda x: f"+{x:.1f}%")
-        biggest_gains_display['New Odds'] = biggest_gains_display['New Odds'].apply(lambda x: f"{x:.1f}%")
+        biggest_gains_display["Change"] = biggest_gains_display["Change"].apply(
+            lambda x: f"+{x:.1f}%"
+        )
+        biggest_gains_display["New Odds"] = biggest_gains_display["New Odds"].apply(
+            lambda x: f"{x:.1f}%"
+        )
 
         # Style the dataframe - theme adaptive
         def highlight_gains(s):
-            if s.name == 'Change':
-                return ['color: #28a745; font-weight: bold' for _ in s]
-            elif s.name == 'Manager':
-                return ['font-weight: bold' for _ in s]
-            return ['' for _ in s]
+            if s.name == "Change":
+                return ["color: #28a745; font-weight: bold" for _ in s]
+            elif s.name == "Manager":
+                return ["font-weight: bold" for _ in s]
+            return ["" for _ in s]
 
         styled_gains = biggest_gains_display.style.apply(highlight_gains)
-        st.dataframe(styled_gains, hide_index=True, use_container_width=True, height=320)
+        st.dataframe(
+            styled_gains, hide_index=True, use_container_width=True, height=320
+        )
         close_card()
 
     with col2:
         render_group_card("Biggest Weekly Drops", "")
         biggest_losses_display = biggest_losses.copy()
-        biggest_losses_display.columns = ['Week', 'Manager', 'Change', 'New Odds']
+        biggest_losses_display.columns = ["Week", "Manager", "Change", "New Odds"]
 
         # Format the data
-        biggest_losses_display['Change'] = biggest_losses_display['Change'].apply(lambda x: f"{x:.1f}%")
-        biggest_losses_display['New Odds'] = biggest_losses_display['New Odds'].apply(lambda x: f"{x:.1f}%")
+        biggest_losses_display["Change"] = biggest_losses_display["Change"].apply(
+            lambda x: f"{x:.1f}%"
+        )
+        biggest_losses_display["New Odds"] = biggest_losses_display["New Odds"].apply(
+            lambda x: f"{x:.1f}%"
+        )
 
         # Style the dataframe - theme adaptive
         def highlight_losses(s):
-            if s.name == 'Change':
-                return ['color: #dc3545; font-weight: bold' for _ in s]
-            elif s.name == 'Manager':
-                return ['font-weight: bold' for _ in s]
-            return ['' for _ in s]
+            if s.name == "Change":
+                return ["color: #dc3545; font-weight: bold" for _ in s]
+            elif s.name == "Manager":
+                return ["font-weight: bold" for _ in s]
+            return ["" for _ in s]
 
         styled_losses = biggest_losses_display.style.apply(highlight_losses)
-        st.dataframe(styled_losses, hide_index=True, use_container_width=True, height=320)
+        st.dataframe(
+            styled_losses, hide_index=True, use_container_width=True, height=320
+        )
         close_card()
 
     # Volatility chart - compact
     st.markdown("**Season Volatility** (higher = more roller coaster season)")
 
-    volatility = data.groupby('manager')['p_playoffs'].std().sort_values(ascending=False)
+    volatility = (
+        data.groupby("manager")["p_playoffs"].std().sort_values(ascending=False)
+    )
 
     # Use theme-aware colors for volatility levels
     bar_colors = []
     for x in volatility.values:
         if x > 15:
-            bar_colors.append(colors['negative'])
+            bar_colors.append(colors["negative"])
         elif x > 10:
-            bar_colors.append('#ff9800')  # Orange
+            bar_colors.append("#ff9800")  # Orange
         else:
-            bar_colors.append(colors['positive'])
+            bar_colors.append(colors["positive"])
 
-    fig = go.Figure(go.Bar(
-        x=volatility.index,
-        y=volatility.values,
-        marker_color=bar_colors,
-        text=[f"{v:.0f}" for v in volatility.values],
-        textposition='outside',
-        hovertemplate='%{x}<br>Volatility: %{y:.1f}%<extra></extra>'
-    ))
+    fig = go.Figure(
+        go.Bar(
+            x=volatility.index,
+            y=volatility.values,
+            marker_color=bar_colors,
+            text=[f"{v:.0f}" for v in volatility.values],
+            textposition="outside",
+            hovertemplate="%{x}<br>Volatility: %{y:.1f}%<extra></extra>",
+        )
+    )
 
     fig.update_layout(
         height=300,  # Compact for mobile
         xaxis=dict(tickangle=-45, title=None),
         yaxis=dict(title="Std Dev (%)"),
         margin=dict(l=10, r=10, t=10, b=60),
-        showlegend=False
+        showlegend=False,
     )
     apply_chart_theme(fig)
 

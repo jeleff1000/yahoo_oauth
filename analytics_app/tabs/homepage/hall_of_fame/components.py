@@ -13,7 +13,7 @@ def champion_card(
     winner: str,
     runner_up: str,
     score: str,
-    winner_pts: Optional[float] = None
+    winner_pts: Optional[float] = None,
 ) -> str:
     """
     Generate HTML for a championship result card.
@@ -39,7 +39,7 @@ def record_card(
     holder: str,
     value: str,
     year: Optional[int] = None,
-    context: Optional[str] = None
+    context: Optional[str] = None,
 ) -> str:
     """
     Generate HTML for a record highlight card.
@@ -73,7 +73,7 @@ def game_card(
     week: int,
     is_playoff: bool = False,
     highlight_stat: Optional[str] = None,
-    highlight_label: Optional[str] = None
+    highlight_label: Optional[str] = None,
 ) -> str:
     """
     Generate HTML for a game result card.
@@ -126,7 +126,7 @@ def upset_card(
     year: int,
     week: int,
     proj_diff: float,
-    is_playoff: bool = False
+    is_playoff: bool = False,
 ) -> str:
     """
     Generate HTML for an upset game card.
@@ -180,7 +180,7 @@ def rivalry_card(
     team_b_wins: int,
     total_games: int,
     avg_combined: float,
-    is_playoff: bool = False
+    is_playoff: bool = False,
 ) -> str:
     """
     Generate HTML for a rivalry matchup card.
@@ -233,7 +233,7 @@ def leader_card(
     primary_stat: str,
     primary_label: str,
     secondary_stats: Optional[dict] = None,
-    is_champion: bool = False
+    is_champion: bool = False,
 ) -> str:
     """
     Generate HTML for a leaderboard entry card.
@@ -265,10 +265,12 @@ def leader_card(
     # Build secondary stats HTML
     secondary_html = ""
     if secondary_stats:
-        stats_items = "".join([
-            f"<div><div class='season-stat-label'>{label}</div><div class='season-stat-value'>{value}</div></div>"
-            for label, value in secondary_stats.items()
-        ])
+        stats_items = "".join(
+            [
+                f"<div><div class='season-stat-label'>{label}</div><div class='season-stat-value'>{value}</div></div>"
+                for label, value in secondary_stats.items()
+            ]
+        )
         secondary_html = f"<div style='display: flex; gap: 1rem; margin-top: 0.5rem;'>{stats_items}</div>"
 
     return f"""
@@ -294,7 +296,7 @@ def season_card(
     wins: int,
     losses: int,
     ppg: float,
-    is_champion: bool = False
+    is_champion: bool = False,
 ) -> str:
     """
     Generate HTML for a top season card.
@@ -309,10 +311,7 @@ def season_card(
         ppg: Points per game
         is_champion: Whether this season won championship
     """
-    secondary_stats = {
-        "Record": f"{wins}-{losses}",
-        "PPG": f"{ppg:.1f}"
-    }
+    secondary_stats = {"Record": f"{wins}-{losses}", "PPG": f"{ppg:.1f}"}
 
     return leader_card(
         rank=rank,
@@ -320,7 +319,7 @@ def season_card(
         primary_stat=f"{total_points:.1f}",
         primary_label="Total Points",
         secondary_stats=secondary_stats,
-        is_champion=is_champion
+        is_champion=is_champion,
     )
 
 
@@ -330,7 +329,7 @@ def week_card(
     week: int,
     points: float,
     result: str,
-    is_playoff: bool = False
+    is_playoff: bool = False,
 ) -> str:
     """
     Generate HTML for a top week performance card.
@@ -344,7 +343,7 @@ def week_card(
         is_playoff: Whether it was a playoff game
     """
     playoff_class = " hof-week-card-playoff" if is_playoff else ""
-    result_color = "#059669" if result == 'W' else "#DC2626"
+    result_color = "#059669" if result == "W" else "#DC2626"
 
     return f"""
         <div class='hof-week-card{playoff_class}'>

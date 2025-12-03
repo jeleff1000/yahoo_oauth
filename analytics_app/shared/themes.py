@@ -11,23 +11,20 @@ Usage:
 """
 
 import streamlit as st
-from typing import Dict, Literal
+from typing import Dict
 
 from .design_tokens import (
-    COLORS,
     SPACING,
     RADIUS,
     SHADOWS,
     SHADOWS_DARK,
-    TYPOGRAPHY,
     TRANSITIONS,
     get_theme_tokens,
-    get_css_variables,
     ThemeType,
 )
 
 # Re-export ThemeType for backwards compatibility
-__all__ = ['detect_theme', 'get_theme_colors', 'inject_theme_css', 'ThemeType']
+__all__ = ["detect_theme", "get_theme_colors", "inject_theme_css", "ThemeType"]
 
 
 def detect_theme() -> ThemeType:
@@ -40,14 +37,14 @@ def detect_theme() -> ThemeType:
     try:
         theme_base = st.get_option("theme.base")
         if theme_base:
-            return 'dark' if theme_base == 'dark' else 'light'
-    except:
+            return "dark" if theme_base == "dark" else "light"
+    except Exception:
         pass
 
-    if 'theme' in st.session_state:
-        return st.session_state['theme']
+    if "theme" in st.session_state:
+        return st.session_state["theme"]
 
-    return 'light'
+    return "light"
 
 
 def get_theme_colors(theme: ThemeType = None) -> Dict[str, str]:
@@ -72,8 +69,8 @@ def inject_theme_css():
     This should be called once at the top of each page to enable theme support.
     Uses CSS media queries to automatically respond to light/dark mode changes.
     """
-    light = get_theme_tokens('light')
-    dark = get_theme_tokens('dark')
+    light = get_theme_tokens("light")
+    dark = get_theme_tokens("dark")
 
     css = f"""
     <style>
@@ -270,9 +267,9 @@ def create_theme_toggle():
         theme = st.radio(
             "Theme",
             options=["light", "dark"],
-            index=0 if detect_theme() == 'light' else 1,
+            index=0 if detect_theme() == "light" else 1,
             horizontal=True,
-            key='theme_toggle'
+            key="theme_toggle",
         )
-        st.session_state['theme'] = theme
+        st.session_state["theme"] = theme
         return theme

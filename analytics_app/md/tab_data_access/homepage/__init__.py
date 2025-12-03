@@ -8,6 +8,7 @@ Optimized loaders for Homepage tab components:
 - Head-to-head matchups
 - Recaps
 """
+
 from .matchup_data import load_homepage_matchup_data
 from .summary_stats import load_homepage_summary_stats
 from .combined import load_optimized_homepage_data

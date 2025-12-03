@@ -40,10 +40,10 @@ def load_homepage_summary_stats() -> Dict[str, Any]:
         db = get_current_league_db()
 
         # Core stats - these tables should always exist
-        matchup_count = _safe_count(T['matchup'])
+        matchup_count = _safe_count(T["matchup"])
         player_count = _safe_count(f"{db}.public.players_by_year")
-        draft_count = _safe_count(T['draft'])
-        transactions_count = _safe_count(T['transactions'])
+        draft_count = _safe_count(T["draft"])
+        transactions_count = _safe_count(T["transactions"])
 
         # Get latest week info
         try:

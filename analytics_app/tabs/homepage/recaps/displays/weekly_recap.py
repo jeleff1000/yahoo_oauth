@@ -5,7 +5,7 @@ Displays the weekly matchup recap using config-driven narratives.
 All text/criteria are defined in weekly_recap_config.py for easy editing.
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional
 import re
 import sys
 from pathlib import Path
@@ -32,10 +32,9 @@ from ..weekly_recap_config import (
     format_template,
     _safe_get,
     _to_float,
-    _to_int,
     _is_win,
 )
-from shared.dataframe_utils import as_dataframe, get_matchup_df
+from shared.dataframe_utils import get_matchup_df
 
 
 def _norm(s: str) -> str:
@@ -72,9 +71,24 @@ def _fmt_points(v) -> str:
 
 # Bolding helpers for markdown
 _UNIT_WORDS = (
-    "point", "points", "win", "wins", "seed", "seeds",
-    "chance", "favorite", "favorites", "spread", "margin",
-    "victory", "loss", "losses", "team", "teams", "game", "games",
+    "point",
+    "points",
+    "win",
+    "wins",
+    "seed",
+    "seeds",
+    "chance",
+    "favorite",
+    "favorites",
+    "spread",
+    "margin",
+    "victory",
+    "loss",
+    "losses",
+    "team",
+    "teams",
+    "game",
+    "games",
 )
 _ADJ_WORDS = ("extra", "total", "more", "fewer", "additional", "straight")
 
@@ -84,13 +98,14 @@ _RE_NUM_UNIT = re.compile(
     rf"(?:\s+(?:{'|'.join(_ADJ_WORDS)}))?"
     rf"(?:\s+(?:{'|'.join(_UNIT_WORDS)}))"
     rf")(?!\w)",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 
 def _bold_parentheticals(s: str) -> str:
     def repl(m: re.Match) -> str:
         return f"**({m.group(1)})**"
+
     return re.sub(r"\(([^()]*)\)", repl, str(s or ""))
 
 
@@ -102,6 +117,7 @@ def _apply_bolding(s: str) -> str:
 # =============================================================================
 # MAIN DISPLAY FUNCTION
 # =============================================================================
+
 
 @st.fragment
 def display_weekly_recap(
@@ -229,52 +245,52 @@ def _build_canonical_row(df: pd.DataFrame, row: pd.Series) -> Dict:
     """
     # Column mappings
     col_mappings = {
-        'manager': ['manager', 'manager_name', 'owner'],
-        'opponent': ['opponent', 'opponent_name'],
-        'team_points': ['team_points', 'points', 'score'],
-        'opponent_points': ['opponent_points', 'opp_points', 'opponent_score'],
-        'margin': ['margin', 'point_diff'],
-        'win': ['win', 'did_win', 'is_win'],
-        'week': ['week'],
-        'year': ['year', 'season'],
-        'is_playoffs': ['is_playoffs', 'playoff_game', 'playoffs'],
-        'is_championship': ['is_championship', 'championship_game'],
-        'is_sacko_game': ['is_sacko_game', 'sacko_game'],
-        'is_consolation': ['is_consolation', 'consolation_game'],
-        'weekly_mean': ['weekly_mean', 'league_mean', 'avg_score'],
-        'weekly_median': ['weekly_median', 'league_median'],
-        'teams_beat_this_week': ['teams_beat_this_week', 'teams_beaten'],
-        'above_league_median': ['above_league_median', 'beat_median'],
-        'above_proj_score': ['above_proj_score', 'beat_projection'],
-        'proj_wins': ['proj_wins', 'projected_win', 'was_favorite'],
-        'win_vs_spread': ['win_vs_spread', 'covered_spread', 'beat_spread'],
-        'expected_odds': ['expected_odds', 'win_probability', 'win_odds'],
-        'expected_spread': ['expected_spread', 'spread', 'point_spread'],
-        'proj_score_error': ['proj_score_error', 'projection_error'],
-        'winning_streak': ['winning_streak', 'win_streak'],
-        'losing_streak': ['losing_streak', 'loss_streak'],
-        'optimal_points': ['optimal_points', 'optimal_score', 'best_possible'],
-        'grade': ['grade', 'weekly_grade'],
-        'gpa': ['gpa', 'weekly_gpa'],
-        'wins_to_date': ['wins_to_date', 'wins', 'season_wins'],
-        'losses_to_date': ['losses_to_date', 'losses', 'season_losses'],
-        'playoff_seed_to_date': ['playoff_seed_to_date', 'seed', 'current_seed'],
-        'champion': ['champion', 'is_champion'],
-        'sacko': ['sacko', 'is_sacko'],
-        'team_made_playoffs': ['team_made_playoffs', 'made_playoffs'],
-        'manager_all_time_ranking': ['manager_all_time_ranking'],
-        'manager_all_time_percentile': ['manager_all_time_percentile'],
-        'manager_season_ranking': ['manager_season_ranking'],
-        'prev_losing_streak': ['prev_losing_streak', 'previous_losing_streak'],
-        'prev_winning_streak': ['prev_winning_streak', 'previous_winning_streak'],
-        'prev_loss': ['prev_loss', 'previous_loss'],
-        'prev_win': ['prev_win', 'previous_win'],
-        'prev_playoff_seed': ['prev_playoff_seed', 'previous_playoff_seed'],
-        'must_win': ['must_win', 'elimination_game'],
-        'eliminated': ['eliminated', 'out_of_contention'],
-        'clinched_playoffs': ['clinched_playoffs', 'playoff_clinch'],
-        'runner_up': ['runner_up', 'is_runner_up'],
-        'third_place': ['third_place', 'is_third_place'],
+        "manager": ["manager", "manager_name", "owner"],
+        "opponent": ["opponent", "opponent_name"],
+        "team_points": ["team_points", "points", "score"],
+        "opponent_points": ["opponent_points", "opp_points", "opponent_score"],
+        "margin": ["margin", "point_diff"],
+        "win": ["win", "did_win", "is_win"],
+        "week": ["week"],
+        "year": ["year", "season"],
+        "is_playoffs": ["is_playoffs", "playoff_game", "playoffs"],
+        "is_championship": ["is_championship", "championship_game"],
+        "is_sacko_game": ["is_sacko_game", "sacko_game"],
+        "is_consolation": ["is_consolation", "consolation_game"],
+        "weekly_mean": ["weekly_mean", "league_mean", "avg_score"],
+        "weekly_median": ["weekly_median", "league_median"],
+        "teams_beat_this_week": ["teams_beat_this_week", "teams_beaten"],
+        "above_league_median": ["above_league_median", "beat_median"],
+        "above_proj_score": ["above_proj_score", "beat_projection"],
+        "proj_wins": ["proj_wins", "projected_win", "was_favorite"],
+        "win_vs_spread": ["win_vs_spread", "covered_spread", "beat_spread"],
+        "expected_odds": ["expected_odds", "win_probability", "win_odds"],
+        "expected_spread": ["expected_spread", "spread", "point_spread"],
+        "proj_score_error": ["proj_score_error", "projection_error"],
+        "winning_streak": ["winning_streak", "win_streak"],
+        "losing_streak": ["losing_streak", "loss_streak"],
+        "optimal_points": ["optimal_points", "optimal_score", "best_possible"],
+        "grade": ["grade", "weekly_grade"],
+        "gpa": ["gpa", "weekly_gpa"],
+        "wins_to_date": ["wins_to_date", "wins", "season_wins"],
+        "losses_to_date": ["losses_to_date", "losses", "season_losses"],
+        "playoff_seed_to_date": ["playoff_seed_to_date", "seed", "current_seed"],
+        "champion": ["champion", "is_champion"],
+        "sacko": ["sacko", "is_sacko"],
+        "team_made_playoffs": ["team_made_playoffs", "made_playoffs"],
+        "manager_all_time_ranking": ["manager_all_time_ranking"],
+        "manager_all_time_percentile": ["manager_all_time_percentile"],
+        "manager_season_ranking": ["manager_season_ranking"],
+        "prev_losing_streak": ["prev_losing_streak", "previous_losing_streak"],
+        "prev_winning_streak": ["prev_winning_streak", "previous_winning_streak"],
+        "prev_loss": ["prev_loss", "previous_loss"],
+        "prev_win": ["prev_win", "previous_win"],
+        "prev_playoff_seed": ["prev_playoff_seed", "previous_playoff_seed"],
+        "must_win": ["must_win", "elimination_game"],
+        "eliminated": ["eliminated", "out_of_contention"],
+        "clinched_playoffs": ["clinched_playoffs", "playoff_clinch"],
+        "runner_up": ["runner_up", "is_runner_up"],
+        "third_place": ["third_place", "is_third_place"],
     }
 
     result = {}
@@ -292,18 +308,21 @@ def _build_canonical_row(df: pd.DataFrame, row: pd.Series) -> Dict:
 
 def _build_result_sentence(row_dict: Dict) -> str:
     """Build the core result sentence."""
-    opponent = _safe_get(row_dict, 'opponent', 'Unknown')
-    team_pts = _to_float(_safe_get(row_dict, 'team_points'), 0)
-    opp_pts = _to_float(_safe_get(row_dict, 'opponent_points'), 0)
+    opponent = _safe_get(row_dict, "opponent", "Unknown")
+    team_pts = _to_float(_safe_get(row_dict, "team_points"), 0)
+    opp_pts = _to_float(_safe_get(row_dict, "opponent_points"), 0)
 
     if _is_win(row_dict):
         template = RESULT_TEMPLATES.get("win", "")
     else:
         template = RESULT_TEMPLATES.get("loss", "")
 
-    return format_template(template, {
-        'opponent': opponent,
-        'team_points': team_pts,
-        'opponent_points': opp_pts,
-        **row_dict
-    })
+    return format_template(
+        template,
+        {
+            "opponent": opponent,
+            "team_points": team_pts,
+            "opponent_points": opp_pts,
+            **row_dict,
+        },
+    )

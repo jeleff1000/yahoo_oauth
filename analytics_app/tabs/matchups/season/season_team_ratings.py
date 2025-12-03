@@ -18,15 +18,29 @@ class SeasonTeamRatingsViewer:
 
         # Coerce numerics where applicable
         self.numeric_cols: List[str] = [
-            "team_points", "win", "loss", "opponent_points",
-            "avg_seed", "p_playoffs", "p_bye", "exp_final_wins",
-            "p_semis", "p_final", "p_champ",
-            "x1_seed", "final_playoff_seed",
-            "shuffle_1_seed", "shuffle_avg_wins",
-            "wins_vs_shuffle_wins", "shuffle_avg_playoffs",
-            "shuffle_avg_bye", "shuffle_avg_seed",
-            "seed_vs_shuffle_seed", "power_rating",
-            "week", "year",
+            "team_points",
+            "win",
+            "loss",
+            "opponent_points",
+            "avg_seed",
+            "p_playoffs",
+            "p_bye",
+            "exp_final_wins",
+            "p_semis",
+            "p_final",
+            "p_champ",
+            "x1_seed",
+            "final_playoff_seed",
+            "shuffle_1_seed",
+            "shuffle_avg_wins",
+            "wins_vs_shuffle_wins",
+            "shuffle_avg_playoffs",
+            "shuffle_avg_bye",
+            "shuffle_avg_seed",
+            "seed_vs_shuffle_seed",
+            "power_rating",
+            "week",
+            "year",
         ]
         for c in self.numeric_cols:
             if c in self.base_df.columns:
@@ -57,25 +71,44 @@ class SeasonTeamRatingsViewer:
         present = set(df_sorted.columns)
 
         # CUMULATIVE STATS (sum across season)
-        sum_cols = [c for c in ["win", "loss", "team_points", "opponent_points"] if c in present]
+        sum_cols = [
+            c for c in ["win", "loss", "team_points", "opponent_points"] if c in present
+        ]
 
         # AVERAGE STATS (mean across season - these are weekly probabilities/ratings)
-        mean_cols = [c for c in [
-            "power_rating",
-            "exp_final_wins", "avg_seed",
-            "p_playoffs", "p_bye", "p_semis", "p_final", "p_champ",
-        ] if c in present]
+        mean_cols = [
+            c
+            for c in [
+                "power_rating",
+                "exp_final_wins",
+                "avg_seed",
+                "p_playoffs",
+                "p_bye",
+                "p_semis",
+                "p_final",
+                "p_champ",
+            ]
+            if c in present
+        ]
 
         # STREAKS (max for winning, max for losing since it's already a positive number)
         max_cols = [c for c in ["winning_streak", "losing_streak"] if c in present]
 
         # END-OF-SEASON VALUES (take last week's value)
         # Shuffle simulations are already averaged across all possible schedules
-        last_cols = [c for c in [
-            "shuffle_1_seed", "shuffle_avg_wins", "wins_vs_shuffle_wins",
-            "shuffle_avg_playoffs", "shuffle_avg_bye", "shuffle_avg_seed",
-            "seed_vs_shuffle_seed",
-        ] if c in present]
+        last_cols = [
+            c
+            for c in [
+                "shuffle_1_seed",
+                "shuffle_avg_wins",
+                "wins_vs_shuffle_wins",
+                "shuffle_avg_playoffs",
+                "shuffle_avg_bye",
+                "shuffle_avg_seed",
+                "seed_vs_shuffle_seed",
+            ]
+            if c in present
+        ]
 
         agg_map: Dict[str, Callable] = {}
         agg_map.update({c: "sum" for c in sum_cols})
@@ -106,12 +139,15 @@ class SeasonTeamRatingsViewer:
         apply_theme_styles()
 
         # Header with description
-        st.markdown("""
+        st.markdown(
+            """
         <div class="tab-header">
         <h2>📊 Season Team Ratings</h2>
         <p>Playoff projections, power ratings, and schedule shuffle simulations aggregated by season</p>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         if self.agg_df.empty:
             st.info("No team ratings data available")
@@ -126,7 +162,9 @@ class SeasonTeamRatingsViewer:
             sort_cols.append("power_rating")
 
         if sort_cols:
-            df = df.sort_values(by=sort_cols, ascending=[False, False] if len(sort_cols) == 2 else False)
+            df = df.sort_values(
+                by=sort_cols, ascending=[False, False] if len(sort_cols) == 2 else False
+            )
 
         # Prepare display dataframe
         display_df = self._prepare_display_df(df)
@@ -140,7 +178,7 @@ class SeasonTeamRatingsViewer:
             use_container_width=True,
             hide_index=True,
             column_config=column_config,
-            height=500
+            height=500,
         )
 
         # Download section
@@ -149,14 +187,14 @@ class SeasonTeamRatingsViewer:
         with col1:
             st.markdown("**💾 Export Data**")
         with col2:
-            csv = display_df.to_csv(index=False).encode('utf-8')
+            csv = display_df.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="📥 CSV",
                 data=csv,
                 file_name=f"season_team_ratings_{pd.Timestamp.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv",
                 key=f"{prefix}_download_csv",
-                use_container_width=True
+                use_container_width=True,
             )
 
     def _prepare_display_df(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -166,59 +204,74 @@ class SeasonTeamRatingsViewer:
         # Define column order and rename mapping
         column_mapping = {
             # Identifiers
-            'manager': 'Manager',
-            'year': 'Year',
-
+            "manager": "Manager",
+            "year": "Year",
             # Season Record
-            'win': 'W',
-            'loss': 'L',
-            'win_pct': 'Win %',
-
+            "win": "W",
+            "loss": "L",
+            "win_pct": "Win %",
             # Season Scoring
-            'team_points': 'PF',
-            'opponent_points': 'PA',
-            'ppg': 'PPG',
-            'papg': 'PA/G',
-
+            "team_points": "PF",
+            "opponent_points": "PA",
+            "ppg": "PPG",
+            "papg": "PA/G",
             # Power & Projections
-            'power_rating': 'Power Rating',
-            'avg_seed': 'Avg Seed',
-            'exp_final_wins': 'Exp Wins',
-
+            "power_rating": "Power Rating",
+            "avg_seed": "Avg Seed",
+            "exp_final_wins": "Exp Wins",
             # Playoff Probabilities (averaged across season)
-            'p_playoffs': 'Playoff %',
-            'p_bye': 'Bye %',
-            'p_semis': 'Semis %',
-            'p_final': 'Final %',
-            'p_champ': 'Champ %',
-
+            "p_playoffs": "Playoff %",
+            "p_bye": "Bye %",
+            "p_semis": "Semis %",
+            "p_final": "Final %",
+            "p_champ": "Champ %",
             # Shuffle Simulations (alternate schedule outcomes)
-            'shuffle_1_seed': 'Shuffle Top Seed',
-            'shuffle_avg_wins': 'Shuffle Avg W',
-            'wins_vs_shuffle_wins': 'W vs Shuffle',
-            'shuffle_avg_playoffs': 'Shuffle Playoff %',
-            'shuffle_avg_bye': 'Shuffle Bye %',
-            'shuffle_avg_seed': 'Shuffle Avg Seed',
-            'seed_vs_shuffle_seed': 'Seed vs Shuffle',
-
+            "shuffle_1_seed": "Shuffle Top Seed",
+            "shuffle_avg_wins": "Shuffle Avg W",
+            "wins_vs_shuffle_wins": "W vs Shuffle",
+            "shuffle_avg_playoffs": "Shuffle Playoff %",
+            "shuffle_avg_bye": "Shuffle Bye %",
+            "shuffle_avg_seed": "Shuffle Avg Seed",
+            "seed_vs_shuffle_seed": "Seed vs Shuffle",
             # Streaks
-            'winning_streak': 'Win Streak',
-            'losing_streak': 'Loss Streak',
+            "winning_streak": "Win Streak",
+            "losing_streak": "Loss Streak",
         }
 
         # Rename columns that exist
-        rename_dict = {k: v for k, v in column_mapping.items() if k in display_df.columns}
+        rename_dict = {
+            k: v for k, v in column_mapping.items() if k in display_df.columns
+        }
         display_df = display_df.rename(columns=rename_dict)
 
         # Define preferred column order
         preferred_order = [
-            'Manager', 'Year', 'W', 'L', 'Win %',
-            'PF', 'PA', 'PPG', 'PA/G',
-            'Power Rating', 'Avg Seed', 'Exp Wins',
-            'Playoff %', 'Bye %', 'Semis %', 'Final %', 'Champ %',
-            'Shuffle Top Seed', 'Shuffle Avg W', 'W vs Shuffle',
-            'Shuffle Playoff %', 'Shuffle Bye %', 'Shuffle Avg Seed', 'Seed vs Shuffle',
-            'Win Streak', 'Loss Streak',
+            "Manager",
+            "Year",
+            "W",
+            "L",
+            "Win %",
+            "PF",
+            "PA",
+            "PPG",
+            "PA/G",
+            "Power Rating",
+            "Avg Seed",
+            "Exp Wins",
+            "Playoff %",
+            "Bye %",
+            "Semis %",
+            "Final %",
+            "Champ %",
+            "Shuffle Top Seed",
+            "Shuffle Avg W",
+            "W vs Shuffle",
+            "Shuffle Playoff %",
+            "Shuffle Bye %",
+            "Shuffle Avg Seed",
+            "Seed vs Shuffle",
+            "Win Streak",
+            "Loss Streak",
         ]
 
         # Keep only columns that exist in preferred order
@@ -235,42 +288,139 @@ class SeasonTeamRatingsViewer:
         """Get column configuration for enhanced display."""
         return {
             # Identifiers
-            'Manager': st.column_config.TextColumn('Manager', help='Manager name', width='medium'),
-            'Year': st.column_config.NumberColumn('Year', help='Season year', format='%d', width='small'),
-
+            "Manager": st.column_config.TextColumn(
+                "Manager", help="Manager name", width="medium"
+            ),
+            "Year": st.column_config.NumberColumn(
+                "Year", help="Season year", format="%d", width="small"
+            ),
             # Season Record
-            'W': st.column_config.NumberColumn('W', help='Wins', format='%d', width='small'),
-            'L': st.column_config.NumberColumn('L', help='Losses', format='%d', width='small'),
-            'Win %': st.column_config.NumberColumn('Win %', help='Winning percentage', format='%.1f%%', width='small'),
-
+            "W": st.column_config.NumberColumn(
+                "W", help="Wins", format="%d", width="small"
+            ),
+            "L": st.column_config.NumberColumn(
+                "L", help="Losses", format="%d", width="small"
+            ),
+            "Win %": st.column_config.NumberColumn(
+                "Win %", help="Winning percentage", format="%.1f%%", width="small"
+            ),
             # Season Scoring (TOTALS)
-            'PF': st.column_config.NumberColumn('PF', help='Total points for (season total)', format='%.2f', width='small'),
-            'PA': st.column_config.NumberColumn('PA', help='Total points against (season total)', format='%.2f', width='small'),
-            'PPG': st.column_config.NumberColumn('PPG', help='Points per game', format='%.2f', width='small'),
-            'PA/G': st.column_config.NumberColumn('PA/G', help='Points against per game', format='%.2f', width='small'),
-
+            "PF": st.column_config.NumberColumn(
+                "PF",
+                help="Total points for (season total)",
+                format="%.2f",
+                width="small",
+            ),
+            "PA": st.column_config.NumberColumn(
+                "PA",
+                help="Total points against (season total)",
+                format="%.2f",
+                width="small",
+            ),
+            "PPG": st.column_config.NumberColumn(
+                "PPG", help="Points per game", format="%.2f", width="small"
+            ),
+            "PA/G": st.column_config.NumberColumn(
+                "PA/G", help="Points against per game", format="%.2f", width="small"
+            ),
             # Power & Projections (AVERAGES)
-            'Power Rating': st.column_config.NumberColumn('Power Rating', help='Average power rating across season', format='%.2f', width='small'),
-            'Avg Seed': st.column_config.NumberColumn('Avg Seed', help='Average projected seed across season', format='%.2f', width='small'),
-            'Exp Wins': st.column_config.NumberColumn('Exp Wins', help='Average expected final wins', format='%.2f', width='small'),
-
+            "Power Rating": st.column_config.NumberColumn(
+                "Power Rating",
+                help="Average power rating across season",
+                format="%.2f",
+                width="small",
+            ),
+            "Avg Seed": st.column_config.NumberColumn(
+                "Avg Seed",
+                help="Average projected seed across season",
+                format="%.2f",
+                width="small",
+            ),
+            "Exp Wins": st.column_config.NumberColumn(
+                "Exp Wins",
+                help="Average expected final wins",
+                format="%.2f",
+                width="small",
+            ),
             # Playoff Probabilities (AVERAGES across season)
-            'Playoff %': st.column_config.NumberColumn('Playoff %', help='Average playoff probability across season', format='%.1f%%', width='small'),
-            'Bye %': st.column_config.NumberColumn('Bye %', help='Average bye probability across season', format='%.1f%%', width='small'),
-            'Semis %': st.column_config.NumberColumn('Semis %', help='Average semifinal probability across season', format='%.1f%%', width='small'),
-            'Final %': st.column_config.NumberColumn('Final %', help='Average final probability across season', format='%.1f%%', width='small'),
-            'Champ %': st.column_config.NumberColumn('Champ %', help='Average championship probability across season', format='%.1f%%', width='small'),
-
+            "Playoff %": st.column_config.NumberColumn(
+                "Playoff %",
+                help="Average playoff probability across season",
+                format="%.1f%%",
+                width="small",
+            ),
+            "Bye %": st.column_config.NumberColumn(
+                "Bye %",
+                help="Average bye probability across season",
+                format="%.1f%%",
+                width="small",
+            ),
+            "Semis %": st.column_config.NumberColumn(
+                "Semis %",
+                help="Average semifinal probability across season",
+                format="%.1f%%",
+                width="small",
+            ),
+            "Final %": st.column_config.NumberColumn(
+                "Final %",
+                help="Average final probability across season",
+                format="%.1f%%",
+                width="small",
+            ),
+            "Champ %": st.column_config.NumberColumn(
+                "Champ %",
+                help="Average championship probability across season",
+                format="%.1f%%",
+                width="small",
+            ),
             # Shuffle Simulations (what would happen with every possible schedule)
-            'Shuffle Top Seed': st.column_config.NumberColumn('Shuffle Top Seed', help='Times finished 1st seed across all possible schedules', format='%d', width='small'),
-            'Shuffle Avg W': st.column_config.NumberColumn('Shuffle Avg W', help='Average wins across all possible schedules', format='%.2f', width='small'),
-            'W vs Shuffle': st.column_config.NumberColumn('W vs Shuffle', help='Actual wins minus shuffle average (luck factor)', format='%.2f', width='small'),
-            'Shuffle Playoff %': st.column_config.NumberColumn('Shuffle Playoff %', help='Playoff % across all possible schedules', format='%.1f%%', width='small'),
-            'Shuffle Bye %': st.column_config.NumberColumn('Shuffle Bye %', help='Bye % across all possible schedules', format='%.1f%%', width='small'),
-            'Shuffle Avg Seed': st.column_config.NumberColumn('Shuffle Avg Seed', help='Average seed across all possible schedules', format='%.2f', width='small'),
-            'Seed vs Shuffle': st.column_config.NumberColumn('Seed vs Shuffle', help='Actual seed minus shuffle average (schedule luck)', format='%.2f', width='small'),
-
+            "Shuffle Top Seed": st.column_config.NumberColumn(
+                "Shuffle Top Seed",
+                help="Times finished 1st seed across all possible schedules",
+                format="%d",
+                width="small",
+            ),
+            "Shuffle Avg W": st.column_config.NumberColumn(
+                "Shuffle Avg W",
+                help="Average wins across all possible schedules",
+                format="%.2f",
+                width="small",
+            ),
+            "W vs Shuffle": st.column_config.NumberColumn(
+                "W vs Shuffle",
+                help="Actual wins minus shuffle average (luck factor)",
+                format="%.2f",
+                width="small",
+            ),
+            "Shuffle Playoff %": st.column_config.NumberColumn(
+                "Shuffle Playoff %",
+                help="Playoff % across all possible schedules",
+                format="%.1f%%",
+                width="small",
+            ),
+            "Shuffle Bye %": st.column_config.NumberColumn(
+                "Shuffle Bye %",
+                help="Bye % across all possible schedules",
+                format="%.1f%%",
+                width="small",
+            ),
+            "Shuffle Avg Seed": st.column_config.NumberColumn(
+                "Shuffle Avg Seed",
+                help="Average seed across all possible schedules",
+                format="%.2f",
+                width="small",
+            ),
+            "Seed vs Shuffle": st.column_config.NumberColumn(
+                "Seed vs Shuffle",
+                help="Actual seed minus shuffle average (schedule luck)",
+                format="%.2f",
+                width="small",
+            ),
             # Streaks
-            'Win Streak': st.column_config.NumberColumn('Win Streak', help='Longest winning streak', format='%d', width='small'),
-            'Loss Streak': st.column_config.NumberColumn('Loss Streak', help='Longest losing streak', format='%d', width='small'),
+            "Win Streak": st.column_config.NumberColumn(
+                "Win Streak", help="Longest winning streak", format="%d", width="small"
+            ),
+            "Loss Streak": st.column_config.NumberColumn(
+                "Loss Streak", help="Longest losing streak", format="%d", width="small"
+            ),
         }

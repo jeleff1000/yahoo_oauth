@@ -12,8 +12,7 @@ if str(_app_dir) not in sys.path:
     sys.path.insert(0, str(_app_dir))
 
 # Import contextual helpers module to avoid circular imports
-from ..helpers import contextual_helpers as ctx
-from shared.dataframe_utils import as_dataframe, get_matchup_df
+from shared.dataframe_utils import get_matchup_df
 
 
 def _norm(s: str) -> str:
@@ -31,8 +30,12 @@ def _find_col(df: pd.DataFrame, candidates: list[str]) -> Optional[str]:
 
 def _find_manager_column(df: pd.DataFrame) -> Optional[str]:
     preferred = [
-        "manager", "manager_name", "owner", "owner_name",
-        "team_owner", "team_manager",
+        "manager",
+        "manager_name",
+        "owner",
+        "owner_name",
+        "team_owner",
+        "team_manager",
     ]
     cols_lower = {str(c).strip().lower(): c for c in df.columns}
     for p in preferred:
@@ -91,10 +94,26 @@ def _fmt_percent(v) -> str:
 
 # --- Bolding helpers (parentheticals and number+unit phrases) ---
 _UNIT_WORDS = (
-    "point", "points", "win", "wins", "seed", "seeds",
-    "chance", "favorite", "favorites", "spread", "margin",
-    "victory", "loss", "losses", "team", "teams",
-    "percent", "percentage", "game", "games",
+    "point",
+    "points",
+    "win",
+    "wins",
+    "seed",
+    "seeds",
+    "chance",
+    "favorite",
+    "favorites",
+    "spread",
+    "margin",
+    "victory",
+    "loss",
+    "losses",
+    "team",
+    "teams",
+    "percent",
+    "percentage",
+    "game",
+    "games",
 )
 _ADJ_WORDS = ("extra", "total", "more", "fewer", "additional")
 
@@ -105,25 +124,30 @@ _RE_NUM_UNIT = re.compile(
     rf"(?:\s+(?:{'|'.join(_ADJ_WORDS)}))?"
     rf"(?:\s+(?:{'|'.join(_UNIT_WORDS)}))"
     rf")(?!\w)",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
+
 
 def _escape_md_text(s: str) -> str:
     # Escape Markdown special chars so content inside bold stays literal
     return re.sub(r"([\\`*_~\-])", r"\\\1", str(s or ""))
+
 
 def _bold_parentheticals(s: str) -> str:
     # Make any (...) segment bold, including the parentheses
     def repl(m: re.Match) -> str:
         inner = _escape_md_text(m.group(1))
         return f"**{inner}**"
+
     return re.sub(r"\(([^()]*)\)", repl, str(s or ""))
+
 
 def _bold_numbers_with_units(s: str) -> str:
     # Bold number+unit phrases outside parentheses (avoid nested bold)
     def bold_nums_segment(seg: str) -> str:
         def repl(m: re.Match) -> str:
             return f"**{_escape_md_text(m.group(1))}**"
+
         return _RE_NUM_UNIT.sub(repl, seg)
 
     text = str(s or "")
@@ -148,6 +172,7 @@ def _bold_numbers_with_units(s: str) -> str:
     if buf:
         out.append(bold_nums_segment("".join(buf)))
     return "".join(out)
+
 
 def _apply_bolding(s: str) -> str:
     # Bold number+units outside parentheses, then bold entire parentheticals
@@ -177,30 +202,69 @@ def display_season_recap(
     col_manager = _find_manager_column(df)
 
     col_wins_to_date = _find_col(df, ["Wins to Date", "wins_to_date", "wins to date"])
-    col_losses_to_date = _find_col(df, ["Losses to Date", "losses_to_date", "losses to date"])
-    col_seed_to_date = _find_col(df, ["Playoff Seed to Date", "playoff_seed_to_date", "seed to date"])
+    col_losses_to_date = _find_col(
+        df, ["Losses to Date", "losses_to_date", "losses to date"]
+    )
+    col_seed_to_date = _find_col(
+        df, ["Playoff Seed to Date", "playoff_seed_to_date", "seed to date"]
+    )
     col_avg_seed = _find_col(df, ["avg_seed", "average_seed"])
     col_p_playoffs = _find_col(df, ["p_playoffs", "prob_playoffs", "p playoffs"])
     col_p_champ = _find_col(df, ["p_champ", "prob_championship", "p champ"])
 
     # Shuffled schedule metrics
-    col_shuffle_avg_wins = _find_col(df, [
-        "shuffle_avg_wins", "shuffle avg wins", "avg_shuffle_wins", "avg shuffle wins",
-        "shuffled_avg_wins", "shuffled avg wins", "simulated_avg_wins", "simulated avg wins",
-        "shuffle wins", "expected wins shuffled", "sched_adj_avg_wins", "schedule adjusted avg wins"
-    ])
-    col_shuffle_avg_playoffs = _find_col(df, [
-        "shuffle_avg_playoffs", "shuffle avg playoffs", "avg_shuffle_playoffs", "avg shuffle playoffs",
-        "shuffled_avg_playoffs", "shuffled avg playoffs", "simulated_playoff_pct", "sim playoff pct",
-        "shuffle_playoff_pct", "playoff pct shuffled", "p_playoffs_shuffle", "p playoffs shuffle",
-        "playoff_odds_shuffle", "playoff odds shuffle"
-    ])
+    col_shuffle_avg_wins = _find_col(
+        df,
+        [
+            "shuffle_avg_wins",
+            "shuffle avg wins",
+            "avg_shuffle_wins",
+            "avg shuffle wins",
+            "shuffled_avg_wins",
+            "shuffled avg wins",
+            "simulated_avg_wins",
+            "simulated avg wins",
+            "shuffle wins",
+            "expected wins shuffled",
+            "sched_adj_avg_wins",
+            "schedule adjusted avg wins",
+        ],
+    )
+    col_shuffle_avg_playoffs = _find_col(
+        df,
+        [
+            "shuffle_avg_playoffs",
+            "shuffle avg playoffs",
+            "avg_shuffle_playoffs",
+            "avg shuffle playoffs",
+            "shuffled_avg_playoffs",
+            "shuffled avg playoffs",
+            "simulated_playoff_pct",
+            "sim playoff pct",
+            "shuffle_playoff_pct",
+            "playoff pct shuffled",
+            "p_playoffs_shuffle",
+            "p playoffs shuffle",
+            "playoff_odds_shuffle",
+            "playoff odds shuffle",
+        ],
+    )
     # Schedule luck vs shuffled wins
-    col_wins_vs_shuffle = _find_col(df, [
-        "wins_vs_shuffle_wins", "wins vs shuffle wins", "wins_minus_shuffle_avg_wins",
-        "wins minus shuffle avg wins", "wins_minus_expected", "wins minus expected",
-        "wins_above_shuffle", "wins above shuffle", "schedule_luck_wins", "schedule luck wins"
-    ])
+    col_wins_vs_shuffle = _find_col(
+        df,
+        [
+            "wins_vs_shuffle_wins",
+            "wins vs shuffle wins",
+            "wins_minus_shuffle_avg_wins",
+            "wins minus shuffle avg wins",
+            "wins_minus_expected",
+            "wins minus expected",
+            "wins_above_shuffle",
+            "wins above shuffle",
+            "schedule_luck_wins",
+            "schedule luck wins",
+        ],
+    )
 
     if col_year:
         df = df[pd.to_numeric(df[col_year], errors="coerce").astype("Int64") == year]
@@ -286,9 +350,7 @@ def display_season_recap(
         diff = _to_float(wins_vs_shuffle, None)
         if diff is not None:
             if diff > 1.0:
-                extra_msg = (
-                    f"You have been gifted ({_fmt_number(diff)} extra wins) so far this year because of an easy schedule, but who's counting?"
-                )
+                extra_msg = f"You have been gifted ({_fmt_number(diff)} extra wins) so far this year because of an easy schedule, but who's counting?"
             elif 0.50 <= diff <= 1.0:
                 extra_msg = "Your schedule is giving you a little extra help."
             elif -0.49 <= diff <= 0.49:
@@ -319,9 +381,7 @@ def display_season_recap(
             shuffle_msg = "You earned your spot in the standings! Keep it up"
         elif sp_pct < 50 and seed_to_date <= 6:
             shuffle_msg = "But hey, you're living in the real world. Don't listen to the haters, they're just jealous."
-    line3b = (
-        f"About ({_fmt_percent(shuffle_avg_playoffs)} of possible schedules) would currently have you in playoff position."
-    )
+    line3b = f"About ({_fmt_percent(shuffle_avg_playoffs)} of possible schedules) would currently have you in playoff position."
     if shuffle_msg:
         line3b += f" {shuffle_msg}"
     st.markdown(_apply_bolding(line3b))

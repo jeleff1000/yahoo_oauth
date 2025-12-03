@@ -4,21 +4,32 @@ import streamlit as st
 import duckdb
 import pandas as pd
 from ..shared.modern_styles import apply_modern_styles
-from .shared.simulation_styles import apply_simulation_styles, start_simulation_container, end_simulation_container
+from .shared.simulation_styles import (
+    apply_simulation_styles,
+    start_simulation_container,
+    end_simulation_container,
+)
 
 # ---- WHAT-IF viewers ----
 from .what_if.shuffle_schedules.shuffled_win_total_viewer import GaviStatViewer
-from .what_if.strength_of_schedule.opponent_shuffle_win_total import OpponentGaviStatViewer
-from .what_if.strength_of_schedule.everyones_schedule_viewer import EveryonesScheduleViewer
+from .what_if.strength_of_schedule.opponent_shuffle_win_total import (
+    OpponentGaviStatViewer,
+)
+from .what_if.strength_of_schedule.everyones_schedule_viewer import (
+    EveryonesScheduleViewer,
+)
 from .what_if.shuffle_schedules.vs_one_opponent_viewer import VsOneOpponentViewer
 from .what_if.tweak_scoring.tweak_scoring_viewer import TweakScoringViewer
 from .what_if.shuffle_schedules.expected_record_viewer import display_expected_record
 from .what_if.shuffle_schedules.expected_seed_viewer import display_expected_seed
-from .what_if.strength_of_schedule.sos_expected_record_viewer import display_opp_expected_record
-from .what_if.strength_of_schedule.sos_expected_seed_viewer import display_opp_expected_seed
+from .what_if.strength_of_schedule.sos_expected_record_viewer import (
+    display_opp_expected_record,
+)
+from .what_if.strength_of_schedule.sos_expected_seed_viewer import (
+    display_opp_expected_seed,
+)
 
 # ---- PREDICTIVE viewers ----
-from .predictive.playoff_odds import PlayoffOddsViewer as PlayoffOddsSnapshot
 from .predictive.playoff_odds_graph import PlayoffOddsViewer as PlayoffOddsGraph
 from .predictive.playoff_machine import display_playoff_machine
 from .predictive.predictive_record import display_predicted_record
@@ -59,9 +70,11 @@ class SimulationDataViewer:
         cols = st.columns(len(main_tab_names))
         for idx, (col, name) in enumerate(zip(cols, main_tab_names)):
             with col:
-                is_active = (idx == current_main_idx)
+                is_active = idx == current_main_idx
                 btn_type = "primary" if is_active else "secondary"
-                if st.button(name, key=f"sim_main_{idx}", use_container_width=True, type=btn_type):
+                if st.button(
+                    name, key=f"sim_main_{idx}", use_container_width=True, type=btn_type
+                ):
                     if not is_active:
                         st.session_state["subtab_Simulations"] = idx
                         st.rerun()
@@ -70,14 +83,16 @@ class SimulationDataViewer:
 
         # ==================== PREDICTIVE ANALYTICS ====================
         if current_main_idx == 0:
-            pred_tabs = st.tabs([
-                "Playoff Dashboard",
-                "Playoff Machine",
-                "Final Records",
-                "Playoff Seeds",
-                "Weekly Odds",
-                "Multi-Year Trends"
-            ])
+            pred_tabs = st.tabs(
+                [
+                    "Playoff Dashboard",
+                    "Playoff Machine",
+                    "Final Records",
+                    "Playoff Seeds",
+                    "Weekly Odds",
+                    "Multi-Year Trends",
+                ]
+            )
 
             with pred_tabs[0]:
                 try:
@@ -117,21 +132,23 @@ class SimulationDataViewer:
 
         # ==================== WHAT-IF SCENARIOS ====================
         elif current_main_idx == 1:
-            whatif_tabs = st.tabs([
-                "Schedule Shuffles",
-                "Strength of Schedule",
-                "Score Sensitivity"
-            ])
+            whatif_tabs = st.tabs(
+                ["Schedule Shuffles", "Strength of Schedule", "Score Sensitivity"]
+            )
 
             # ---- Schedule Shuffles (4 sub-tabs) ----
             with whatif_tabs[0]:
-                st.caption("What if you kept your scores but faced randomized opponents?")
-                schedule_subtabs = st.tabs([
-                    "Win Distribution",
-                    "Head-to-Head",
-                    "Expected Records",
-                    "Expected Seeding"
-                ])
+                st.caption(
+                    "What if you kept your scores but faced randomized opponents?"
+                )
+                schedule_subtabs = st.tabs(
+                    [
+                        "Win Distribution",
+                        "Head-to-Head",
+                        "Expected Records",
+                        "Expected Seeding",
+                    ]
+                )
 
                 with schedule_subtabs[0]:
                     try:
@@ -159,13 +176,17 @@ class SimulationDataViewer:
 
             # ---- Strength of Schedule (4 sub-tabs) ----
             with whatif_tabs[1]:
-                st.caption("What if everyone faced your opponents? Measures schedule difficulty.")
-                opponent_subtabs = st.tabs([
-                    "Win Distribution",
-                    "Everyone's Schedule",
-                    "Expected Records",
-                    "Expected Seeding"
-                ])
+                st.caption(
+                    "What if everyone faced your opponents? Measures schedule difficulty."
+                )
+                opponent_subtabs = st.tabs(
+                    [
+                        "Win Distribution",
+                        "Everyone's Schedule",
+                        "Expected Records",
+                        "Expected Seeding",
+                    ]
+                )
 
                 with opponent_subtabs[0]:
                     try:
@@ -202,7 +223,9 @@ class SimulationDataViewer:
 
 
 @st.fragment
-def display_simulations_overview(matchup_data_df: pd.DataFrame | None, player_data_df=None):
+def display_simulations_overview(
+    matchup_data_df: pd.DataFrame | None, player_data_df=None
+):
     """Main entry point for simulations tab."""
     SimulationDataViewer(matchup_data_df).display()
 

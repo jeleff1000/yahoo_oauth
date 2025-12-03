@@ -6,6 +6,7 @@ Provides injury analysis tools including:
 - Season injury stats
 - Career injury stats
 """
+
 from .injury_overview import display_injury_overview, InjuryStatsViewer
 from .weekly_injury_stats import WeeklyInjuryStatsViewer
 from .season_injury_stats import SeasonInjuryStatsViewer

@@ -59,8 +59,12 @@ def load_optimized_transactions_data() -> Dict[str, Any]:
         # Load related data needed by transaction viewer (with reasonable limits)
         # Note: Using LIMIT here is acceptable as these are supporting datasets
         db = get_current_league_db()
-        player_data = run_query(f"SELECT * FROM {db}.public.players_by_year ORDER BY year DESC, week DESC LIMIT 10000")
-        draft_data = run_query(f"SELECT * FROM {T['draft']} ORDER BY year DESC, round, pick LIMIT 1000")
+        player_data = run_query(
+            f"SELECT * FROM {db}.public.players_by_year ORDER BY year DESC, week DESC LIMIT 10000"
+        )
+        draft_data = run_query(
+            f"SELECT * FROM {T['draft']} ORDER BY year DESC, round, pick LIMIT 1000"
+        )
 
         # Combine results
         return {

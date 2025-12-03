@@ -19,13 +19,11 @@ RECAPS_MATCHUP_COLUMNS = [
     "team_name",
     "opponent",
     "opponent_team",
-
     # Scoring
     "team_points",
     "opponent_points",
     "margin",
     "total_matchup_score",
-
     # Projections
     "team_projected_points",
     "opponent_projected_points",
@@ -33,7 +31,6 @@ RECAPS_MATCHUP_COLUMNS = [
     "abs_proj_score_error",
     "above_proj_score",
     "below_proj_score",
-
     # Expected/Spread Stats
     "expected_spread",
     "expected_odds",
@@ -41,18 +38,15 @@ RECAPS_MATCHUP_COLUMNS = [
     "lose_vs_spread",
     "underdog_wins",
     "favorite_losses",
-
     # League Context
     "league_weekly_mean",
     "league_weekly_median",
     "teams_beat_this_week",
     "above_league_median",
-
     # Results
     "win",
     "loss",
     "close_margin",
-
     # Playoff/Season Info
     "is_playoffs",
     "is_consolation",
@@ -62,7 +56,6 @@ RECAPS_MATCHUP_COLUMNS = [
     "sacko",
     "final_playoff_seed",
     "cumulative_week",
-
     # Cumulative/Season stats for recaps
     "wins_to_date",
     "losses_to_date",
@@ -75,7 +68,6 @@ RECAPS_MATCHUP_COLUMNS = [
     "p_playoffs",
     "p_bye",
     "proj_wins",
-
     # Additional useful columns
     "cumulative_wins",
     "cumulative_losses",
@@ -83,16 +75,13 @@ RECAPS_MATCHUP_COLUMNS = [
     "final_losses",
     "win_streak",
     "loss_streak",
-
     # Playoff odds and projections
     "avg_seed",
     "p_champ",
-
     # Shuffled schedule metrics
     "shuffle_avg_wins",
     "shuffle_avg_playoffs",
     "wins_vs_shuffle_wins",
-
     # Manager rankings and percentiles (for exceptional performance detection)
     "manager_all_time_ranking",
     "manager_all_time_percentile",
@@ -143,9 +132,15 @@ def load_recaps_matchup_data() -> Dict[str, Any]:
         df = run_query(query)
 
         # Add column aliases for backward compatibility with existing tabs
-        if "team_projected_points" in df.columns and "manager_proj_score" not in df.columns:
+        if (
+            "team_projected_points" in df.columns
+            and "manager_proj_score" not in df.columns
+        ):
             df["manager_proj_score"] = df["team_projected_points"]
-        if "opponent_projected_points" in df.columns and "opponent_proj_score" not in df.columns:
+        if (
+            "opponent_projected_points" in df.columns
+            and "opponent_proj_score" not in df.columns
+        ):
             df["opponent_proj_score"] = df["opponent_projected_points"]
         if "team_name" in df.columns and "manager_team" not in df.columns:
             df["manager_team"] = df["team_name"]

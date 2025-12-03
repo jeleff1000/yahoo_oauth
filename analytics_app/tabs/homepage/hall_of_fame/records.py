@@ -24,12 +24,15 @@ class RecordsViewer:
 
     @st.fragment
     def display(self):
-        st.markdown("""
+        st.markdown(
+            """
             <div class='hof-gradient-header hof-header-purple'>
                 <h2>📊 League Records</h2>
                 <p>All-time records, streaks, and memorable moments</p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         if self.df is None or self.df.empty:
             st.info("📊 No data available")
@@ -104,46 +107,58 @@ class RecordsViewer:
             with cols[0]:
                 if not highest_week.empty:
                     row = highest_week.iloc[0]
-                    st.markdown(record_card(
-                        title="🔥 Highest Single Week",
-                        holder=row['manager'],
-                        value=f"{row['team_points']:.1f} pts",
-                        year=int(row['year']),
-                        context=f"Week {int(row['week'])}"
-                    ), unsafe_allow_html=True)
+                    st.markdown(
+                        record_card(
+                            title="🔥 Highest Single Week",
+                            holder=row["manager"],
+                            value=f"{row['team_points']:.1f} pts",
+                            year=int(row["year"]),
+                            context=f"Week {int(row['week'])}",
+                        ),
+                        unsafe_allow_html=True,
+                    )
 
             with cols[1]:
                 if not lowest_week.empty:
                     row = lowest_week.iloc[0]
-                    st.markdown(record_card(
-                        title="❄️ Lowest Single Week",
-                        holder=row['manager'],
-                        value=f"{row['team_points']:.1f} pts",
-                        year=int(row['year']),
-                        context=f"Week {int(row['week'])}"
-                    ), unsafe_allow_html=True)
+                    st.markdown(
+                        record_card(
+                            title="❄️ Lowest Single Week",
+                            holder=row["manager"],
+                            value=f"{row['team_points']:.1f} pts",
+                            year=int(row["year"]),
+                            context=f"Week {int(row['week'])}",
+                        ),
+                        unsafe_allow_html=True,
+                    )
 
             with cols[2]:
                 if not best_season.empty:
                     row = best_season.iloc[0]
-                    st.markdown(record_card(
-                        title="📈 Best Season PPG",
-                        holder=row['manager'],
-                        value=f"{row['ppg']:.2f} ppg",
-                        year=int(row['year']),
-                        context=f"{int(row['wins'])} wins"
-                    ), unsafe_allow_html=True)
+                    st.markdown(
+                        record_card(
+                            title="📈 Best Season PPG",
+                            holder=row["manager"],
+                            value=f"{row['ppg']:.2f} ppg",
+                            year=int(row["year"]),
+                            context=f"{int(row['wins'])} wins",
+                        ),
+                        unsafe_allow_html=True,
+                    )
 
             with cols[3]:
                 if not biggest_blowout.empty:
                     row = biggest_blowout.iloc[0]
-                    st.markdown(record_card(
-                        title="💥 Biggest Blowout",
-                        holder=row['winner'],
-                        value=f"+{row['margin']:.1f} margin",
-                        year=int(row['year']),
-                        context=f"vs {row['loser']}"
-                    ), unsafe_allow_html=True)
+                    st.markdown(
+                        record_card(
+                            title="💥 Biggest Blowout",
+                            holder=row["winner"],
+                            value=f"+{row['margin']:.1f} margin",
+                            year=int(row["year"]),
+                            context=f"vs {row['loser']}",
+                        ),
+                        unsafe_allow_html=True,
+                    )
 
             # League Totals Section (folded from Miscellaneous)
             st.markdown("#### 📊 League Totals")
@@ -162,7 +177,7 @@ class RecordsViewer:
                 row = totals.iloc[0]
                 cols = st.columns(4)
                 with cols[0]:
-                    st.metric("Seasons", int(row['seasons']))
+                    st.metric("Seasons", int(row["seasons"]))
                 with cols[1]:
                     st.metric("Games", f"{int(row['total_games']):,}")
                 with cols[2]:
@@ -183,7 +198,7 @@ class RecordsViewer:
                         SELECT COUNT(*) as cnt FROM matchups
                         WHERE CAST(team_points AS DOUBLE) >= {threshold}
                     """
-                    count = self.con.execute(count_query).fetchdf().iloc[0]['cnt']
+                    count = self.con.execute(count_query).fetchdf().iloc[0]["cnt"]
                     st.metric(f"{label} Weeks", int(count))
 
         except Exception as e:
@@ -197,8 +212,10 @@ class RecordsViewer:
             # Calculate streaks for each manager using pandas (streak logic is complex)
             streak_data = []
 
-            for manager in self.df['manager'].unique():
-                manager_games = self.df[self.df['manager'] == manager].sort_values(['year', 'week'])
+            for manager in self.df["manager"].unique():
+                manager_games = self.df[self.df["manager"] == manager].sort_values(
+                    ["year", "week"]
+                )
 
                 current_streak = 0
                 max_win_streak = 0
@@ -206,64 +223,76 @@ class RecordsViewer:
                 current_type = None
 
                 for _, game in manager_games.iterrows():
-                    if game['win'] == 1:
-                        if current_type == 'win':
+                    if game["win"] == 1:
+                        if current_type == "win":
                             current_streak += 1
                         else:
                             current_streak = 1
-                            current_type = 'win'
+                            current_type = "win"
                         max_win_streak = max(max_win_streak, current_streak)
                     else:
-                        if current_type == 'loss':
+                        if current_type == "loss":
                             current_streak += 1
                         else:
                             current_streak = 1
-                            current_type = 'loss'
+                            current_type = "loss"
                         max_loss_streak = max(max_loss_streak, current_streak)
 
-                streak_data.append({
-                    'manager': manager,
-                    'win_streak': max_win_streak,
-                    'loss_streak': max_loss_streak
-                })
+                streak_data.append(
+                    {
+                        "manager": manager,
+                        "win_streak": max_win_streak,
+                        "loss_streak": max_loss_streak,
+                    }
+                )
 
             streak_df = pd.DataFrame(streak_data)
 
             # Top record holders
-            best_win = streak_df.nlargest(1, 'win_streak')
-            worst_loss = streak_df.nlargest(1, 'loss_streak')
+            best_win = streak_df.nlargest(1, "win_streak")
+            worst_loss = streak_df.nlargest(1, "loss_streak")
 
             col1, col2 = st.columns(2)
 
             with col1:
                 if not best_win.empty:
                     row = best_win.iloc[0]
-                    st.markdown(record_card(
-                        title="🔥 Longest Win Streak",
-                        holder=row['manager'],
-                        value=f"{int(row['win_streak'])} games"
-                    ), unsafe_allow_html=True)
+                    st.markdown(
+                        record_card(
+                            title="🔥 Longest Win Streak",
+                            holder=row["manager"],
+                            value=f"{int(row['win_streak'])} games",
+                        ),
+                        unsafe_allow_html=True,
+                    )
 
             with col2:
                 if not worst_loss.empty:
                     row = worst_loss.iloc[0]
-                    st.markdown(record_card(
-                        title="💀 Longest Loss Streak",
-                        holder=row['manager'],
-                        value=f"{int(row['loss_streak'])} games"
-                    ), unsafe_allow_html=True)
+                    st.markdown(
+                        record_card(
+                            title="💀 Longest Loss Streak",
+                            holder=row["manager"],
+                            value=f"{int(row['loss_streak'])} games",
+                        ),
+                        unsafe_allow_html=True,
+                    )
 
             # Show both streak tables side by side
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("#### 🏆 Win Streaks")
-                win_streaks = streak_df.nlargest(10, 'win_streak')[['manager', 'win_streak']].copy()
-                win_streaks.columns = ['Manager', 'Streak']
+                win_streaks = streak_df.nlargest(10, "win_streak")[
+                    ["manager", "win_streak"]
+                ].copy()
+                win_streaks.columns = ["Manager", "Streak"]
                 st.dataframe(win_streaks, use_container_width=True, hide_index=True)
             with col2:
                 st.markdown("#### 📉 Loss Streaks")
-                loss_streaks = streak_df.nlargest(10, 'loss_streak')[['manager', 'loss_streak']].copy()
-                loss_streaks.columns = ['Manager', 'Streak']
+                loss_streaks = streak_df.nlargest(10, "loss_streak")[
+                    ["manager", "loss_streak"]
+                ].copy()
+                loss_streaks.columns = ["Manager", "Streak"]
                 st.dataframe(loss_streaks, use_container_width=True, hide_index=True)
 
         except Exception as e:
@@ -297,13 +326,16 @@ class RecordsViewer:
 
             # Top record card
             top = tough_losses.iloc[0]
-            st.markdown(record_card(
-                title="😭 Unluckiest Loss Ever",
-                holder=top['manager'],
-                value=f"{top['score']:.1f} pts (L)",
-                year=int(top['year']),
-                context=f"Lost to {top['opponent']} by {top['margin']:.1f}"
-            ), unsafe_allow_html=True)
+            st.markdown(
+                record_card(
+                    title="😭 Unluckiest Loss Ever",
+                    holder=top["manager"],
+                    value=f"{top['score']:.1f} pts (L)",
+                    year=int(top["year"]),
+                    context=f"Lost to {top['opponent']} by {top['margin']:.1f}",
+                ),
+                unsafe_allow_html=True,
+            )
 
             # Summary KPIs
             col1, col2, col3 = st.columns(3)
@@ -317,7 +349,7 @@ class RecordsViewer:
                     SELECT COUNT(*) as cnt FROM matchups
                     WHERE win = 0 AND CAST(team_points AS DOUBLE) >= 120
                 """
-                high_losses = self.con.execute(high_loss_query).fetchdf().iloc[0]['cnt']
+                high_losses = self.con.execute(high_loss_query).fetchdf().iloc[0]["cnt"]
                 st.metric("120+ Point Losses", int(high_losses))
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -325,8 +357,16 @@ class RecordsViewer:
             # Full table
             st.markdown("#### 😢 Top 10 Highest Scoring Losses")
             display_df = tough_losses.copy()
-            display_df['year'] = display_df['year'].astype(str)
-            display_df.columns = ['Manager', 'Opponent', 'Score', 'Opp Score', 'Year', 'Week', 'Lost By']
+            display_df["year"] = display_df["year"].astype(str)
+            display_df.columns = [
+                "Manager",
+                "Opponent",
+                "Score",
+                "Opp Score",
+                "Year",
+                "Week",
+                "Lost By",
+            ]
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
         except Exception as e:

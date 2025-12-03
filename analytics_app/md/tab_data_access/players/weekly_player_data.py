@@ -33,34 +33,28 @@ WEEKLY_PLAYER_COLUMNS = [
     "player_key",
     "player_week",
     "player_year",
-
     # === Time dimensions (4) ===
     "year",
     "week",
     "cumulative_week",
     "manager_week",
-
     # === Positions (5) ===
     "position",
     "yahoo_position",
     "nfl_position",
     "fantasy_position",
     "lineup_position",  # QB1, RB1, WR2, etc.
-
     # === Roster status (2) ===
     "is_rostered",
     "is_started",
-
     # === Points and scoring (3) ===
     "points",
     "fantasy_points",
     "calculated_points",
-
     # === SPAR metrics (3) ===
-    "spar",             # Legacy SPAR
-    "player_spar",      # Total SPAR produced (opportunity cost)
-    "manager_spar",     # SPAR while on manager's roster (actual value)
-
+    "spar",  # Legacy SPAR
+    "player_spar",  # Total SPAR produced (opportunity cost)
+    "manager_spar",  # SPAR while on manager's roster (actual value)
     # === Passing stats (11) ===
     "completions",
     "attempts",
@@ -73,7 +67,6 @@ WEEKLY_PLAYER_COLUMNS = [
     "passing_epa",
     "passing_cpoe",
     "pacr",
-
     # === Rushing stats (10) ===
     "carries",
     "rushing_yards",
@@ -85,7 +78,6 @@ WEEKLY_PLAYER_COLUMNS = [
     "sack_fumbles_lost",
     "rushing_2pt_conversions",
     "passing_2pt_conversions",
-
     # === Receiving stats (13) ===
     "receptions",
     "targets",
@@ -102,7 +94,6 @@ WEEKLY_PLAYER_COLUMNS = [
     "wopr",
     "racr",
     "air_yards_share",
-
     # === Kicker stats (13) ===
     "fg_made",
     "fg_att",
@@ -117,7 +108,6 @@ WEEKLY_PLAYER_COLUMNS = [
     "pat_made",
     "pat_att",
     "pat_missed",
-
     # === Defense/IDP stats (15) ===
     "def_sacks",
     "def_sack_yards",
@@ -134,7 +124,6 @@ WEEKLY_PLAYER_COLUMNS = [
     "def_fumbles_forced",
     "def_safeties",
     "def_tds",
-
     # === DST stats (9) ===
     "pts_allow",
     "dst_points_allowed",
@@ -145,7 +134,6 @@ WEEKLY_PLAYER_COLUMNS = [
     "fumble_recovery_opp",
     "fumble_recovery_tds",
     "three_out",
-
     # === Matchup context (10) ===
     "matchup_name",
     "team_1",
@@ -157,7 +145,6 @@ WEEKLY_PLAYER_COLUMNS = [
     "margin",
     "is_playoffs",
     "is_consolation",
-
     # === Playoff rounds (7) ===
     "quarterfinal",
     "semifinal",
@@ -166,13 +153,11 @@ WEEKLY_PLAYER_COLUMNS = [
     "playoff_round",
     "consolation_round",
     "sacko",
-
     # === Optimal lineup flags (4) ===
     "optimal_player",
     "optimal_position",
     "league_wide_optimal_player",
     "league_wide_optimal_position",
-
     # === Visual/UI (1) ===
     "headshot_url",
 ]
@@ -181,7 +166,7 @@ WEEKLY_PLAYER_COLUMNS = [
 @st.cache_data(
     show_spinner=True,
     ttl=3600,  # 1 hour cache (compromise between historical and current data)
-    max_entries=50  # Cache last 50 queries
+    max_entries=50,  # Cache last 50 queries
 )
 def load_weekly_player_data(
     year: int | None = None,
@@ -189,7 +174,7 @@ def load_weekly_player_data(
     limit: int = 100,
     offset: int = 0,
     sort_column: str = "points",
-    sort_direction: str = "DESC"
+    sort_direction: str = "DESC",
 ) -> Dict[str, Any]:
     """
     Load weekly player data with ONLY the columns needed.
@@ -239,8 +224,16 @@ def load_weekly_player_data(
         # Build column list for SELECT clause
         cols_str = ", ".join(WEEKLY_PLAYER_COLUMNS)
 
-        numeric_cols = {"points", "passing_yards", "passing_tds", "rushing_yards",
-                       "rushing_tds", "receiving_yards", "receiving_tds", "receptions"}
+        numeric_cols = {
+            "points",
+            "passing_yards",
+            "passing_tds",
+            "rushing_yards",
+            "rushing_tds",
+            "receiving_yards",
+            "receiving_tds",
+            "receptions",
+        }
         if sort_column in numeric_cols:
             order_by = f"ORDER BY {sort_column} {sort_direction} NULLS LAST"
         else:
@@ -269,7 +262,9 @@ def load_weekly_player_data(
         else:
             # More data available - use conservative estimate
             # This avoids expensive COUNT query
-            estimated_total = None  # Will show "More available" instead of exact page count
+            estimated_total = (
+                None  # Will show "More available" instead of exact page count
+            )
 
         df.attrs["total_count"] = estimated_total
         df.attrs["offset"] = offset
@@ -285,14 +280,14 @@ def load_weekly_player_data(
 @st.cache_data(
     show_spinner=True,
     ttl=3600,  # 1 hour cache for filtered queries
-    max_entries=100  # Cache more filtered queries
+    max_entries=100,  # Cache more filtered queries
 )
 def load_filtered_weekly_player_data(
     filters: dict,
     limit: int = 5000,
     offset: int = 0,
     sort_column: str = "points",
-    sort_direction: str = "DESC"
+    sort_direction: str = "DESC",
 ):
     """
     Load filtered weekly player data with ONLY the columns needed.
@@ -321,13 +316,21 @@ def load_filtered_weekly_player_data(
             where.append("LOWER(player) LIKE LOWER('%" + esc + "%')")
 
         if filters.get("rostered_only"):
-            where.append("manager IS NOT NULL AND manager <> '' AND manager <> 'Unrostered'")
+            where.append(
+                "manager IS NOT NULL AND manager <> '' AND manager <> 'Unrostered'"
+            )
         if filters.get("started_only"):
             where.append("started = 1")
         if filters.get("exclude_postseason"):
             where.append("(season_type IS NULL OR season_type = 'REG')")
 
-        for col in ["manager", "nfl_position", "fantasy_position", "nfl_team", "opponent_nfl_team"]:
+        for col in [
+            "manager",
+            "nfl_position",
+            "fantasy_position",
+            "nfl_team",
+            "opponent_nfl_team",
+        ]:
             vals = filters.get(col) or []
             if vals:
                 if col == "manager":
@@ -354,8 +357,16 @@ def load_filtered_weekly_player_data(
         # Build column list for SELECT clause
         cols_str = ", ".join(WEEKLY_PLAYER_COLUMNS)
 
-        numeric_cols = {"points", "passing_yards", "passing_tds", "rushing_yards",
-                       "rushing_tds", "receiving_yards", "receiving_tds", "receptions"}
+        numeric_cols = {
+            "points",
+            "passing_yards",
+            "passing_tds",
+            "rushing_yards",
+            "rushing_tds",
+            "receiving_yards",
+            "receiving_tds",
+            "receptions",
+        }
         if sort_column in numeric_cols:
             order_by = f"ORDER BY {sort_column} {sort_direction} NULLS LAST"
         else:
@@ -419,29 +430,23 @@ H2H_COLUMNS = [
     "player",
     "manager",
     "opponent",
-
     # Time dimensions (2)
     "year",
     "week",
-
     # Positions (5)
     "fantasy_position",
     "lineup_position",
     "position",
     "league_wide_optimal_position",
     "optimal_position",
-
     # Matchup context (3)
     "matchup_name",
     "team_1",
     "team_2",
-
     # Stats (1)
     "points",
-
     # Flags (1)
     "league_wide_optimal_player",
-
     # Visual (1)
     "headshot_url",
 ]

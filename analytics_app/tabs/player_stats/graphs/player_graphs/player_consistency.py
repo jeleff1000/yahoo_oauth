@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import streamlit as st
-import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from md.core import list_player_seasons
@@ -16,14 +15,17 @@ def display_player_consistency_graph(prefix=""):
     """
     st.header("🎯 Player Consistency Analysis")
 
-    st.markdown("""
+    st.markdown(
+        """
     <div style="background: #f0f2f6; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
     <p style="margin: 0; color: #31333F; font-size: 0.9rem;">
     <strong>Find reliable performers:</strong> Compare players by their consistency metrics.
     High PPG with low variance = reliable. High variance = boom/bust.
     </p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     # Year selection with "All Seasons" option
     available_years = list_player_seasons()
@@ -41,14 +43,14 @@ def display_player_consistency_graph(prefix=""):
             "Select Season Range",
             options=year_options,
             index=0,
-            key=f"{prefix}_year_range"
+            key=f"{prefix}_year_range",
         )
 
     with col2:
         position = st.selectbox(
             "Select Position",
             options=["All", "QB", "RB", "WR", "TE", "K", "DEF"],
-            key=f"{prefix}_position"
+            key=f"{prefix}_position",
         )
 
     # Determine years to load
@@ -65,7 +67,7 @@ def display_player_consistency_graph(prefix=""):
             options=["All Players (1999+)", "Rostered Only (2014+)"],
             index=0,
             key=f"{prefix}_roster_filter",
-            help="All Players shows complete history. Rostered Only limits to when manager data was tracked."
+            help="All Players shows complete history. Rostered Only limits to when manager data was tracked.",
         )
 
     with col4:
@@ -73,7 +75,7 @@ def display_player_consistency_graph(prefix=""):
             "Started games only",
             value=True,
             key=f"{prefix}_started_only",
-            help="Only count games where player was actually started (not benched)"
+            help="Only count games where player was actually started (not benched)",
         )
 
     # Load data
@@ -84,7 +86,7 @@ def display_player_consistency_graph(prefix=""):
             rostered_only=(roster_filter == "Rostered Only (2014+)"),
             started_only=started_filter,
             sort_column="points",
-            sort_direction="DESC"
+            sort_direction="DESC",
         )
 
         if player_data.empty:
@@ -102,10 +104,14 @@ def display_player_consistency_graph(prefix=""):
     # Calculate metrics
     player_data["ppg"] = (player_data["points"] / player_data["games_started"]).round(2)
     if "win" in player_data.columns:
-        player_data["win_rate"] = ((player_data["win"] / player_data["games_started"]) * 100).round(1)
+        player_data["win_rate"] = (
+            (player_data["win"] / player_data["games_started"]) * 100
+        ).round(1)
 
     # Create tabs for different views
-    tab1, tab2, tab3 = st.tabs(["📊 Top Performers", "🎯 PPG vs Games", "📋 Full Stats"])
+    tab1, tab2, tab3 = st.tabs(
+        ["📊 Top Performers", "🎯 PPG vs Games", "📋 Full Stats"]
+    )
 
     with tab1:
         st.subheader("📊 Top Performers by Points Per Game")
@@ -118,28 +124,31 @@ def display_player_consistency_graph(prefix=""):
 
         top_players_sorted = top_players.sort_values("ppg")
 
-        fig.add_trace(go.Bar(
-            y=top_players_sorted["player"],
-            x=top_players_sorted["ppg"],
-            orientation='h',
-            marker=dict(
-                color=top_players_sorted["ppg"],
-                colorscale="Viridis",
-                showscale=True,
-                colorbar=dict(title="PPG")
-            ),
-            text=top_players_sorted["ppg"].apply(lambda x: f"{x:.2f}"),
-            textposition='outside',
-            hovertemplate="<b>%{y}</b><br>PPG: %{x:.2f}<br>Games: " +
-                         top_players_sorted["games_started"].astype(str) + "<extra></extra>"
-        ))
+        fig.add_trace(
+            go.Bar(
+                y=top_players_sorted["player"],
+                x=top_players_sorted["ppg"],
+                orientation="h",
+                marker=dict(
+                    color=top_players_sorted["ppg"],
+                    colorscale="Viridis",
+                    showscale=True,
+                    colorbar=dict(title="PPG"),
+                ),
+                text=top_players_sorted["ppg"].apply(lambda x: f"{x:.2f}"),
+                textposition="outside",
+                hovertemplate="<b>%{y}</b><br>PPG: %{x:.2f}<br>Games: "
+                + top_players_sorted["games_started"].astype(str)
+                + "<extra></extra>",
+            )
+        )
 
         fig.update_layout(
             xaxis_title="Points Per Game",
             yaxis_title="",
             height=max(400, top_n * 25),
             template="plotly_white",
-            showlegend=False
+            showlegend=False,
         )
 
         st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_top_performers")
@@ -158,13 +167,10 @@ def display_player_consistency_graph(prefix=""):
             hover_name="player",
             hover_data={"ppg": ":.2f", "games_started": True, "points": ":.0f"},
             labels={"ppg": "Points Per Game", "games_started": "Games Started"},
-            color_discrete_sequence=px.colors.qualitative.Set2
+            color_discrete_sequence=px.colors.qualitative.Set2,
         )
 
-        fig2.update_layout(
-            height=500,
-            template="plotly_white"
-        )
+        fig2.update_layout(height=500, template="plotly_white")
 
         # Add reference lines
         median_ppg = player_data["ppg"].median()
@@ -193,7 +199,7 @@ def display_player_consistency_graph(prefix=""):
             "ppg": "PPG",
             "points": "Total Points",
             "games_started": "Games",
-            "win_rate": "Win %"
+            "win_rate": "Win %",
         }
         display_df = display_df.rename(columns=column_mapping)
         display_df = display_df.sort_values("PPG", ascending=False)
@@ -205,8 +211,12 @@ def display_player_consistency_graph(prefix=""):
             column_config={
                 "PPG": st.column_config.NumberColumn(format="%.2f"),
                 "Total Points": st.column_config.NumberColumn(format="%.1f"),
-                "Win %": st.column_config.NumberColumn(format="%.1f%%") if "Win %" in display_df.columns else None
-            }
+                "Win %": (
+                    st.column_config.NumberColumn(format="%.1f%%")
+                    if "Win %" in display_df.columns
+                    else None
+                ),
+            },
         )
 
     # Summary insights

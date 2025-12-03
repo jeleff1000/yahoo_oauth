@@ -10,7 +10,6 @@ A clean, decluttered landing page that:
 """
 from __future__ import annotations
 from typing import Any, Dict, Optional
-import pandas as pd
 import streamlit as st
 import sys
 from pathlib import Path
@@ -26,7 +25,7 @@ from ..shared.modern_styles import apply_modern_styles
 
 # Data helpers
 from md.tab_data_access.homepage import load_player_two_week_slice
-from shared.dataframe_utils import as_dataframe, get_matchup_df
+from shared.dataframe_utils import get_matchup_df
 
 # Homepage sections
 from .season_standings import display_season_standings
@@ -37,6 +36,7 @@ from .recaps import display_recap_overview
 # Hall of Fame
 try:
     from .hall_of_fame.hall_of_fame_homepage import HallOfFameViewer
+
     HALL_OF_FAME_AVAILABLE = True
     HALL_OF_FAME_ERROR = None
 except Exception as hof_import_error:
@@ -47,7 +47,8 @@ except Exception as hof_import_error:
 
 def _apply_homepage_styles():
     """Apply minimal homepage-specific styles."""
-    st.markdown("""
+    st.markdown(
+        """
     <style>
     /* ========================================
        HOMEPAGE HERO - Subtle gradient
@@ -248,7 +249,9 @@ def _apply_homepage_styles():
         }
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def _render_hero(summary: Dict[str, Any]) -> None:
@@ -256,13 +259,16 @@ def _render_hero(summary: Dict[str, Any]) -> None:
     latest_year = summary.get("latest_year", 2024)
     latest_week = summary.get("latest_week", 1)
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="homepage-hero">
         <h1>Fantasy Football Command Center</h1>
         <p class="subtitle">25+ years of data, analytics, and insights at your fingertips</p>
         <span class="season-badge">Season {latest_year} - Week {latest_week}</span>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def _render_quick_stats(summary: Dict[str, Any]) -> None:
@@ -277,7 +283,8 @@ def _render_quick_stats(summary: Dict[str, Any]) -> None:
             return f"{n/1000:.1f}K"
         return str(n)
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="stats-row">
         <div class="stat-card">
             <div class="stat-value">{fmt(matchups)}</div>
@@ -296,14 +303,20 @@ def _render_quick_stats(summary: Dict[str, Any]) -> None:
             <div class="stat-label">Transactions</div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def _render_navigation_tiles() -> None:
     """Render the main navigation tiles."""
-    st.markdown('<div class="section-header"><h3>Explore the App</h3></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-header"><h3>Explore the App</h3></div>',
+        unsafe_allow_html=True,
+    )
 
-    st.markdown("""
+    st.markdown(
+        """
     <div class="nav-grid">
         <div class="nav-tile">
             <span class="nav-tile-icon">📊</span>
@@ -342,63 +355,85 @@ def _render_navigation_tiles() -> None:
             <span class="nav-tile-tag">See Below</span>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def _render_key_concepts() -> None:
     """Render a compact key concepts section."""
-    st.markdown('<div class="section-header"><h3>Key Concepts</h3></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-header"><h3>Key Concepts</h3></div>',
+        unsafe_allow_html=True,
+    )
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("""
+        st.markdown(
+            """
         <div class="info-card">
             <h4>SPAR (Season Points Above Replacement)</h4>
             <p>Measures player value vs a replacement-level player at the same position.
             Higher SPAR = more valuable.</p>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col2:
-        st.markdown("""
+        st.markdown(
+            """
         <div class="info-card">
             <h4>Optimal Lineup</h4>
             <p>The perfect lineup using hindsight. Compare actual vs optimal to measure
             lineup efficiency.</p>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
 
 def _render_quick_tips() -> None:
     """Render quick tips for new users."""
-    st.markdown('<div class="section-header"><h3>Quick Tips</h3></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-header"><h3>Quick Tips</h3></div>', unsafe_allow_html=True
+    )
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown("""
+        st.markdown(
+            """
         <div class="info-card">
             <h4>Finding Players</h4>
             <p>Go to <strong>Players</strong> tab and use the filters to search.</p>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col2:
-        st.markdown("""
+        st.markdown(
+            """
         <div class="info-card">
             <h4>Playoff Odds</h4>
             <p>Check <strong>Simulations</strong> tab for live playoff probabilities.</p>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col3:
-        st.markdown("""
+        st.markdown(
+            """
         <div class="info-card">
             <h4>Draft Value</h4>
             <p>Use <strong>Draft</strong> tab to see which picks delivered value.</p>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
 
 @st.fragment
@@ -415,8 +450,17 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
 
     # Get subtab from session state (controlled by hamburger menu)
     subtab_idx = st.session_state.get("subtab_Home", 0)
-    section_names = ["Overview", "Hall of Fame", "Standings", "Schedules", "Head-to-Head", "Recaps"]
-    section_name = section_names[subtab_idx] if subtab_idx < len(section_names) else "Overview"
+    section_names = [
+        "Overview",
+        "Hall of Fame",
+        "Standings",
+        "Schedules",
+        "Head-to-Head",
+        "Recaps",
+    ]
+    section_name = (
+        section_names[subtab_idx] if subtab_idx < len(section_names) else "Overview"
+    )
 
     # Render only the active section (lazy loading)
     if section_name == "Overview":
@@ -433,6 +477,7 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
             except Exception as e:
                 st.error(f"Failed to render Hall of Fame: {e}")
                 import traceback
+
                 st.code(traceback.format_exc())
         else:
             st.warning("Hall of Fame module not found.")
@@ -446,12 +491,20 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
             display_season_standings(matchup_df, prefix="standings")
 
     elif section_name == "Schedules":
-        st.markdown('<div class="section-header"><h3>Team Schedules</h3></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-header"><h3>Team Schedules</h3></div>',
+            unsafe_allow_html=True,
+        )
         display_schedules(df_dict, prefix="schedules")
 
     elif section_name == "Head-to-Head":
-        st.markdown('<div class="section-header"><h3>Head-to-Head Matchups</h3></div>', unsafe_allow_html=True)
-        st.info("Select 'All' or 'Optimal' in the matchup dropdown to see the league-wide optimal lineup!")
+        st.markdown(
+            '<div class="section-header"><h3>Head-to-Head Matchups</h3></div>',
+            unsafe_allow_html=True,
+        )
+        st.info(
+            "Select 'All' or 'Optimal' in the matchup dropdown to see the league-wide optimal lineup!"
+        )
 
         if matchup_df is not None and not matchup_df.empty:
             try:
@@ -468,9 +521,15 @@ def display_homepage_overview(df_dict: Optional[Dict[str, Any]] = None) -> None:
             display_head_to_head(df_dict)
 
     elif section_name == "Recaps":
-        st.markdown('<div class="section-header"><h3>Weekly Team Recaps</h3></div>', unsafe_allow_html=True)
-        st.success("Get narrative recaps for each team including top performers and award-worthy moments.")
+        st.markdown(
+            '<div class="section-header"><h3>Weekly Team Recaps</h3></div>',
+            unsafe_allow_html=True,
+        )
+        st.success(
+            "Get narrative recaps for each team including top performers and award-worthy moments."
+        )
 
         from md.tab_data_access.homepage import load_recaps_matchup_data
+
         recaps_data = load_recaps_matchup_data()
         display_recap_overview(recaps_data)

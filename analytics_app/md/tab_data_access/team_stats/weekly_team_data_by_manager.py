@@ -13,7 +13,7 @@ def load_weekly_team_data_by_manager(
     week: int | None = None,
     include_regular_season: bool = True,
     include_playoffs: bool = True,
-    include_consolation: bool = False
+    include_consolation: bool = False,
 ):
     """
     Load weekly team stats aggregated by manager only (all positions combined).
@@ -34,7 +34,7 @@ def load_weekly_team_data_by_manager(
             "manager <> ''",
             "manager <> 'Unrostered'",
             "fantasy_position IS NOT NULL",
-            "fantasy_position NOT IN ('BN', 'IR')"
+            "fantasy_position NOT IN ('BN', 'IR')",
         ]
 
         if year is not None:
@@ -46,7 +46,9 @@ def load_weekly_team_data_by_manager(
         # Each checkbox controls whether that type of game is included
         week_type_conditions = []
         if include_regular_season:
-            week_type_conditions.append("((is_playoffs IS NULL OR is_playoffs = 0) AND (is_consolation IS NULL OR is_consolation = 0))")
+            week_type_conditions.append(
+                "((is_playoffs IS NULL OR is_playoffs = 0) AND (is_consolation IS NULL OR is_consolation = 0))"
+            )
         if include_playoffs:
             week_type_conditions.append("is_playoffs = 1")
         if include_consolation:

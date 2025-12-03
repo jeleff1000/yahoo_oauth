@@ -1,11 +1,14 @@
 """
 Performance utilities for optimizing Streamlit app
 """
-import streamlit as st
+
 import functools
+import logging
 import time
 from typing import Any, Callable, Optional
-import logging
+
+import pandas as pd
+import streamlit as st
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +21,7 @@ class PerformanceMonitor:
 
     def time_operation(self, operation_name: str):
         """Context manager for timing operations"""
+
         class Timer:
             def __init__(self, name, monitor):
                 self.name = name
@@ -46,11 +50,12 @@ def lazy_import(module_path: str):
     Lazy import decorator to speed up initial app load
     Only import modules when they're actually needed
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Import the module only when function is called
-            parts = module_path.rsplit('.', 1)
+            parts = module_path.rsplit(".", 1)
             if len(parts) == 2:
                 module_name, attr = parts
                 module = __import__(module_name, fromlist=[attr])
@@ -62,16 +67,20 @@ def lazy_import(module_path: str):
             return func(imported, *args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
-def smart_cache(ttl: int = 600, show_spinner: bool = False, key_func: Optional[Callable] = None):
+def smart_cache(
+    ttl: int = 600, show_spinner: bool = False, key_func: Optional[Callable] = None
+):
     """
     Enhanced caching with session state fallback
     - Uses st.cache_data as primary cache
     - Falls back to session_state for user-specific data
     - Supports custom key functions for fine-grained control
     """
+
     def decorator(func):
         # Get the cached version
         cached_func = st.cache_data(ttl=ttl, show_spinner=show_spinner)(func)
@@ -101,6 +110,7 @@ def smart_cache(ttl: int = 600, show_spinner: bool = False, key_func: Optional[C
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -109,13 +119,16 @@ def progressive_loader(message: str = "Loading..."):
     Show progressive loading states with spinner
     Automatically times the operation
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             with st.spinner(message):
                 with perf_monitor.time_operation(func.__name__):
                     return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -131,7 +144,7 @@ def batch_operations(items: list, batch_size: int = 100, operation: Callable = N
     status_text = st.empty()
 
     for i in range(0, len(items), batch_size):
-        batch = items[i:i + batch_size]
+        batch = items[i : i + batch_size]
         batch_num = i // batch_size + 1
 
         status_text.text(f"Processing batch {batch_num}/{total_batches}...")
@@ -160,7 +173,6 @@ class DataLoader:
         Stores in session state to avoid reloading on tab switch
         """
         cache_key = f"_data_{tab_name}"
-        active_tab_key = "active_main_tab"
 
         # Check if data is already loaded
         if cache_key in st.session_state:
@@ -197,15 +209,15 @@ def optimize_dataframe(df, max_rows: int = 10000):
 
     # Optimize dtypes
     for col in df.columns:
-        if df[col].dtype == 'object':
+        if df[col].dtype == "object":
             try:
                 # Try to convert to numeric
-                df[col] = pd.to_numeric(df[col], errors='ignore')
-            except:
+                df[col] = pd.to_numeric(df[col], errors="ignore")
+            except Exception:
                 pass
-        elif df[col].dtype == 'float64':
+        elif df[col].dtype == "float64":
             # Downcast floats
-            df[col] = pd.to_numeric(df[col], downcast='float')
+            df[col] = pd.to_numeric(df[col], downcast="float")
 
     return df
 
@@ -215,6 +227,7 @@ def debounce(wait_time: float = 0.5):
     Debounce function calls to avoid excessive reruns
     Useful for search inputs and filters
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -231,4 +244,5 @@ def debounce(wait_time: float = 0.5):
             return func(*args, **kwargs)
 
         return wrapper
+
     return decorator

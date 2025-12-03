@@ -54,7 +54,7 @@ class PlayoffOddsViewer:
             st.info("No seasons available.")
             return
 
-        min_year, max_year = int(seasons[0]), int(seasons[-1])
+        _min_year, max_year = int(seasons[0]), int(seasons[-1])
         min_week, max_week = int(df["week"].min()), int(df["week"].max())
 
         # Controls
@@ -65,7 +65,7 @@ class PlayoffOddsViewer:
             "Quick Preset",
             ["Current Season", "Last 3 Years", "Last 5 Years", "All Time", "Custom"],
             index=4,
-            key="quick_preset_odds"
+            key="quick_preset_odds",
         )
 
         # Determine default years based on preset
@@ -90,16 +90,12 @@ class PlayoffOddsViewer:
                 default=default_years,
                 key="year_multiselect",
                 help="Select one or more seasons to analyze",
-                disabled=(quick_preset != "Custom")
+                disabled=(quick_preset != "Custom"),
             )
 
         with col2:
             st.markdown("<br>", unsafe_allow_html=True)
-            show_champions = st.checkbox(
-                "🏆 Champs",
-                value=False,
-                key="champions_only"
-            )
+            show_champions = st.checkbox("🏆 Champs", value=False, key="champions_only")
 
         # Week range selection
         col1, col2 = st.columns(2)
@@ -109,7 +105,7 @@ class PlayoffOddsViewer:
                 "Start Week",
                 options=list(range(min_week, max_week + 1)),
                 index=0,
-                key="start_week_select"
+                key="start_week_select",
             )
 
         with col2:
@@ -117,7 +113,7 @@ class PlayoffOddsViewer:
                 "End Week",
                 options=list(range(min_week, max_week + 1)),
                 index=max_week - min_week,
-                key="end_week_select"
+                key="end_week_select",
             )
 
         if not selected_years:
@@ -126,10 +122,10 @@ class PlayoffOddsViewer:
 
         # Filter data
         filtered_df = df[
-            (df["year"].isin(selected_years)) &
-            (df["week"] >= start_week) &
-            (df["week"] <= end_week)
-            ].copy()
+            (df["year"].isin(selected_years))
+            & (df["week"] >= start_week)
+            & (df["week"] <= end_week)
+        ].copy()
 
         if show_champions:
             filtered_df = filtered_df[filtered_df["champion"] == 1]
@@ -148,7 +144,7 @@ class PlayoffOddsViewer:
                 "Select Managers (leave empty for all)",
                 managers,
                 default=[],
-                key="manager_select"
+                key="manager_select",
             )
 
         with col2:
@@ -175,9 +171,13 @@ class PlayoffOddsViewer:
         metric_cols = st.columns(len(metric_keys))
         for idx, (col, key) in enumerate(zip(metric_cols, metric_keys)):
             with col:
-                is_active = (st.session_state[metric_key] == idx)
-                if st.button(METRIC_LABELS[key], key=f"metric_btn_{idx}", use_container_width=True,
-                            type="primary" if is_active else "secondary"):
+                is_active = st.session_state[metric_key] == idx
+                if st.button(
+                    METRIC_LABELS[key],
+                    key=f"metric_btn_{idx}",
+                    use_container_width=True,
+                    type="primary" if is_active else "secondary",
+                ):
                     if not is_active:
                         st.session_state[metric_key] = idx
                         st.rerun()
@@ -198,8 +198,16 @@ class PlayoffOddsViewer:
         fig = go.Figure()
 
         colors = [
-            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+            "#1f77b4",
+            "#ff7f0e",
+            "#2ca02c",
+            "#d62728",
+            "#9467bd",
+            "#8c564b",
+            "#e377c2",
+            "#7f7f7f",
+            "#bcbd22",
+            "#17becf",
         ]
 
         managers = sorted(data["manager"].unique())
@@ -222,24 +230,26 @@ class PlayoffOddsViewer:
                 if is_percent_metric and needs_scaling:
                     y_values = y_values * 100
 
-                fig.add_trace(go.Scatter(
-                    x=year_data["week"],
-                    y=y_values,
-                    mode='lines+markers',
-                    name=manager,
-                    legendgroup=manager,
-                    showlegend=bool(year == mgr_data["year"].min()),
-                    line=dict(width=3, color=colors[i % len(colors)]),
-                    marker=dict(size=8),
-                    hovertemplate=(
-                            f'<b>{manager}</b><br>' +
-                            f'Year: {year}<br>' +
-                            'Week: %{x}<br>' +
-                            f'{METRIC_LABELS[metric]}: %{{y:.1f}}' +
-                            ('%' if is_percent_metric else '') +
-                            '<extra></extra>'
+                fig.add_trace(
+                    go.Scatter(
+                        x=year_data["week"],
+                        y=y_values,
+                        mode="lines+markers",
+                        name=manager,
+                        legendgroup=manager,
+                        showlegend=bool(year == mgr_data["year"].min()),
+                        line=dict(width=3, color=colors[i % len(colors)]),
+                        marker=dict(size=8),
+                        hovertemplate=(
+                            f"<b>{manager}</b><br>"
+                            + f"Year: {year}<br>"
+                            + "Week: %{x}<br>"
+                            + f"{METRIC_LABELS[metric]}: %{{y:.1f}}"
+                            + ("%" if is_percent_metric else "")
+                            + "<extra></extra>"
+                        ),
                     )
-                ))
+                )
 
         # Layout - create title based on selected years
         if len(selected_years) == 1:
@@ -253,36 +263,33 @@ class PlayoffOddsViewer:
             title = f"{METRIC_LABELS[metric]} - {len(selected_years)} Seasons ({min_year}-{max_year})"
 
         fig.update_layout(
-            title={
-                'text': title,
-                'x': 0.5,
-                'xanchor': 'center',
-                'font': {'size': 18}
-            },
+            title={"text": title, "x": 0.5, "xanchor": "center", "font": {"size": 18}},
             xaxis_title="Week",
             yaxis_title=METRIC_LABELS[metric] + (" (%)" if is_percent_metric else ""),
-            hovermode='x unified',
+            hovermode="x unified",
             height=600,
-            legend=dict(
-                orientation="v",
-                yanchor="top",
-                y=1,
-                xanchor="left",
-                x=1.02
-            ),
+            legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
             font=dict(size=12),
             margin=dict(l=20, r=20, t=60, b=20),
             xaxis=dict(showgrid=True, dtick=1),
-            yaxis=dict(showgrid=True)
+            yaxis=dict(showgrid=True),
         )
 
         # Reference lines
         if metric == "p_playoffs" and needs_scaling:
-            fig.add_hline(y=50, line_dash="dash", line_color="orange",
-                          annotation_text="50% - Coin Flip")
+            fig.add_hline(
+                y=50,
+                line_dash="dash",
+                line_color="orange",
+                annotation_text="50% - Coin Flip",
+            )
         elif metric == "p_champ" and needs_scaling:
-            fig.add_hline(y=10, line_dash="dash", line_color="red",
-                          annotation_text="10% - Long Shot")
+            fig.add_hline(
+                y=10,
+                line_dash="dash",
+                line_color="red",
+                annotation_text="10% - Long Shot",
+            )
 
         st.plotly_chart(fig, use_container_width=True)
 
@@ -292,12 +299,13 @@ class PlayoffOddsViewer:
         st.markdown("### 📊 Summary Statistics")
 
         # Calculate stats
-        manager_stats = data.groupby("manager").agg({
-            metric: ['mean', 'max', 'min', 'std'],
-            'week': 'count'
-        }).round(4)
+        manager_stats = (
+            data.groupby("manager")
+            .agg({metric: ["mean", "max", "min", "std"], "week": "count"})
+            .round(4)
+        )
 
-        manager_stats.columns = ['Average', 'Peak', 'Low', 'Volatility', 'Weeks']
+        manager_stats.columns = ["Average", "Peak", "Low", "Volatility", "Weeks"]
 
         # Scale if needed
         is_percent_metric = metric != "exp_final_wins"
@@ -308,32 +316,32 @@ class PlayoffOddsViewer:
                 needs_scaling = True
 
         if is_percent_metric and needs_scaling:
-            for col in ['Average', 'Peak', 'Low', 'Volatility']:
+            for col in ["Average", "Peak", "Low", "Volatility"]:
                 manager_stats[col] = manager_stats[col] * 100
 
-        manager_stats = manager_stats.sort_values('Average', ascending=False)
+        manager_stats = manager_stats.sort_values("Average", ascending=False)
 
         # Display metrics - responsive layout
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
         with col1:
-            best_avg = manager_stats['Average'].idxmax()
-            best_val = manager_stats.loc[best_avg, 'Average']
+            best_avg = manager_stats["Average"].idxmax()
+            best_val = manager_stats.loc[best_avg, "Average"]
             suffix = "%" if is_percent_metric else " wins"
             st.metric("Highest Average", best_avg, f"{best_val:.1f}{suffix}")
 
         with col2:
-            best_peak = manager_stats['Peak'].idxmax()
-            peak_val = manager_stats.loc[best_peak, 'Peak']
+            best_peak = manager_stats["Peak"].idxmax()
+            peak_val = manager_stats.loc[best_peak, "Peak"]
             st.metric("Best Peak", best_peak, f"{peak_val:.1f}{suffix}")
 
         with col3:
-            most_volatile = manager_stats['Volatility'].idxmax()
-            volatile_val = manager_stats.loc[most_volatile, 'Volatility']
+            most_volatile = manager_stats["Volatility"].idxmax()
+            volatile_val = manager_stats.loc[most_volatile, "Volatility"]
             st.metric("Most Volatile", most_volatile, f"±{volatile_val:.1f}{suffix}")
 
         with col4:
-            league_avg = manager_stats['Average'].mean()
+            league_avg = manager_stats["Average"].mean()
             st.metric("League Average", f"{league_avg:.1f}{suffix}")
 
         # Full table
@@ -341,10 +349,10 @@ class PlayoffOddsViewer:
 
         styled_df = manager_stats.copy()
         if is_percent_metric:
-            for col in ['Average', 'Peak', 'Low', 'Volatility']:
+            for col in ["Average", "Peak", "Low", "Volatility"]:
                 styled_df[col] = styled_df[col].apply(lambda x: f"{x:.1f}%")
         else:
-            for col in ['Average', 'Peak', 'Low', 'Volatility']:
+            for col in ["Average", "Peak", "Low", "Volatility"]:
                 styled_df[col] = styled_df[col].apply(lambda x: f"{x:.2f}")
 
         st.dataframe(styled_df, use_container_width=True)

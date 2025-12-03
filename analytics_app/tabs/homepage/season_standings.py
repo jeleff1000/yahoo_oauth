@@ -20,42 +20,35 @@ class SeasonStandingsViewer:
 
     def _get_theme_aware_colors(self):
         """Get colors for pandas styling (requires actual values, not CSS vars)."""
-        is_dark = detect_theme() == 'dark'
+        is_dark = detect_theme() == "dark"
 
         return {
             # Championship/medals - same in both modes
-            'gold': '#FFD700',
-            'silver': '#C0C0C0',
-            'bronze': '#D4A574' if is_dark else '#CD7F32',
-
+            "gold": "#FFD700",
+            "silver": "#C0C0C0",
+            "bronze": "#D4A574" if is_dark else "#CD7F32",
             # Consolation greens (adjusted for dark mode visibility)
-            'green_1': '#66BB6A' if is_dark else '#81C784',
-            'green_2': '#81C784' if is_dark else '#A5D6A7',
-            'green_3': '#A5D6A7' if is_dark else '#C8E6C9',
-            'green_4': '#C8E6C9' if is_dark else '#E8F5E9',
-
+            "green_1": "#66BB6A" if is_dark else "#81C784",
+            "green_2": "#81C784" if is_dark else "#A5D6A7",
+            "green_3": "#A5D6A7" if is_dark else "#C8E6C9",
+            "green_4": "#C8E6C9" if is_dark else "#E8F5E9",
             # Consolation losses
-            'gray_1': '#546E7A' if is_dark else '#CFD8DC',
-            'gray_2': '#607D8B' if is_dark else '#ECEFF1',
-            'gray_3': '#78909C' if is_dark else '#F5F5F5',
-
+            "gray_1": "#546E7A" if is_dark else "#CFD8DC",
+            "gray_2": "#607D8B" if is_dark else "#ECEFF1",
+            "gray_3": "#78909C" if is_dark else "#F5F5F5",
             # Quarterfinals
-            'quarterfinal': '#455A64' if is_dark else '#E8E3D3',
-
+            "quarterfinal": "#455A64" if is_dark else "#E8E3D3",
             # Consolation semifinals
-            'consol_semi': '#37474F' if is_dark else '#E3F2FD',
-
+            "consol_semi": "#37474F" if is_dark else "#E3F2FD",
             # Special
-            'sacko': '#EF4444',  # Using design token error color
-            'in_progress': '#3B82F6',  # Using design token info color
-            'missed': '#757575' if is_dark else '#9E9E9E',
-
+            "sacko": "#EF4444",  # Using design token error color
+            "in_progress": "#3B82F6",  # Using design token info color
+            "missed": "#757575" if is_dark else "#9E9E9E",
             # Text colors based on background
-            'text_dark': '#000000',
-            'text_light': '#FFFFFF',
-
+            "text_dark": "#000000",
+            "text_light": "#FFFFFF",
             # Is dark mode flag
-            'is_dark': is_dark,
+            "is_dark": is_dark,
         }
 
     @st.fragment
@@ -64,10 +57,11 @@ class SeasonStandingsViewer:
         apply_modern_styles()
 
         colors = self._get_theme_aware_colors()
-        is_dark = colors['is_dark']
+        is_dark = colors["is_dark"]
 
         # Theme-aware CSS using CSS variables
-        st.markdown("""
+        st.markdown(
+            """
             <style>
             /* Standings table container - static display, no heavy shadows */
             .standings-container {
@@ -87,7 +81,9 @@ class SeasonStandingsViewer:
             }
 
             </style>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         # Header with inline controls
         st.markdown("### Current Standings")
@@ -226,7 +222,7 @@ class SeasonStandingsViewer:
             years = sorted(df_out["Year"].unique())
 
             selected_year = st.selectbox(
-                "Year", years, index=len(years)-1, key=f"{prefix}_year"
+                "Year", years, index=len(years) - 1, key=f"{prefix}_year"
             )
 
             filtered = df_out[df_out["Year"] == selected_year]
@@ -236,66 +232,97 @@ class SeasonStandingsViewer:
 
             # Style entire row for champion/sacko, otherwise just the Final Result cell
             def style_row(row):
-                result = row['Final Result']
+                result = row["Final Result"]
                 n_cols = len(row)
 
                 # Champion - highlight entire row gold
-                if result == 'Won Championship':
-                    return [f'background-color: {colors["gold"]}; color: {colors["text_dark"]}; font-weight: bold;'] * n_cols
+                if result == "Won Championship":
+                    return [
+                        f'background-color: {colors["gold"]}; color: {colors["text_dark"]}; font-weight: bold;'
+                    ] * n_cols
 
                 # Sacko - highlight entire row red
-                elif result == 'Sacko':
-                    return [f'background-color: {colors["sacko"]}; color: {colors["text_light"]}; font-weight: bold;'] * n_cols
+                elif result == "Sacko":
+                    return [
+                        f'background-color: {colors["sacko"]}; color: {colors["text_light"]}; font-weight: bold;'
+                    ] * n_cols
 
                 # For all other results, only style the Final Result column
                 else:
-                    styles = [''] * n_cols
-                    result_idx = list(row.index).index('Final Result')
+                    styles = [""] * n_cols
+                    result_idx = list(row.index).index("Final Result")
 
-                    if result == 'Lost Championship':
-                        styles[result_idx] = f'background-color: {colors["silver"]}; color: {colors["text_dark"]};'
-                    elif result == 'Lost Semifinals':
-                        styles[result_idx] = f'background-color: {colors["bronze"]}; color: {colors["text_light"]};'
-                    elif result == 'Lost Quarterfinals':
-                        styles[result_idx] = f'background-color: {colors["quarterfinal"]}; color: {colors["text_dark"] if not is_dark else colors["text_light"]};'
-                    elif 'Won Third Place' in result:
-                        styles[result_idx] = f'background-color: {colors["green_1"]}; color: {colors["text_dark"]};'
-                    elif 'Won Fifth Place' in result:
-                        styles[result_idx] = f'background-color: {colors["green_2"]}; color: {colors["text_dark"]};'
-                    elif 'Won Seventh Place' in result:
-                        styles[result_idx] = f'background-color: {colors["green_3"]}; color: {colors["text_dark"]};'
-                    elif 'Won Ninth Place' in result:
-                        styles[result_idx] = f'background-color: {colors["green_4"]}; color: {colors["text_dark"]};'
-                    elif 'Lost Third Place' in result:
-                        styles[result_idx] = f'background-color: {colors["gray_1"]}; color: {colors["text_dark"] if not is_dark else colors["text_light"]};'
-                    elif 'Lost Fifth Place' in result:
-                        styles[result_idx] = f'background-color: {colors["gray_2"]}; color: {colors["text_dark"] if not is_dark else colors["text_light"]};'
-                    elif 'Lost Seventh Place' in result or 'Lost Ninth Place' in result:
-                        styles[result_idx] = f'background-color: {colors["gray_3"]}; color: {colors["text_dark"] if not is_dark else colors["text_light"]};'
-                    elif 'Consolation' in result:
-                        styles[result_idx] = f'background-color: {colors["consol_semi"]}; color: {colors["text_dark"] if not is_dark else colors["text_light"]};'
-                    elif result == 'Season in Progress':
-                        styles[result_idx] = f'background-color: {colors["in_progress"]}; color: {colors["text_light"]};'
-                    elif result == 'Missed Playoffs':
-                        styles[result_idx] = f'background-color: {colors["missed"]}; color: {colors["text_light"]};'
+                    if result == "Lost Championship":
+                        styles[result_idx] = (
+                            f'background-color: {colors["silver"]}; color: {colors["text_dark"]};'
+                        )
+                    elif result == "Lost Semifinals":
+                        styles[result_idx] = (
+                            f'background-color: {colors["bronze"]}; color: {colors["text_light"]};'
+                        )
+                    elif result == "Lost Quarterfinals":
+                        styles[result_idx] = (
+                            f'background-color: {colors["quarterfinal"]}; color: {colors["text_dark"] if not is_dark else colors["text_light"]};'
+                        )
+                    elif "Won Third Place" in result:
+                        styles[result_idx] = (
+                            f'background-color: {colors["green_1"]}; color: {colors["text_dark"]};'
+                        )
+                    elif "Won Fifth Place" in result:
+                        styles[result_idx] = (
+                            f'background-color: {colors["green_2"]}; color: {colors["text_dark"]};'
+                        )
+                    elif "Won Seventh Place" in result:
+                        styles[result_idx] = (
+                            f'background-color: {colors["green_3"]}; color: {colors["text_dark"]};'
+                        )
+                    elif "Won Ninth Place" in result:
+                        styles[result_idx] = (
+                            f'background-color: {colors["green_4"]}; color: {colors["text_dark"]};'
+                        )
+                    elif "Lost Third Place" in result:
+                        styles[result_idx] = (
+                            f'background-color: {colors["gray_1"]}; color: {colors["text_dark"] if not is_dark else colors["text_light"]};'
+                        )
+                    elif "Lost Fifth Place" in result:
+                        styles[result_idx] = (
+                            f'background-color: {colors["gray_2"]}; color: {colors["text_dark"] if not is_dark else colors["text_light"]};'
+                        )
+                    elif "Lost Seventh Place" in result or "Lost Ninth Place" in result:
+                        styles[result_idx] = (
+                            f'background-color: {colors["gray_3"]}; color: {colors["text_dark"] if not is_dark else colors["text_light"]};'
+                        )
+                    elif "Consolation" in result:
+                        styles[result_idx] = (
+                            f'background-color: {colors["consol_semi"]}; color: {colors["text_dark"] if not is_dark else colors["text_light"]};'
+                        )
+                    elif result == "Season in Progress":
+                        styles[result_idx] = (
+                            f'background-color: {colors["in_progress"]}; color: {colors["text_light"]};'
+                        )
+                    elif result == "Missed Playoffs":
+                        styles[result_idx] = (
+                            f'background-color: {colors["missed"]}; color: {colors["text_light"]};'
+                        )
 
                     return styles
 
             # Apply row styling
-            styled_df = filtered.style.apply(
-                style_row, axis=1
-            ).format({
-                'PF': '{:.1f}',
-                'PA': '{:.1f}',
-                'W': '{:.1f}' if per_game else '{:.0f}',
-                'L': '{:.1f}' if per_game else '{:.0f}'
-            })
+            styled_df = filtered.style.apply(style_row, axis=1).format(
+                {
+                    "PF": "{:.1f}",
+                    "PA": "{:.1f}",
+                    "W": "{:.1f}" if per_game else "{:.0f}",
+                    "L": "{:.1f}" if per_game else "{:.0f}",
+                }
+            )
 
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
             # Compact legend
             with st.expander("Legend", expanded=False):
-                st.markdown(f"""
+                st.markdown(
+                    f"""
                     <div style='display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.8rem;'>
                         <span style='background: {colors['gold']}; color: {colors['text_dark']}; padding: 2px 8px; border-radius: 4px;'>🏆 Champ</span>
                         <span style='background: {colors['silver']}; color: {colors['text_dark']}; padding: 2px 8px; border-radius: 4px;'>2nd</span>
@@ -304,11 +331,14 @@ class SeasonStandingsViewer:
                         <span style='background: {colors['gray_1']}; color: {colors['text_light']}; padding: 2px 8px; border-radius: 4px;'>Consolation L</span>
                         <span style='background: {colors['sacko']}; color: {colors['text_light']}; padding: 2px 8px; border-radius: 4px;'>Sacko</span>
                     </div>
-                """, unsafe_allow_html=True)
+                """,
+                    unsafe_allow_html=True,
+                )
 
         except Exception as e:
             st.error("Failed to build standings table from DuckDB.")
             st.exception(e)
+
 
 @st.fragment
 def display_season_standings(df, prefix: str = ""):

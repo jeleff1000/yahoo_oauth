@@ -21,36 +21,30 @@ MANAGERS_MATCHUP_COLUMNS = [
     "year",
     "week",
     "cumulative_week",
-
     # === Team identifiers (4) ===
     "manager",
     "team_name",
     "opponent",
     "manager_year_week",
-
     # === Scoring (Yahoo API column names) (4) ===
     "team_points",
     "opponent_points",
     "team_projected_points",
     "opponent_projected_points",
-
     # === Results (3) ===
     "win",
     "loss",
     "margin",
-
     # === Game type flags (2) ===
     "is_playoffs",
     "is_consolation",
-
     # === Optimal/efficiency metrics (6) ===
     "optimal_points",
     "optimal_win",
     "optimal_loss",
     "lineup_efficiency",  # Lineup efficiency percentage (actual/optimal)
-    "bench_points",       # Points left on bench
-    "win_probability",    # Pre-game win probability
-
+    "bench_points",  # Points left on bench
+    "win_probability",  # Pre-game win probability
     # === Spread/projection metrics (10) ===
     "expected_spread",
     "expected_odds",
@@ -63,25 +57,21 @@ MANAGERS_MATCHUP_COLUMNS = [
     "abs_proj_score_error",
     "underdog_wins",
     "favorite_losses",
-
     # === Competition metrics (5) ===
     "teams_beat_this_week",  # Keep for backward compatibility
-    "weekly_rank",           # NEW: Weekly league ranking (1-8)
+    "weekly_rank",  # NEW: Weekly league ranking (1-8)
     "opponent_teams_beat_this_week",
     "total_matchup_score",
     "close_margin",
-
     # === League comparison (4) ===
     "league_weekly_mean",
     "league_weekly_median",
     "above_league_median",
     "below_league_median",
-
     # === Opponent comparison (3) ===
     "opponent_median",
     "above_opponent_median",
     "below_opponent_median",
-
     # === Season stats (6) ===
     "manager_season_mean",
     "manager_season_median",
@@ -89,28 +79,23 @@ MANAGERS_MATCHUP_COLUMNS = [
     "personal_season_median",
     "season_mean",
     "season_median",
-
     # === Streaks (2) ===
     "winning_streak",
     "losing_streak",
-
     # === Performance metrics (3) ===
     "gpa",
     "grade",
     "power_rating",
-
     # === Playoff details (6) ===
-    "playoff_round",      # Playoff round name (Quarterfinal, Semifinal, Championship)
+    "playoff_round",  # Playoff round name (Quarterfinal, Semifinal, Championship)
     "consolation_round",  # Consolation round name (5th Place Game, 7th Place Game, etc.)
-    "quarterfinal",       # Keep for backward compatibility
-    "semifinal",          # Keep for backward compatibility
-    "championship",       # Keep for backward compatibility
+    "quarterfinal",  # Keep for backward compatibility
+    "semifinal",  # Keep for backward compatibility
+    "championship",  # Keep for backward compatibility
     "final_playoff_seed",
-
     # === Season outcomes (2) ===
     "champion",
     "sacko",
-
     # === Simulation/Prediction Columns (for Team Ratings subtab) (13) ===
     # Playoff probabilities
     "avg_seed",
@@ -119,11 +104,9 @@ MANAGERS_MATCHUP_COLUMNS = [
     "p_semis",
     "p_final",
     "p_champ",
-
     # Expected values
     "exp_final_wins",
     "exp_final_pf",
-
     # Schedule shuffle simulations (what if we shuffled all schedules)
     "shuffle_1_seed",
     "shuffle_avg_wins",
@@ -192,9 +175,15 @@ def load_managers_matchup_data() -> Dict[str, Any]:
 
         # Add column aliases for backward compatibility with existing tabs
         # Some tabs still use the old renamed column names
-        if "team_projected_points" in df.columns and "manager_proj_score" not in df.columns:
+        if (
+            "team_projected_points" in df.columns
+            and "manager_proj_score" not in df.columns
+        ):
             df["manager_proj_score"] = df["team_projected_points"]
-        if "opponent_projected_points" in df.columns and "opponent_proj_score" not in df.columns:
+        if (
+            "opponent_projected_points" in df.columns
+            and "opponent_proj_score" not in df.columns
+        ):
             df["opponent_proj_score"] = df["opponent_projected_points"]
         if "team_name" in df.columns and "manager_team" not in df.columns:
             df["manager_team"] = df["team_name"]

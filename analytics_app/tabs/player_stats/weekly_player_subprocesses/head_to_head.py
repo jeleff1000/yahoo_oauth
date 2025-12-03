@@ -9,8 +9,20 @@ import streamlit as st
 
 MAIN_POSITIONS = ["QB", "RB", "WR", "TE", "W/R/T", "K", "DEF"]
 BENCH_IR = ["BN", "IR"]
-ALL_POSITIONS = ["QB", "RB", "WR", "TE", "W/R/T", "K", "DEF", "BN", "IR"]  # Includes bench positions
-DEFAULT_HEADSHOT = "https://static.www.nfl.com/image/private/f_auto,q_auto/league/mdrlzgankwwjldxllgcx"
+ALL_POSITIONS = [
+    "QB",
+    "RB",
+    "WR",
+    "TE",
+    "W/R/T",
+    "K",
+    "DEF",
+    "BN",
+    "IR",
+]  # Includes bench positions
+DEFAULT_HEADSHOT = (
+    "https://static.www.nfl.com/image/private/f_auto,q_auto/league/mdrlzgankwwjldxllgcx"
+)
 
 
 class H2HViewer:
@@ -32,38 +44,61 @@ class H2HViewer:
         # The data has lineup_position with numbered slots, which is what we need for proper display
         if "lineup_position" in self.player_df.columns:
             # Store original fantasy_position as base_position for reference
-            self.player_df["base_position"] = self.player_df["fantasy_position"].astype(str)
+            self.player_df["base_position"] = self.player_df["fantasy_position"].astype(
+                str
+            )
             # Use lineup_position as the display position
-            self.player_df["fantasy_position"] = self.player_df["lineup_position"].astype(str)
+            self.player_df["fantasy_position"] = self.player_df[
+                "lineup_position"
+            ].astype(str)
 
         # Normalize types early
         for col in ("year", "week"):
             if col in self.player_df.columns:
-                self.player_df[col] = pd.to_numeric(self.player_df[col], errors="coerce")
+                self.player_df[col] = pd.to_numeric(
+                    self.player_df[col], errors="coerce"
+                )
         # Safety: fill required string cols to avoid duckdb NULL string issues
-        for col in ("player", "fantasy_position", "position", "manager", "opponent", "matchup_name", "team_1", "team_2"):
+        for col in (
+            "player",
+            "fantasy_position",
+            "position",
+            "manager",
+            "opponent",
+            "matchup_name",
+            "team_1",
+            "team_2",
+        ):
             if col in self.player_df.columns:
                 self.player_df[col] = self.player_df[col].astype(str)
 
         if "points" in self.player_df.columns:
-            self.player_df["points"] = pd.to_numeric(self.player_df["points"], errors="coerce")
+            self.player_df["points"] = pd.to_numeric(
+                self.player_df["points"], errors="coerce"
+            )
 
         if "headshot_url" in self.player_df.columns:
-            self.player_df["headshot_url"] = self.player_df["headshot_url"].fillna("").astype(str)
+            self.player_df["headshot_url"] = (
+                self.player_df["headshot_url"].fillna("").astype(str)
+            )
 
     # ---- utilities -----------------------------------------------------------
 
     def get_matchup_names(self) -> list[str]:
         if "matchup_name" not in self.player_df.columns:
-            raise KeyError("The required column 'matchup_name' is missing in player data.")
+            raise KeyError(
+                "The required column 'matchup_name' is missing in player data."
+            )
 
         # Get unique matchup names, filter out invalid ones, and format them
-        raw_matchups = self.player_df["matchup_name"].dropna().astype(str).unique().tolist()
+        raw_matchups = (
+            self.player_df["matchup_name"].dropna().astype(str).unique().tolist()
+        )
         formatted_matchups = []
 
         for matchup in raw_matchups:
             # Skip "None vs None" and similar invalid matchups
-            if matchup.lower() in ['none vs none', 'nan vs nan', 'none', 'nan', '']:
+            if matchup.lower() in ["none vs none", "nan vs nan", "none", "nan", ""]:
                 continue
 
             # Format matchup: replace "__vs__" with " vs "
@@ -141,10 +176,14 @@ class H2HViewer:
             pos_order_map = {pos: i for i, pos in enumerate(positions)}
             pos_case_parts = []
             for pos, order in pos_order_map.items():
-                pos_case_parts.append(f"WHEN fantasy_position LIKE '{pos}%' THEN {order}")
+                pos_case_parts.append(
+                    f"WHEN fantasy_position LIKE '{pos}%' THEN {order}"
+                )
                 # Also handle FLEX as alias for W/R/T
                 if pos == "W/R/T":
-                    pos_case_parts.append(f"WHEN fantasy_position LIKE 'FLEX%' THEN {order}")
+                    pos_case_parts.append(
+                        f"WHEN fantasy_position LIKE 'FLEX%' THEN {order}"
+                    )
             pos_case = "CASE " + " ".join(pos_case_parts) + " ELSE 999 END"
             order_clause = f"{pos_case}, fantasy_position, points DESC"
 
@@ -235,22 +274,47 @@ class H2HViewer:
 
         return merged
 
-    def _postprocess_and_totals(self, df: pd.DataFrame) -> tuple[pd.DataFrame, str, str]:
-        df["points_1"] = pd.to_numeric(df.get("points_1", 0), errors="coerce").fillna(0).round(2)
-        df["points_2"] = pd.to_numeric(df.get("points_2", 0), errors="coerce").fillna(0).round(2)
+    def _postprocess_and_totals(
+        self, df: pd.DataFrame
+    ) -> tuple[pd.DataFrame, str, str]:
+        df["points_1"] = (
+            pd.to_numeric(df.get("points_1", 0), errors="coerce").fillna(0).round(2)
+        )
+        df["points_2"] = (
+            pd.to_numeric(df.get("points_2", 0), errors="coerce").fillna(0).round(2)
+        )
         df["margin_1"] = (df["points_1"] - df["points_2"]).round(2)
         df["margin_2"] = -df["margin_1"]
 
         # Try to read team names from any non-null value
         team_1_name = df.get("team_1")
         team_2_name = df.get("team_2")
-        team_1_name = str(team_1_name.dropna().iloc[0]) if team_1_name is not None and team_1_name.notna().any() else "Team 1"
-        team_2_name = str(team_2_name.dropna().iloc[0]) if team_2_name is not None and team_2_name.notna().any() else "Team 2"
+        team_1_name = (
+            str(team_1_name.dropna().iloc[0])
+            if team_1_name is not None and team_1_name.notna().any()
+            else "Team 1"
+        )
+        team_2_name = (
+            str(team_2_name.dropna().iloc[0])
+            if team_2_name is not None and team_2_name.notna().any()
+            else "Team 2"
+        )
 
         # Position sort: extract base position and slot number for proper ordering
         # E.g., "QB1" -> base="QB", slot=1; "W/R/T1" -> base="W/R/T", slot=1
         # For bench (BN/IR), sort by BN first then IR, within each sort by position
-        pos_order_map = {"QB": 0, "RB": 1, "WR": 2, "TE": 3, "W/R/T": 4, "FLEX": 4, "K": 5, "DEF": 6, "BN": 7, "IR": 8}
+        pos_order_map = {
+            "QB": 0,
+            "RB": 1,
+            "WR": 2,
+            "TE": 3,
+            "W/R/T": 4,
+            "FLEX": 4,
+            "K": 5,
+            "DEF": 6,
+            "BN": 7,
+            "IR": 8,
+        }
 
         def get_position_order(pos_str):
             """Get sort order for a position string"""
@@ -270,7 +334,11 @@ class H2HViewer:
             if pos_str.startswith("BN") or pos_str.startswith("IR"):
                 bn_ir_order = 0 if pos_str.startswith("BN") else 1
                 actual_pos = row.get("position", "")
-                if pd.notna(actual_pos) and str(actual_pos).strip() not in ["", "nan", "None"]:
+                if pd.notna(actual_pos) and str(actual_pos).strip() not in [
+                    "",
+                    "nan",
+                    "None",
+                ]:
                     return (str(actual_pos).strip(), 0, bn_ir_order)
                 return (pos_str, 999, bn_ir_order)
 
@@ -279,20 +347,21 @@ class H2HViewer:
                 base = "W/R/T"
                 try:
                     slot = int(pos_str[5:]) if len(pos_str) > 5 else 1
-                except:
+                except Exception:
                     slot = 1
                 return (base, slot, 0)
             if pos_str.startswith("FLEX"):
                 base = "FLEX"  # Will map to order 4 (same as W/R/T)
                 try:
                     slot = int(pos_str[4:]) if len(pos_str) > 4 else 1
-                except:
+                except Exception:
                     slot = 1
                 return (base, slot, 0)
 
             # Extract base position (letters) and slot number (digits at end)
             import re
-            match = re.match(r'^([A-Z]+)(\d*)$', pos_str)
+
+            match = re.match(r"^([A-Z]+)(\d*)$", pos_str)
             if match:
                 base = match.group(1)
                 slot_str = match.group(2)
@@ -309,7 +378,9 @@ class H2HViewer:
 
             # For bench, get position order for BOTH teams and use the minimum (earliest position)
             # This ensures rows are sorted by the best position on either side
-            df["__pos_order"] = df["__base_pos"].map(pos_order_map).fillna(999).astype(int)
+            df["__pos_order"] = (
+                df["__base_pos"].map(pos_order_map).fillna(999).astype(int)
+            )
 
             # Also get position order for the other team's player (position_1 and position_2)
             if "position_1" in df.columns:
@@ -332,10 +403,19 @@ class H2HViewer:
 
         # Sort by: BN/IR order first, then lineup position order (from fantasy_position), then slot, then points
         # Use __pos_order (based on lineup slot like W/R/T) not __min_pos_order (based on NFL position like WR)
-        df = df.sort_values(["__bn_ir_order", "__pos_order", "__slot_num", "points_1"], ascending=[True, True, True, False])
+        df = df.sort_values(
+            ["__bn_ir_order", "__pos_order", "__slot_num", "points_1"],
+            ascending=[True, True, True, False],
+        )
 
         # Clean up temp columns
-        cols_to_drop = ["__pos_order", "__base_pos", "__slot_num", "__bn_ir_order", "__min_pos_order"]
+        cols_to_drop = [
+            "__pos_order",
+            "__base_pos",
+            "__slot_num",
+            "__bn_ir_order",
+            "__min_pos_order",
+        ]
         if "__pos_order_1" in df.columns:
             cols_to_drop.append("__pos_order_1")
         if "__pos_order_2" in df.columns:
@@ -344,18 +424,20 @@ class H2HViewer:
 
         # Totals row - ensure all required columns are present
         total_row = pd.DataFrame(
-            [{
-                "player_1": "TOTAL",
-                "points_1": round(float(df["points_1"].sum()), 2),
-                "fantasy_position": "",
-                "points_2": round(float(df["points_2"].sum()), 2),
-                "player_2": "TOTAL",
-                "headshot_url_1": "",
-                "headshot_url_2": "",
-                "margin_1": 0,
-                "margin_2": 0,
-                "slot": 999,
-            }]
+            [
+                {
+                    "player_1": "TOTAL",
+                    "points_1": round(float(df["points_1"].sum()), 2),
+                    "fantasy_position": "",
+                    "points_2": round(float(df["points_2"].sum()), 2),
+                    "player_2": "TOTAL",
+                    "headshot_url_1": "",
+                    "headshot_url_2": "",
+                    "margin_1": 0,
+                    "margin_2": 0,
+                    "slot": 999,
+                }
+            ]
         )
         df = pd.concat([df, total_row], ignore_index=True)
         return df, team_1_name, team_2_name
@@ -390,13 +472,19 @@ class H2HViewer:
         before_dedup = len(opt)
 
         # Sort by points descending, then drop duplicates keeping first (highest points)
-        opt = opt.sort_values("points", ascending=False).drop_duplicates(subset=["player"], keep="first").copy()
+        opt = (
+            opt.sort_values("points", ascending=False)
+            .drop_duplicates(subset=["player"], keep="first")
+            .copy()
+        )
 
         after_dedup = len(opt)
 
         if before_dedup != after_dedup:
             duplicates_removed = before_dedup - after_dedup
-            st.warning(f"⚠️ Removed {duplicates_removed} duplicate player rows. This indicates duplicate data in source file - consider re-running the pipeline.")
+            st.warning(
+                f"⚠️ Removed {duplicates_removed} duplicate player rows. This indicates duplicate data in source file - consider re-running the pipeline."
+            )
 
         # ---- Use the 'league_wide_optimal_position' column for display & ordering
         # This column shows the roster slot each player fills (QB, RB1, W/R/T, etc.)
@@ -404,10 +492,14 @@ class H2HViewer:
             pos_col = "league_wide_optimal_position"
         elif "position" in opt.columns:
             pos_col = "position"
-            st.info("ℹ️ 'league_wide_optimal_position' column not found; falling back to 'position' for ordering/display.")
+            st.info(
+                "ℹ️ 'league_wide_optimal_position' column not found; falling back to 'position' for ordering/display."
+            )
         else:
             pos_col = "fantasy_position"
-            st.info("ℹ️ Neither 'league_wide_optimal_position' nor 'position' found; falling back to 'fantasy_position' for ordering/display.")
+            st.info(
+                "ℹ️ Neither 'league_wide_optimal_position' nor 'position' found; falling back to 'fantasy_position' for ordering/display."
+            )
         opt[pos_col] = opt[pos_col].astype(str)
 
         # Normalize key columns
@@ -437,7 +529,8 @@ class H2HViewer:
 
             # Extract base position (letters only, remove trailing digits)
             import re
-            match = re.match(r'^([A-Z]+)', pos_str)
+
+            match = re.match(r"^([A-Z]+)", pos_str)
             if match:
                 return match.group(1)
 
@@ -446,7 +539,11 @@ class H2HViewer:
         opt["__base_pos"] = opt[pos_col].apply(extract_base_position)
         pos_order = {p: i for i, p in enumerate(MAIN_POSITIONS)}
         opt["__pos_order"] = opt["__base_pos"].map(pos_order).fillna(999).astype(int)
-        opt = opt.sort_values(["__pos_order", "points"], ascending=[True, False]).drop(columns=["__base_pos"]).reset_index(drop=True)
+        opt = (
+            opt.sort_values(["__pos_order", "points"], ascending=[True, False])
+            .drop(columns=["__base_pos"])
+            .reset_index(drop=True)
+        )
 
         # Calculate total
         total_points = opt["points"].sum()
@@ -681,28 +778,31 @@ class H2HViewer:
 
             for _, r in opt.iterrows():
                 headshot = str(r.get("headshot_url") or DEFAULT_HEADSHOT)
-                if not headshot or headshot.lower() == 'nan':
+                if not headshot or headshot.lower() == "nan":
                     headshot = DEFAULT_HEADSHOT
                 player = str(r.get("player") or "")
-                pts = float(r.get('points', 0))
+                pts = float(r.get("points", 0))
                 pos = str(r.get(pos_col) or "")
 
                 # Extract base position for color coding
                 import re
-                match = re.match(r'^([A-Z]+(?:/[A-Z]+(?:/[A-Z]+)?)?)', pos)
+
+                match = re.match(r"^([A-Z]+(?:/[A-Z]+(?:/[A-Z]+)?)?)", pos)
                 if match:
                     base_pos = match.group(1)
                 else:
                     base_pos = pos
 
                 # Map to position class
-                if 'W/R/T' in base_pos:
-                    pos_class = 'pos-FLEX'
+                if "W/R/T" in base_pos:
+                    pos_class = "pos-FLEX"
                 else:
-                    pos_class = f'pos-{base_pos}'
+                    pos_class = f"pos-{base_pos}"
 
                 # Add def-logo class for defense team logos
-                img_class = "opt-player-img def-logo" if base_pos == 'DEF' else "opt-player-img"
+                img_class = (
+                    "opt-player-img def-logo" if base_pos == "DEF" else "opt-player-img"
+                )
 
                 # Calculate percentage for visualization bar
                 bar_pct = (pts / max_points * 100) if max_points > 0 else 0
@@ -710,28 +810,43 @@ class H2HViewer:
                 # Handle unrostered players (manager is None, NA, empty, or "nan" string)
                 # If manager contains "Unrostered" AND other names, show only the other names
                 mgr_raw = r.get("manager")
-                if pd.isna(mgr_raw) or str(mgr_raw).strip().lower() in ["", "nan", "none", "null"]:
+                if pd.isna(mgr_raw) or str(mgr_raw).strip().lower() in [
+                    "",
+                    "nan",
+                    "none",
+                    "null",
+                ]:
                     mgr = "Unrostered"
                 else:
                     mgr = str(mgr_raw)
                     # Filter out "Unrostered" if there are other managers
                     if "," in mgr and "Unrostered" in mgr:
-                        managers_list = [m.strip() for m in mgr.split(",") if m.strip().lower() != "unrostered"]
+                        managers_list = [
+                            m.strip()
+                            for m in mgr.split(",")
+                            if m.strip().lower() != "unrostered"
+                        ]
                         if managers_list:
                             mgr = ", ".join(managers_list)
                         else:
                             mgr = "Unrostered"
 
                 rows.append("<tr>")
-                rows.append(f"<td><span class='opt-pos-badge {pos_class}'>{pos}</span></td>")
+                rows.append(
+                    f"<td><span class='opt-pos-badge {pos_class}'>{pos}</span></td>"
+                )
                 # Player with photo stacked above name
                 rows.append("<td><div class='opt-player-stack'>")
-                rows.append(f"<img src='{headshot}' class='{img_class}' alt='{player}' loading='lazy'>")
+                rows.append(
+                    f"<img src='{headshot}' class='{img_class}' alt='{player}' loading='lazy'>"
+                )
                 rows.append(f"<span class='opt-player-name'>{player}</span>")
                 rows.append("</div></td>")
                 # Points with visualization bar
-                rows.append(f"<td><div class='opt-points-cell'>")
-                rows.append(f"<div class='opt-points-bar' style='width:{bar_pct}%'></div>")
+                rows.append("<td><div class='opt-points-cell'>")
+                rows.append(
+                    f"<div class='opt-points-bar' style='width:{bar_pct}%'></div>"
+                )
                 rows.append(f"<span class='opt-points-value'>{pts:,.2f}</span>")
                 rows.append("</div></td>")
                 rows.append(f"<td>{mgr}</td>")
@@ -749,23 +864,47 @@ class H2HViewer:
 
     # ---- score display helpers ------------------------------------------------
 
-    def display_matchup_score_header(self, team_1: str, team_2: str, team_1_pts: float, team_2_pts: float):
+    def display_matchup_score_header(
+        self, team_1: str, team_2: str, team_1_pts: float, team_2_pts: float
+    ):
         """Display score header for a matchup."""
         col1, col2, col3 = st.columns([2, 1, 2])
         with col1:
-            color1 = '#4ade80' if team_1_pts > team_2_pts else '#f87171' if team_1_pts < team_2_pts else 'white'
-            st.markdown(f"<div style='text-align:center;'><b style='font-size:1.1rem;'>{team_1}</b><br><span style='font-size:1.8rem;color:{color1};font-weight:bold;'>{team_1_pts:.2f}</span></div>", unsafe_allow_html=True)
+            color1 = (
+                "#4ade80"
+                if team_1_pts > team_2_pts
+                else "#f87171" if team_1_pts < team_2_pts else "white"
+            )
+            st.markdown(
+                f"<div style='text-align:center;'><b style='font-size:1.1rem;'>{team_1}</b><br><span style='font-size:1.8rem;color:{color1};font-weight:bold;'>{team_1_pts:.2f}</span></div>",
+                unsafe_allow_html=True,
+            )
         with col2:
-            st.markdown("<div style='text-align:center;font-size:1.3rem;padding-top:0.8rem;'>vs</div>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='text-align:center;font-size:1.3rem;padding-top:0.8rem;'>vs</div>",
+                unsafe_allow_html=True,
+            )
         with col3:
-            color2 = '#4ade80' if team_2_pts > team_1_pts else '#f87171' if team_2_pts < team_1_pts else 'white'
-            st.markdown(f"<div style='text-align:center;'><b style='font-size:1.1rem;'>{team_2}</b><br><span style='font-size:1.8rem;color:{color2};font-weight:bold;'>{team_2_pts:.2f}</span></div>", unsafe_allow_html=True)
+            color2 = (
+                "#4ade80"
+                if team_2_pts > team_1_pts
+                else "#f87171" if team_2_pts < team_1_pts else "white"
+            )
+            st.markdown(
+                f"<div style='text-align:center;'><b style='font-size:1.1rem;'>{team_2}</b><br><span style='font-size:1.8rem;color:{color2};font-weight:bold;'>{team_2_pts:.2f}</span></div>",
+                unsafe_allow_html=True,
+            )
 
     def display_optimal_score_header(self, total_pts: float):
         """Display score header for optimal lineup."""
-        st.markdown(f"<div style='text-align:center;margin-bottom:1rem;'><span style='font-size:1rem;opacity:0.8;'>League Optimal Total</span><br><span style='font-size:2rem;color:#4ade80;font-weight:bold;'>{total_pts:.2f}</span></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='text-align:center;margin-bottom:1rem;'><span style='font-size:1rem;opacity:0.8;'>League Optimal Total</span><br><span style='font-size:2rem;color:#4ade80;font-weight:bold;'>{total_pts:.2f}</span></div>",
+            unsafe_allow_html=True,
+        )
 
-    def _calculate_lineup_points(self, df: pd.DataFrame, manager: str, use_optimal: bool = False) -> float:
+    def _calculate_lineup_points(
+        self, df: pd.DataFrame, manager: str, use_optimal: bool = False
+    ) -> float:
         """Calculate total points for a manager's starting lineup."""
         # For optimal: use optimal_position to determine starters
         # For actual: use lineup_position (or fantasy_position as fallback)
@@ -782,7 +921,9 @@ class H2HViewer:
 
         # Exclude bench/IR
         if pos_col in team_df.columns:
-            starters = team_df[~team_df[pos_col].astype(str).str.upper().str.startswith(("BN", "IR"))]
+            starters = team_df[
+                ~team_df[pos_col].astype(str).str.upper().str.startswith(("BN", "IR"))
+            ]
         else:
             starters = team_df
 
@@ -810,8 +951,16 @@ class H2HViewer:
         # Identify each side from columns present in the player_df
         # team_1 and team_2 ARE the manager names (alphabetically ordered)
         if "team_1" in dfm.columns and "team_2" in dfm.columns:
-            team_1 = str(dfm["team_1"].dropna().astype(str).iloc[0]) if dfm["team_1"].notna().any() else None
-            team_2 = str(dfm["team_2"].dropna().astype(str).iloc[0]) if dfm["team_2"].notna().any() else None
+            team_1 = (
+                str(dfm["team_1"].dropna().astype(str).iloc[0])
+                if dfm["team_1"].notna().any()
+                else None
+            )
+            team_2 = (
+                str(dfm["team_2"].dropna().astype(str).iloc[0])
+                if dfm["team_2"].notna().any()
+                else None
+            )
         else:
             # Fallback: derive names from managers (best-effort)
             mgrs = dfm["manager"].dropna().astype(str).unique().tolist()
@@ -828,8 +977,12 @@ class H2HViewer:
             team_2_pts = self._calculate_lineup_points(dfm, team_2, use_optimal=False)
             self.display_matchup_score_header(team_1, team_2, team_1_pts, team_2_pts)
 
-            team_1_main = self._prepare_team_duckdb(dfm, team_1, "team_1", MAIN_POSITIONS)
-            team_2_main = self._prepare_team_duckdb(dfm, team_2, "team_2", MAIN_POSITIONS)
+            team_1_main = self._prepare_team_duckdb(
+                dfm, team_1, "team_1", MAIN_POSITIONS
+            )
+            team_2_main = self._prepare_team_duckdb(
+                dfm, team_2, "team_2", MAIN_POSITIONS
+            )
             team_1_bench = self._prepare_team_duckdb(dfm, team_1, "team_1", BENCH_IR)
             team_2_bench = self._prepare_team_duckdb(dfm, team_2, "team_2", BENCH_IR)
 
@@ -840,15 +993,19 @@ class H2HViewer:
 
             self.render_table(main_df, team_1_name, team_2_name, color_coding=True)
             if not bench_df.empty and len(bench_df) > 1:
-                self.render_table(bench_df, team_1_name, team_2_name, color_coding=False)
+                self.render_table(
+                    bench_df, team_1_name, team_2_name, color_coding=False
+                )
 
         # Optimal Lineups tab
         with lineup_tabs[1]:
             if "optimal_position" not in dfm.columns:
                 st.warning("Optimal lineup data not available for this matchup.")
             else:
-                opt_check = dfm[dfm["optimal_position"].notna() &
-                               ~dfm["optimal_position"].isin(["BN", "IR", ""])]
+                opt_check = dfm[
+                    dfm["optimal_position"].notna()
+                    & ~dfm["optimal_position"].isin(["BN", "IR", ""])
+                ]
                 if opt_check.empty:
                     st.warning("No optimal lineup positions found for this matchup.")
                 else:
@@ -856,27 +1013,49 @@ class H2HViewer:
                     dfm_optimal["fantasy_position"] = dfm_optimal["optimal_position"]
 
                     # Calculate and display optimal scores
-                    team_1_opt_pts = self._calculate_lineup_points(dfm_optimal, team_1, use_optimal=True)
-                    team_2_opt_pts = self._calculate_lineup_points(dfm_optimal, team_2, use_optimal=True)
-                    self.display_matchup_score_header(team_1, team_2, team_1_opt_pts, team_2_opt_pts)
+                    team_1_opt_pts = self._calculate_lineup_points(
+                        dfm_optimal, team_1, use_optimal=True
+                    )
+                    team_2_opt_pts = self._calculate_lineup_points(
+                        dfm_optimal, team_2, use_optimal=True
+                    )
+                    self.display_matchup_score_header(
+                        team_1, team_2, team_1_opt_pts, team_2_opt_pts
+                    )
 
-                    team_1_main = self._prepare_team_duckdb(dfm_optimal, team_1, "team_1", MAIN_POSITIONS)
-                    team_2_main = self._prepare_team_duckdb(dfm_optimal, team_2, "team_2", MAIN_POSITIONS)
-                    team_1_bench = self._prepare_team_duckdb(dfm_optimal, team_1, "team_1", BENCH_IR)
-                    team_2_bench = self._prepare_team_duckdb(dfm_optimal, team_2, "team_2", BENCH_IR)
+                    team_1_main = self._prepare_team_duckdb(
+                        dfm_optimal, team_1, "team_1", MAIN_POSITIONS
+                    )
+                    team_2_main = self._prepare_team_duckdb(
+                        dfm_optimal, team_2, "team_2", MAIN_POSITIONS
+                    )
+                    team_1_bench = self._prepare_team_duckdb(
+                        dfm_optimal, team_1, "team_1", BENCH_IR
+                    )
+                    team_2_bench = self._prepare_team_duckdb(
+                        dfm_optimal, team_2, "team_2", BENCH_IR
+                    )
 
                     main_df = self._merge_two_teams(team_1_main, team_2_main)
-                    main_df, team_1_name, team_2_name = self._postprocess_and_totals(main_df)
+                    main_df, team_1_name, team_2_name = self._postprocess_and_totals(
+                        main_df
+                    )
                     bench_df = self._merge_two_teams(team_1_bench, team_2_bench)
                     bench_df, _, _ = self._postprocess_and_totals(bench_df)
 
-                    self.render_table(main_df, team_1_name, team_2_name, color_coding=True)
+                    self.render_table(
+                        main_df, team_1_name, team_2_name, color_coding=True
+                    )
                     if not bench_df.empty and len(bench_df) > 1:
-                        self.render_table(bench_df, team_1_name, team_2_name, color_coding=False)
+                        self.render_table(
+                            bench_df, team_1_name, team_2_name, color_coding=False
+                        )
 
     # ---- rendering -----------------------------------------------------------
 
-    def render_table(self, df: pd.DataFrame, team_1_name: str, team_2_name: str, color_coding: bool):
+    def render_table(
+        self, df: pd.DataFrame, team_1_name: str, team_2_name: str, color_coding: bool
+    ):
         st.markdown(
             """
             <style>
@@ -1068,10 +1247,22 @@ class H2HViewer:
         if color_coding and "margin_1" in df.columns and "margin_2" in df.columns:
             df_no_total = df[df.get("player_1", "") != "TOTAL"]
             if not df_no_total.empty:
-                m1_min, m1_max = df_no_total["margin_1"].min(skipna=True), df_no_total["margin_1"].max(skipna=True)
-                m2_min, m2_max = df_no_total["margin_2"].min(skipna=True), df_no_total["margin_2"].max(skipna=True)
-                global_min = min(m for m in [m1_min, m2_min] if pd.notna(m)) if any(pd.notna([m1_min, m2_min])) else 0
-                global_max = max(m for m in [m1_max, m2_max] if pd.notna(m)) if any(pd.notna([m1_max, m2_max])) else 1
+                m1_min, m1_max = df_no_total["margin_1"].min(skipna=True), df_no_total[
+                    "margin_1"
+                ].max(skipna=True)
+                m2_min, m2_max = df_no_total["margin_2"].min(skipna=True), df_no_total[
+                    "margin_2"
+                ].max(skipna=True)
+                global_min = (
+                    min(m for m in [m1_min, m2_min] if pd.notna(m))
+                    if any(pd.notna([m1_min, m2_min]))
+                    else 0
+                )
+                global_max = (
+                    max(m for m in [m1_max, m2_max] if pd.notna(m))
+                    if any(pd.notna([m1_max, m2_max]))
+                    else 1
+                )
                 rng = max(global_max - global_min, 1)
             else:
                 global_min, rng = 0, 1
@@ -1091,7 +1282,7 @@ class H2HViewer:
         html.append("<table class='h2h-visual'><thead><tr>")
         # Team 1 name spanning player + points columns
         html.append(f"<th colspan='2' style='width:42%'>{team_1_name}</th>")
-        html.append(f"<th style='width:16%'>Position</th>")
+        html.append("<th style='width:16%'>Position</th>")
         # Team 2 name spanning player + points columns
         html.append(f"<th colspan='2' style='width:42%'>{team_2_name}</th>")
         html.append("</tr></thead><tbody>")
@@ -1101,8 +1292,8 @@ class H2HViewer:
 
             if is_total:
                 # Total row - special formatting
-                pts1 = row.get('points_1', 0)
-                pts2 = row.get('points_2', 0)
+                pts1 = row.get("points_1", 0)
+                pts2 = row.get("points_2", 0)
                 html.append("<tr class='h2h-total-row'>")
                 html.append("<td><strong>TOTAL</strong></td>")
                 html.append(f"<td><strong>{pts1:,.2f}</strong></td>")
@@ -1112,53 +1303,80 @@ class H2HViewer:
                 html.append("</tr>")
             else:
                 # Regular player row
-                player1 = str(row.get('player_1', '')).strip() if pd.notna(row.get('player_1')) else ''
-                player2 = str(row.get('player_2', '')).strip() if pd.notna(row.get('player_2')) else ''
-                headshot_1 = str(row.get('headshot_url_1', '')).strip() if pd.notna(row.get('headshot_url_1')) else ''
-                headshot_2 = str(row.get('headshot_url_2', '')).strip() if pd.notna(row.get('headshot_url_2')) else ''
-                pts1 = row.get('points_1', 0)
-                pts2 = row.get('points_2', 0)
-                pos = str(row.get('fantasy_position', '')).strip() if pd.notna(row.get('fantasy_position')) else ''
+                player1 = (
+                    str(row.get("player_1", "")).strip()
+                    if pd.notna(row.get("player_1"))
+                    else ""
+                )
+                player2 = (
+                    str(row.get("player_2", "")).strip()
+                    if pd.notna(row.get("player_2"))
+                    else ""
+                )
+                headshot_1 = (
+                    str(row.get("headshot_url_1", "")).strip()
+                    if pd.notna(row.get("headshot_url_1"))
+                    else ""
+                )
+                headshot_2 = (
+                    str(row.get("headshot_url_2", "")).strip()
+                    if pd.notna(row.get("headshot_url_2"))
+                    else ""
+                )
+                pts1 = row.get("points_1", 0)
+                pts2 = row.get("points_2", 0)
+                pos = (
+                    str(row.get("fantasy_position", "")).strip()
+                    if pd.notna(row.get("fantasy_position"))
+                    else ""
+                )
 
                 # Extract base position and determine display
                 # For bench/IR, show "BN" or "IR" but color-code by actual position
-                if pos.startswith('BN') or pos.startswith('IR'):
-                    is_bench = True
-                    pos_display = 'BN' if pos.startswith('BN') else 'IR'
+                if pos.startswith("BN") or pos.startswith("IR"):
+                    pos_display = "BN" if pos.startswith("BN") else "IR"
 
                     # Get actual NFL position for color coding from position column
-                    actual_position = str(row.get('position', '')).strip() if pd.notna(row.get('position')) else ''
-                    if actual_position and actual_position not in ['nan', '', 'None']:
+                    actual_position = (
+                        str(row.get("position", "")).strip()
+                        if pd.notna(row.get("position"))
+                        else ""
+                    )
+                    if actual_position and actual_position not in ["nan", "", "None"]:
                         # Use actual position for color coding
-                        if actual_position == 'W/R/T' or actual_position == 'FLEX':
-                            pos_class = 'pos-FLEX'
+                        if actual_position == "W/R/T" or actual_position == "FLEX":
+                            pos_class = "pos-FLEX"
                         else:
-                            pos_class = f'pos-{actual_position}'
+                            pos_class = f"pos-{actual_position}"
                     else:
                         # Fallback to BN color if no position info
-                        pos_class = 'pos-BN' if pos.startswith('BN') else 'pos-IR'
+                        pos_class = "pos-BN" if pos.startswith("BN") else "pos-IR"
                 else:
-                    is_bench = False
                     # Extract base position (remove trailing numbers)
                     import re
-                    match = re.match(r'^([A-Z]+(?:/[A-Z]+(?:/[A-Z]+)?)?)', pos)
+
+                    match = re.match(r"^([A-Z]+(?:/[A-Z]+(?:/[A-Z]+)?)?)", pos)
                     if match:
                         pos_display = match.group(1)
                     else:
                         pos_display = pos
                     # Map to position class
-                    if 'W/R/T' in pos_display:
-                        pos_class = 'pos-FLEX'
+                    if "W/R/T" in pos_display:
+                        pos_class = "pos-FLEX"
                     else:
-                        pos_class = f'pos-{pos_display}'
+                        pos_class = f"pos-{pos_display}"
 
                 # Add def-logo class for defense team logos
-                img_class = "h2h-player-img def-logo" if pos_display == 'DEF' else "h2h-player-img"
+                img_class = (
+                    "h2h-player-img def-logo"
+                    if pos_display == "DEF"
+                    else "h2h-player-img"
+                )
 
                 # Use default headshot if missing
-                if not headshot_1 or headshot_1.lower() == 'nan':
+                if not headshot_1 or headshot_1.lower() == "nan":
                     headshot_1 = DEFAULT_HEADSHOT
-                if not headshot_2 or headshot_2.lower() == 'nan':
+                if not headshot_2 or headshot_2.lower() == "nan":
                     headshot_2 = DEFAULT_HEADSHOT
 
                 # Color coding
@@ -1176,7 +1394,9 @@ class H2HViewer:
                 html.append("<td style='width:30%;'>")
                 if player1:
                     html.append("<div class='h2h-player-stack'>")
-                    html.append(f"<img src='{headshot_1}' class='{img_class}' alt='{player1}' loading='lazy'>")
+                    html.append(
+                        f"<img src='{headshot_1}' class='{img_class}' alt='{player1}' loading='lazy'>"
+                    )
                     html.append(f"<span class='h2h-player-name'>{player1}</span>")
                     html.append("</div>")
                 else:
@@ -1184,22 +1404,30 @@ class H2HViewer:
                 html.append("</td>")
 
                 # Team 1 points cell
-                html.append(f"<td style='background-color:{c1}; width:12%;'><div class='h2h-points-cell' style='color:{text_color};'>{pts1:,.2f}</div></td>")
+                html.append(
+                    f"<td style='background-color:{c1}; width:12%;'><div class='h2h-points-cell' style='color:{text_color};'>{pts1:,.2f}</div></td>"
+                )
 
                 # Position badge with color coding
                 html.append("<td>")
                 if pos:
-                    html.append(f"<span class='h2h-pos-badge {pos_class}'>{pos_display}</span>")
+                    html.append(
+                        f"<span class='h2h-pos-badge {pos_class}'>{pos_display}</span>"
+                    )
                 html.append("</td>")
 
                 # Team 2 points cell
-                html.append(f"<td style='background-color:{c2}; width:12%;'><div class='h2h-points-cell' style='color:{text_color};'>{pts2:,.2f}</div></td>")
+                html.append(
+                    f"<td style='background-color:{c2}; width:12%;'><div class='h2h-points-cell' style='color:{text_color};'>{pts2:,.2f}</div></td>"
+                )
 
                 # Team 2 player cell: photo on top, name below
                 html.append("<td style='width:30%;'>")
                 if player2:
                     html.append("<div class='h2h-player-stack'>")
-                    html.append(f"<img src='{headshot_2}' class='{img_class}' alt='{player2}' loading='lazy'>")
+                    html.append(
+                        f"<img src='{headshot_2}' class='{img_class}' alt='{player2}' loading='lazy'>"
+                    )
                     html.append(f"<span class='h2h-player-name'>{player2}</span>")
                     html.append("</div>")
                 else:
@@ -1214,7 +1442,10 @@ class H2HViewer:
 
 # ---------- small helpers & standalone viewer --------------------------------
 
-def filter_h2h_data(player_df: pd.DataFrame, year: int, week: int, matchup_name: str) -> pd.DataFrame:
+
+def filter_h2h_data(
+    player_df: pd.DataFrame, year: int, week: int, matchup_name: str
+) -> pd.DataFrame:
     con = duckdb.connect()
     con.register("player_data", player_df)
     q = f"""
@@ -1244,7 +1475,9 @@ def display_head_to_head(player_df: pd.DataFrame):
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
     # Year/Week from player_df only
-    pairs = df.loc[df["year"].notna() & df["week"].notna(), ["year", "week"]].drop_duplicates()
+    pairs = df.loc[
+        df["year"].notna() & df["week"].notna(), ["year", "week"]
+    ].drop_duplicates()
     pairs = pairs.sort_values(["year", "week"]).astype({"year": int, "week": int})
     if pairs.empty:
         st.write("No year/week rows available.")
@@ -1259,8 +1492,16 @@ def display_head_to_head(player_df: pd.DataFrame):
         weeks = sorted(pairs.loc[pairs["year"] == y, "week"].unique().tolist())
         w = st.selectbox("Week", weeks, index=len(weeks) - 1, key="h2h_week")
     with c3:
-        matchups = sorted(df.query("year==@y and week==@w")["matchup_name"].dropna().astype(str).unique().tolist())
-        m = st.selectbox("Matchup", matchups, index=0 if matchups else None, key="h2h_matchup")
+        matchups = sorted(
+            df.query("year==@y and week==@w")["matchup_name"]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+        m = st.selectbox(
+            "Matchup", matchups, index=0 if matchups else None, key="h2h_matchup"
+        )
     with c4:
         go = st.button("Go", key="h2h_go")
 
@@ -1269,4 +1510,3 @@ def display_head_to_head(player_df: pd.DataFrame):
         H2HViewer(sub).display(prefix="h2h", matchup_name=m)
     elif not go:
         st.write("Select a year, week, and matchup, then click Go.")
-

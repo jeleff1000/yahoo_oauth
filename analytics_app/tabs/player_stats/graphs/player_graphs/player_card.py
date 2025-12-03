@@ -5,18 +5,23 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 from md.core import list_player_seasons
-from md.tab_data_access.players import load_players_career_data, load_players_season_data
-from md.tab_data_access.players.weekly_player_data import load_filtered_weekly_player_data
+from md.tab_data_access.players import (
+    load_players_career_data,
+    load_players_season_data,
+)
+from md.tab_data_access.players.weekly_player_data import (
+    load_filtered_weekly_player_data,
+)
 
 
 # Position colors (vintage 1970s inspired)
 POSITION_COLORS = {
-    'QB': {'primary': '#C41E3A', 'secondary': '#8B1A2E', 'name': 'QUARTERBACK'},
-    'RB': {'primary': '#006B3F', 'secondary': '#004D2E', 'name': 'RUNNING BACK'},
-    'WR': {'primary': '#FF6B35', 'secondary': '#D4551B', 'name': 'WIDE RECEIVER'},
-    'TE': {'primary': '#C41E3A', 'secondary': '#8B1A2E', 'name': 'TIGHT END'},
-    'K': {'primary': '#5B2C6F', 'secondary': '#3E1D4C', 'name': 'KICKER'},
-    'DEF': {'primary': '#003366', 'secondary': '#001A33', 'name': 'DEFENSE'},
+    "QB": {"primary": "#C41E3A", "secondary": "#8B1A2E", "name": "QUARTERBACK"},
+    "RB": {"primary": "#006B3F", "secondary": "#004D2E", "name": "RUNNING BACK"},
+    "WR": {"primary": "#FF6B35", "secondary": "#D4551B", "name": "WIDE RECEIVER"},
+    "TE": {"primary": "#C41E3A", "secondary": "#8B1A2E", "name": "TIGHT END"},
+    "K": {"primary": "#5B2C6F", "secondary": "#3E1D4C", "name": "KICKER"},
+    "DEF": {"primary": "#003366", "secondary": "#001A33", "name": "DEFENSE"},
 }
 
 # Team logos
@@ -55,9 +60,9 @@ TEAM_LOGO_MAP = {
     "TEN": "https://upload.wikimedia.org/wikipedia/en/thumb/c/c1/Tennessee_Titans_logo.svg/100px-Tennessee_Titans_logo.svg.png",
     "WAS": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Washington_football_team_wlogo.svg/1024px-Washington_football_team_wlogo.svg.png",
     "WSH": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Washington_football_team_wlogo.svg/1024px-Washington_football_team_wlogo.svg.png",
-    'STL': 'https://upload.wikimedia.org/wikipedia/en/thumb/8/8a/Los_Angeles_Rams_logo.svg/100px-Los_Angeles_Rams_logo.svg.png',
-    'SD': 'https://upload.wikimedia.org/wikipedia/en/thumb/7/72/NFL_Chargers_logo.svg/100px-NFL_Chargers_logo.svg.png',
-    'OAK': 'https://upload.wikimedia.org/wikipedia/en/thumb/4/48/Las_Vegas_Raiders_logo.svg/150px-Las_Vegas_Raiders_logo.svg.png'
+    "STL": "https://upload.wikimedia.org/wikipedia/en/thumb/8/8a/Los_Angeles_Rams_logo.svg/100px-Los_Angeles_Rams_logo.svg.png",
+    "SD": "https://upload.wikimedia.org/wikipedia/en/thumb/7/72/NFL_Chargers_logo.svg/100px-NFL_Chargers_logo.svg.png",
+    "OAK": "https://upload.wikimedia.org/wikipedia/en/thumb/4/48/Las_Vegas_Raiders_logo.svg/150px-Las_Vegas_Raiders_logo.svg.png",
 }
 
 
@@ -92,14 +97,17 @@ def display_player_card(prefix=""):
     """
     st.header("🏈 Player Card")
 
-    st.markdown("""
+    st.markdown(
+        """
     <div style="background: #f0f2f6; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
     <p style="margin: 0; color: #31333F; font-size: 0.9rem;">
     <strong>Classic football card:</strong> Vintage 1970s-style player card.
     Search for any player to see their card.
     </p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     # Year selection
     available_years = list_player_seasons()
@@ -112,7 +120,7 @@ def display_player_card(prefix=""):
         selected_year = st.selectbox(
             "Select Season",
             options=sorted(available_years, reverse=True),
-            key=f"{prefix}_card_year"
+            key=f"{prefix}_card_year",
         )
 
     with col2:
@@ -120,14 +128,14 @@ def display_player_card(prefix=""):
             "View Mode",
             ["Season Stats", "Career Stats"],
             horizontal=True,
-            key=f"{prefix}_card_mode"
+            key=f"{prefix}_card_mode",
         )
 
     # Player search
     player_search = st.text_input(
         "🔍 Search for a player:",
         placeholder="e.g., Lamar Jackson",
-        key=f"{prefix}_card_search"
+        key=f"{prefix}_card_search",
     ).strip()
 
     if not player_search:
@@ -141,7 +149,7 @@ def display_player_card(prefix=""):
                 year=[int(selected_year)],
                 rostered_only=False,
                 sort_column="points",
-                sort_direction="DESC"
+                sort_direction="DESC",
             )
         else:
             player_data = load_players_career_data(
@@ -150,7 +158,7 @@ def display_player_card(prefix=""):
                 rostered_only=False,
                 started_only=False,
                 sort_column="points",
-                sort_direction="DESC"
+                sort_direction="DESC",
             )
 
         if player_data is None or player_data.empty:
@@ -161,7 +169,9 @@ def display_player_card(prefix=""):
     player_data["player_lower"] = player_data["player"].str.lower()
     search_lower = player_search.lower()
 
-    filtered = player_data[player_data["player_lower"].str.contains(search_lower)].copy()
+    filtered = player_data[
+        player_data["player_lower"].str.contains(search_lower)
+    ].copy()
     filtered = filtered.drop(columns=["player_lower"])
 
     if filtered.empty:
@@ -170,27 +180,29 @@ def display_player_card(prefix=""):
 
     # If multiple matches, let user select
     if len(filtered) > 1:
-        filtered['display'] = filtered['player'] + " (" + filtered['nfl_position'].astype(str) + ")"
+        filtered["display"] = (
+            filtered["player"] + " (" + filtered["nfl_position"].astype(str) + ")"
+        )
         selected_player_display = st.selectbox(
             "Multiple players found - select one:",
-            filtered['display'].unique(),
-            key=f"{prefix}_card_player_select"
+            filtered["display"].unique(),
+            key=f"{prefix}_card_player_select",
         )
         selected_player_name = selected_player_display.split(" (")[0]
-        player_row = filtered[filtered['player'] == selected_player_name].iloc[0]
+        player_row = filtered[filtered["player"] == selected_player_name].iloc[0]
     else:
         player_row = filtered.iloc[0]
 
     # Extract player info
-    player_name = str(player_row['player'])
-    position = str(player_row.get('nfl_position', 'N/A'))
-    team = str(player_row.get('nfl_team', 'N/A'))
-    headshot = str(player_row.get('headshot_url', ''))
-    if not headshot or headshot == 'nan':
-        headshot = 'https://static.www.nfl.com/image/private/f_auto,q_auto/league/mdrlzgankwwjldxllgcx'
+    player_name = str(player_row["player"])
+    position = str(player_row.get("nfl_position", "N/A"))
+    team = str(player_row.get("nfl_team", "N/A"))
+    headshot = str(player_row.get("headshot_url", ""))
+    if not headshot or headshot == "nan":
+        headshot = "https://static.www.nfl.com/image/private/f_auto,q_auto/league/mdrlzgankwwjldxllgcx"
 
     # Get position colors
-    pos_colors = POSITION_COLORS.get(position, POSITION_COLORS['QB'])
+    pos_colors = POSITION_COLORS.get(position, POSITION_COLORS["QB"])
 
     # Get team logo
     team_logo = TEAM_LOGO_MAP.get(team, "")
@@ -200,7 +212,7 @@ def display_player_card(prefix=""):
     try:
         filters = {
             "player_query": player_name,
-            "rostered_only": False  # Get all games to find best game
+            "rostered_only": False,  # Get all games to find best game
         }
         if view_mode == "Season Stats":
             filters["year"] = [int(selected_year)]
@@ -210,86 +222,133 @@ def display_player_card(prefix=""):
         if weekly_data is not None and not weekly_data.empty:
             # Filter to only this player's data (in case of partial name matches)
             # Use contains instead of exact match to be more forgiving
-            weekly_data = weekly_data[weekly_data['player'].str.lower().str.contains(player_name.lower(), regex=False)].copy()
+            weekly_data = weekly_data[
+                weekly_data["player"]
+                .str.lower()
+                .str.contains(player_name.lower(), regex=False)
+            ].copy()
 
             if not weekly_data.empty:
                 # Convert to numeric
-                weekly_data['points'] = pd.to_numeric(weekly_data['points'], errors='coerce')
-                weekly_data['win'] = pd.to_numeric(weekly_data['win'], errors='coerce')
+                weekly_data["points"] = pd.to_numeric(
+                    weekly_data["points"], errors="coerce"
+                )
+                weekly_data["win"] = pd.to_numeric(weekly_data["win"], errors="coerce")
                 # Column is 'is_started' not 'started'
-                if 'is_started' in weekly_data.columns:
-                    weekly_data['is_started'] = pd.to_numeric(weekly_data['is_started'], errors='coerce')
-                elif 'started' in weekly_data.columns:
-                    weekly_data['is_started'] = pd.to_numeric(weekly_data['started'], errors='coerce')
+                if "is_started" in weekly_data.columns:
+                    weekly_data["is_started"] = pd.to_numeric(
+                        weekly_data["is_started"], errors="coerce"
+                    )
+                elif "started" in weekly_data.columns:
+                    weekly_data["is_started"] = pd.to_numeric(
+                        weekly_data["started"], errors="coerce"
+                    )
                 else:
-                    weekly_data['is_started'] = 1  # Assume all games count if no started column
-                weekly_data['is_playoffs'] = pd.to_numeric(weekly_data['is_playoffs'], errors='coerce')
-                weekly_data['optimal_player'] = pd.to_numeric(weekly_data['optimal_player'], errors='coerce')
-                weekly_data['team_points'] = pd.to_numeric(weekly_data['team_points'], errors='coerce')
-                weekly_data['opponent_points'] = pd.to_numeric(weekly_data['opponent_points'], errors='coerce')
+                    weekly_data["is_started"] = (
+                        1  # Assume all games count if no started column
+                    )
+                weekly_data["is_playoffs"] = pd.to_numeric(
+                    weekly_data["is_playoffs"], errors="coerce"
+                )
+                weekly_data["optimal_player"] = pd.to_numeric(
+                    weekly_data["optimal_player"], errors="coerce"
+                )
+                weekly_data["team_points"] = pd.to_numeric(
+                    weekly_data["team_points"], errors="coerce"
+                )
+                weekly_data["opponent_points"] = pd.to_numeric(
+                    weekly_data["opponent_points"], errors="coerce"
+                )
 
                 # Only count started games for W-L record
-                started_games = weekly_data[weekly_data['is_started'] == 1].copy()
+                started_games = weekly_data[weekly_data["is_started"] == 1].copy()
 
                 if not started_games.empty:
                     # Overall W-L record
-                    wins = int(started_games['win'].sum())
+                    wins = int(started_games["win"].sum())
                     losses = len(started_games) - wins
-                    matchup_stats['record'] = f"{wins}-{losses}"
-                    matchup_stats['win_pct'] = (wins / len(started_games) * 100) if len(started_games) > 0 else 0
+                    matchup_stats["record"] = f"{wins}-{losses}"
+                    matchup_stats["win_pct"] = (
+                        (wins / len(started_games) * 100)
+                        if len(started_games) > 0
+                        else 0
+                    )
 
                     # Playoff W-L record
-                    playoff_games = started_games[started_games['is_playoffs'] == 1]
+                    playoff_games = started_games[started_games["is_playoffs"] == 1]
                     if not playoff_games.empty:
-                        playoff_wins = int(playoff_games['win'].sum())
+                        playoff_wins = int(playoff_games["win"].sum())
                         playoff_losses = len(playoff_games) - playoff_wins
-                        matchup_stats['playoff_record'] = f"{playoff_wins}-{playoff_losses}"
+                        matchup_stats["playoff_record"] = (
+                            f"{playoff_wins}-{playoff_losses}"
+                        )
                     else:
-                        matchup_stats['playoff_record'] = "0-0"
+                        matchup_stats["playoff_record"] = "0-0"
 
                     # Average margin when started
-                    started_games['margin'] = started_games['team_points'] - started_games['opponent_points']
-                    matchup_stats['avg_margin'] = started_games['margin'].mean()
+                    started_games["margin"] = (
+                        started_games["team_points"] - started_games["opponent_points"]
+                    )
+                    matchup_stats["avg_margin"] = started_games["margin"].mean()
                 else:
-                    matchup_stats['record'] = "0-0"
-                    matchup_stats['win_pct'] = 0
-                    matchup_stats['playoff_record'] = "0-0"
-                    matchup_stats['avg_margin'] = 0
+                    matchup_stats["record"] = "0-0"
+                    matchup_stats["win_pct"] = 0
+                    matchup_stats["playoff_record"] = "0-0"
+                    matchup_stats["avg_margin"] = 0
 
                 # Best game (all games, not just started)
-                matchup_stats['best_game'] = weekly_data['points'].max()
+                matchup_stats["best_game"] = weekly_data["points"].max()
 
                 # Championships (rings) - check for championship column
-                if 'championship' in weekly_data.columns:
-                    weekly_data['championship'] = pd.to_numeric(weekly_data['championship'], errors='coerce')
+                if "championship" in weekly_data.columns:
+                    weekly_data["championship"] = pd.to_numeric(
+                        weekly_data["championship"], errors="coerce"
+                    )
                     # Championship + win = championship won
-                    championship_wins = int(weekly_data[(weekly_data['championship'] == 1) & (weekly_data['win'] == 1)]['win'].sum())
-                    matchup_stats['rings'] = championship_wins
+                    championship_wins = int(
+                        weekly_data[
+                            (weekly_data["championship"] == 1)
+                            & (weekly_data["win"] == 1)
+                        ]["win"].sum()
+                    )
+                    matchup_stats["rings"] = championship_wins
                 else:
-                    matchup_stats['rings'] = 0
+                    matchup_stats["rings"] = 0
     except Exception:
         # If matchup stats fail, just continue without them
         pass
 
     # Calculate stats
     if view_mode == "Season Stats":
-        total_points = _safe_float(player_row.get('points', 0))
-        ppg = _safe_float(player_row.get('season_ppg', 0))
-        games = _safe_int(player_row.get('fantasy_games', 0))
+        total_points = _safe_float(player_row.get("points", 0))
+        ppg = _safe_float(player_row.get("season_ppg", 0))
+        games = _safe_int(player_row.get("fantasy_games", 0))
         year_label = f"{selected_year}"
 
         # Calculate optimal % from season data (only counts actual games played)
-        optimal_count = _safe_int(player_row.get('optimal_player', 0))
+        optimal_count = _safe_int(player_row.get("optimal_player", 0))
         optimal_pct = (optimal_count / games * 100) if games > 0 else 0
     else:
-        total_points = _safe_float(player_row.get('points', 0))
-        ppg = _safe_float(player_row.get('ppg', 0)) if 'ppg' in player_row else (total_points / _safe_int(player_row.get('games_started', 1)) if _safe_int(player_row.get('games_started', 0)) > 0 else 0)
-        games = _safe_int(player_row.get('games_started', 0))
+        total_points = _safe_float(player_row.get("points", 0))
+        ppg = (
+            _safe_float(player_row.get("ppg", 0))
+            if "ppg" in player_row
+            else (
+                total_points / _safe_int(player_row.get("games_started", 1))
+                if _safe_int(player_row.get("games_started", 0)) > 0
+                else 0
+            )
+        )
+        games = _safe_int(player_row.get("games_started", 0))
         year_label = "CAREER"
 
         # Calculate optimal % from career data (only counts actual games played)
-        optimal_count = _safe_int(player_row.get('optimal_player', 0))
-        games_played = _safe_int(player_row.get('games_played', 0)) if 'games_played' in player_row else games
+        optimal_count = _safe_int(player_row.get("optimal_player", 0))
+        games_played = (
+            _safe_int(player_row.get("games_played", 0))
+            if "games_played" in player_row
+            else games
+        )
         optimal_pct = (optimal_count / games_played * 100) if games_played > 0 else 0
 
     # Build vintage 1970s card HTML - FRONT AND BACK
@@ -676,15 +735,15 @@ def display_player_card(prefix=""):
 
     # Position-specific stats for FRONT card
     # Column names differ between season and career data
-    if position == 'QB':
+    if position == "QB":
         if view_mode == "Season Stats":
-            pass_yds = _safe_int(player_row.get('passing_yards', 0))
-            pass_tds = _safe_int(player_row.get('passing_tds', 0))
-            pass_ints = _safe_int(player_row.get('passing_interceptions', 0))
+            pass_yds = _safe_int(player_row.get("passing_yards", 0))
+            pass_tds = _safe_int(player_row.get("passing_tds", 0))
+            pass_ints = _safe_int(player_row.get("passing_interceptions", 0))
         else:  # Career Stats
-            pass_yds = _safe_int(player_row.get('pass_yds', 0))
-            pass_tds = _safe_int(player_row.get('pass_td', 0))
-            pass_ints = _safe_int(player_row.get('passing_interceptions', 0))
+            pass_yds = _safe_int(player_row.get("pass_yds", 0))
+            pass_tds = _safe_int(player_row.get("pass_td", 0))
+            pass_ints = _safe_int(player_row.get("passing_interceptions", 0))
 
         card_html += f"""
             <div class="position-stat-grid">
@@ -703,21 +762,21 @@ def display_player_card(prefix=""):
             </div>
         """
 
-    elif position in ['RB', 'WR', 'TE']:
+    elif position in ["RB", "WR", "TE"]:
         if view_mode == "Season Stats":
-            rush_yds = _safe_int(player_row.get('rushing_yards', 0))
-            rush_tds = _safe_int(player_row.get('rushing_tds', 0))
-            rec_yds = _safe_int(player_row.get('receiving_yards', 0))
-            rec_tds = _safe_int(player_row.get('receiving_tds', 0))
-            receptions = _safe_int(player_row.get('receptions', 0))
+            rush_yds = _safe_int(player_row.get("rushing_yards", 0))
+            rush_tds = _safe_int(player_row.get("rushing_tds", 0))
+            rec_yds = _safe_int(player_row.get("receiving_yards", 0))
+            rec_tds = _safe_int(player_row.get("receiving_tds", 0))
+            receptions = _safe_int(player_row.get("receptions", 0))
         else:  # Career Stats
-            rush_yds = _safe_int(player_row.get('rush_yds', 0))
-            rush_tds = _safe_int(player_row.get('rush_td', 0))
-            rec_yds = _safe_int(player_row.get('rec_yds', 0))
-            rec_tds = _safe_int(player_row.get('rec_td', 0))
-            receptions = _safe_int(player_row.get('rec', 0))
+            rush_yds = _safe_int(player_row.get("rush_yds", 0))
+            rush_tds = _safe_int(player_row.get("rush_td", 0))
+            rec_yds = _safe_int(player_row.get("rec_yds", 0))
+            rec_tds = _safe_int(player_row.get("rec_td", 0))
+            receptions = _safe_int(player_row.get("rec", 0))
 
-        if position == 'RB':
+        if position == "RB":
             card_html += f"""
             <div class="position-stat-grid">
                 <div class="position-stat">
@@ -752,10 +811,10 @@ def display_player_card(prefix=""):
             </div>
             """
 
-    elif position == 'K':
-        fgm = _safe_int(player_row.get('fg_made', 0))
-        fga = _safe_int(player_row.get('fg_att', 0))
-        xpm = _safe_int(player_row.get('pat_made', 0))
+    elif position == "K":
+        fgm = _safe_int(player_row.get("fg_made", 0))
+        fga = _safe_int(player_row.get("fg_att", 0))
+        xpm = _safe_int(player_row.get("pat_made", 0))
 
         card_html += f"""
             <div class="position-stat-grid">
@@ -774,10 +833,10 @@ def display_player_card(prefix=""):
             </div>
         """
 
-    elif position == 'DEF':
-        sacks = _safe_int(player_row.get('def_sacks', 0))
-        ints = _safe_int(player_row.get('def_interceptions', 0))
-        def_tds = _safe_int(player_row.get('def_tds', 0))
+    elif position == "DEF":
+        sacks = _safe_int(player_row.get("def_sacks", 0))
+        ints = _safe_int(player_row.get("def_interceptions", 0))
+        def_tds = _safe_int(player_row.get("def_tds", 0))
 
         card_html += f"""
             <div class="position-stat-grid">
@@ -798,9 +857,9 @@ def display_player_card(prefix=""):
 
     # Add manager info and highlights to front card
     # Get manager name from player data
-    manager_name = str(player_row.get('manager', 'N/A'))
-    if manager_name == 'nan' or not manager_name or manager_name == '':
-        manager_name = 'Free Agent'
+    manager_name = str(player_row.get("manager", "N/A"))
+    if manager_name == "nan" or not manager_name or manager_name == "":
+        manager_name = "Free Agent"
 
     card_html += f"""
             <div class="manager-section">
@@ -811,14 +870,14 @@ def display_player_card(prefix=""):
 
     # Add fantasy highlights - get stats from player_row data
     # Extract win/loss/champion data from player_row (aggregated data)
-    wins_from_data = _safe_int(player_row.get('win', 0))
-    losses_from_data = _safe_int(player_row.get('loss', 0))
-    championships_from_data = _safe_int(player_row.get('championships', 0))
-    position_rank = player_row.get('position_season_rank', None)
+    wins_from_data = _safe_int(player_row.get("win", 0))
+    losses_from_data = _safe_int(player_row.get("loss", 0))
+    championships_from_data = _safe_int(player_row.get("championships", 0))
+    position_rank = player_row.get("position_season_rank", None)
 
     # Pre-compute best game display - use matchup_stats if available, otherwise show PPG as fallback
-    if matchup_stats and 'best_game' in matchup_stats:
-        best_game_val = matchup_stats.get('best_game', 0)
+    if matchup_stats and "best_game" in matchup_stats:
+        best_game_val = matchup_stats.get("best_game", 0)
         best_game_display = f"{best_game_val:.1f}" if best_game_val else "N/A"
     else:
         # Fallback: use total points / games as estimate, or just show N/A
@@ -826,7 +885,9 @@ def display_player_card(prefix=""):
 
     if view_mode == "Career Stats":
         # Career: show W-L record, Championships, Best Game, Optimal %
-        champ_display = '🏆' * championships_from_data if championships_from_data > 0 else '0'
+        champ_display = (
+            "🏆" * championships_from_data if championships_from_data > 0 else "0"
+        )
         card_html += f"""
             <div class="highlights-grid">
                 <div class="highlight-box">
@@ -851,7 +912,11 @@ def display_player_card(prefix=""):
         # Season: show W-L record, Position Rank, Best Game, Optimal %
         # Handle position_rank - could be None, NaN, or a valid number
         try:
-            if position_rank is not None and not pd.isna(position_rank) and float(position_rank) > 0:
+            if (
+                position_rank is not None
+                and not pd.isna(position_rank)
+                and float(position_rank) > 0
+            ):
                 rank_display = f"#{int(position_rank)}"
             else:
                 rank_display = "N/A"
@@ -901,23 +966,23 @@ def display_player_card(prefix=""):
 
     # Add comprehensive stats based on position
     # Column names differ between season and career data
-    if position == 'QB':
+    if position == "QB":
         if view_mode == "Season Stats":
-            pass_yds = _safe_int(player_row.get('passing_yards', 0))
-            pass_tds = _safe_int(player_row.get('passing_tds', 0))
-            pass_ints = _safe_int(player_row.get('passing_interceptions', 0))
-            pass_att = _safe_int(player_row.get('attempts', 0))
-            pass_cmp = _safe_int(player_row.get('completions', 0))
-            rush_yds = _safe_int(player_row.get('rushing_yards', 0))
-            rush_tds = _safe_int(player_row.get('rushing_tds', 0))
+            pass_yds = _safe_int(player_row.get("passing_yards", 0))
+            pass_tds = _safe_int(player_row.get("passing_tds", 0))
+            pass_ints = _safe_int(player_row.get("passing_interceptions", 0))
+            pass_att = _safe_int(player_row.get("attempts", 0))
+            pass_cmp = _safe_int(player_row.get("completions", 0))
+            rush_yds = _safe_int(player_row.get("rushing_yards", 0))
+            rush_tds = _safe_int(player_row.get("rushing_tds", 0))
         else:  # Career Stats
-            pass_yds = _safe_int(player_row.get('pass_yds', 0))
-            pass_tds = _safe_int(player_row.get('pass_td', 0))
-            pass_ints = _safe_int(player_row.get('passing_interceptions', 0))
-            pass_att = _safe_int(player_row.get('attempts', 0))
-            pass_cmp = _safe_int(player_row.get('completions', 0))
-            rush_yds = _safe_int(player_row.get('rush_yds', 0))
-            rush_tds = _safe_int(player_row.get('rush_td', 0))
+            pass_yds = _safe_int(player_row.get("pass_yds", 0))
+            pass_tds = _safe_int(player_row.get("pass_td", 0))
+            pass_ints = _safe_int(player_row.get("passing_interceptions", 0))
+            pass_att = _safe_int(player_row.get("attempts", 0))
+            pass_cmp = _safe_int(player_row.get("completions", 0))
+            rush_yds = _safe_int(player_row.get("rush_yds", 0))
+            rush_tds = _safe_int(player_row.get("rush_td", 0))
 
         cmp_pct = (pass_cmp / pass_att * 100) if pass_att > 0 else 0
 
@@ -954,23 +1019,23 @@ def display_player_card(prefix=""):
                 </div>
         """
 
-    elif position == 'RB':
+    elif position == "RB":
         if view_mode == "Season Stats":
-            rush_yds = _safe_int(player_row.get('rushing_yards', 0))
-            rush_tds = _safe_int(player_row.get('rushing_tds', 0))
-            rush_att = _safe_int(player_row.get('carries', 0))
-            rec_yds = _safe_int(player_row.get('receiving_yards', 0))
-            rec_tds = _safe_int(player_row.get('receiving_tds', 0))
-            receptions = _safe_int(player_row.get('receptions', 0))
-            targets = _safe_int(player_row.get('targets', 0))
+            rush_yds = _safe_int(player_row.get("rushing_yards", 0))
+            rush_tds = _safe_int(player_row.get("rushing_tds", 0))
+            rush_att = _safe_int(player_row.get("carries", 0))
+            rec_yds = _safe_int(player_row.get("receiving_yards", 0))
+            rec_tds = _safe_int(player_row.get("receiving_tds", 0))
+            receptions = _safe_int(player_row.get("receptions", 0))
+            targets = _safe_int(player_row.get("targets", 0))
         else:  # Career Stats
-            rush_yds = _safe_int(player_row.get('rush_yds', 0))
-            rush_tds = _safe_int(player_row.get('rush_td', 0))
-            rush_att = _safe_int(player_row.get('rush_att', 0))
-            rec_yds = _safe_int(player_row.get('rec_yds', 0))
-            rec_tds = _safe_int(player_row.get('rec_td', 0))
-            receptions = _safe_int(player_row.get('rec', 0))
-            targets = _safe_int(player_row.get('targets', 0))
+            rush_yds = _safe_int(player_row.get("rush_yds", 0))
+            rush_tds = _safe_int(player_row.get("rush_td", 0))
+            rush_att = _safe_int(player_row.get("rush_att", 0))
+            rec_yds = _safe_int(player_row.get("rec_yds", 0))
+            rec_tds = _safe_int(player_row.get("rec_td", 0))
+            receptions = _safe_int(player_row.get("rec", 0))
+            targets = _safe_int(player_row.get("targets", 0))
 
         ypc = (rush_yds / rush_att) if rush_att > 0 else 0
         catch_rate = (receptions / targets * 100) if targets > 0 else 0
@@ -1008,21 +1073,21 @@ def display_player_card(prefix=""):
                 </div>
         """
 
-    elif position in ['WR', 'TE']:
+    elif position in ["WR", "TE"]:
         if view_mode == "Season Stats":
-            rec_yds = _safe_int(player_row.get('receiving_yards', 0))
-            rec_tds = _safe_int(player_row.get('receiving_tds', 0))
-            receptions = _safe_int(player_row.get('receptions', 0))
-            targets = _safe_int(player_row.get('targets', 0))
-            rush_yds = _safe_int(player_row.get('rushing_yards', 0))
-            rush_tds = _safe_int(player_row.get('rushing_tds', 0))
+            rec_yds = _safe_int(player_row.get("receiving_yards", 0))
+            rec_tds = _safe_int(player_row.get("receiving_tds", 0))
+            receptions = _safe_int(player_row.get("receptions", 0))
+            targets = _safe_int(player_row.get("targets", 0))
+            rush_yds = _safe_int(player_row.get("rushing_yards", 0))
+            rush_tds = _safe_int(player_row.get("rushing_tds", 0))
         else:  # Career Stats
-            rec_yds = _safe_int(player_row.get('rec_yds', 0))
-            rec_tds = _safe_int(player_row.get('rec_td', 0))
-            receptions = _safe_int(player_row.get('rec', 0))
-            targets = _safe_int(player_row.get('targets', 0))
-            rush_yds = _safe_int(player_row.get('rush_yds', 0))
-            rush_tds = _safe_int(player_row.get('rush_td', 0))
+            rec_yds = _safe_int(player_row.get("rec_yds", 0))
+            rec_tds = _safe_int(player_row.get("rec_td", 0))
+            receptions = _safe_int(player_row.get("rec", 0))
+            targets = _safe_int(player_row.get("targets", 0))
+            rush_yds = _safe_int(player_row.get("rush_yds", 0))
+            rush_tds = _safe_int(player_row.get("rush_td", 0))
 
         catch_rate = (receptions / targets * 100) if targets > 0 else 0
         ypr = (rec_yds / receptions) if receptions > 0 else 0
@@ -1057,11 +1122,11 @@ def display_player_card(prefix=""):
                 </div>
         """
 
-    elif position == 'K':
-        fgm = _safe_int(player_row.get('fg_made', 0))
-        fga = _safe_int(player_row.get('fg_att', 0))
-        xpm = _safe_int(player_row.get('pat_made', 0))
-        xpa = _safe_int(player_row.get('pat_att', 0))
+    elif position == "K":
+        fgm = _safe_int(player_row.get("fg_made", 0))
+        fga = _safe_int(player_row.get("fg_att", 0))
+        xpm = _safe_int(player_row.get("pat_made", 0))
+        xpa = _safe_int(player_row.get("pat_att", 0))
         fg_pct = (fgm / fga * 100) if fga > 0 else 0
         xp_pct = (xpm / xpa * 100) if xpa > 0 else 0
 
@@ -1087,13 +1152,15 @@ def display_player_card(prefix=""):
                 </div>
         """
 
-    elif position == 'DEF':
-        sacks = _safe_float(player_row.get('def_sacks', 0))
-        ints = _safe_int(player_row.get('def_interceptions', 0))
-        def_tds = _safe_int(player_row.get('def_tds', 0))
-        fumbles = _safe_int(player_row.get('fumble_recovery_opp', 0))  # Or could use def_fumbles
-        safeties = _safe_int(player_row.get('def_safeties', 0))
-        pts_allowed = _safe_int(player_row.get('points_allowed', 0))
+    elif position == "DEF":
+        sacks = _safe_float(player_row.get("def_sacks", 0))
+        ints = _safe_int(player_row.get("def_interceptions", 0))
+        def_tds = _safe_int(player_row.get("def_tds", 0))
+        fumbles = _safe_int(
+            player_row.get("fumble_recovery_opp", 0)
+        )  # Or could use def_fumbles
+        safeties = _safe_int(player_row.get("def_safeties", 0))
+        pts_allowed = _safe_int(player_row.get("points_allowed", 0))
 
         card_html += f"""
                 <div class="stat-section">
@@ -1160,8 +1227,8 @@ def display_player_card(prefix=""):
 
     # Additional details
     with st.expander("📋 Full Stats Breakdown", expanded=False):
-        exclude_cols = ['player_lower', 'headshot_url', 'display']
+        exclude_cols = ["player_lower", "headshot_url", "display"]
         available_cols = [c for c in filtered.columns if c not in exclude_cols]
         detail_df = filtered[available_cols].head(1).T.reset_index()
-        detail_df.columns = ['Stat', 'Value']
+        detail_df.columns = ["Stat", "Value"]
         st.dataframe(detail_df, hide_index=True, use_container_width=True)

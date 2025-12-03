@@ -22,12 +22,15 @@ class LeaderboardsViewer:
 
     @st.fragment
     def display(self):
-        st.markdown("""
+        st.markdown(
+            """
             <div class='hof-gradient-header hof-header-blue'>
                 <h2>👑 Leaderboards</h2>
                 <p>All-time career leaders, legendary seasons, and explosive weeks</p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         if self.df is None or self.df.empty:
             st.info("📊 No data available")
@@ -75,21 +78,38 @@ class LeaderboardsViewer:
             for i, col in enumerate(cols):
                 if i < len(leaders):
                     row = leaders.iloc[i]
-                    rings = "🏆" * int(row['championships']) if row['championships'] > 0 else ""
+                    rings = (
+                        "🏆" * int(row["championships"])
+                        if row["championships"] > 0
+                        else ""
+                    )
                     with col:
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                             <div style='text-align: center; padding: 0.5rem;'>
                                 <div style='font-size: 1.1rem;'>{medals[i]} <b>{row['manager']}</b></div>
                                 <div style='color: var(--success); font-weight: 700;'>{row['total_points']:,.0f} pts</div>
                                 <div style='font-size: 0.75rem; color: var(--text-muted);'>{row['ppg']:.1f} PPG · {row['win_pct']:.0f}% {rings}</div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
 
             # Full leaderboard (Top 10)
             st.markdown("#### 📊 Full Career Leaderboard")
             display_df = leaders.head(10).copy()
-            display_df.columns = ['Manager', 'Games', 'Wins', 'Total Pts', 'PPG', 'Win %', 'Titles']
-            display_df['Titles'] = display_df['Titles'].apply(lambda x: '🏆 ' * int(x) if x > 0 else '-')
+            display_df.columns = [
+                "Manager",
+                "Games",
+                "Wins",
+                "Total Pts",
+                "PPG",
+                "Win %",
+                "Titles",
+            ]
+            display_df["Titles"] = display_df["Titles"].apply(
+                lambda x: "🏆 " * int(x) if x > 0 else "-"
+            )
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
         except Exception as e:
@@ -153,9 +173,17 @@ class LeaderboardsViewer:
 
             # Display as table
             display_df = top_seasons.copy()
-            display_df['year'] = display_df['year'].astype(str)
-            display_df.columns = ['Manager', 'Year', 'Total Points', 'Wins', 'Losses', 'PPG', 'Champion']
-            display_df['Champion'] = display_df['Champion'].map({1: '🏆', 0: ''})
+            display_df["year"] = display_df["year"].astype(str)
+            display_df.columns = [
+                "Manager",
+                "Year",
+                "Total Points",
+                "Wins",
+                "Losses",
+                "PPG",
+                "Champion",
+            ]
+            display_df["Champion"] = display_df["Champion"].map({1: "🏆", 0: ""})
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
         except Exception as e:
@@ -166,6 +194,7 @@ class LeaderboardsViewer:
         st.markdown("### ⚡ Highest Single-Week Performances")
 
         try:
+
             def get_top_weeks(is_playoff):
                 query = f"""
                     SELECT
@@ -191,7 +220,7 @@ class LeaderboardsViewer:
                 st.markdown("#### Regular Season")
                 if not reg_weeks.empty:
                     display_df = reg_weeks.copy()
-                    display_df.columns = ['Manager', 'Year', 'Wk', 'Points', 'W/L']
+                    display_df.columns = ["Manager", "Year", "Wk", "Points", "W/L"]
                     st.dataframe(display_df, use_container_width=True, hide_index=True)
                 else:
                     st.info("No regular season data")
@@ -200,7 +229,7 @@ class LeaderboardsViewer:
                 st.markdown("#### Playoffs")
                 if not playoff_weeks.empty:
                     display_df = playoff_weeks.copy()
-                    display_df.columns = ['Manager', 'Year', 'Wk', 'Points', 'W/L']
+                    display_df.columns = ["Manager", "Year", "Wk", "Points", "W/L"]
                     st.dataframe(display_df, use_container_width=True, hide_index=True)
                 else:
                     st.info("No playoff data")

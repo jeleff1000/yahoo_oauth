@@ -6,7 +6,7 @@ import re
 import pandas as pd
 import streamlit as st
 from .table_styles import render_modern_table
-from ..shared.simulation_styles import render_section_header, compact_week_selector
+from ..shared.simulation_styles import render_section_header
 
 
 def _select_week_for_seed(base_df: pd.DataFrame):
@@ -20,9 +20,13 @@ def _select_week_for_seed(base_df: pd.DataFrame):
     cols = st.columns(2)
     for idx, (col, name) in enumerate(zip(cols, modes)):
         with col:
-            is_active = (st.session_state[mode_key] == idx)
-            if st.button(name, key=f"pred_seed_btn_{idx}", use_container_width=True,
-                        type="primary" if is_active else "secondary"):
+            is_active = st.session_state[mode_key] == idx
+            if st.button(
+                name,
+                key=f"pred_seed_btn_{idx}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+            ):
                 if not is_active:
                     st.session_state[mode_key] = idx
                     st.rerun()
@@ -30,33 +34,29 @@ def _select_week_for_seed(base_df: pd.DataFrame):
     mode = modes[st.session_state[mode_key]]
 
     if mode == "Today's Date":
-        year = int(base_df['year'].max())
-        week = int(base_df[base_df['year'] == year]['week'].max())
+        year = int(base_df["year"].max())
+        week = int(base_df[base_df["year"] == year]["week"].max())
         st.caption(f"📅 Auto-selected Year {year}, Week {week}")
         return year, week, True
     else:
-        years = sorted(base_df['year'].astype(int).unique())
+        years = sorted(base_df["year"].astype(int).unique())
 
         col1, col2 = st.columns(2)
 
         with col1:
             year_choice = st.selectbox(
-                "Year",
-                ["Select Year"] + [str(y) for y in years],
-                key="pred_year_seed"
+                "Year", ["Select Year"] + [str(y) for y in years], key="pred_year_seed"
             )
 
         if year_choice == "Select Year":
             return None, None, False
 
         year = int(year_choice)
-        weeks = sorted(base_df[base_df['year'] == year]['week'].astype(int).unique())
+        weeks = sorted(base_df[base_df["year"] == year]["week"].astype(int).unique())
 
         with col2:
             week_choice = st.selectbox(
-                "Week",
-                ["Select Week"] + [str(w) for w in weeks],
-                key="pred_week_seed"
+                "Week", ["Select Week"] + [str(w) for w in weeks], key="pred_week_seed"
             )
 
         if week_choice == "Select Week":
@@ -69,7 +69,7 @@ def _select_week_for_seed(base_df: pd.DataFrame):
 @st.fragment
 def _render_expected_seed(base_df: pd.DataFrame, year: int, week: int):
     """Render predicted seeding table."""
-    week_slice = base_df[(base_df['year'] == year) & (base_df['week'] == week)]
+    week_slice = base_df[(base_df["year"] == year) & (base_df["week"] == week)]
 
     if week_slice.empty:
         st.info("No data available for selected year/week.")
@@ -93,11 +93,11 @@ def _render_expected_seed(base_df: pd.DataFrame, year: int, week: int):
     ordered_seed_cols = [c for _, c in seed_meta]
 
     # Build dataframe
-    needed = ['manager'] + [c for c in ordered_seed_cols if c in week_slice.columns]
+    needed = ["manager"] + [c for c in ordered_seed_cols if c in week_slice.columns]
     df = (
         week_slice[needed]
-        .drop_duplicates(subset=['manager'])
-        .set_index('manager')
+        .drop_duplicates(subset=["manager"])
+        .set_index("manager")
         .sort_index()
     )
 
@@ -110,8 +110,8 @@ def _render_expected_seed(base_df: pd.DataFrame, year: int, week: int):
     # Sum probabilities for seeds 1-3
     top_seeds = [col for col in df.columns if int(col) <= 3]
     if top_seeds:
-        df['_sort_prob'] = df[top_seeds].sum(axis=1)
-        df = df.sort_values('_sort_prob', ascending=False).drop(columns=['_sort_prob'])
+        df["_sort_prob"] = df[top_seeds].sum(axis=1)
+        df = df.sort_values("_sort_prob", ascending=False).drop(columns=["_sort_prob"])
 
     render_section_header("Predicted Playoff Seeding", "")
     st.caption("Probability of finishing in each playoff seed position")
@@ -131,7 +131,7 @@ def _render_expected_seed(base_df: pd.DataFrame, year: int, week: int):
         color_columns=numeric_cols,
         reverse_columns=[],
         format_specs=format_specs,
-        column_names=column_names
+        column_names=column_names,
     )
 
 
@@ -144,17 +144,16 @@ def display_predicted_seed(matchup_data_df: pd.DataFrame):
 
     # Filter to regular season only
     base_df = matchup_data_df[
-        (matchup_data_df['is_playoffs'] == 0) &
-        (matchup_data_df['is_consolation'] == 0)
-        ].copy()
+        (matchup_data_df["is_playoffs"] == 0) & (matchup_data_df["is_consolation"] == 0)
+    ].copy()
 
     if base_df.empty:
         st.info("No regular season data available")
         return
 
     # Type conversion
-    base_df['year'] = base_df['year'].astype(int)
-    base_df['week'] = base_df['week'].astype(int)
+    base_df["year"] = base_df["year"].astype(int)
+    base_df["week"] = base_df["week"].astype(int)
 
     year, week, auto_display = _select_week_for_seed(base_df)
 

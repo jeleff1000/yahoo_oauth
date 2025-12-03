@@ -3,6 +3,7 @@ from .weekly.weekly_optimal_lineups import display_weekly_optimal_lineup
 from .season.season_optimal_lineups import display_season_optimal_lineup
 from .all_time.career_optimal_lineups import display_alltime_optimal_lineup
 
+
 @st.fragment
 def display_optimal_lineup(player_df, matchup_data):
     sub_tab_names = ["Weekly", "Season", "Career"]

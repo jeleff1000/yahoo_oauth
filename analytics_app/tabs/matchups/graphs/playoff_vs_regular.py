@@ -15,14 +15,17 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
     """
     st.header("🏆 Playoff vs Regular Season Performance")
 
-    st.markdown("""
+    st.markdown(
+        """
     <div style="background: #f0f2f6; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
     <p style="margin: 0; color: #31333F; font-size: 0.9rem;">
     <strong>When it matters most:</strong> See who rises to the occasion in playoffs vs regular season.
     Are you a playoff performer or a regular season hero?
     </p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     # Year selection
     available_years = list_seasons()
@@ -32,9 +35,7 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
 
     year_options = ["All Seasons"] + available_years
     selected_year = st.selectbox(
-        "Select Season",
-        options=year_options,
-        key=f"{prefix}_year"
+        "Select Season", options=year_options, key=f"{prefix}_year"
     )
 
     # Load data
@@ -93,7 +94,7 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
         "Select Managers to Display",
         options=managers,
         default=managers[:5] if len(managers) >= 5 else managers,
-        key=f"{prefix}_managers"
+        key=f"{prefix}_managers",
     )
 
     if not selected_managers:
@@ -117,17 +118,19 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
                 type_data = manager_data[manager_data["game_type"] == game_type]
 
                 if len(type_data) > 0:
-                    comparison_stats.append({
-                        "Manager": manager,
-                        "Game Type": game_type,
-                        "Games": len(type_data),
-                        "Wins": type_data["win"].sum(),
-                        "Losses": len(type_data) - type_data["win"].sum(),
-                        "Win %": type_data["win"].mean() * 100,
-                        "Avg Points": type_data["team_points"].mean(),
-                        "Avg Opp Points": type_data["opponent_points"].mean(),
-                        "Consistency (Std Dev)": type_data["team_points"].std()
-                    })
+                    comparison_stats.append(
+                        {
+                            "Manager": manager,
+                            "Game Type": game_type,
+                            "Games": len(type_data),
+                            "Wins": type_data["win"].sum(),
+                            "Losses": len(type_data) - type_data["win"].sum(),
+                            "Win %": type_data["win"].mean() * 100,
+                            "Avg Points": type_data["team_points"].mean(),
+                            "Avg Opp Points": type_data["opponent_points"].mean(),
+                            "Consistency (Std Dev)": type_data["team_points"].std(),
+                        }
+                    )
 
         comp_df = pd.DataFrame(comparison_stats)
 
@@ -139,69 +142,78 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
         st.subheader("Average Points: Regular Season vs Playoffs")
 
         fig_comp = make_subplots(
-            rows=1, cols=2,
+            rows=1,
+            cols=2,
             subplot_titles=("Average Points Per Game", "Win Percentage"),
-            specs=[[{"type": "bar"}, {"type": "bar"}]]
+            specs=[[{"type": "bar"}, {"type": "bar"}]],
         )
 
         # Pivot data for easier plotting
-        pivot_points = comp_df.pivot(index="Manager", columns="Game Type", values="Avg Points")
-        pivot_winpct = comp_df.pivot(index="Manager", columns="Game Type", values="Win %")
+        pivot_points = comp_df.pivot(
+            index="Manager", columns="Game Type", values="Avg Points"
+        )
+        pivot_winpct = comp_df.pivot(
+            index="Manager", columns="Game Type", values="Win %"
+        )
 
         # Add traces for points
         if "Regular Season" in pivot_points.columns:
             fig_comp.add_trace(
                 go.Bar(
-                    name='Regular Season',
+                    name="Regular Season",
                     x=pivot_points.index,
                     y=pivot_points["Regular Season"],
-                    marker_color='lightblue',
+                    marker_color="lightblue",
                     text=pivot_points["Regular Season"].round(2),
-                    textposition='outside'
+                    textposition="outside",
                 ),
-                row=1, col=1
+                row=1,
+                col=1,
             )
 
         if "Playoff" in pivot_points.columns:
             fig_comp.add_trace(
                 go.Bar(
-                    name='Playoff',
+                    name="Playoff",
                     x=pivot_points.index,
                     y=pivot_points["Playoff"],
-                    marker_color='gold',
+                    marker_color="gold",
                     text=pivot_points["Playoff"].round(2),
-                    textposition='outside'
+                    textposition="outside",
                 ),
-                row=1, col=1
+                row=1,
+                col=1,
             )
 
         # Add traces for win %
         if "Regular Season" in pivot_winpct.columns:
             fig_comp.add_trace(
                 go.Bar(
-                    name='Regular Season',
+                    name="Regular Season",
                     x=pivot_winpct.index,
                     y=pivot_winpct["Regular Season"],
-                    marker_color='lightblue',
-                    text=pivot_winpct["Regular Season"].round(1).astype(str) + '%',
-                    textposition='outside',
-                    showlegend=False
+                    marker_color="lightblue",
+                    text=pivot_winpct["Regular Season"].round(1).astype(str) + "%",
+                    textposition="outside",
+                    showlegend=False,
                 ),
-                row=1, col=2
+                row=1,
+                col=2,
             )
 
         if "Playoff" in pivot_winpct.columns:
             fig_comp.add_trace(
                 go.Bar(
-                    name='Playoff',
+                    name="Playoff",
                     x=pivot_winpct.index,
                     y=pivot_winpct["Playoff"],
-                    marker_color='gold',
-                    text=pivot_winpct["Playoff"].round(1).astype(str) + '%',
-                    textposition='outside',
-                    showlegend=False
+                    marker_color="gold",
+                    text=pivot_winpct["Playoff"].round(1).astype(str) + "%",
+                    textposition="outside",
+                    showlegend=False,
                 ),
-                row=1, col=2
+                row=1,
+                col=2,
             )
 
         fig_comp.update_xaxes(tickangle=-45)
@@ -210,12 +222,8 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
             template="plotly_white",
             showlegend=True,
             legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.1,
-                xanchor="center",
-                x=0.5
-            )
+                orientation="h", yanchor="bottom", y=1.1, xanchor="center", x=0.5
+            ),
         )
 
         st.plotly_chart(fig_comp, use_container_width=True, key=f"{prefix}_comparison")
@@ -223,10 +231,12 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
         # Detailed comparison table
         with st.expander("📊 Detailed Stats", expanded=False):
             display_comp = comp_df.copy()
-            display_comp['Win %'] = display_comp['Win %'].round(1)
-            display_comp['Avg Points'] = display_comp['Avg Points'].round(2)
-            display_comp['Avg Opp Points'] = display_comp['Avg Opp Points'].round(2)
-            display_comp['Consistency (Std Dev)'] = display_comp['Consistency (Std Dev)'].round(2)
+            display_comp["Win %"] = display_comp["Win %"].round(1)
+            display_comp["Avg Points"] = display_comp["Avg Points"].round(2)
+            display_comp["Avg Opp Points"] = display_comp["Avg Opp Points"].round(2)
+            display_comp["Consistency (Std Dev)"] = display_comp[
+                "Consistency (Std Dev)"
+            ].round(2)
 
             st.dataframe(display_comp, hide_index=True, use_container_width=True)
 
@@ -242,15 +252,17 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
             manager_playoff = playoff_only[playoff_only["manager"] == manager]
 
             if len(manager_playoff) > 0:
-                playoff_stats.append({
-                    "Manager": manager,
-                    "Playoff Games": len(manager_playoff),
-                    "Playoff Wins": manager_playoff["win"].sum(),
-                    "Playoff Win %": manager_playoff["win"].mean() * 100,
-                    "Avg Playoff PPG": manager_playoff["team_points"].mean(),
-                    "Best Playoff Game": manager_playoff["team_points"].max(),
-                    "Worst Playoff Game": manager_playoff["team_points"].min()
-                })
+                playoff_stats.append(
+                    {
+                        "Manager": manager,
+                        "Playoff Games": len(manager_playoff),
+                        "Playoff Wins": manager_playoff["win"].sum(),
+                        "Playoff Win %": manager_playoff["win"].mean() * 100,
+                        "Avg Playoff PPG": manager_playoff["team_points"].mean(),
+                        "Best Playoff Game": manager_playoff["team_points"].max(),
+                        "Worst Playoff Game": manager_playoff["team_points"].min(),
+                    }
+                )
 
         playoff_df = pd.DataFrame(playoff_stats).round(2)
         playoff_df = playoff_df.sort_values("Playoff Win %", ascending=False)
@@ -260,20 +272,22 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
 
         playoff_sorted = playoff_df.sort_values("Playoff Win %", ascending=True)
 
-        fig_playoff.add_trace(go.Bar(
-            y=playoff_sorted['Manager'],
-            x=playoff_sorted['Playoff Win %'],
-            orientation='h',
-            marker=dict(
-                color=playoff_sorted['Playoff Win %'],
-                colorscale='RdYlGn',
-                showscale=True,
-                colorbar=dict(title="Win %")
-            ),
-            text=playoff_sorted['Playoff Win %'].apply(lambda x: f"{x:.1f}%"),
-            textposition='outside',
-            hovertemplate="<b>%{y}</b><br>Playoff Win %: %{x:.1f}%<extra></extra>"
-        ))
+        fig_playoff.add_trace(
+            go.Bar(
+                y=playoff_sorted["Manager"],
+                x=playoff_sorted["Playoff Win %"],
+                orientation="h",
+                marker=dict(
+                    color=playoff_sorted["Playoff Win %"],
+                    colorscale="RdYlGn",
+                    showscale=True,
+                    colorbar=dict(title="Win %"),
+                ),
+                text=playoff_sorted["Playoff Win %"].apply(lambda x: f"{x:.1f}%"),
+                textposition="outside",
+                hovertemplate="<b>%{y}</b><br>Playoff Win %: %{x:.1f}%<extra></extra>",
+            )
+        )
 
         fig_playoff.add_vline(x=50, line_dash="dash", line_color="gray", opacity=0.5)
 
@@ -282,7 +296,7 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
             yaxis_title="",
             height=max(300, len(playoff_df) * 40),
             template="plotly_white",
-            showlegend=False
+            showlegend=False,
         )
 
         st.plotly_chart(fig_playoff, use_container_width=True, key=f"{prefix}_playoff")
@@ -298,8 +312,8 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
                 "Playoff Win %": st.column_config.NumberColumn(format="%.1f%%"),
                 "Avg Playoff PPG": st.column_config.NumberColumn(format="%.2f"),
                 "Best Playoff Game": st.column_config.NumberColumn(format="%.2f"),
-                "Worst Playoff Game": st.column_config.NumberColumn(format="%.2f")
-            }
+                "Worst Playoff Game": st.column_config.NumberColumn(format="%.2f"),
+            },
         )
 
     with tab3:
@@ -318,16 +332,20 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
                 ppg_diff = playoff["team_points"].mean() - regular["team_points"].mean()
                 win_pct_diff = (playoff["win"].mean() - regular["win"].mean()) * 100
 
-                differential_stats.append({
-                    "Manager": manager,
-                    "PPG Difference": ppg_diff,
-                    "Win % Difference": win_pct_diff,
-                    "Regular PPG": regular["team_points"].mean(),
-                    "Playoff PPG": playoff["team_points"].mean(),
-                    "Regular Win %": regular["win"].mean() * 100,
-                    "Playoff Win %": playoff["win"].mean() * 100,
-                    "Category": "🔥 Playoff Riser" if ppg_diff > 0 else "📉 Playoff Dropper"
-                })
+                differential_stats.append(
+                    {
+                        "Manager": manager,
+                        "PPG Difference": ppg_diff,
+                        "Win % Difference": win_pct_diff,
+                        "Regular PPG": regular["team_points"].mean(),
+                        "Playoff PPG": playoff["team_points"].mean(),
+                        "Regular Win %": regular["win"].mean() * 100,
+                        "Playoff Win %": playoff["win"].mean() * 100,
+                        "Category": (
+                            "🔥 Playoff Riser" if ppg_diff > 0 else "📉 Playoff Dropper"
+                        ),
+                    }
+                )
 
         if not differential_stats:
             st.info("Not enough data to calculate differentials.")
@@ -339,17 +357,21 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
 
             diff_sorted = diff_df.sort_values("PPG Difference", ascending=True)
 
-            colors = ['green' if x > 0 else 'red' for x in diff_sorted['PPG Difference']]
+            colors = [
+                "green" if x > 0 else "red" for x in diff_sorted["PPG Difference"]
+            ]
 
-            fig_diff.add_trace(go.Bar(
-                y=diff_sorted['Manager'],
-                x=diff_sorted['PPG Difference'],
-                orientation='h',
-                marker_color=colors,
-                text=diff_sorted['PPG Difference'].apply(lambda x: f"{x:+.1f}"),
-                textposition='outside',
-                hovertemplate="<b>%{y}</b><br>PPG Diff: %{x:+.1f}<extra></extra>"
-            ))
+            fig_diff.add_trace(
+                go.Bar(
+                    y=diff_sorted["Manager"],
+                    x=diff_sorted["PPG Difference"],
+                    orientation="h",
+                    marker_color=colors,
+                    text=diff_sorted["PPG Difference"].apply(lambda x: f"{x:+.1f}"),
+                    textposition="outside",
+                    hovertemplate="<b>%{y}</b><br>PPG Diff: %{x:+.1f}<extra></extra>",
+                )
+            )
 
             fig_diff.add_vline(x=0, line_color="black", line_width=2)
 
@@ -358,7 +380,7 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
                 yaxis_title="",
                 height=max(300, len(diff_df) * 40),
                 template="plotly_white",
-                showlegend=False
+                showlegend=False,
             )
 
             st.plotly_chart(fig_diff, use_container_width=True, key=f"{prefix}_diff")
@@ -368,50 +390,56 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
 
             fig_scatter = go.Figure()
 
-            fig_scatter.add_trace(go.Scatter(
-                x=diff_df['Regular PPG'],
-                y=diff_df['Playoff PPG'],
-                mode='markers+text',
-                text=diff_df['Manager'],
-                textposition='top center',
-                marker=dict(
-                    size=15,
-                    color=diff_df['PPG Difference'],
-                    colorscale='RdYlGn',
-                    showscale=True,
-                    colorbar=dict(title="Diff"),
-                    line=dict(width=1, color='white')
-                ),
-                hovertemplate=(
-                    "<b>%{text}</b><br>"
-                    "Regular PPG: %{x:.1f}<br>"
-                    "Playoff PPG: %{y:.1f}<br>"
-                    "<extra></extra>"
+            fig_scatter.add_trace(
+                go.Scatter(
+                    x=diff_df["Regular PPG"],
+                    y=diff_df["Playoff PPG"],
+                    mode="markers+text",
+                    text=diff_df["Manager"],
+                    textposition="top center",
+                    marker=dict(
+                        size=15,
+                        color=diff_df["PPG Difference"],
+                        colorscale="RdYlGn",
+                        showscale=True,
+                        colorbar=dict(title="Diff"),
+                        line=dict(width=1, color="white"),
+                    ),
+                    hovertemplate=(
+                        "<b>%{text}</b><br>"
+                        "Regular PPG: %{x:.1f}<br>"
+                        "Playoff PPG: %{y:.1f}<br>"
+                        "<extra></extra>"
+                    ),
                 )
-            ))
+            )
 
             # Add 45-degree reference line (equal performance)
-            min_val = min(diff_df['Regular PPG'].min(), diff_df['Playoff PPG'].min())
-            max_val = max(diff_df['Regular PPG'].max(), diff_df['Playoff PPG'].max())
+            min_val = min(diff_df["Regular PPG"].min(), diff_df["Playoff PPG"].min())
+            max_val = max(diff_df["Regular PPG"].max(), diff_df["Playoff PPG"].max())
 
-            fig_scatter.add_trace(go.Scatter(
-                x=[min_val, max_val],
-                y=[min_val, max_val],
-                mode='lines',
-                line=dict(dash='dash', color='gray'),
-                showlegend=False,
-                hoverinfo='skip'
-            ))
+            fig_scatter.add_trace(
+                go.Scatter(
+                    x=[min_val, max_val],
+                    y=[min_val, max_val],
+                    mode="lines",
+                    line=dict(dash="dash", color="gray"),
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
 
             fig_scatter.update_layout(
                 xaxis_title="Regular Season PPG",
                 yaxis_title="Playoff PPG",
                 height=500,
                 template="plotly_white",
-                showlegend=False
+                showlegend=False,
             )
 
-            st.plotly_chart(fig_scatter, use_container_width=True, key=f"{prefix}_scatter")
+            st.plotly_chart(
+                fig_scatter, use_container_width=True, key=f"{prefix}_scatter"
+            )
 
             # Differential table
             with st.expander("📊 Full Differential Stats", expanded=False):
@@ -422,7 +450,11 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
         if differential_stats:
             best_riser = max(differential_stats, key=lambda x: x["PPG Difference"])
             worst_dropper = min(differential_stats, key=lambda x: x["PPG Difference"])
-            best_playoff_winpct = playoff_df.nlargest(1, "Playoff Win %").iloc[0] if not playoff_df.empty else None
+            best_playoff_winpct = (
+                playoff_df.nlargest(1, "Playoff Win %").iloc[0]
+                if not playoff_df.empty
+                else None
+            )
 
             col1, col2, col3 = st.columns(3)
 
@@ -430,7 +462,7 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
                 st.metric(
                     "🔥 Biggest Playoff Riser",
                     best_riser["Manager"],
-                    f"+{best_riser['PPG Difference']:.1f} PPG"
+                    f"+{best_riser['PPG Difference']:.1f} PPG",
                 )
 
             with col2:
@@ -438,12 +470,12 @@ def display_playoff_vs_regular_graph(df_dict=None, prefix=""):
                     st.metric(
                         "🏆 Best Playoff Win %",
                         best_playoff_winpct["Manager"],
-                        f"{best_playoff_winpct['Playoff Win %']:.1f}%"
+                        f"{best_playoff_winpct['Playoff Win %']:.1f}%",
                     )
 
             with col3:
                 st.metric(
                     "📉 Biggest Playoff Dropper",
                     worst_dropper["Manager"],
-                    f"{worst_dropper['PPG Difference']:.1f} PPG"
+                    f"{worst_dropper['PPG Difference']:.1f} PPG",
                 )

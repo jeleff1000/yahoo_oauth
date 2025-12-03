@@ -12,9 +12,7 @@ from .keeper_data import load_keeper_data
 
 @st.cache_data(show_spinner=True, ttl=120)
 def load_optimized_keepers_data(
-    all_years: bool = True,
-    year: int = None,
-    week: int = None
+    all_years: bool = True, year: int = None, week: int = None
 ) -> pd.DataFrame | None:
     """
     Load all data for keepers tab in one optimized call.

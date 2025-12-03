@@ -6,22 +6,6 @@ Import from here for backwards compatibility, but all styles are now centralized
 """
 
 # Re-export everything from the centralized styles module
-from ...shared.modern_styles import (
-    apply_modern_styles,
-    render_info_box,
-    render_success_box,
-    render_warning_box,
-    render_error_box,
-    render_loading_indicator,
-    render_stats_count,
-    render_gradient_header,
-    render_section_card,
-    render_metric_card,
-    render_empty_state,
-    render_filter_count,
-    render_legend_box,
-    format_value_with_color,
-)
 
 
 def apply_theme_styles():

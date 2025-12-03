@@ -1,6 +1,5 @@
 # tabs/hall_of_fame/top_players.py
 import streamlit as st
-import pandas as pd
 import duckdb
 
 
@@ -13,24 +12,29 @@ class TopPlayersViewer:
 
     @st.fragment
     def display(self):
-        st.markdown("""
+        st.markdown(
+            """
             <div class='hof-gradient-header hof-header-blue'>
                 <h2>👑 Top Players</h2>
                 <p>The greatest managers and their legendary performances</p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         if self.df is None or self.df.empty:
             st.info("📊 No player data available")
             return
 
         # Create subtabs
-        player_tabs = st.tabs([
-            "🏅 Career Leaders",
-            "📈 Single Season Bests",
-            "⚡ Single Week Explosions",
-            "🎯 Consistency Kings"
-        ])
+        player_tabs = st.tabs(
+            [
+                "🏅 Career Leaders",
+                "📈 Single Season Bests",
+                "⚡ Single Week Explosions",
+                "🎯 Consistency Kings",
+            ]
+        )
 
         with player_tabs[0]:
             self._display_career_leaders()
@@ -85,7 +89,8 @@ class TopPlayersViewer:
                             medal = "🥉"
 
                         with col:
-                            st.markdown(f"""
+                            st.markdown(
+                                f"""
                                 <div class='hof-leader-card' style='border: 3px solid {border};'>
                                     <div class='leader-medal'>{medal}</div>
                                     <div class='leader-name'>{row['manager']}</div>
@@ -110,15 +115,27 @@ class TopPlayersViewer:
                                         </div>
                                     </div>
                                 </div>
-                            """, unsafe_allow_html=True)
+                            """,
+                                unsafe_allow_html=True,
+                            )
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # Full leaderboard
                 st.markdown("#### 📊 Full Career Leaderboard")
                 display_df = leaders.copy()
-                display_df.columns = ['Manager', 'Games', 'Wins', 'Total Pts', 'PPG', 'Win %', 'Titles']
-                display_df['Titles'] = display_df['Titles'].apply(lambda x: '🏆 ' * int(x) if x > 0 else '-')
+                display_df.columns = [
+                    "Manager",
+                    "Games",
+                    "Wins",
+                    "Total Pts",
+                    "PPG",
+                    "Win %",
+                    "Titles",
+                ]
+                display_df["Titles"] = display_df["Titles"].apply(
+                    lambda x: "🏆 " * int(x) if x > 0 else "-"
+                )
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
         except Exception as e:
@@ -152,8 +169,9 @@ class TopPlayersViewer:
                 for i, row in seasons.head(15).iterrows():
                     col1, col2 = st.columns([3, 1])
                     with col1:
-                        champ_badge = " 🏆" if row['champion'] == 1 else ""
-                        st.markdown(f"""
+                        champ_badge = " 🏆" if row["champion"] == 1 else ""
+                        st.markdown(
+                            f"""
                             <div class='hof-timeline-card'>
                                 <div class='timeline-year'>#{i+1} • {int(row['year'])}</div>
                                 <div class='timeline-winner'>{row['manager']}{champ_badge}</div>
@@ -164,7 +182,9 @@ class TopPlayersViewer:
                                     <span>Best: {row['best_week']:.1f}</span>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
 
         except Exception as e:
             st.error(f"Error loading season bests: {e}")
@@ -195,10 +215,11 @@ class TopPlayersViewer:
 
                 with col1:
                     st.markdown("#### 🔥 Regular Season")
-                    reg = weeks[weeks['playoffs'] == 0].head(10)
+                    reg = weeks[weeks["playoffs"] == 0].head(10)
                     for i, row in reg.iterrows():
-                        result_color = "#059669" if row['result'] == 'W' else "#DC2626"
-                        st.markdown(f"""
+                        result_color = "#059669" if row["result"] == "W" else "#DC2626"
+                        st.markdown(
+                            f"""
                             <div class='hof-week-card'>
                                 <div class='week-info'>
                                     <div>
@@ -213,15 +234,20 @@ class TopPlayersViewer:
                                     </div>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
 
                 with col2:
                     st.markdown("#### 🏆 Playoffs")
-                    playoff = weeks[weeks['playoffs'] == 1].head(10)
+                    playoff = weeks[weeks["playoffs"] == 1].head(10)
                     if not playoff.empty:
                         for i, row in playoff.iterrows():
-                            result_color = "#059669" if row['result'] == 'W' else "#DC2626"
-                            st.markdown(f"""
+                            result_color = (
+                                "#059669" if row["result"] == "W" else "#DC2626"
+                            )
+                            st.markdown(
+                                f"""
                                 <div class='hof-week-card hof-week-card-playoff'>
                                     <div class='week-info'>
                                         <div>
@@ -236,7 +262,9 @@ class TopPlayersViewer:
                                         </div>
                                     </div>
                                 </div>
-                            """, unsafe_allow_html=True)
+                            """,
+                                unsafe_allow_html=True,
+                            )
                     else:
                         st.info("No playoff games in top 20")
 
@@ -274,26 +302,43 @@ class TopPlayersViewer:
 
             if not consistency.empty:
                 st.markdown("#### 📊 Most Consistent Performers")
-                st.caption("*Higher consistency score = more reliable week-to-week performance*")
+                st.caption(
+                    "*Higher consistency score = more reliable week-to-week performance*"
+                )
 
                 display_df = consistency.head(15).copy()
-                display_df.columns = ['Manager', 'Games', 'Avg Pts', 'Std Dev', 'Consistency Score']
+                display_df.columns = [
+                    "Manager",
+                    "Games",
+                    "Avg Pts",
+                    "Std Dev",
+                    "Consistency Score",
+                ]
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
                 # Show insights
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     most_consistent = consistency.iloc[0]
-                    st.metric("Most Consistent", most_consistent['manager'],
-                              delta=f"Score: {most_consistent['consistency_score']:.2f}")
+                    st.metric(
+                        "Most Consistent",
+                        most_consistent["manager"],
+                        delta=f"Score: {most_consistent['consistency_score']:.2f}",
+                    )
                 with col2:
-                    highest_avg = consistency.nlargest(1, 'avg_points').iloc[0]
-                    st.metric("Highest Avg (Top 15)", highest_avg['manager'],
-                              delta=f"{highest_avg['avg_points']:.1f} PPG")
+                    highest_avg = consistency.nlargest(1, "avg_points").iloc[0]
+                    st.metric(
+                        "Highest Avg (Top 15)",
+                        highest_avg["manager"],
+                        delta=f"{highest_avg['avg_points']:.1f} PPG",
+                    )
                 with col3:
-                    lowest_dev = consistency.nsmallest(1, 'std_dev').iloc[0]
-                    st.metric("Lowest Variance", lowest_dev['manager'],
-                              delta=f"±{lowest_dev['std_dev']:.1f} pts")
+                    lowest_dev = consistency.nsmallest(1, "std_dev").iloc[0]
+                    st.metric(
+                        "Lowest Variance",
+                        lowest_dev["manager"],
+                        delta=f"±{lowest_dev['std_dev']:.1f} pts",
+                    )
 
         except Exception as e:
             st.error(f"Error loading consistency data: {e}")

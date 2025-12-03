@@ -11,59 +11,61 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import random
-from md.core import T, run_query
+from md.core import T
 
 
 def get_league_name() -> str:
     """Extract league name from table configuration."""
     try:
-        table_ref = T.get('transactions', 'league.transactions')
-        schema = table_ref.split('.')[0] if '.' in table_ref else 'League'
+        table_ref = T.get("transactions", "league.transactions")
+        schema = table_ref.split(".")[0] if "." in table_ref else "League"
         # Strip 'l_' prefix if it was added for digit-starting names (e.g., 'l_5townsfootball')
         if schema.startswith("l_") and len(schema) > 2 and schema[2].isdigit():
             schema = schema[2:]
         return schema.upper()
     except Exception:
-        return 'Fantasy League'
+        return "Fantasy League"
 
 
 def calculate_gpa(grade_counts: dict) -> float:
     """Calculate GPA from grade distribution."""
-    grade_points = {'A': 4, 'B': 3, 'C': 2, 'D': 1, 'F': 0}
-    total_points = sum(grade_points.get(g, 0) * count for g, count in grade_counts.items())
+    grade_points = {"A": 4, "B": 3, "C": 2, "D": 1, "F": 0}
+    total_points = sum(
+        grade_points.get(g, 0) * count for g, count in grade_counts.items()
+    )
     total_count = sum(grade_counts.values())
     return total_points / total_count if total_count > 0 else 0
 
 
 def get_base_grade(grade: str) -> str:
     """Get the base letter (A, B, C, D, F) from a grade."""
-    if not grade or grade == 'N/A' or pd.isna(grade):
-        return ''
+    if not grade or grade == "N/A" or pd.isna(grade):
+        return ""
     return str(grade)[0].upper()
 
 
 def gpa_to_letter_grade(gpa: float) -> str:
     """Convert GPA (0-4) to letter grade with +/-."""
     if gpa >= 3.7:
-        return 'A' if gpa >= 3.85 else 'A-'
+        return "A" if gpa >= 3.85 else "A-"
     elif gpa >= 3.3:
-        return 'B+' if gpa >= 3.5 else 'B'
+        return "B+" if gpa >= 3.5 else "B"
     elif gpa >= 3.0:
-        return 'B-'
+        return "B-"
     elif gpa >= 2.7:
-        return 'C+'
+        return "C+"
     elif gpa >= 2.3:
-        return 'C'
+        return "C"
     elif gpa >= 2.0:
-        return 'C-'
+        return "C-"
     elif gpa >= 1.7:
-        return 'D+'
+        return "D+"
     elif gpa >= 1.3:
-        return 'D'
+        return "D"
     elif gpa >= 1.0:
-        return 'D-'
+        return "D-"
     else:
-        return 'F'
+        return "F"
 
 
 def build_transaction_report_card_html(
@@ -90,37 +92,39 @@ def build_transaction_report_card_html(
 
     # Build table rows - separate sections for Top 5 and Bottom 5
     def build_row(txn, show_year=False):
-        base_grade = get_base_grade(txn.get('grade', ''))
-        grade_class = f'grade-{base_grade}' if base_grade in ['A', 'B', 'C', 'D', 'F'] else ''
-        result_emoji = txn.get('result_emoji', '')
-        type_icons = {'add': '+', 'drop': '-', 'trade': '↔'}
-        type_icon = type_icons.get(txn.get('type', '').lower(), '?')
+        base_grade = get_base_grade(txn.get("grade", ""))
+        grade_class = (
+            f"grade-{base_grade}" if base_grade in ["A", "B", "C", "D", "F"] else ""
+        )
+        result_emoji = txn.get("result_emoji", "")
+        type_icons = {"add": "+", "drop": "-", "trade": "↔"}
+        type_icon = type_icons.get(txn.get("type", "").lower(), "?")
         type_class = f"type-{txn.get('type', 'unknown').lower()}"
-        faab_display = f"${txn.get('faab', 0):.0f}" if txn.get('faab', 0) > 0 else '-'
+        faab_display = f"${txn.get('faab', 0):.0f}" if txn.get("faab", 0) > 0 else "-"
 
-        score_val = txn.get('score', 0)
+        score_val = txn.get("score", 0)
         if score_val >= 50:
-            score_class = 'score-excellent'
+            score_class = "score-excellent"
         elif score_val >= 20:
-            score_class = 'score-good'
+            score_class = "score-good"
         elif score_val >= 0:
-            score_class = 'score-neutral'
+            score_class = "score-neutral"
         elif score_val >= -20:
-            score_class = 'score-poor'
+            score_class = "score-poor"
         else:
-            score_class = 'score-terrible'
+            score_class = "score-terrible"
 
         # Headshot image
-        headshot = txn.get('headshot_url', '')
+        headshot = txn.get("headshot_url", "")
         if headshot:
             player_cell = f'<img src="{headshot}" class="player-headshot" onerror="this.style.display=\'none\'"> {txn.get("player", "Unknown")}'
         else:
-            player_cell = txn.get('player', 'Unknown')
+            player_cell = txn.get("player", "Unknown")
 
         # Year column for career view
         year_cell = f"<td>{txn.get('year', '-')}</td>" if show_year else ""
 
-        return f'''
+        return f"""
         <tr>
             {year_cell}
             <td>{txn.get('week', '-')}</td>
@@ -133,82 +137,97 @@ def build_transaction_report_card_html(
             <td class="grade-cell {grade_class}">{txn.get('grade', '-')}</td>
             <td>{result_emoji}</td>
         </tr>
-        '''
+        """
 
     # Determine if we should show year column (career view)
     show_year = year == "Career"
 
     # Split into 4 sections by type
-    best_adds = [t for t in transactions_data if t.get('section') == 'best_adds']
-    worst_drops = [t for t in transactions_data if t.get('section') == 'worst_drops']
-    best_trades = [t for t in transactions_data if t.get('section') == 'best_trades']
-    worst_trades = [t for t in transactions_data if t.get('section') == 'worst_trades']
+    best_adds = [t for t in transactions_data if t.get("section") == "best_adds"]
+    worst_drops = [t for t in transactions_data if t.get("section") == "worst_drops"]
+    best_trades = [t for t in transactions_data if t.get("section") == "best_trades"]
+    worst_trades = [t for t in transactions_data if t.get("section") == "worst_trades"]
 
     year_header = "<th>Year</th>" if show_year else ""
-    colspan = '10' if show_year else '9'
+    colspan = "10" if show_year else "9"
 
     table_rows = ""
 
     # Best Adds section
     if best_adds:
-        table_rows += f'''
+        table_rows += f"""
         <tr class="section-header best-section">
             <td colspan="{colspan}">🏆 Best Adds ({len(best_adds)})</td>
         </tr>
-        '''
+        """
         for txn in best_adds:
             table_rows += build_row(txn, show_year)
 
     # Worst Drops section
     if worst_drops:
-        table_rows += f'''
+        table_rows += f"""
         <tr class="section-header worst-section">
             <td colspan="{colspan}">😬 Worst Drops ({len(worst_drops)})</td>
         </tr>
-        '''
+        """
         for txn in worst_drops:
             table_rows += build_row(txn, show_year)
 
     # Best Trades section
     if best_trades:
-        table_rows += f'''
+        table_rows += f"""
         <tr class="section-header trade-section">
             <td colspan="{colspan}">🤝 Best Trades ({len(best_trades)})</td>
         </tr>
-        '''
+        """
         for txn in best_trades:
             table_rows += build_row(txn, show_year)
 
     # Worst Trades section
     if worst_trades:
-        table_rows += f'''
+        table_rows += f"""
         <tr class="section-header trade-worst-section">
             <td colspan="{colspan}">💔 Worst Trades ({len(worst_trades)})</td>
         </tr>
-        '''
+        """
         for txn in worst_trades:
             table_rows += build_row(txn, show_year)
 
     # Grade messages
     base_overall = get_base_grade(overall_grade)
     grade_messages = {
-        'A': ['Waiver Wire Wizard!', 'Elite GM!', 'Transaction Master!', 'Outstanding moves!'],
-        'B': ['Solid pickups!', 'Good eye for talent!', 'Nice work!', 'Well managed!'],
-        'C': ['Average performance', 'Room to improve', 'Keep studying!', 'Not bad, not great'],
-        'D': ['Needs work...', 'Study the waiver wire!', 'Disappointing', 'Try harder'],
-        'F': ['Disaster!', 'What happened?!', 'See me after class!', 'Complete failure']
+        "A": [
+            "Waiver Wire Wizard!",
+            "Elite GM!",
+            "Transaction Master!",
+            "Outstanding moves!",
+        ],
+        "B": ["Solid pickups!", "Good eye for talent!", "Nice work!", "Well managed!"],
+        "C": [
+            "Average performance",
+            "Room to improve",
+            "Keep studying!",
+            "Not bad, not great",
+        ],
+        "D": ["Needs work...", "Study the waiver wire!", "Disappointing", "Try harder"],
+        "F": [
+            "Disaster!",
+            "What happened?!",
+            "See me after class!",
+            "Complete failure",
+        ],
     }
-    messages = grade_messages.get(base_overall, [''])
+    messages = grade_messages.get(base_overall, [""])
     random.seed(hash(f"{manager}{year}"))
     grade_message = random.choice(messages)
 
     # Build grade distribution bars
     grade_bars = ""
     max_count = max(grade_distribution.values()) if grade_distribution else 1
-    for grade in ['A', 'B', 'C', 'D', 'F']:
+    for grade in ["A", "B", "C", "D", "F"]:
         count = grade_distribution.get(grade, 0)
         width_pct = (count / max_count * 100) if max_count > 0 else 0
-        grade_bars += f'''
+        grade_bars += f"""
         <div class="grade-bar-row">
             <span class="grade-bar-label grade-{grade}">{grade}</span>
             <div class="grade-bar-container">
@@ -216,40 +235,40 @@ def build_transaction_report_card_html(
             </div>
             <span class="grade-bar-count">{count}</span>
         </div>
-        '''
+        """
 
     # Best/Worst highlights
     best_html = ""
     if best_pickup:
-        best_html = f'''
+        best_html = f"""
         <div class="highlight-box highlight-best">
             <div class="highlight-label">Best Pickup</div>
             <div class="highlight-player">{best_pickup.get('player', 'N/A')}</div>
             <div class="highlight-stats">+{best_pickup.get('spar', 0):.1f} SPAR | ${best_pickup.get('faab', 0):.0f}</div>
         </div>
-        '''
+        """
 
     trade_html = ""
     if best_trade:
-        trade_html = f'''
+        trade_html = f"""
         <div class="highlight-box highlight-trade">
             <div class="highlight-label">Best Trade</div>
             <div class="highlight-player">{best_trade.get('player', 'N/A')}</div>
             <div class="highlight-stats">+{best_trade.get('spar', 0):.1f} SPAR</div>
         </div>
-        '''
+        """
 
     worst_html = ""
     if worst_drop:
-        worst_html = f'''
+        worst_html = f"""
         <div class="highlight-box highlight-worst">
             <div class="highlight-label">Worst Drop</div>
             <div class="highlight-player">{worst_drop.get('player', 'N/A')}</div>
             <div class="highlight-stats">-{worst_drop.get('spar', 0):.1f} SPAR Lost</div>
         </div>
-        '''
+        """
 
-    html = f'''
+    html = f"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -789,12 +808,16 @@ body {{
 </div>
 </body>
 </html>
-'''
+"""
     return html
 
 
 @st.fragment
-def display_transaction_report_card(transaction_df: pd.DataFrame, player_df: pd.DataFrame = None, career_view: bool = False) -> None:
+def display_transaction_report_card(
+    transaction_df: pd.DataFrame,
+    player_df: pd.DataFrame = None,
+    career_view: bool = False,
+) -> None:
     """Display a styled report card for a manager's transaction performance.
 
     Args:
@@ -810,25 +833,31 @@ def display_transaction_report_card(transaction_df: pd.DataFrame, player_df: pd.
 
     # Join with player data to get headshot_url if not already in transaction data
     # (headshot_url is now added in pipeline, but fallback to player join for older data)
-    if 'headshot_url' not in df.columns and player_df is not None and 'yahoo_player_id' in df.columns:
+    if (
+        "headshot_url" not in df.columns
+        and player_df is not None
+        and "yahoo_player_id" in df.columns
+    ):
         # Get unique player headshots
-        headshot_lookup = player_df[['yahoo_player_id', 'headshot_url']].drop_duplicates('yahoo_player_id')
-        df = df.merge(headshot_lookup, on='yahoo_player_id', how='left')
+        headshot_lookup = player_df[
+            ["yahoo_player_id", "headshot_url"]
+        ].drop_duplicates("yahoo_player_id")
+        df = df.merge(headshot_lookup, on="yahoo_player_id", how="left")
 
     if df.empty:
         st.warning("No transaction data available.")
         return
 
     # Check for required columns
-    required_cols = ['manager', 'year', 'transaction_type']
+    required_cols = ["manager", "year", "transaction_type"]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         st.warning(f"Missing required columns: {', '.join(missing)}")
         return
 
     # Get managers and years
-    managers = sorted(df['manager'].dropna().unique().tolist())
-    years = sorted(df['year'].dropna().unique().tolist(), reverse=True)
+    managers = sorted(df["manager"].dropna().unique().tolist())
+    years = sorted(df["year"].dropna().unique().tolist(), reverse=True)
 
     if not managers or not years:
         st.warning("No transaction data available.")
@@ -843,18 +872,25 @@ def display_transaction_report_card(transaction_df: pd.DataFrame, player_df: pd.
     # Dropdowns
     col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
-        selected_manager = st.selectbox("Select Manager", managers, key=f"txn_report_card_manager{key_suffix}")
+        selected_manager = st.selectbox(
+            "Select Manager", managers, key=f"txn_report_card_manager{key_suffix}"
+        )
     with col2:
         year_options = ["Career"] + [str(y) for y in years]
         # Default to Career for career_view, otherwise most recent season
         default_idx = 0 if career_view else 1
-        selected_year = st.selectbox("Select Year", year_options, index=default_idx, key=f"txn_report_card_year{key_suffix}")
+        selected_year = st.selectbox(
+            "Select Year",
+            year_options,
+            index=default_idx,
+            key=f"txn_report_card_year{key_suffix}",
+        )
 
     # Filter data
-    manager_df = df[df['manager'] == selected_manager].copy()
+    manager_df = df[df["manager"] == selected_manager].copy()
 
     if selected_year != "Career":
-        manager_df = manager_df[manager_df['year'] == int(selected_year)]
+        manager_df = manager_df[manager_df["year"] == int(selected_year)]
 
     if manager_df.empty:
         st.warning(f"No transaction data for {selected_manager} in {selected_year}.")
@@ -862,35 +898,49 @@ def display_transaction_report_card(transaction_df: pd.DataFrame, player_df: pd.
 
     # Calculate stats
     total_transactions = len(manager_df)
-    total_adds = len(manager_df[manager_df['transaction_type'] == 'add'])
-    total_drops = len(manager_df[manager_df['transaction_type'] == 'drop'])
-    total_trades = len(manager_df[manager_df['transaction_type'] == 'trade'])
+    total_adds = len(manager_df[manager_df["transaction_type"] == "add"])
+    total_drops = len(manager_df[manager_df["transaction_type"] == "drop"])
+    total_trades = len(manager_df[manager_df["transaction_type"] == "trade"])
 
     # SPAR calculations
-    spar_col = 'manager_spar_ros_managed' if 'manager_spar_ros_managed' in manager_df.columns else 'net_manager_spar_ros'
+    spar_col = (
+        "manager_spar_ros_managed"
+        if "manager_spar_ros_managed" in manager_df.columns
+        else "net_manager_spar_ros"
+    )
     if spar_col not in manager_df.columns:
-        spar_col = 'fa_spar_ros'
+        spar_col = "fa_spar_ros"
 
-    total_net_spar = manager_df['net_manager_spar_ros'].sum() if 'net_manager_spar_ros' in manager_df.columns else 0
+    total_net_spar = (
+        manager_df["net_manager_spar_ros"].sum()
+        if "net_manager_spar_ros" in manager_df.columns
+        else 0
+    )
 
     # Total transaction score (weighted metric)
-    total_score = manager_df['transaction_score'].sum() if 'transaction_score' in manager_df.columns else total_net_spar
+    total_score = (
+        manager_df["transaction_score"].sum()
+        if "transaction_score" in manager_df.columns
+        else total_net_spar
+    )
 
     # FAAB spent
-    total_faab_spent = manager_df['faab_bid'].sum() if 'faab_bid' in manager_df.columns else 0
+    total_faab_spent = (
+        manager_df["faab_bid"].sum() if "faab_bid" in manager_df.columns else 0
+    )
 
     # Win rate (positive NET SPAR)
-    if 'net_manager_spar_ros' in manager_df.columns:
-        wins = (manager_df['net_manager_spar_ros'] > 0).sum()
+    if "net_manager_spar_ros" in manager_df.columns:
+        wins = (manager_df["net_manager_spar_ros"] > 0).sum()
         win_rate = (wins / total_transactions * 100) if total_transactions > 0 else 0
     else:
         win_rate = 50  # Default
 
     # Grade distribution
     grade_distribution = {}
-    if 'transaction_grade' in manager_df.columns:
-        grade_counts = manager_df['transaction_grade'].value_counts()
-        for grade in ['A', 'B', 'C', 'D', 'F']:
+    if "transaction_grade" in manager_df.columns:
+        grade_counts = manager_df["transaction_grade"].value_counts()
+        for grade in ["A", "B", "C", "D", "F"]:
             grade_distribution[grade] = int(grade_counts.get(grade, 0))
 
     # Calculate GPA and overall grade
@@ -899,84 +949,102 @@ def display_transaction_report_card(transaction_df: pd.DataFrame, player_df: pd.
 
     # Best pickup (adds only)
     best_pickup = None
-    adds_df = manager_df[manager_df['transaction_type'] == 'add']
+    adds_df = manager_df[manager_df["transaction_type"] == "add"]
     if len(adds_df) > 0 and spar_col in adds_df.columns:
-        best_idx = adds_df[spar_col].idxmax() if adds_df[spar_col].notna().any() else None
+        best_idx = (
+            adds_df[spar_col].idxmax() if adds_df[spar_col].notna().any() else None
+        )
         if best_idx is not None:
             best_row = adds_df.loc[best_idx]
             best_pickup = {
-                'player': best_row.get('player_name', 'Unknown'),
-                'spar': best_row.get(spar_col, 0) or 0,
-                'faab': best_row.get('faab_bid', 0) or 0,
+                "player": best_row.get("player_name", "Unknown"),
+                "spar": best_row.get(spar_col, 0) or 0,
+                "faab": best_row.get("faab_bid", 0) or 0,
             }
 
     # Best trade (trades only)
     best_trade = None
-    trades_df = manager_df[manager_df['transaction_type'] == 'trade']
+    trades_df = manager_df[manager_df["transaction_type"] == "trade"]
     if len(trades_df) > 0 and spar_col in trades_df.columns:
-        best_trade_idx = trades_df[spar_col].idxmax() if trades_df[spar_col].notna().any() else None
+        best_trade_idx = (
+            trades_df[spar_col].idxmax() if trades_df[spar_col].notna().any() else None
+        )
         if best_trade_idx is not None:
             best_trade_row = trades_df.loc[best_trade_idx]
             best_trade = {
-                'player': best_trade_row.get('player_name', 'Unknown'),
-                'spar': best_trade_row.get(spar_col, 0) or 0,
+                "player": best_trade_row.get("player_name", "Unknown"),
+                "spar": best_trade_row.get(spar_col, 0) or 0,
             }
 
     # Worst drop (drops only - highest player_spar_ros_total = most regret)
     worst_drop = None
-    drops_df = manager_df[manager_df['transaction_type'] == 'drop']
-    drop_spar_col = 'player_spar_ros_total' if 'player_spar_ros_total' in drops_df.columns else 'drop_regret_score'
+    drops_df = manager_df[manager_df["transaction_type"] == "drop"]
+    drop_spar_col = (
+        "player_spar_ros_total"
+        if "player_spar_ros_total" in drops_df.columns
+        else "drop_regret_score"
+    )
     if len(drops_df) > 0 and drop_spar_col in drops_df.columns:
-        worst_idx = drops_df[drop_spar_col].idxmax() if drops_df[drop_spar_col].notna().any() else None
+        worst_idx = (
+            drops_df[drop_spar_col].idxmax()
+            if drops_df[drop_spar_col].notna().any()
+            else None
+        )
         if worst_idx is not None:
             worst_row = drops_df.loc[worst_idx]
             worst_drop = {
-                'player': worst_row.get('player_name', 'Unknown'),
-                'spar': worst_row.get(drop_spar_col, 0) or 0,
+                "player": worst_row.get("player_name", "Unknown"),
+                "spar": worst_row.get(drop_spar_col, 0) or 0,
             }
 
     # Build transactions data for table - 4 sections by type
     transactions_data = []
-    sort_col = 'transaction_score' if 'transaction_score' in manager_df.columns else spar_col
+    sort_col = (
+        "transaction_score" if "transaction_score" in manager_df.columns else spar_col
+    )
     if sort_col not in manager_df.columns:
-        sort_col = 'week'
+        sort_col = "week"
 
     def build_transaction_entry(row, section):
         spar_val = row.get(spar_col, 0)
         if pd.isna(spar_val):
             spar_val = 0
-        score_val = row.get('transaction_score', spar_val)
+        score_val = row.get("transaction_score", spar_val)
         if pd.isna(score_val):
             score_val = 0
 
         # Get headshot URL if available
-        headshot = row.get('headshot_url', '')
+        headshot = row.get("headshot_url", "")
         if pd.isna(headshot):
-            headshot = ''
+            headshot = ""
 
         return {
-            'week': int(row['week']) if pd.notna(row.get('week')) else '-',
-            'year': int(row['year']) if pd.notna(row.get('year')) else '-',
-            'type': row.get('transaction_type', row.get('type', '')),
-            'player': row.get('player_name', 'Unknown'),
-            'position': row.get('position', '-'),
-            'faab': row.get('faab_bid', 0) or 0,
-            'spar': spar_val,
-            'score': score_val,
-            'grade': row.get('transaction_grade', '-'),
-            'result_emoji': row.get('result_emoji', ''),
-            'transaction_result': row.get('transaction_result', ''),
-            'headshot_url': headshot,
-            'section': section,
+            "week": int(row["week"]) if pd.notna(row.get("week")) else "-",
+            "year": int(row["year"]) if pd.notna(row.get("year")) else "-",
+            "type": row.get("transaction_type", row.get("type", "")),
+            "player": row.get("player_name", "Unknown"),
+            "position": row.get("position", "-"),
+            "faab": row.get("faab_bid", 0) or 0,
+            "spar": spar_val,
+            "score": score_val,
+            "grade": row.get("transaction_grade", "-"),
+            "result_emoji": row.get("result_emoji", ""),
+            "transaction_result": row.get("transaction_result", ""),
+            "headshot_url": headshot,
+            "section": section,
         }
 
     # Split by transaction type
-    adds_df = manager_df[manager_df['transaction_type'] == 'add'].copy()
-    drops_df = manager_df[manager_df['transaction_type'] == 'drop'].copy()
-    trades_df = manager_df[manager_df['transaction_type'] == 'trade'].copy()
+    adds_df = manager_df[manager_df["transaction_type"] == "add"].copy()
+    drops_df = manager_df[manager_df["transaction_type"] == "drop"].copy()
+    trades_df = manager_df[manager_df["transaction_type"] == "trade"].copy()
 
     # For drops, use drop_regret_score or player_spar_ros_total (higher = worse drop)
-    drop_sort_col = 'drop_regret_score' if 'drop_regret_score' in drops_df.columns else 'player_spar_ros_total'
+    drop_sort_col = (
+        "drop_regret_score"
+        if "drop_regret_score" in drops_df.columns
+        else "player_spar_ros_total"
+    )
     if drop_sort_col not in drops_df.columns:
         drop_sort_col = sort_col
 
@@ -984,28 +1052,32 @@ def display_transaction_report_card(transaction_df: pd.DataFrame, player_df: pd.
     if len(adds_df) > 0:
         best_adds = adds_df.sort_values(sort_col, ascending=False).head(5)
         for _, row in best_adds.iterrows():
-            transactions_data.append(build_transaction_entry(row, 'best_adds'))
+            transactions_data.append(build_transaction_entry(row, "best_adds"))
 
     # Worst 5 drops (highest regret score = most SPAR lost)
     if len(drops_df) > 0:
         worst_drops = drops_df.sort_values(drop_sort_col, ascending=False).head(5)
         for _, row in worst_drops.iterrows():
-            transactions_data.append(build_transaction_entry(row, 'worst_drops'))
+            transactions_data.append(build_transaction_entry(row, "worst_drops"))
 
     # Best 2 trades (highest score)
     if len(trades_df) > 0:
         best_trades = trades_df.sort_values(sort_col, ascending=False).head(2)
         for _, row in best_trades.iterrows():
-            transactions_data.append(build_transaction_entry(row, 'best_trades'))
+            transactions_data.append(build_transaction_entry(row, "best_trades"))
 
     # Worst 2 trades (lowest score)
     if len(trades_df) > 1:  # Need at least 2 trades for worst section
         worst_trades = trades_df.sort_values(sort_col, ascending=True).head(2)
         # Avoid duplicates if only 2-3 trades total
-        best_trade_keys = [(t['player'], t['week'], t['year']) for t in transactions_data if t['section'] == 'best_trades']
+        best_trade_keys = [
+            (t["player"], t["week"], t["year"])
+            for t in transactions_data
+            if t["section"] == "best_trades"
+        ]
         for _, row in worst_trades.iterrows():
-            entry = build_transaction_entry(row, 'worst_trades')
-            if (entry['player'], entry['week'], entry['year']) not in best_trade_keys:
+            entry = build_transaction_entry(row, "worst_trades")
+            if (entry["player"], entry["week"], entry["year"]) not in best_trade_keys:
                 transactions_data.append(entry)
 
     # Build and render HTML
@@ -1034,14 +1106,18 @@ def display_transaction_report_card(transaction_df: pd.DataFrame, player_df: pd.
     base_height = 850
     row_height = 35
     section_header_height = 40
-    num_sections = sum([
-        1 if any(t['section'] == 'best_adds' for t in transactions_data) else 0,
-        1 if any(t['section'] == 'worst_drops' for t in transactions_data) else 0,
-        1 if any(t['section'] == 'best_trades' for t in transactions_data) else 0,
-        1 if any(t['section'] == 'worst_trades' for t in transactions_data) else 0,
-    ])
+    num_sections = sum(
+        [
+            1 if any(t["section"] == "best_adds" for t in transactions_data) else 0,
+            1 if any(t["section"] == "worst_drops" for t in transactions_data) else 0,
+            1 if any(t["section"] == "best_trades" for t in transactions_data) else 0,
+            1 if any(t["section"] == "worst_trades" for t in transactions_data) else 0,
+        ]
+    )
     num_rows = len(transactions_data)  # Max ~14 (5+5+2+2)
-    calculated_height = base_height + (num_rows * row_height) + (num_sections * section_header_height)
+    calculated_height = (
+        base_height + (num_rows * row_height) + (num_sections * section_header_height)
+    )
 
     # Render using components.html
     components.html(html, height=calculated_height, scrolling=True)

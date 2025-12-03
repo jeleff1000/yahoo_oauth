@@ -2,6 +2,7 @@
 Exception handling utilities for matchups tab.
 Provides better error reporting and logging.
 """
+
 import streamlit as st
 import logging
 from typing import Optional, Callable, Any
@@ -13,26 +14,31 @@ logger = logging.getLogger(__name__)
 
 class MatchupDataError(Exception):
     """Base exception for matchup data errors."""
+
     pass
 
 
 class DataNotFoundError(MatchupDataError):
     """Raised when required data is not found."""
+
     pass
 
 
 class FilterError(MatchupDataError):
     """Raised when filtering operations fail."""
+
     pass
 
 
 class GraphRenderError(MatchupDataError):
     """Raised when graph rendering fails."""
+
     pass
 
 
 class ComponentLoadError(MatchupDataError):
     """Raised when a UI component fails to load."""
+
     pass
 
 
@@ -46,13 +52,16 @@ def handle_graph_import_error(func: Callable) -> Callable:
     Returns:
         Wrapped function with error handling
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs) -> Any:
         try:
             return func(*args, **kwargs)
         except ImportError as e:
             logger.error(f"Graph import failed: {e}")
-            st.warning(f"⚠️ Graph unavailable: Could not import required module - {str(e)}")
+            st.warning(
+                f"⚠️ Graph unavailable: Could not import required module - {str(e)}"
+            )
             return None
         except ModuleNotFoundError as e:
             logger.error(f"Graph module not found: {e}")
@@ -80,6 +89,7 @@ def handle_data_operation(func: Callable) -> Callable:
     Returns:
         Wrapped function with error handling
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs) -> Any:
         try:
@@ -105,9 +115,7 @@ def handle_data_operation(func: Callable) -> Callable:
 
 
 def safe_import_graph_module(
-    module_path: str,
-    function_name: str,
-    fallback_message: Optional[str] = None
+    module_path: str, function_name: str, fallback_message: Optional[str] = None
 ) -> Optional[Callable]:
     """
     Safely import a graph module and function.
@@ -123,7 +131,8 @@ def safe_import_graph_module(
     try:
         # Import the module
         from importlib import import_module
-        module = import_module(module_path, package='tabs.matchups')
+
+        module = import_module(module_path, package="tabs.matchups")
 
         # Get the function
         if hasattr(module, function_name):
@@ -175,7 +184,9 @@ def validate_dataframe(df: Any, required_columns: list[str]) -> bool:
         missing_columns = [col for col in required_columns if col not in df.columns]
 
         if missing_columns:
-            st.error(f"❌ Data error: Missing required columns: {', '.join(missing_columns)}")
+            st.error(
+                f"❌ Data error: Missing required columns: {', '.join(missing_columns)}"
+            )
             return False
 
         return True
@@ -196,10 +207,12 @@ def log_performance(operation_name: str) -> Callable:
     Returns:
         Decorator function
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
             import time
+
             start_time = time.time()
 
             try:
@@ -215,8 +228,11 @@ def log_performance(operation_name: str) -> Callable:
 
             except Exception as e:
                 elapsed = time.time() - start_time
-                logger.error(f"{operation_name} failed after {elapsed:.2f}s: {e}", exc_info=True)
+                logger.error(
+                    f"{operation_name} failed after {elapsed:.2f}s: {e}", exc_info=True
+                )
                 raise
 
         return wrapper
+
     return decorator

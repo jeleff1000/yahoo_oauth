@@ -1,10 +1,19 @@
 """Shared modern table styling for simulation viewers using AgGrid with theme-adaptive red-yellow-green gradient"""
+
 import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
 
-def render_modern_table(df, title="", color_columns=None, reverse_columns=None, format_specs=None, column_names=None, gradient_by_column=True):
+def render_modern_table(
+    df,
+    title="",
+    color_columns=None,
+    reverse_columns=None,
+    format_specs=None,
+    column_names=None,
+    gradient_by_column=True,
+):
     """
     Render a modern styled AgGrid table with red-yellow-green gradient coloring and sorting.
 
@@ -24,7 +33,10 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
     column_names = column_names or {}
 
     if title:
-        st.markdown(f"<h4 style='margin-top: 1rem; margin-bottom: 0.5rem;'>{title}</h4>", unsafe_allow_html=True)
+        st.markdown(
+            f"<h4 style='margin-top: 1rem; margin-bottom: 0.5rem;'>{title}</h4>",
+            unsafe_allow_html=True,
+        )
 
     # Prepare dataframe - reset index to make it a regular column
     display_df = df.reset_index()
@@ -40,17 +52,20 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
             # Check for Total row in first column(s)
             mask = pd.Series([True] * len(display_df))
             for c in display_df.columns[:3]:  # Check first few columns for 'Total'
-                if display_df[c].dtype == 'object' or display_df[c].dtype.name == 'string':
-                    mask &= display_df[c].astype(str).str.lower() != 'total'
+                if (
+                    display_df[c].dtype == "object"
+                    or display_df[c].dtype.name == "string"
+                ):
+                    mask &= display_df[c].astype(str).str.lower() != "total"
 
             col_data = col_data[mask]
-            numeric_vals = pd.to_numeric(col_data, errors='coerce').dropna()
+            numeric_vals = pd.to_numeric(col_data, errors="coerce").dropna()
 
             if len(numeric_vals) > 0:
                 gradients[col] = {
-                    'min': numeric_vals.min(),
-                    'max': numeric_vals.max(),
-                    'reverse': col in reverse_columns
+                    "min": numeric_vals.min(),
+                    "max": numeric_vals.max(),
+                    "reverse": col in reverse_columns,
                 }
 
     # Rename columns for display AFTER calculating gradients
@@ -82,32 +97,36 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
                     break
 
         # Set column width
-        col_config['width'] = 80
+        col_config["width"] = 80
         if col == display_df.columns[0]:
-            col_config['width'] = 120
-        elif col in ['Year', 'Manager', 'index']:
-            col_config['width'] = 100
+            col_config["width"] = 120
+        elif col in ["Year", "Manager", "index"]:
+            col_config["width"] = 100
 
         # Apply number formatting
         if original_col in format_specs:
             format_str = format_specs[original_col]
-            if '.0f' in format_str:
-                col_config['type'] = 'numericColumn'
-                col_config['valueFormatter'] = JsCode(f"(params) => params.value !== null && params.value !== undefined ? params.value.toFixed(0) : '—'")
-            elif '.1f' in format_str or '.2f' in format_str:
-                decimals = 2 if '.2f' in format_str else 1
-                col_config['type'] = 'numericColumn'
-                col_config['valueFormatter'] = JsCode(f"(params) => params.value !== null && params.value !== undefined ? params.value.toFixed({decimals}) : '—'")
+            if ".0f" in format_str:
+                col_config["type"] = "numericColumn"
+                col_config["valueFormatter"] = JsCode(
+                    "(params) => params.value !== null && params.value !== undefined ? params.value.toFixed(0) : '—'"
+                )
+            elif ".1f" in format_str or ".2f" in format_str:
+                decimals = 2 if ".2f" in format_str else 1
+                col_config["type"] = "numericColumn"
+                col_config["valueFormatter"] = JsCode(
+                    f"(params) => params.value !== null && params.value !== undefined ? params.value.toFixed({decimals}) : '—'"
+                )
 
         # Enable sorting
-        col_config['sortable'] = True
-        col_config['filter'] = False
+        col_config["sortable"] = True
+        col_config["filter"] = False
 
         # Apply gradient coloring via cellStyle
         if original_col in gradients:
-            is_reverse = gradients[original_col]['reverse']
-            col_min = gradients[original_col]['min']
-            col_max = gradients[original_col]['max']
+            is_reverse = gradients[original_col]["reverse"]
+            col_min = gradients[original_col]["min"]
+            col_max = gradients[original_col]["max"]
 
             if gradient_by_column:
                 # Column-based gradient
@@ -156,8 +175,11 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
                 """
             else:
                 # Row-based gradient
-                display_gradient_cols = [renamed_gradient_cols[orig] for orig in all_gradient_cols
-                                         if renamed_gradient_cols[orig] in display_df.columns]
+                display_gradient_cols = [
+                    renamed_gradient_cols[orig]
+                    for orig in all_gradient_cols
+                    if renamed_gradient_cols[orig] in display_df.columns
+                ]
 
                 cell_style_js = f"""
                 function(params) {{
@@ -219,25 +241,22 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
                     }};
                 }}
                 """
-            col_config['cellStyle'] = JsCode(cell_style_js)
+            col_config["cellStyle"] = JsCode(cell_style_js)
 
         gb.configure_column(col, **col_config)
 
     # Configure default column settings
     gb.configure_default_column(
-        resizable=True,
-        filterable=False,
-        sortable=True,
-        editable=False
+        resizable=True, filterable=False, sortable=True, editable=False
     )
 
     # Configure grid options
     gb.configure_grid_options(
-        domLayout='normal',
+        domLayout="normal",
         enableCellTextSelection=True,
         rowHeight=40,
         headerHeight=45,
-        suppressColumnVirtualisation=True
+        suppressColumnVirtualisation=True,
     )
 
     # Theme-adaptive CSS for AgGrid
@@ -245,17 +264,14 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
         ".ag-header-cell": {
             "font-weight": "600",
             "font-size": "0.95em",
-            "padding": "8px"
+            "padding": "8px",
         },
-        ".ag-cell": {
-            "font-size": "0.9em",
-            "padding": "8px"
-        },
+        ".ag-cell": {"font-size": "0.9em", "padding": "8px"},
         ".ag-root-wrapper": {
             "border-radius": "8px",
             "overflow": "hidden",
-            "box-shadow": "0 2px 8px rgba(0,0,0,0.08)"
-        }
+            "box-shadow": "0 2px 8px rgba(0,0,0,0.08)",
+        },
     }
 
     grid_options = gb.build()
@@ -268,6 +284,6 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
         allow_unsafe_jscode=True,
         custom_css=custom_css,
         height=min(650, 45 + len(display_df) * 40 + 10),
-        theme='streamlit',  # Uses Streamlit's theme (auto light/dark)
-        fit_columns_on_grid_load=False
+        theme="streamlit",  # Uses Streamlit's theme (auto light/dark)
+        fit_columns_on_grid_load=False,
     )

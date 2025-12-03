@@ -3,9 +3,15 @@
 import streamlit as st
 import pandas as pd
 
-from .career_team_subprocesses.career_team_basic_stats import get_basic_stats as get_basic_stats_by_pos
-from .career_team_subprocesses.career_team_advanced_stats import get_advanced_stats as get_advanced_stats_by_pos
-from .career_team_subprocesses.career_team_basic_stats_by_manager import get_basic_stats as get_basic_stats_by_mgr
+from .career_team_subprocesses.career_team_basic_stats import (
+    get_basic_stats as get_basic_stats_by_pos,
+)
+from .career_team_subprocesses.career_team_advanced_stats import (
+    get_advanced_stats as get_advanced_stats_by_pos,
+)
+from .career_team_subprocesses.career_team_basic_stats_by_manager import (
+    get_basic_stats as get_basic_stats_by_mgr,
+)
 
 from .shared.theme import apply_theme_styles, render_empty_state
 from ..shared.modern_styles import apply_modern_styles
@@ -16,10 +22,27 @@ from .shared.column_config import get_column_config_for_position
 class CareerTeamViewer:
     """Career team data viewer - shows stats aggregated by manager and/or position."""
 
-    def __init__(self, team_data_by_position: pd.DataFrame, team_data_by_manager: pd.DataFrame, team_data_by_lineup_position: pd.DataFrame = None):
-        self.team_data_by_position = team_data_by_position.copy() if team_data_by_position is not None else pd.DataFrame()
-        self.team_data_by_manager = team_data_by_manager.copy() if team_data_by_manager is not None else pd.DataFrame()
-        self.team_data_by_lineup_position = team_data_by_lineup_position.copy() if team_data_by_lineup_position is not None else pd.DataFrame()
+    def __init__(
+        self,
+        team_data_by_position: pd.DataFrame,
+        team_data_by_manager: pd.DataFrame,
+        team_data_by_lineup_position: pd.DataFrame = None,
+    ):
+        self.team_data_by_position = (
+            team_data_by_position.copy()
+            if team_data_by_position is not None
+            else pd.DataFrame()
+        )
+        self.team_data_by_manager = (
+            team_data_by_manager.copy()
+            if team_data_by_manager is not None
+            else pd.DataFrame()
+        )
+        self.team_data_by_lineup_position = (
+            team_data_by_lineup_position.copy()
+            if team_data_by_lineup_position is not None
+            else pd.DataFrame()
+        )
 
     def display(self):
         """Display career team stats with clean, mobile-friendly layout."""
@@ -44,7 +67,8 @@ class CareerTeamViewer:
     def _render_filter_ui(self) -> dict:
         """Render compact collapsible filter UI matching matchups style."""
         # Compact filter styling
-        st.markdown("""
+        st.markdown(
+            """
         <style>
         [data-testid="stExpander"] .stMultiSelect,
         [data-testid="stExpander"] .stCheckbox,
@@ -58,7 +82,9 @@ class CareerTeamViewer:
             margin-bottom: 0.25rem !important;
         }
         </style>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         with st.expander("🔎 Filters", expanded=False):
             col1, col2 = st.columns(2)
@@ -67,22 +93,24 @@ class CareerTeamViewer:
             with col1:
                 positions = ["All", "QB", "RB", "WR", "TE", "K", "DEF", "W/R/T"]
                 selected_position = st.selectbox(
-                    "Position",
-                    positions,
-                    index=0,
-                    key="career_team_position"
+                    "Position", positions, index=0, key="career_team_position"
                 )
 
             # Manager filter
             with col2:
-                if not self.team_data_by_position.empty and 'manager' in self.team_data_by_position.columns:
-                    managers = sorted(self.team_data_by_position['manager'].dropna().unique())
+                if (
+                    not self.team_data_by_position.empty
+                    and "manager" in self.team_data_by_position.columns
+                ):
+                    managers = sorted(
+                        self.team_data_by_position["manager"].dropna().unique()
+                    )
                     selected_managers = st.multiselect(
                         "Manager(s)",
                         managers,
                         default=[],
                         key="career_team_managers",
-                        placeholder="All managers"
+                        placeholder="All managers",
                     )
                     if not selected_managers:
                         selected_managers = managers
@@ -92,38 +120,44 @@ class CareerTeamViewer:
             # Game type toggles (inline, compact) - no year filter for career stats
             st.markdown(
                 '<p style="margin: 0.5rem 0 0.25rem 0; font-size: 0.85rem; opacity: 0.7;">Game Types</p>',
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
             toggle_cols = st.columns(3)
 
             with toggle_cols[0]:
                 regular_season = st.checkbox(
                     "Regular",
-                    value=st.session_state.get("career_team_include_regular_season", True),
-                    key="career_team_include_regular_season"
+                    value=st.session_state.get(
+                        "career_team_include_regular_season", True
+                    ),
+                    key="career_team_include_regular_season",
                 )
             with toggle_cols[1]:
                 playoffs = st.checkbox(
                     "Playoffs",
                     value=st.session_state.get("career_team_include_playoffs", True),
-                    key="career_team_include_playoffs"
+                    key="career_team_include_playoffs",
                 )
             with toggle_cols[2]:
                 consolation = st.checkbox(
                     "Consolation",
-                    value=st.session_state.get("career_team_include_consolation", False),
-                    key="career_team_include_consolation"
+                    value=st.session_state.get(
+                        "career_team_include_consolation", False
+                    ),
+                    key="career_team_include_consolation",
                 )
 
         return {
-            'position': selected_position,
-            'managers': selected_managers,
-            'regular_season': regular_season,
-            'playoffs': playoffs,
-            'consolation': consolation
+            "position": selected_position,
+            "managers": selected_managers,
+            "regular_season": regular_season,
+            "playoffs": playoffs,
+            "consolation": consolation,
         }
 
-    def _apply_filters(self, data: pd.DataFrame, filters: dict, filter_position: bool = True) -> pd.DataFrame:
+    def _apply_filters(
+        self, data: pd.DataFrame, filters: dict, filter_position: bool = True
+    ) -> pd.DataFrame:
         """Apply filters to dataframe."""
         if data.empty:
             return data
@@ -131,12 +165,16 @@ class CareerTeamViewer:
         filtered = data.copy()
 
         # Position filter
-        if filter_position and filters['position'] != "All" and 'fantasy_position' in filtered.columns:
-            filtered = filtered[filtered['fantasy_position'] == filters['position']]
+        if (
+            filter_position
+            and filters["position"] != "All"
+            and "fantasy_position" in filtered.columns
+        ):
+            filtered = filtered[filtered["fantasy_position"] == filters["position"]]
 
         # Manager filter
-        if filters['managers'] and 'manager' in filtered.columns:
-            filtered = filtered[filtered['manager'].isin(filters['managers'])]
+        if filters["managers"] and "manager" in filtered.columns:
+            filtered = filtered[filtered["manager"].isin(filters["managers"])]
 
         return filtered
 
@@ -146,7 +184,7 @@ class CareerTeamViewer:
             render_empty_state(
                 title="No Data Available",
                 message="Career team data has not been loaded yet.",
-                icon="📭"
+                icon="📭",
             )
             return
 
@@ -157,15 +195,15 @@ class CareerTeamViewer:
             return
 
         # Stats tabs
-        stat_tabs = st.tabs([TAB_LABELS['basic_stats'], TAB_LABELS['advanced_stats']])
+        stat_tabs = st.tabs([TAB_LABELS["basic_stats"], TAB_LABELS["advanced_stats"]])
 
         with stat_tabs[0]:
-            df = get_basic_stats_by_pos(filtered_data, filters['position'])
-            self._render_data_table(df, "career_basic_pos", filters['position'])
+            df = get_basic_stats_by_pos(filtered_data, filters["position"])
+            self._render_data_table(df, "career_basic_pos", filters["position"])
 
         with stat_tabs[1]:
-            df = get_advanced_stats_by_pos(filtered_data, filters['position'])
-            self._render_data_table(df, "career_advanced_pos", filters['position'])
+            df = get_advanced_stats_by_pos(filtered_data, filters["position"])
+            self._render_data_table(df, "career_advanced_pos", filters["position"])
 
     def _display_by_lineup_position(self, filters: dict):
         """Display stats grouped by manager and lineup position."""
@@ -173,24 +211,30 @@ class CareerTeamViewer:
             render_empty_state(
                 title="No Data Available",
                 message="Career lineup position data has not been loaded yet.",
-                icon="📭"
+                icon="📭",
             )
             return
 
         # Apply filters (without position filter)
-        filtered_data = self._apply_filters(self.team_data_by_lineup_position, filters, filter_position=False)
+        filtered_data = self._apply_filters(
+            self.team_data_by_lineup_position, filters, filter_position=False
+        )
 
         # Lineup position selector
-        if 'lineup_position' in filtered_data.columns:
-            lineup_positions = ["All"] + sorted(filtered_data['lineup_position'].dropna().unique().tolist())
+        if "lineup_position" in filtered_data.columns:
+            lineup_positions = ["All"] + sorted(
+                filtered_data["lineup_position"].dropna().unique().tolist()
+            )
             selected_lp = st.selectbox(
                 "Lineup Position",
                 lineup_positions,
                 index=0,
-                key="career_team_lp_select"
+                key="career_team_lp_select",
             )
             if selected_lp != "All":
-                filtered_data = filtered_data[filtered_data['lineup_position'] == selected_lp]
+                filtered_data = filtered_data[
+                    filtered_data["lineup_position"] == selected_lp
+                ]
 
         if filtered_data.empty:
             st.warning("No data matches the selected filters.")
@@ -205,11 +249,13 @@ class CareerTeamViewer:
             render_empty_state(
                 title="No Data Available",
                 message="Career manager data has not been loaded yet.",
-                icon="📭"
+                icon="📭",
             )
             return
 
-        filtered_data = self._apply_filters(self.team_data_by_manager, filters, filter_position=False)
+        filtered_data = self._apply_filters(
+            self.team_data_by_manager, filters, filter_position=False
+        )
 
         if filtered_data.empty:
             st.warning("No data matches the selected filters.")
@@ -223,8 +269,18 @@ class CareerTeamViewer:
         if data.empty:
             return pd.DataFrame()
 
-        display_cols = [col for col in ['manager', 'lineup_position', 'total_points', 'manager_spar', 'games_played', 'ppg_all_time']
-                       if col in data.columns]
+        display_cols = [
+            col
+            for col in [
+                "manager",
+                "lineup_position",
+                "total_points",
+                "manager_spar",
+                "games_played",
+                "ppg_all_time",
+            ]
+            if col in data.columns
+        ]
 
         if not display_cols:
             return pd.DataFrame()
@@ -232,24 +288,26 @@ class CareerTeamViewer:
         result = data[display_cols].copy()
 
         # Round numeric columns
-        for col in ['total_points', 'manager_spar', 'ppg_all_time']:
+        for col in ["total_points", "manager_spar", "ppg_all_time"]:
             if col in result.columns:
                 result[col] = result[col].round(2)
 
         # Rename columns
         rename_map = {
-            'manager': 'Manager',
-            'lineup_position': 'Lineup Position',
-            'total_points': 'Career Points',
-            'manager_spar': 'Manager SPAR',
-            'games_played': 'Games',
-            'ppg_all_time': 'PPG'
+            "manager": "Manager",
+            "lineup_position": "Lineup Position",
+            "total_points": "Career Points",
+            "manager_spar": "Manager SPAR",
+            "games_played": "Games",
+            "ppg_all_time": "PPG",
         }
-        result = result.rename(columns={k: v for k, v in rename_map.items() if k in result.columns})
+        result = result.rename(
+            columns={k: v for k, v in rename_map.items() if k in result.columns}
+        )
 
         # Sort by career points desc
-        if 'Career Points' in result.columns:
-            result = result.sort_values('Career Points', ascending=False)
+        if "Career Points" in result.columns:
+            result = result.sort_values("Career Points", ascending=False)
 
         return result
 
@@ -258,8 +316,8 @@ class CareerTeamViewer:
         if df.empty:
             render_empty_state(
                 title="No Data Found",
-                message=f"No stats available for the selected filters",
-                icon="🔍"
+                message="No stats available for the selected filters",
+                icon="🔍",
             )
             return
 
@@ -273,15 +331,15 @@ class CareerTeamViewer:
             column_config=column_config,
             hide_index=True,
             use_container_width=True,
-            height=table_height
+            height=table_height,
         )
 
         # Export button
-        csv = df.to_csv(index=False).encode('utf-8')
+        csv = df.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="Download CSV",
             data=csv,
             file_name=f"{prefix}.csv",
             mime="text/csv",
-            key=f"{prefix}_download"
+            key=f"{prefix}_download",
         )

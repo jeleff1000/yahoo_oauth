@@ -17,21 +17,21 @@ def calculate_std_dev(df, selected_year, show_regular_season, show_postseason):
     mask = pd.Series(True, index=df.index)
 
     if selected_year != "All Years":
-        mask &= (df['year'] == selected_year)
+        mask &= df["year"] == selected_year
 
     if not show_regular_season:
-        mask &= (df['is_playoffs'] == True)
+        mask &= df["is_playoffs"]
 
     if not show_postseason:
-        mask &= (df['is_playoffs'] == False)
+        mask &= not df["is_playoffs"]
 
     filtered = df[mask]
 
     # Vectorized groupby aggregation
     std_dev_df = (
-        filtered.groupby('manager', as_index=False)['team_points']
+        filtered.groupby("manager", as_index=False)["team_points"]
         .std(ddof=1)
-        .rename(columns={'team_points': 'StdDev_TeamPoints'})
+        .rename(columns={"team_points": "StdDev_TeamPoints"})
     )
 
     return std_dev_df
@@ -43,21 +43,21 @@ def tweak_scores(df, std_dev_df):
     Significantly faster than original implementation.
     """
     # Merge standard deviations once
-    df = df.merge(std_dev_df, on='manager', how='left')
+    df = df.merge(std_dev_df, on="manager", how="left")
 
     # Vectorized random tweaking
     random_factors = np.random.uniform(-1 / 3, 1 / 3, size=len(df))
-    df['tweaked_team_points'] = (
-            df['team_points'] + random_factors * df['StdDev_TeamPoints']
+    df["tweaked_team_points"] = (
+        df["team_points"] + random_factors * df["StdDev_TeamPoints"]
     )
 
     # Use existing opponent_points column (not opponent_points)
     # Vectorized win/loss calculation
-    df['Sim_Wins'] = (df['tweaked_team_points'] > df['opponent_points']).astype(int)
-    df['Sim_Losses'] = (df['tweaked_team_points'] < df['opponent_points']).astype(int)
+    df["Sim_Wins"] = (df["tweaked_team_points"] > df["opponent_points"]).astype(int)
+    df["Sim_Losses"] = (df["tweaked_team_points"] < df["opponent_points"]).astype(int)
 
     # Clean up temporary columns
-    df = df.drop(columns=['StdDev_TeamPoints'])
+    df = df.drop(columns=["StdDev_TeamPoints"])
 
     return df
 
@@ -69,28 +69,20 @@ def calculate_playoff_seed(df):
     """
     # Vectorized aggregation
     agg_df = (
-        df.groupby('manager', as_index=False)
-        .agg({
-            'Sim_Wins': 'sum',
-            'tweaked_team_points': 'sum'
-        })
-        .rename(columns={'tweaked_team_points': 'Total_Tweaked_Points'})
+        df.groupby("manager", as_index=False)
+        .agg({"Sim_Wins": "sum", "tweaked_team_points": "sum"})
+        .rename(columns={"tweaked_team_points": "Total_Tweaked_Points"})
     )
 
     # Sort and assign seeds
     agg_df = agg_df.sort_values(
-        by=['Sim_Wins', 'Total_Tweaked_Points'],
-        ascending=[False, False]
+        by=["Sim_Wins", "Total_Tweaked_Points"], ascending=[False, False]
     ).reset_index(drop=True)
 
-    agg_df['Sim_Playoff_Seed'] = range(1, len(agg_df) + 1)
+    agg_df["Sim_Playoff_Seed"] = range(1, len(agg_df) + 1)
 
     # Merge back to original dataframe
-    df = df.merge(
-        agg_df[['manager', 'Sim_Playoff_Seed']],
-        on='manager',
-        how='left'
-    )
+    df = df.merge(agg_df[["manager", "Sim_Playoff_Seed"]], on="manager", how="left")
 
     return df
 
@@ -101,10 +93,7 @@ def main(df, selected_year, show_regular_season, show_postseason, tweak_scores_f
     """
     # Calculate standard deviations (cached)
     std_dev_df = calculate_std_dev(
-        df,
-        selected_year,
-        show_regular_season,
-        show_postseason
+        df, selected_year, show_regular_season, show_postseason
     )
 
     # Apply score tweaking if requested
@@ -112,7 +101,7 @@ def main(df, selected_year, show_regular_season, show_postseason, tweak_scores_f
         df = tweak_scores(df, std_dev_df)
     else:
         # If not tweaking, use original scores
-        df['tweaked_team_points'] = df['team_points']
+        df["tweaked_team_points"] = df["team_points"]
 
     # Calculate playoff seeds
     df = calculate_playoff_seed(df)
@@ -121,6 +110,7 @@ def main(df, selected_year, show_regular_season, show_postseason, tweak_scores_f
 
 
 # Additional utility functions for analysis
+
 
 def batch_simulate(df, n_simulations=1000, **kwargs):
     """
@@ -134,14 +124,11 @@ def batch_simulate(df, n_simulations=1000, **kwargs):
 
         # Extract key metrics
         summary = (
-            sim_df.groupby('manager')
-            .agg({
-                'Sim_Wins': 'sum',
-                'Sim_Playoff_Seed': 'first'
-            })
+            sim_df.groupby("manager")
+            .agg({"Sim_Wins": "sum", "Sim_Playoff_Seed": "first"})
             .reset_index()
         )
-        summary['simulation'] = i
+        summary["simulation"] = i
         results.append(summary)
 
     # Combine all simulations
@@ -149,34 +136,39 @@ def batch_simulate(df, n_simulations=1000, **kwargs):
 
     # Calculate statistics
     stats = (
-        all_results.groupby('manager')
-        .agg({
-            'Sim_Wins': ['mean', 'std', 'min', 'max'],
-            'Sim_Playoff_Seed': ['mean', 'std']
-        })
+        all_results.groupby("manager")
+        .agg(
+            {
+                "Sim_Wins": ["mean", "std", "min", "max"],
+                "Sim_Playoff_Seed": ["mean", "std"],
+            }
+        )
         .reset_index()
     )
 
     stats.columns = [
-        'manager',
-        'avg_wins', 'std_wins', 'min_wins', 'max_wins',
-        'avg_seed', 'std_seed'
+        "manager",
+        "avg_wins",
+        "std_wins",
+        "min_wins",
+        "max_wins",
+        "avg_seed",
+        "std_seed",
     ]
 
     return stats
 
 
 @st.cache_data(ttl=3600)
-def calculate_win_probabilities(df, selected_year, show_regular_season, show_postseason):
+def calculate_win_probabilities(
+    df, selected_year, show_regular_season, show_postseason
+):
     """
     Calculate win probability distributions using multiple simulations.
     Cached for performance.
     """
     std_dev_df = calculate_std_dev(
-        df,
-        selected_year,
-        show_regular_season,
-        show_postseason
+        df, selected_year, show_regular_season, show_postseason
     )
 
     # Run 1000 simulations
@@ -184,7 +176,7 @@ def calculate_win_probabilities(df, selected_year, show_regular_season, show_pos
 
     for _ in range(1000):
         sim_df = tweak_scores(df.copy(), std_dev_df)
-        wins = sim_df.groupby('manager')['Sim_Wins'].sum().to_dict()
+        wins = sim_df.groupby("manager")["Sim_Wins"].sum().to_dict()
         sim_results.append(wins)
 
     # Convert to DataFrame for analysis
@@ -192,8 +184,8 @@ def calculate_win_probabilities(df, selected_year, show_regular_season, show_pos
 
     # Calculate percentiles
     percentiles = results_df.quantile([0.1, 0.25, 0.5, 0.75, 0.9]).T
-    percentiles.columns = ['p10', 'p25', 'median', 'p75', 'p90']
-    percentiles['mean'] = results_df.mean()
-    percentiles['std'] = results_df.std()
+    percentiles.columns = ["p10", "p25", "median", "p75", "p90"]
+    percentiles["mean"] = results_df.mean()
+    percentiles["std"] = results_df.std()
 
-    return percentiles.reset_index().rename(columns={'index': 'manager'})
+    return percentiles.reset_index().rename(columns={"index": "manager"})

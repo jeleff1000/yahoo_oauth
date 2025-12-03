@@ -16,12 +16,12 @@ from .playoff_vs_regular import display_playoff_vs_regular_graph
 from .strength_of_schedule import display_strength_of_schedule_graph
 
 __all__ = [
-    'display_scoring_trends',
-    'display_win_percentage_graph',
-    'display_power_rating_graph',
-    'display_scoring_distribution_graph',
-    'display_margin_of_victory_graph',
-    'display_optimal_lineup_efficiency_graph',
-    'display_playoff_vs_regular_graph',
-    'display_strength_of_schedule_graph',
+    "display_scoring_trends",
+    "display_win_percentage_graph",
+    "display_power_rating_graph",
+    "display_scoring_distribution_graph",
+    "display_margin_of_victory_graph",
+    "display_optimal_lineup_efficiency_graph",
+    "display_playoff_vs_regular_graph",
+    "display_strength_of_schedule_graph",
 ]

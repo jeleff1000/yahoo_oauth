@@ -1,9 +1,10 @@
 """
 Reusable UI components for consistent design across the app
 """
+
 import streamlit as st
 import pandas as pd
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 
 
 def render_metric_card(
@@ -12,24 +13,33 @@ def render_metric_card(
     delta: Optional[str] = None,
     icon: str = "📊",
     color: str = "#667eea",
-    help_text: Optional[str] = None
+    help_text: Optional[str] = None,
 ):
     """
     Render a modern metric card with gradient background
     """
-    delta_html = f"""
+    delta_html = (
+        f"""
         <div style='font-size: 0.85rem; color: #059669; margin-top: 0.3rem;'>
             {delta}
         </div>
-    """ if delta else ""
+    """
+        if delta
+        else ""
+    )
 
-    help_html = f"""
+    help_html = (
+        f"""
         <div style='font-size: 0.75rem; color: #6B7280; margin-top: 0.5rem;'>
             {help_text}
         </div>
-    """ if help_text else ""
+    """
+        if help_text
+        else ""
+    )
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div style='background: linear-gradient(135deg, {color}15 0%, {color}05 100%);
                     border-left: 4px solid {color};
                     border-radius: 8px;
@@ -46,20 +56,29 @@ def render_metric_card(
             {delta_html}
             {help_html}
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
-def render_header(title: str, subtitle: Optional[str] = None, gradient: tuple = ("#667eea", "#764ba2")):
+def render_header(
+    title: str, subtitle: Optional[str] = None, gradient: tuple = ("#667eea", "#764ba2")
+):
     """
     Render a gradient header section
     """
-    subtitle_html = f"""
+    subtitle_html = (
+        f"""
         <p style='margin: 0.5rem 0 0 0; color: rgba(255,255,255,0.95); font-size: 1rem;'>
             {subtitle}
         </p>
-    """ if subtitle else ""
+    """
+        if subtitle
+        else ""
+    )
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div style='background: linear-gradient(135deg, {gradient[0]} 0%, {gradient[1]} 100%);
                     padding: 1.5rem;
                     border-radius: 12px;
@@ -70,14 +89,12 @@ def render_header(title: str, subtitle: Optional[str] = None, gradient: tuple = 
             </h2>
             {subtitle_html}
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
-def render_info_card(
-    content: str,
-    card_type: str = "info",
-    icon: Optional[str] = None
-):
+def render_info_card(content: str, card_type: str = "info", icon: Optional[str] = None):
     """
     Render an info/warning/error card
     """
@@ -91,7 +108,8 @@ def render_info_card(
     config = colors.get(card_type, colors["info"])
     icon = icon or config["icon"]
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div style='background: {config["bg"]};
                     border-left: 4px solid {config["border"]};
                     border-radius: 8px;
@@ -104,14 +122,17 @@ def render_info_card(
                 </div>
             </div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_stat_badge(label: str, value: str, color: str = "#667eea"):
     """
     Render a small stat badge
     """
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div style='display: inline-block;
                     background: {color};
                     color: white;
@@ -122,7 +143,9 @@ def render_stat_badge(label: str, value: str, color: str = "#667eea"):
                     margin: 0.2rem;'>
             {label}: {value}
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_progress_bar(value: float, label: str = "", max_value: float = 100.0):
@@ -139,7 +162,8 @@ def render_progress_bar(value: float, label: str = "", max_value: float = 100.0)
     else:
         color = "#EF4444"
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div style='margin: 1rem 0;'>
             <div style='display: flex; justify-content: space-between; margin-bottom: 0.3rem;'>
                 <span style='font-size: 0.85rem; color: #6B7280;'>{label}</span>
@@ -151,21 +175,24 @@ def render_progress_bar(value: float, label: str = "", max_value: float = 100.0)
                 </div>
             </div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
-def render_comparison_card(
-    team1: Dict[str, Any],
-    team2: Dict[str, Any],
-    winner: str
-):
+def render_comparison_card(team1: Dict[str, Any], team2: Dict[str, Any], winner: str):
     """
     Render a matchup comparison card
     """
-    team1_border = "3px solid #10B981" if winner == team1["name"] else "1px solid #E5E7EB"
-    team2_border = "3px solid #10B981" if winner == team2["name"] else "1px solid #E5E7EB"
+    team1_border = (
+        "3px solid #10B981" if winner == team1["name"] else "1px solid #E5E7EB"
+    )
+    team2_border = (
+        "3px solid #10B981" if winner == team2["name"] else "1px solid #E5E7EB"
+    )
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div style='display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem;
                     background: white; border-radius: 12px; padding: 1.5rem;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.1);'>
@@ -201,14 +228,16 @@ def render_comparison_card(
                 </div>
             </div>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_data_table(
     df: pd.DataFrame,
     title: Optional[str] = None,
     highlight_column: Optional[str] = None,
-    highlight_condition: str = "max"
+    highlight_condition: str = "max",
 ):
     """
     Render a styled data table with optional highlighting
@@ -226,8 +255,10 @@ def render_data_table(
             mask = df[highlight_column] > 0
 
         styled_df = df.style.apply(
-            lambda x: ['background-color: #D1FAE5' if mask[i] else '' for i in range(len(x))],
-            axis=0
+            lambda x: [
+                "background-color: #D1FAE5" if mask[i] else "" for i in range(len(x))
+            ],
+            axis=0,
         )
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
     else:
@@ -237,18 +268,23 @@ def render_data_table(
 def render_empty_state(
     message: str = "No data available",
     icon: str = "📭",
-    suggestion: Optional[str] = None
+    suggestion: Optional[str] = None,
 ):
     """
     Render an empty state placeholder
     """
-    suggestion_html = f"""
+    suggestion_html = (
+        f"""
         <div style='margin-top: 1rem; font-size: 0.9rem; color: #6B7280;'>
             💡 {suggestion}
         </div>
-    """ if suggestion else ""
+    """
+        if suggestion
+        else ""
+    )
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <div style='text-align: center; padding: 3rem 1rem;
                     background: #F9FAFB; border-radius: 12px;
                     border: 2px dashed #E5E7EB;'>
@@ -260,7 +296,9 @@ def render_empty_state(
             </div>
             {suggestion_html}
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_loading_skeleton(num_rows: int = 5):
@@ -268,7 +306,8 @@ def render_loading_skeleton(num_rows: int = 5):
     Render a loading skeleton for better UX
     """
     for _ in range(num_rows):
-        st.markdown("""
+        st.markdown(
+            """
             <div style='background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
                         background-size: 200% 100%;
                         animation: loading 1.5s infinite;
@@ -282,4 +321,6 @@ def render_loading_skeleton(num_rows: int = 5):
                     100% { background-position: -200% 0; }
                 }
             </style>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )

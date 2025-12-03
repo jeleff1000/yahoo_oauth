@@ -31,7 +31,7 @@ class PlayoffOddsCumulativeViewer:
             st.info("No data available.")
             return
 
-        if 'week' not in df.columns or 'year' not in df.columns:
+        if "week" not in df.columns or "year" not in df.columns:
             st.error("Required columns 'week' and 'year' not found.")
             return
 
@@ -53,7 +53,7 @@ class PlayoffOddsCumulativeViewer:
             list(METRIC_LABELS.keys()),
             format_func=lambda k: METRIC_LABELS[k],
             key="metric_select_cum",
-            help="Choose which playoff metric to compare year-over-year"
+            help="Choose which playoff metric to compare year-over-year",
         )
 
         # Session state buttons instead of radio
@@ -65,9 +65,13 @@ class PlayoffOddsCumulativeViewer:
         trend_cols = st.columns(2)
         for idx, (col, name) in enumerate(zip(trend_cols, trend_types)):
             with col:
-                is_active = (st.session_state[trend_key] == idx)
-                if st.button(name, key=f"trend_btn_{idx}", use_container_width=True,
-                            type="primary" if is_active else "secondary"):
+                is_active = st.session_state[trend_key] == idx
+                if st.button(
+                    name,
+                    key=f"trend_btn_{idx}",
+                    use_container_width=True,
+                    type="primary" if is_active else "secondary",
+                ):
                     if not is_active:
                         st.session_state[trend_key] = idx
                         st.rerun()
@@ -78,7 +82,7 @@ class PlayoffOddsCumulativeViewer:
         managers = sorted(df["manager"].unique())
 
         # Handle "Select All" button
-        if 'cum_select_all_clicked' not in st.session_state:
+        if "cum_select_all_clicked" not in st.session_state:
             st.session_state.cum_select_all_clicked = False
 
         col1, col2 = st.columns([4, 1])
@@ -95,7 +99,7 @@ class PlayoffOddsCumulativeViewer:
                 default=default_mgrs,
                 key="select_cum",
                 label_visibility="collapsed",
-                placeholder="Select managers (empty = all)"
+                placeholder="Select managers (empty = all)",
             )
 
         if st.session_state.cum_select_all_clicked:
@@ -116,8 +120,16 @@ class PlayoffOddsCumulativeViewer:
         fig = go.Figure()
 
         colors = [
-            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+            "#1f77b4",
+            "#ff7f0e",
+            "#2ca02c",
+            "#d62728",
+            "#9467bd",
+            "#8c564b",
+            "#e377c2",
+            "#7f7f7f",
+            "#bcbd22",
+            "#17becf",
         ]
 
         for i, manager in enumerate(managers):
@@ -141,42 +153,36 @@ class PlayoffOddsCumulativeViewer:
                 year_values.append(value)
 
             # Plot the trend
-            fig.add_trace(go.Scatter(
-                x=years,
-                y=year_values,
-                mode='lines+markers',
-                name=manager,
-                line=dict(width=3, color=colors[i % len(colors)]),
-                marker=dict(size=10),
-                hovertemplate=(
-                    f'<b>{manager}</b><br>' +
-                    'Year: %{x}<br>' +
-                    f'{METRIC_LABELS[metric]}: %{{y:.1f}}' +
-                    ('%' if metric != "exp_final_wins" else '') +
-                    '<extra></extra>'
+            fig.add_trace(
+                go.Scatter(
+                    x=years,
+                    y=year_values,
+                    mode="lines+markers",
+                    name=manager,
+                    line=dict(width=3, color=colors[i % len(colors)]),
+                    marker=dict(size=10),
+                    hovertemplate=(
+                        f"<b>{manager}</b><br>"
+                        + "Year: %{x}<br>"
+                        + f"{METRIC_LABELS[metric]}: %{{y:.1f}}"
+                        + ("%" if metric != "exp_final_wins" else "")
+                        + "<extra></extra>"
+                    ),
                 )
-            ))
+            )
 
         fig.update_layout(
             title=f"{METRIC_LABELS[metric]} - {trend_type} by Year",
             xaxis_title="Season",
-            yaxis_title=METRIC_LABELS[metric] + (" (%)" if metric != "exp_final_wins" else ""),
-            hovermode='x unified',
+            yaxis_title=METRIC_LABELS[metric]
+            + (" (%)" if metric != "exp_final_wins" else ""),
+            hovermode="x unified",
             height=500,
-            xaxis=dict(
-                showgrid=True,
-                dtick=1
-            ),
+            xaxis=dict(showgrid=True, dtick=1),
             yaxis=dict(showgrid=True),
-            legend=dict(
-                orientation="v",
-                yanchor="top",
-                y=1,
-                xanchor="left",
-                x=1.01
-            ),
+            legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.01),
             font=dict(size=12),
-            margin=dict(l=20, r=20, t=40, b=20)
+            margin=dict(l=20, r=20, t=40, b=20),
         )
 
         st.plotly_chart(fig, use_container_width=True, key=f"yoy_{metric}_{trend_type}")
@@ -199,12 +205,14 @@ class PlayoffOddsCumulativeViewer:
                 avg_value = year_data[metric].mean()
                 peak_value = year_data[metric].max()
 
-                stats_list.append({
-                    "Manager": manager,
-                    "Year": year,
-                    "Average": avg_value,
-                    "Peak": peak_value
-                })
+                stats_list.append(
+                    {
+                        "Manager": manager,
+                        "Year": year,
+                        "Average": avg_value,
+                        "Peak": peak_value,
+                    }
+                )
 
         if not stats_list:
             st.info("No data available")
@@ -222,7 +230,9 @@ class PlayoffOddsCumulativeViewer:
             prev_year = year_list[i - 1]
             curr_year = year_list[i]
             if prev_year in pivot_avg.columns and curr_year in pivot_avg.columns:
-                pivot_avg[f"Δ{curr_year}"] = (pivot_avg[curr_year] - pivot_avg[prev_year]).round(2)
+                pivot_avg[f"Δ{curr_year}"] = (
+                    pivot_avg[curr_year] - pivot_avg[prev_year]
+                ).round(2)
 
         # Mobile-friendly stacked layout
         st.markdown("**📊 Season Averages by Year**")

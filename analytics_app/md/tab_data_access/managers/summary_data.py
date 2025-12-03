@@ -25,7 +25,8 @@ def load_managers_summary_data() -> Dict[str, Any]:
     """
     try:
         # Matchup summary by year and manager (already optimized - uses aggregation)
-        matchup_summary = run_query(f"""
+        matchup_summary = run_query(
+            f"""
             SELECT
                 year, manager,
                 COUNT(*) AS games_played,
@@ -36,10 +37,12 @@ def load_managers_summary_data() -> Dict[str, Any]:
             FROM {T['matchup']}
             GROUP BY year, manager
             ORDER BY year DESC, wins DESC
-        """)
+        """
+        )
 
         # Head-to-head summary (already optimized - uses aggregation)
-        h2h_summary = run_query(f"""
+        h2h_summary = run_query(
+            f"""
             SELECT
                 m1.manager, m2.manager AS opponent,
                 COUNT(*) AS games_played,
@@ -50,7 +53,8 @@ def load_managers_summary_data() -> Dict[str, Any]:
               ON m1.year = m2.year AND m1.week = m2.week AND m1.opponent = m2.manager
             GROUP BY m1.manager, m2.manager
             ORDER BY m1.manager, wins DESC
-        """)
+        """
+        )
 
         return {
             "summary": matchup_summary,

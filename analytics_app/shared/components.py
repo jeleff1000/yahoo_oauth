@@ -18,9 +18,7 @@ from typing import Optional, List, Dict, Any
 
 
 def hero_section(
-    title: str,
-    subtitle: Optional[str] = None,
-    icon: Optional[str] = None
+    title: str, subtitle: Optional[str] = None, icon: Optional[str] = None
 ) -> None:
     """
     Render a hero section with subtle gradient background.
@@ -30,16 +28,16 @@ def hero_section(
         subtitle: Optional description text
         icon: Optional emoji/icon to display before title
     """
-    icon_html = f'<span style="margin-right: 0.5rem;">{icon}</span>' if icon else ''
+    icon_html = f'<span style="margin-right: 0.5rem;">{icon}</span>' if icon else ""
 
-    html = f'''
+    html = f"""
     <div class="hero-section">
         <h2 style="margin: 0; display: flex; align-items: center;">
             {icon_html}{title}
         </h2>
         {f'<p style="margin: 0.5rem 0 0 0;">{subtitle}</p>' if subtitle else ''}
     </div>
-    '''
+    """
     st.markdown(html, unsafe_allow_html=True)
 
 
@@ -51,17 +49,15 @@ def section_header(title: str, icon: Optional[str] = None) -> None:
         title: Section heading text
         icon: Optional emoji/icon
     """
-    icon_html = f'{icon} ' if icon else ''
+    icon_html = f"{icon} " if icon else ""
     st.markdown(
         f'<div class="section-header-title">{icon_html}{title}</div>',
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
 
 def static_card(
-    content: str,
-    title: Optional[str] = None,
-    icon: Optional[str] = None
+    content: str, title: Optional[str] = None, icon: Optional[str] = None
 ) -> None:
     """
     Render a static info card - NO hover effects, NOT clickable.
@@ -73,25 +69,21 @@ def static_card(
         title: Optional card title
         icon: Optional emoji/icon
     """
-    title_html = ''
+    title_html = ""
     if title:
-        icon_html = f'{icon} ' if icon else ''
+        icon_html = f"{icon} " if icon else ""
         title_html = f'<div class="feature-title">{icon_html}{title}</div>'
 
-    html = f'''
+    html = f"""
     <div class="static-card">
         {title_html}
         <div class="feature-desc">{content}</div>
     </div>
-    '''
+    """
     st.markdown(html, unsafe_allow_html=True)
 
 
-def feature_card(
-    title: str,
-    description: str,
-    icon: Optional[str] = None
-) -> None:
+def feature_card(title: str, description: str, icon: Optional[str] = None) -> None:
     """
     Render a feature/info card - static, no hover.
 
@@ -100,23 +92,20 @@ def feature_card(
         description: Feature description
         icon: Optional emoji/icon
     """
-    icon_html = f'<div class="feature-icon">{icon}</div>' if icon else ''
+    icon_html = f'<div class="feature-icon">{icon}</div>' if icon else ""
 
-    html = f'''
+    html = f"""
     <div class="feature-card">
         {icon_html}
         <div class="feature-title">{title}</div>
         <div class="feature-desc">{description}</div>
     </div>
-    '''
+    """
     st.markdown(html, unsafe_allow_html=True)
 
 
 def stat_display(
-    value: Any,
-    label: str,
-    trend: Optional[str] = None,
-    trend_positive: bool = True
+    value: Any, label: str, trend: Optional[str] = None, trend_positive: bool = True
 ) -> None:
     """
     Render a clean stat/metric display.
@@ -127,17 +116,17 @@ def stat_display(
         trend: Optional trend indicator (e.g., "+5%")
         trend_positive: Whether trend is positive (green) or negative (red)
     """
-    trend_html = ''
+    trend_html = ""
     if trend:
-        color = 'var(--success)' if trend_positive else 'var(--error)'
+        color = "var(--success)" if trend_positive else "var(--error)"
         trend_html = f'<span style="color: {color}; font-size: 0.875rem; margin-left: 0.5rem;">{trend}</span>'
 
-    html = f'''
+    html = f"""
     <div class="stat-display">
         <div class="stat-value">{value}{trend_html}</div>
         <div class="stat-label">{label}</div>
     </div>
-    '''
+    """
     st.markdown(html, unsafe_allow_html=True)
 
 
@@ -149,10 +138,9 @@ def info_box(content: str, title: Optional[str] = None) -> None:
         content: Message content
         title: Optional title
     """
-    title_html = f'<strong>{title}</strong><br>' if title else ''
+    title_html = f"<strong>{title}</strong><br>" if title else ""
     st.markdown(
-        f'<div class="info-box">{title_html}{content}</div>',
-        unsafe_allow_html=True
+        f'<div class="info-box">{title_html}{content}</div>', unsafe_allow_html=True
     )
 
 
@@ -164,10 +152,9 @@ def success_box(content: str, title: Optional[str] = None) -> None:
         content: Message content
         title: Optional title
     """
-    title_html = f'<strong>{title}</strong><br>' if title else ''
+    title_html = f"<strong>{title}</strong><br>" if title else ""
     st.markdown(
-        f'<div class="success-box">{title_html}{content}</div>',
-        unsafe_allow_html=True
+        f'<div class="success-box">{title_html}{content}</div>', unsafe_allow_html=True
     )
 
 
@@ -179,10 +166,9 @@ def warning_box(content: str, title: Optional[str] = None) -> None:
         content: Message content
         title: Optional title
     """
-    title_html = f'<strong>{title}</strong><br>' if title else ''
+    title_html = f"<strong>{title}</strong><br>" if title else ""
     st.markdown(
-        f'<div class="warning-box">{title_html}{content}</div>',
-        unsafe_allow_html=True
+        f'<div class="warning-box">{title_html}{content}</div>', unsafe_allow_html=True
     )
 
 
@@ -194,18 +180,14 @@ def error_box(content: str, title: Optional[str] = None) -> None:
         content: Message content
         title: Optional title
     """
-    title_html = f'<strong>{title}</strong><br>' if title else ''
+    title_html = f"<strong>{title}</strong><br>" if title else ""
     st.markdown(
-        f'<div class="error-box">{title_html}{content}</div>',
-        unsafe_allow_html=True
+        f'<div class="error-box">{title_html}{content}</div>', unsafe_allow_html=True
     )
 
 
 def interactive_card(
-    title: str,
-    description: str,
-    icon: Optional[str] = None,
-    key: Optional[str] = None
+    title: str, description: str, icon: Optional[str] = None, key: Optional[str] = None
 ) -> bool:
     """
     Render an interactive/clickable card with hover effects.
@@ -221,23 +203,25 @@ def interactive_card(
     Returns:
         True if card was clicked
     """
-    icon_html = f'<div class="feature-icon">{icon}</div>' if icon else ''
+    icon_html = f'<div class="feature-icon">{icon}</div>' if icon else ""
 
     # Use columns to create a full-width clickable area
     col = st.container()
     with col:
         st.markdown(
-            f'''
+            f"""
             <div class="interactive-card">
                 {icon_html}
                 <div class="feature-title">{title}</div>
                 <div class="feature-desc">{description}</div>
             </div>
-            ''',
-            unsafe_allow_html=True
+            """,
+            unsafe_allow_html=True,
         )
         # Hidden button for click handling
-        return st.button(f"Select {title}", key=key, type="secondary", use_container_width=True)
+        return st.button(
+            f"Select {title}", key=key, type="secondary", use_container_width=True
+        )
 
 
 def stat_grid(stats: List[Dict[str, Any]], columns: int = 4) -> None:
@@ -252,10 +236,10 @@ def stat_grid(stats: List[Dict[str, Any]], columns: int = 4) -> None:
     for i, stat in enumerate(stats):
         with cols[i % columns]:
             stat_display(
-                value=stat.get('value', ''),
-                label=stat.get('label', ''),
-                trend=stat.get('trend'),
-                trend_positive=stat.get('trend_positive', True)
+                value=stat.get("value", ""),
+                label=stat.get("label", ""),
+                trend=stat.get("trend"),
+                trend_positive=stat.get("trend_positive", True),
             )
 
 
@@ -266,7 +250,7 @@ def data_table_css() -> str:
     Returns:
         CSS string to be injected with st.markdown
     """
-    return '''
+    return """
     <style>
     .data-table {
         width: 100%;
@@ -309,7 +293,7 @@ def data_table_css() -> str:
         }
     }
     </style>
-    '''
+    """
 
 
 def position_badge(position: str) -> str:

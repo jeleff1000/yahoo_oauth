@@ -21,8 +21,12 @@ def display_team_names(team_names_data):
     apply_modern_styles()
 
     # Expecting columns: manager, year, team_name, division_id
-    if team_names_data is None or not {'manager', 'year', 'team_name'}.issubset(team_names_data.columns):
-        st.error("Team Names Data not found or missing required columns (manager, year, team_name).")
+    if team_names_data is None or not {"manager", "year", "team_name"}.issubset(
+        team_names_data.columns
+    ):
+        st.error(
+            "Team Names Data not found or missing required columns (manager, year, team_name)."
+        )
         return
 
     # Subtab navigation buttons at top
@@ -32,21 +36,32 @@ def display_team_names(team_names_data):
     cols = st.columns(len(sub_tab_names))
     for idx, (col, name) in enumerate(zip(cols, sub_tab_names)):
         with col:
-            is_active = (idx == current_idx)
+            is_active = idx == current_idx
             btn_type = "primary" if is_active else "secondary"
-            if st.button(name, key=f"team_names_subtab_{idx}", use_container_width=True, type=btn_type):
+            if st.button(
+                name,
+                key=f"team_names_subtab_{idx}",
+                use_container_width=True,
+                type=btn_type,
+            ):
                 if not is_active:
                     st.session_state["subtab_Team Names"] = idx
                     st.rerun()
 
-    view_mode = sub_tab_names[current_idx] if current_idx < len(sub_tab_names) else "All Managers"
+    view_mode = (
+        sub_tab_names[current_idx]
+        if current_idx < len(sub_tab_names)
+        else "All Managers"
+    )
 
     data = team_names_data.copy()
-    data = data[['manager', 'team_name', 'year', 'division_id']].dropna(subset=['manager', 'team_name'])
-    data['year'] = data['year'].astype(str)
-    data['manager'] = data['manager'].astype(str)
-    data['team_name'] = data['team_name'].astype(str)
-    data['division_id'] = data['division_id'].fillna('Unknown').astype(str)
+    data = data[["manager", "team_name", "year", "division_id"]].dropna(
+        subset=["manager", "team_name"]
+    )
+    data["year"] = data["year"].astype(str)
+    data["manager"] = data["manager"].astype(str)
+    data["team_name"] = data["team_name"].astype(str)
+    data["division_id"] = data["division_id"].fillna("Unknown").astype(str)
 
     if view_mode == "All Managers":
         _render_all_managers_view(data)
@@ -58,17 +73,20 @@ def _render_all_managers_view(data):
     """Render matrix view with all managers."""
     # Build pivot: rows = year, cols = manager
     pivot = data.pivot_table(
-        index='year',
-        columns='manager',
-        values='team_name',
-        aggfunc=lambda vals: '<br>'.join(sorted(set([str(v) for v in vals if v and str(v).strip()])))
-    ).fillna('')
+        index="year",
+        columns="manager",
+        values="team_name",
+        aggfunc=lambda vals: "<br>".join(
+            sorted(set([str(v) for v in vals if v and str(v).strip()]))
+        ),
+    ).fillna("")
 
     # Ensure consistent column order (sorted alphabetically)
     pivot = pivot.reindex(sorted(pivot.columns), axis=1)
 
     # Add dark-mode compatible CSS
-    st.markdown("""
+    st.markdown(
+        """
     <style>
     .team-matrix { border-collapse: collapse; width: 100%; table-layout: fixed; font-family: Inter, system-ui, Arial; background: #1e293b; }
     .team-matrix th, .team-matrix td { border: 1px solid #334155; padding: 6px 8px; text-align: left; vertical-align: top; word-break: break-word; color: white; }
@@ -81,42 +99,45 @@ def _render_all_managers_view(data):
     .team-matrix tbody tr:nth-child(odd) td { background: #1e293b; }
     .team-matrix tbody tr:nth-child(even) .year-col { background: #475569; }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     html = ['<div class="team-matrix-wrapper"><table class="team-matrix">']
     # header
-    html.append('<thead><tr>')
+    html.append("<thead><tr>")
     html.append('<th class="year-col">Year</th>')
     for mgr in pivot.columns:
         html.append(f'<th class="manager-col">{mgr}</th>')
-    html.append('</tr></thead>')
+    html.append("</tr></thead>")
 
     # body
-    html.append('<tbody>')
+    html.append("<tbody>")
     for year in pivot.index:
-        html.append('<tr>')
+        html.append("<tr>")
         html.append(f'<td class="year-col">{year}</td>')
         for mgr in pivot.columns:
-            cell = pivot.at[year, mgr] if mgr in pivot.columns else ''
+            cell = pivot.at[year, mgr] if mgr in pivot.columns else ""
             if not cell:
-                html.append('<td></td>')
+                html.append("<td></td>")
             else:
-                parts = [p.strip() for p in str(cell).split('<br>') if p.strip()]
-                badges = ''.join([f'<div class="badge">{p}</div>' for p in parts])
-                html.append(f'<td>{badges}</td>')
-        html.append('</tr>')
-    html.append('</tbody></table></div>')
+                parts = [p.strip() for p in str(cell).split("<br>") if p.strip()]
+                badges = "".join([f'<div class="badge">{p}</div>' for p in parts])
+                html.append(f"<td>{badges}</td>")
+        html.append("</tr>")
+    html.append("</tbody></table></div>")
 
-    st.html(''.join(html))
+    st.html("".join(html))
 
 
 def _render_division_view(data):
     """Render separate tables for each division."""
     # Get unique divisions
-    divisions = sorted(data['division_id'].unique())
+    divisions = sorted(data["division_id"].unique())
 
     # Add dark-mode compatible CSS
-    st.markdown("""
+    st.markdown(
+        """
     <style>
     .division-section { margin-bottom: 2rem; }
     .division-header {
@@ -139,18 +160,22 @@ def _render_division_view(data):
     .team-matrix tbody tr:nth-child(odd) td { background: #1e293b; }
     .team-matrix tbody tr:nth-child(even) .year-col { background: #475569; }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     for division in divisions:
-        division_data = data[data['division_id'] == division]
+        division_data = data[data["division_id"] == division]
 
         # Build pivot for this division
         pivot = division_data.pivot_table(
-            index='year',
-            columns='manager',
-            values='team_name',
-            aggfunc=lambda vals: '<br>'.join(sorted(set([str(v) for v in vals if v and str(v).strip()])))
-        ).fillna('')
+            index="year",
+            columns="manager",
+            values="team_name",
+            aggfunc=lambda vals: "<br>".join(
+                sorted(set([str(v) for v in vals if v and str(v).strip()]))
+            ),
+        ).fillna("")
 
         # Ensure consistent column order
         pivot = pivot.reindex(sorted(pivot.columns), axis=1)
@@ -161,27 +186,26 @@ def _render_division_view(data):
         html.append('<div class="team-matrix-wrapper"><table class="team-matrix">')
 
         # header
-        html.append('<thead><tr>')
+        html.append("<thead><tr>")
         html.append('<th class="year-col">Year</th>')
         for mgr in pivot.columns:
             html.append(f'<th class="manager-col">{mgr}</th>')
-        html.append('</tr></thead>')
+        html.append("</tr></thead>")
 
         # body
-        html.append('<tbody>')
+        html.append("<tbody>")
         for year in pivot.index:
-            html.append('<tr>')
+            html.append("<tr>")
             html.append(f'<td class="year-col">{year}</td>')
             for mgr in pivot.columns:
-                cell = pivot.at[year, mgr] if mgr in pivot.columns else ''
+                cell = pivot.at[year, mgr] if mgr in pivot.columns else ""
                 if not cell:
-                    html.append('<td></td>')
+                    html.append("<td></td>")
                 else:
-                    parts = [p.strip() for p in str(cell).split('<br>') if p.strip()]
-                    badges = ''.join([f'<div class="badge">{p}</div>' for p in parts])
-                    html.append(f'<td>{badges}</td>')
-            html.append('</tr>')
-        html.append('</tbody></table></div></div>')
+                    parts = [p.strip() for p in str(cell).split("<br>") if p.strip()]
+                    badges = "".join([f'<div class="badge">{p}</div>' for p in parts])
+                    html.append(f"<td>{badges}</td>")
+            html.append("</tr>")
+        html.append("</tbody></table></div></div>")
 
-        st.html(''.join(html))
-
+        st.html("".join(html))

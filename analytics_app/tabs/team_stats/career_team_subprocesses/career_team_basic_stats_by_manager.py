@@ -14,105 +14,138 @@ def get_basic_stats(team_data: pd.DataFrame) -> pd.DataFrame:
 
     # CRITICAL: Remove duplicate columns
     if df.columns.duplicated().any():
-        df = df.loc[:, ~df.columns.duplicated(keep='first')]
+        df = df.loc[:, ~df.columns.duplicated(keep="first")]
 
     # Ensure numeric columns
     numeric_cols = [
-        'total_points', 'player_spar', 'ppg_all_time', 'passing_yards', 'passing_tds', 'passing_interceptions',
-        'rushing_yards', 'rushing_tds', 'receptions', 'receiving_yards', 'receiving_tds',
-        'targets', 'fg_att', 'fg_made', 'pat_made', 'pat_att', 'def_sacks',
-        'def_interceptions', 'pts_allow', 'def_td', 'attempts', 'completions', 'rush_att',
-        'games_played'
+        "total_points",
+        "player_spar",
+        "ppg_all_time",
+        "passing_yards",
+        "passing_tds",
+        "passing_interceptions",
+        "rushing_yards",
+        "rushing_tds",
+        "receptions",
+        "receiving_yards",
+        "receiving_tds",
+        "targets",
+        "fg_att",
+        "fg_made",
+        "pat_made",
+        "pat_att",
+        "def_sacks",
+        "def_interceptions",
+        "pts_allow",
+        "def_td",
+        "attempts",
+        "completions",
+        "rush_att",
+        "games_played",
     ]
     for col in numeric_cols:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # Calculate Total TDs and Total Yards
-    df['total_tds'] = pd.to_numeric(df.get('passing_tds', 0), errors='coerce').fillna(0) + \
-                      pd.to_numeric(df.get('rushing_tds', 0), errors='coerce').fillna(0) + \
-                      pd.to_numeric(df.get('receiving_tds', 0), errors='coerce').fillna(0) + \
-                      pd.to_numeric(df.get('def_td', 0), errors='coerce').fillna(0)
+    df["total_tds"] = (
+        pd.to_numeric(df.get("passing_tds", 0), errors="coerce").fillna(0)
+        + pd.to_numeric(df.get("rushing_tds", 0), errors="coerce").fillna(0)
+        + pd.to_numeric(df.get("receiving_tds", 0), errors="coerce").fillna(0)
+        + pd.to_numeric(df.get("def_td", 0), errors="coerce").fillna(0)
+    )
 
-    df['other_tds'] = pd.to_numeric(df.get('rushing_tds', 0), errors='coerce').fillna(0) + \
-                      pd.to_numeric(df.get('receiving_tds', 0), errors='coerce').fillna(0) + \
-                      pd.to_numeric(df.get('def_td', 0), errors='coerce').fillna(0)
+    df["other_tds"] = (
+        pd.to_numeric(df.get("rushing_tds", 0), errors="coerce").fillna(0)
+        + pd.to_numeric(df.get("receiving_tds", 0), errors="coerce").fillna(0)
+        + pd.to_numeric(df.get("def_td", 0), errors="coerce").fillna(0)
+    )
 
-    df['total_yards'] = pd.to_numeric(df.get('passing_yards', 0), errors='coerce').fillna(0) + \
-                        pd.to_numeric(df.get('rushing_yards', 0), errors='coerce').fillna(0) + \
-                        pd.to_numeric(df.get('receiving_yards', 0), errors='coerce').fillna(0)
+    df["total_yards"] = (
+        pd.to_numeric(df.get("passing_yards", 0), errors="coerce").fillna(0)
+        + pd.to_numeric(df.get("rushing_yards", 0), errors="coerce").fillna(0)
+        + pd.to_numeric(df.get("receiving_yards", 0), errors="coerce").fillna(0)
+    )
 
-    df['rush_rec_yards'] = pd.to_numeric(df.get('rushing_yards', 0), errors='coerce').fillna(0) + \
-                           pd.to_numeric(df.get('receiving_yards', 0), errors='coerce').fillna(0)
+    df["rush_rec_yards"] = pd.to_numeric(
+        df.get("rushing_yards", 0), errors="coerce"
+    ).fillna(0) + pd.to_numeric(df.get("receiving_yards", 0), errors="coerce").fillna(0)
 
     # Rename columns
     column_renames = {
-        'manager': 'Manager',
-        'total_points': 'Points',
-        'player_spar': 'SPAR',  # Use player_spar to avoid double aggregation
-        'ppg_all_time': 'PPG',
-        'total_tds': 'Total TD',
-        'passing_tds': 'Pass TD',
-        'other_tds': 'Other TD',
-        'total_yards': 'Total Yds',
-        'passing_yards': 'Pass Yds',
-        'rush_rec_yards': 'Rush+Rec Yds',
-        'passing_interceptions': 'INT',
-        'rushing_yards': 'Rush Yds',
-        'rushing_tds': 'Rush TD',
-        'rush_att': 'Att',
-        'receptions': 'Rec',
-        'receiving_yards': 'Rec Yds',
-        'receiving_tds': 'Rec TD',
-        'targets': 'Tgt',
-        'completions': 'Comp',
-        'attempts': 'Pass Att',
-        'fg_made': 'FGM',
-        'fg_att': 'FGA',
-        'pat_made': 'XPM',
-        'pat_att': 'XPA',
-        'def_sacks': 'Sacks',
-        'def_interceptions': 'Def INT',
-        'pts_allow': 'PA',
-        'def_td': 'Def TD',
-        'games_played': 'GP'
+        "manager": "Manager",
+        "total_points": "Points",
+        "player_spar": "SPAR",  # Use player_spar to avoid double aggregation
+        "ppg_all_time": "PPG",
+        "total_tds": "Total TD",
+        "passing_tds": "Pass TD",
+        "other_tds": "Other TD",
+        "total_yards": "Total Yds",
+        "passing_yards": "Pass Yds",
+        "rush_rec_yards": "Rush+Rec Yds",
+        "passing_interceptions": "INT",
+        "rushing_yards": "Rush Yds",
+        "rushing_tds": "Rush TD",
+        "rush_att": "Att",
+        "receptions": "Rec",
+        "receiving_yards": "Rec Yds",
+        "receiving_tds": "Rec TD",
+        "targets": "Tgt",
+        "completions": "Comp",
+        "attempts": "Pass Att",
+        "fg_made": "FGM",
+        "fg_att": "FGA",
+        "pat_made": "XPM",
+        "pat_att": "XPA",
+        "def_sacks": "Sacks",
+        "def_interceptions": "Def INT",
+        "pts_allow": "PA",
+        "def_td": "Def TD",
+        "games_played": "GP",
     }
 
     df = df.rename(columns=column_renames)
 
     # CRITICAL: Remove any duplicate columns created during rename
     if df.columns.duplicated().any():
-        df = df.loc[:, ~df.columns.duplicated(keep='first')]
+        df = df.loc[:, ~df.columns.duplicated(keep="first")]
 
     # Select columns - minimal default view matching the new style (removed GP - it's being double-aggregated at data layer)
     columns = [
-        "Manager", "Points", "SPAR", "PPG",
-        "Pass TD", "Other TD",
-        "Pass Yds", "Rush+Rec Yds",
-        "Rec"
+        "Manager",
+        "Points",
+        "SPAR",
+        "PPG",
+        "Pass TD",
+        "Other TD",
+        "Pass Yds",
+        "Rush+Rec Yds",
+        "Rec",
     ]
 
     existing = [c for c in columns if c in df.columns]
     existing = list(dict.fromkeys(existing))
 
     # Sorting: Points desc
-    if 'Points' in df.columns:
-        df = df.sort_values(by='Points', ascending=False, na_position='last')
+    if "Points" in df.columns:
+        df = df.sort_values(by="Points", ascending=False, na_position="last")
 
     result_df = df[existing].copy()
 
     # CRITICAL: Remove any duplicate column names
     if result_df.columns.duplicated().any():
-        result_df = result_df.loc[:, ~result_df.columns.duplicated(keep='first')]
+        result_df = result_df.loc[:, ~result_df.columns.duplicated(keep="first")]
 
     # Round numeric displays
-    for c in ['Points', 'PPG']:
+    for c in ["Points", "PPG"]:
         if c in result_df.columns:
-            result_df[c] = pd.to_numeric(result_df[c], errors='coerce')
-            result_df[c] = result_df[c].round(2 if c == 'PPG' else 1)
+            result_df[c] = pd.to_numeric(result_df[c], errors="coerce")
+            result_df[c] = result_df[c].round(2 if c == "PPG" else 1)
 
     result_df.columns = [str(col) for col in result_df.columns]
 
-    assert not result_df.columns.duplicated().any(), f"Duplicate columns detected: {result_df.columns[result_df.columns.duplicated()].tolist()}"
+    assert (
+        not result_df.columns.duplicated().any()
+    ), f"Duplicate columns detected: {result_df.columns[result_df.columns.duplicated()].tolist()}"
 
     return result_df

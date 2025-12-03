@@ -4,9 +4,10 @@ from __future__ import annotations
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 from md.core import list_player_seasons
-from md.tab_data_access.players.weekly_player_data import load_filtered_weekly_player_data
+from md.tab_data_access.players.weekly_player_data import (
+    load_filtered_weekly_player_data,
+)
 
 
 @st.fragment
@@ -17,14 +18,17 @@ def display_weekly_performance_heatmap(prefix=""):
     """
     st.header("🗓️ Weekly Performance Heatmap")
 
-    st.markdown("""
+    st.markdown(
+        """
     <div style="background: #f0f2f6; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
     <p style="margin: 0; color: #31333F; font-size: 0.9rem;">
     <strong>Visual consistency tracker:</strong> See every game at a glance.
     Color intensity shows scoring levels - dark green = elite week, red = poor week.
     </p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     # Year selection
     available_years = list_player_seasons()
@@ -32,28 +36,28 @@ def display_weekly_performance_heatmap(prefix=""):
         st.error("No player data found.")
         return
 
-    min_year, max_year = min(available_years), max(available_years)
+    _min_year, _max_year = min(available_years), max(available_years)
 
     col1, col2 = st.columns(2)
     with col1:
         selected_year = st.selectbox(
             "Select Season",
             options=sorted(available_years, reverse=True),
-            key=f"{prefix}_heatmap_year"
+            key=f"{prefix}_heatmap_year",
         )
 
     with col2:
         position = st.selectbox(
             "Select Position",
             options=["All", "QB", "RB", "WR", "TE", "K", "DEF"],
-            key=f"{prefix}_heatmap_position"
+            key=f"{prefix}_heatmap_position",
         )
 
     # Player search
     player_search = st.text_input(
         "🔍 Search for players (comma separated):",
         placeholder="e.g., Patrick Mahomes, Christian McCaffrey",
-        key=f"{prefix}_heatmap_search"
+        key=f"{prefix}_heatmap_search",
     ).strip()
 
     if not player_search:
@@ -63,16 +67,12 @@ def display_weekly_performance_heatmap(prefix=""):
     # Load data
     with st.spinner("Loading weekly data..."):
         # Load all weeks for the selected year
-        filters = {
-            "year": [int(selected_year)],
-            "rostered_only": False
-        }
+        filters = {"year": [int(selected_year)], "rostered_only": False}
         if position != "All":
             filters["nfl_position"] = [position]
 
         weekly_data = load_filtered_weekly_player_data(
-            filters=filters,
-            limit=50000  # Get all data for the year
+            filters=filters, limit=50000  # Get all data for the year
         )
 
         if weekly_data is None or weekly_data.empty:
@@ -104,45 +104,47 @@ def display_weekly_performance_heatmap(prefix=""):
             "Color by",
             ["Points", "PPG Differential"],
             key=f"{prefix}_heatmap_color",
-            help="Points shows raw score. PPG Differential shows how far above/below season average."
+            help="Points shows raw score. PPG Differential shows how far above/below season average.",
         )
 
     with col4:
         show_values = st.checkbox(
-            "Show values on heatmap",
-            value=True,
-            key=f"{prefix}_heatmap_show_values"
+            "Show values on heatmap", value=True, key=f"{prefix}_heatmap_show_values"
         )
 
     # Prepare heatmap data
-    players = filtered['player'].unique()
+    players = filtered["player"].unique()
 
     for player_name in players:
-        player_df = filtered[filtered['player'] == player_name].copy()
+        player_df = filtered[filtered["player"] == player_name].copy()
 
         # Ensure numeric types
-        player_df['week'] = pd.to_numeric(player_df['week'], errors='coerce')
-        player_df['points'] = pd.to_numeric(player_df['points'], errors='coerce')
+        player_df["week"] = pd.to_numeric(player_df["week"], errors="coerce")
+        player_df["points"] = pd.to_numeric(player_df["points"], errors="coerce")
 
         # Calculate season PPG for differential
-        season_ppg = player_df['points'].mean()
-        player_df['ppg_diff'] = player_df['points'] - season_ppg
+        season_ppg = player_df["points"].mean()
+        player_df["ppg_diff"] = player_df["points"] - season_ppg
 
         # Sort by week
-        player_df = player_df.sort_values('week')
+        player_df = player_df.sort_values("week")
 
         # Get position and team for subtitle
-        pos = player_df['nfl_position'].iloc[0] if 'nfl_position' in player_df.columns else ""
-        team = player_df['nfl_team'].iloc[0] if 'nfl_team' in player_df.columns else ""
-        manager = player_df['manager'].iloc[0] if 'manager' in player_df.columns else ""
+        pos = (
+            player_df["nfl_position"].iloc[0]
+            if "nfl_position" in player_df.columns
+            else ""
+        )
+        team = player_df["nfl_team"].iloc[0] if "nfl_team" in player_df.columns else ""
+        manager = player_df["manager"].iloc[0] if "manager" in player_df.columns else ""
 
         # Create matrix for heatmap (1 row per player)
-        weeks = player_df['week'].tolist()
+        weeks = player_df["week"].tolist()
         if color_metric == "Points":
-            values = player_df['points'].tolist()
+            values = player_df["points"].tolist()
             colorbar_title = "Points"
         else:
-            values = player_df['ppg_diff'].tolist()
+            values = player_df["ppg_diff"].tolist()
             colorbar_title = "vs Avg"
 
         # Create heatmap
@@ -151,18 +153,18 @@ def display_weekly_performance_heatmap(prefix=""):
         # Determine color scale based on metric
         if color_metric == "Points":
             colorscale = [
-                [0.0, '#DC2626'],   # Red (low)
-                [0.3, '#F59E0B'],   # Orange
-                [0.5, '#FCD34D'],   # Yellow
-                [0.7, '#10B981'],   # Green
-                [1.0, '#059669']    # Dark Green (high)
+                [0.0, "#DC2626"],  # Red (low)
+                [0.3, "#F59E0B"],  # Orange
+                [0.5, "#FCD34D"],  # Yellow
+                [0.7, "#10B981"],  # Green
+                [1.0, "#059669"],  # Dark Green (high)
             ]
         else:
             # Diverging scale for differential (red=below avg, green=above avg)
             colorscale = [
-                [0.0, '#DC2626'],   # Red (well below)
-                [0.5, '#F3F4F6'],   # Gray (average)
-                [1.0, '#059669']    # Green (well above)
+                [0.0, "#DC2626"],  # Red (well below)
+                [0.5, "#F3F4F6"],  # Gray (average)
+                [1.0, "#059669"],  # Green (well above)
             ]
 
         # Create text labels
@@ -171,21 +173,21 @@ def display_weekly_performance_heatmap(prefix=""):
         else:
             text_values = None
 
-        fig.add_trace(go.Heatmap(
-            z=[values],
-            x=weeks,
-            y=[player_name],
-            colorscale=colorscale,
-            text=text_values,
-            texttemplate='%{text}' if show_values else None,
-            textfont={"size": 10},
-            hovertemplate='<b>Week %{x}</b><br>%{y}<br>' + colorbar_title + ': %{z:.2f}<extra></extra>',
-            colorbar=dict(
-                title=colorbar_title,
-                thickness=15,
-                len=0.7
+        fig.add_trace(
+            go.Heatmap(
+                z=[values],
+                x=weeks,
+                y=[player_name],
+                colorscale=colorscale,
+                text=text_values,
+                texttemplate="%{text}" if show_values else None,
+                textfont={"size": 10},
+                hovertemplate="<b>Week %{x}</b><br>%{y}<br>"
+                + colorbar_title
+                + ": %{z:.2f}<extra></extra>",
+                colorbar=dict(title=colorbar_title, thickness=15, len=0.7),
             )
-        ))
+        )
 
         # Update layout
         subtitle = f"{pos} - {team}" if pos and team else ""
@@ -196,26 +198,25 @@ def display_weekly_performance_heatmap(prefix=""):
             title=dict(
                 text=f"<b>{player_name}</b><br><sub>{subtitle}</sub>",
                 x=0.5,
-                xanchor='center'
+                xanchor="center",
             ),
             xaxis=dict(
                 title="Week",
-                tickmode='linear',
+                tickmode="linear",
                 tick0=1,
                 dtick=1,
                 showgrid=True,
-                gridcolor='rgba(128,128,128,0.2)'
+                gridcolor="rgba(128,128,128,0.2)",
             ),
-            yaxis=dict(
-                title="",
-                showticklabels=False
-            ),
+            yaxis=dict(title="", showticklabels=False),
             height=200,
             margin=dict(l=20, r=20, t=80, b=50),
-            template="plotly_white"
+            template="plotly_white",
         )
 
-        st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_heatmap_{player_name}")
+        st.plotly_chart(
+            fig, use_container_width=True, key=f"{prefix}_heatmap_{player_name}"
+        )
 
         # Summary stats
         with st.expander(f"📊 {player_name} - {selected_year} Summary", expanded=False):
@@ -234,28 +235,28 @@ def display_weekly_performance_heatmap(prefix=""):
 
             # Week-by-week table
             st.caption("Week-by-week breakdown:")
-            detail_cols = ['week', 'points', 'opponent']
-            if 'nfl_position' in player_df.columns:
-                detail_cols.insert(1, 'nfl_position')
+            detail_cols = ["week", "points", "opponent"]
+            if "nfl_position" in player_df.columns:
+                detail_cols.insert(1, "nfl_position")
 
             available_cols = [c for c in detail_cols if c in player_df.columns]
             detail_df = player_df[available_cols].copy()
 
             # Rename for display
-            detail_df = detail_df.rename(columns={
-                'week': 'Week',
-                'points': 'Points',
-                'opponent': 'Opponent',
-                'nfl_position': 'Position'
-            })
+            detail_df = detail_df.rename(
+                columns={
+                    "week": "Week",
+                    "points": "Points",
+                    "opponent": "Opponent",
+                    "nfl_position": "Position",
+                }
+            )
 
             st.dataframe(
                 detail_df,
                 hide_index=True,
                 use_container_width=True,
-                column_config={
-                    "Points": st.column_config.NumberColumn(format="%.1f")
-                }
+                column_config={"Points": st.column_config.NumberColumn(format="%.1f")},
             )
 
     # Multi-player comparison option
@@ -266,55 +267,52 @@ def display_weekly_performance_heatmap(prefix=""):
         # Create combined heatmap
         comparison_data = []
         for player_name in players:
-            player_df = filtered[filtered['player'] == player_name].copy()
-            player_df = player_df.sort_values('week')
+            player_df = filtered[filtered["player"] == player_name].copy()
+            player_df = player_df.sort_values("week")
 
-            season_ppg = player_df['points'].mean()
+            season_ppg = player_df["points"].mean()
 
             for _, row in player_df.iterrows():
-                comparison_data.append({
-                    'player': player_name,
-                    'week': row['week'],
-                    'points': row['points'],
-                    'ppg_diff': row['points'] - season_ppg
-                })
+                comparison_data.append(
+                    {
+                        "player": player_name,
+                        "week": row["week"],
+                        "points": row["points"],
+                        "ppg_diff": row["points"] - season_ppg,
+                    }
+                )
 
         comp_df = pd.DataFrame(comparison_data)
 
         # Pivot for heatmap
         if color_metric == "Points":
-            pivot_df = comp_df.pivot(index='player', columns='week', values='points')
+            pivot_df = comp_df.pivot(index="player", columns="week", values="points")
         else:
-            pivot_df = comp_df.pivot(index='player', columns='week', values='ppg_diff')
+            pivot_df = comp_df.pivot(index="player", columns="week", values="ppg_diff")
 
         fig_comp = go.Figure()
 
-        fig_comp.add_trace(go.Heatmap(
-            z=pivot_df.values,
-            x=pivot_df.columns.tolist(),
-            y=pivot_df.index.tolist(),
-            colorscale=colorscale,
-            hovertemplate='<b>%{y}</b><br>Week %{x}<br>' + colorbar_title + ': %{z:.2f}<extra></extra>',
-            colorbar=dict(
-                title=colorbar_title,
-                thickness=15,
-                len=0.7
+        fig_comp.add_trace(
+            go.Heatmap(
+                z=pivot_df.values,
+                x=pivot_df.columns.tolist(),
+                y=pivot_df.index.tolist(),
+                colorscale=colorscale,
+                hovertemplate="<b>%{y}</b><br>Week %{x}<br>"
+                + colorbar_title
+                + ": %{z:.2f}<extra></extra>",
+                colorbar=dict(title=colorbar_title, thickness=15, len=0.7),
             )
-        ))
+        )
 
         fig_comp.update_layout(
             title=f"Player Comparison - {selected_year}",
-            xaxis=dict(
-                title="Week",
-                tickmode='linear',
-                tick0=1,
-                dtick=1
-            ),
-            yaxis=dict(
-                title="Player"
-            ),
+            xaxis=dict(title="Week", tickmode="linear", tick0=1, dtick=1),
+            yaxis=dict(title="Player"),
             height=max(300, len(players) * 60),
-            template="plotly_white"
+            template="plotly_white",
         )
 
-        st.plotly_chart(fig_comp, use_container_width=True, key=f"{prefix}_heatmap_comparison")
+        st.plotly_chart(
+            fig_comp, use_container_width=True, key=f"{prefix}_heatmap_comparison"
+        )

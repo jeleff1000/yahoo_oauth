@@ -51,7 +51,6 @@ WEEKLY_CONTEXT_CRITERIA = [
         "text": "a heartbreaker decided by just {margin:.1f} points",
         "category": "margin",
     },
-
     # Projection accuracy
     {
         "condition": lambda r: r.get("above_proj_score") == 1 and r.get("win") == 1,
@@ -68,7 +67,6 @@ WEEKLY_CONTEXT_CRITERIA = [
         "text": "even while outperforming projections",
         "category": "projection",
     },
-
     # Spread/odds context
     {
         "condition": lambda r: r.get("underdog_wins") == 1,
@@ -80,19 +78,19 @@ WEEKLY_CONTEXT_CRITERIA = [
         "text": "in a surprising upset loss as the favorite",
         "category": "spread",
     },
-
     # Streak context
     {
-        "condition": lambda r: (r.get("winning_streak") or r.get("win_streak") or 0) >= 3,
+        "condition": lambda r: (r.get("winning_streak") or r.get("win_streak") or 0)
+        >= 3,
         "text": "extending their winning streak to {winning_streak} games",
         "category": "streak",
     },
     {
-        "condition": lambda r: (r.get("losing_streak") or r.get("loss_streak") or 0) >= 3,
+        "condition": lambda r: (r.get("losing_streak") or r.get("loss_streak") or 0)
+        >= 3,
         "text": "dropping their {losing_streak}th straight",
         "category": "streak",
     },
-
     # League standing context
     {
         "condition": lambda r: r.get("teams_beat_this_week", 0) >= 9,
@@ -100,7 +98,8 @@ WEEKLY_CONTEXT_CRITERIA = [
         "category": "league",
     },
     {
-        "condition": lambda r: r.get("teams_beat_this_week", 0) == 0 and r.get("loss") == 1,
+        "condition": lambda r: r.get("teams_beat_this_week", 0) == 0
+        and r.get("loss") == 1,
         "text": "posting the lowest score in the league",
         "category": "league",
     },
@@ -118,11 +117,14 @@ WEEKLY_MILESTONE_CRITERIA = [
         "text": "This marks their first win of the season.",
     },
     {
-        "condition": lambda r: r.get("wins_to_date") == r.get("losses_to_date") and r.get("win") == 1 and r.get("wins_to_date", 0) > 1,
+        "condition": lambda r: r.get("wins_to_date") == r.get("losses_to_date")
+        and r.get("win") == 1
+        and r.get("wins_to_date", 0) > 1,
         "text": "They're now back to .500 on the season.",
     },
     {
-        "condition": lambda r: r.get("playoff_seed_to_date", 99) <= 4 and r.get("win") == 1,
+        "condition": lambda r: r.get("playoff_seed_to_date", 99) <= 4
+        and r.get("win") == 1,
         "text": "They currently sit in playoff position at the #{playoff_seed_to_date} seed.",
     },
     {
@@ -165,7 +167,6 @@ SEASON_CONTEXT_CRITERIA = [
         "text": "outside the playoff picture at #{playoff_seed_to_date}",
         "category": "seed",
     },
-
     # Playoff probability
     {
         "condition": lambda r: (r.get("p_playoffs") or 0) >= 0.9,
@@ -178,18 +179,17 @@ SEASON_CONTEXT_CRITERIA = [
         "category": "probability",
     },
     {
-        "condition": lambda r: (r.get("p_playoffs") or 0) < 0.5 and (r.get("p_playoffs") or 0) > 0,
+        "condition": lambda r: (r.get("p_playoffs") or 0) < 0.5
+        and (r.get("p_playoffs") or 0) > 0,
         "text": "facing long odds at just {p_playoffs_pct}% playoff probability",
         "category": "probability",
     },
-
     # Championship probability
     {
         "condition": lambda r: (r.get("p_champ") or 0) >= 0.15,
         "text": "and a {p_champ_pct}% shot at the title",
         "category": "championship",
     },
-
     # Schedule luck
     {
         "condition": lambda r: (r.get("wins_vs_shuffle_wins") or 0) >= 2,
@@ -203,7 +203,6 @@ SEASON_CONTEXT_CRITERIA = [
         "category": "luck",
         "standalone": True,
     },
-
     # Projected finish
     {
         "condition": lambda r: r.get("proj_wins") is not None,
@@ -224,25 +223,23 @@ PLAYER_INTRO_TEMPLATE = "Top performers this week:"
 PLAYER_HIGHLIGHT_CRITERIA = [
     # Best performer
     {
-        "condition": lambda r: r.get("is_top_scorer") == True,
+        "condition": lambda r: r.get("is_top_scorer"),
         "text": "{player} led the way with {points:.2f} points",
         "category": "top",
     },
-
     # Position leaders
     {
-        "condition": lambda r: r.get("is_position_leader") == True,
+        "condition": lambda r: r.get("is_position_leader"),
         "text": "{player} ({position}) contributed {points:.2f}",
         "category": "position",
     },
-
     # Bench disappointments
     {
-        "condition": lambda r: r.get("was_benched") == True and r.get("points", 0) > r.get("starter_points", 0),
+        "condition": lambda r: r.get("was_benched")
+        and r.get("points", 0) > r.get("starter_points", 0),
         "text": "{player} put up {points:.2f} on the bench - more than the starter",
         "category": "bench",
     },
-
     # Percentile-based highlights
     {
         "condition": lambda r: (r.get("weekly_percentile") or 0) >= 95,
@@ -250,7 +247,8 @@ PLAYER_HIGHLIGHT_CRITERIA = [
         "category": "percentile",
     },
     {
-        "condition": lambda r: (r.get("weekly_percentile") or 0) <= 5 and r.get("started") == True,
+        "condition": lambda r: (r.get("weekly_percentile") or 0) <= 5
+        and r.get("started"),
         "text": "{player} struggled mightily, ranking in the bottom {weekly_percentile:.0f}%",
         "category": "percentile",
     },
@@ -284,6 +282,7 @@ PLAYER_SUMMARY_CRITERIA = [
 # =============================================================================
 # HELPER: Format a value for display
 # =============================================================================
+
 
 def format_value(value, decimals=2):
     """Format numeric values for display."""

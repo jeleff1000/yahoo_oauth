@@ -20,7 +20,6 @@ WEEKLY_RECAP_OUTCOMES = {
     # ========================================================================
     # LOSSES (win = 0)
     # ========================================================================
-
     (0, 0, 0, 0): {
         "title": "💀 Complete Meltdown",
         "text": (
@@ -30,9 +29,8 @@ WEEKLY_RECAP_OUTCOMES = {
             "Maybe a players-only meeting can sort out this debacle."
         ),
         "emoji": "💀",
-        "color": "red"
+        "color": "red",
     },
-
     (0, 0, 0, 1): {
         "title": "🤷 Moral Victory?",
         "text": (
@@ -42,9 +40,8 @@ WEEKLY_RECAP_OUTCOMES = {
             "You lost but at least you kept it close? Not much good to take from this one. They are who you thought they were — and you let them off the hook."
         ),
         "emoji": "🤷",
-        "color": "orange"
+        "color": "orange",
     },
-
     (0, 0, 1, 0): {
         "title": "💔 Heartbreaker",
         "text": (
@@ -53,9 +50,8 @@ WEEKLY_RECAP_OUTCOMES = {
             "You even missed your personal projections by {abs_proj_err_str}. Scrap that entire game plan because you won't make it far playing like this."
         ),
         "emoji": "💔",
-        "color": "red"
+        "color": "red",
     },
-
     (0, 1, 0, 0): {
         "title": "⚔️ Noble Defeat",
         "text": (
@@ -63,9 +59,8 @@ WEEKLY_RECAP_OUTCOMES = {
             "You exceeded your projected score by {proj_err_pos_str}. Goliath beat David this week, but at least you gave it your all."
         ),
         "emoji": "⚔️",
-        "color": "blue"
+        "color": "blue",
     },
-
     (0, 1, 0, 1): {
         "title": "🫱 Went Down Swinging",
         "text": (
@@ -73,9 +68,8 @@ WEEKLY_RECAP_OUTCOMES = {
             "only losing by {margin_pos_str}. You exceeded your projections by {proj_err_pos_str}; just not enough to pull off the upset."
         ),
         "emoji": "🫱",
-        "color": "orange"
+        "color": "orange",
     },
-
     (0, 1, 1, 0): {
         "title": "😤 Deserved Better",
         "text": (
@@ -83,13 +77,11 @@ WEEKLY_RECAP_OUTCOMES = {
             "You beat your projection by {proj_err_pos_str} but still lost a game where you were favored. Just remember: defense wins championships."
         ),
         "emoji": "😤",
-        "color": "orange"
+        "color": "orange",
     },
-
     # ========================================================================
     # WINS (win = 1)
     # ========================================================================
-
     (1, 0, 0, 1): {
         "title": "🍀 Lucky Break",
         "text": (
@@ -97,9 +89,8 @@ WEEKLY_RECAP_OUTCOMES = {
             "missing your expected point total by {abs_proj_err_str}, you still came away with the victory. Way to steal one!"
         ),
         "emoji": "🍀",
-        "color": "green"
+        "color": "green",
     },
-
     (1, 0, 1, 0): {
         "title": "💪 Ugly Win",
         "text": (
@@ -107,9 +98,8 @@ WEEKLY_RECAP_OUTCOMES = {
             "but hey — a win is a win."
         ),
         "emoji": "💪",
-        "color": "green"
+        "color": "green",
     },
-
     (1, 0, 1, 1): {
         "title": "😅 Close Call",
         "text": (
@@ -117,9 +107,8 @@ WEEKLY_RECAP_OUTCOMES = {
             "You missed your projected score by {abs_proj_err_str} but still came away with the {margin_pos_str} point victory. Way to survive and advance."
         ),
         "emoji": "😅",
-        "color": "green"
+        "color": "green",
     },
-
     (1, 1, 0, 1): {
         "title": "🔥 Giant Slayer",
         "text": (
@@ -127,9 +116,8 @@ WEEKLY_RECAP_OUTCOMES = {
             "You exceeded your projected score by {proj_err_pos_str} and stepped up for a big win."
         ),
         "emoji": "🔥",
-        "color": "green"
+        "color": "green",
     },
-
     (1, 1, 1, 0): {
         "title": "✊ Gritty Victory",
         "text": (
@@ -137,9 +125,8 @@ WEEKLY_RECAP_OUTCOMES = {
             "Sure, you only won by {margin_pos_str} — but close only counts in horseshoes and grenades."
         ),
         "emoji": "✊",
-        "color": "green"
+        "color": "green",
     },
-
     (1, 1, 1, 1): {
         "title": "🏆 Dominant Performance",
         "text": (
@@ -147,7 +134,7 @@ WEEKLY_RECAP_OUTCOMES = {
             "we had you pegged for a {spread_str} point favorite going into the week."
         ),
         "emoji": "🏆",
-        "color": "green"
+        "color": "green",
     },
 }
 
@@ -158,21 +145,18 @@ WEEKLY_RECAP_OUTCOMES = {
 CONTEXTUAL_MESSAGES = {
     "close_game": {
         "win": "That was a nail-biter! You won by just {margin_pos_str} points. Your heart rate is probably still elevated.",
-        "loss": "So close yet so far. Lost by just {margin_pos_str} points. That's gotta sting."
+        "loss": "So close yet so far. Lost by just {margin_pos_str} points. That's gotta sting.",
     },
-
     "blowout": {
         "win": "Absolutely demolished {opponent} by {margin_pos_str} points. No mercy!",
-        "loss": "Ouch. Got blown out by {margin_pos_str} points. Might want to look away from this one."
+        "loss": "Ouch. Got blown out by {margin_pos_str} points. Might want to look away from this one.",
     },
-
     "league_performance": {
         "above_median": "You beat the league median this week ({weekly_median:.1f} pts), scoring {team_points:.1f}. Rock solid.",
         "below_median": "You fell below the league median this week ({weekly_median:.1f} pts), only scoring {team_points:.1f}. Room for improvement.",
         "dominated": "You would've beaten {teams_beat} other teams this week. Dominant performance!",
-        "struggled": "You only would've beaten {teams_beat} other teams this week. Yikes."
+        "struggled": "You only would've beaten {teams_beat} other teams this week. Yikes.",
     },
-
     # ========================================================================
     # OPTIMAL LINEUP CONTEXT
     # ========================================================================
@@ -186,12 +170,11 @@ CONTEXTUAL_MESSAGES = {
             "minor": "Pretty close to optimal! Only {optimal_diff:.1f} points left on the bench.",
             "perfect": "PERFECT LINEUP! You started your best possible team. That's what we like to see!",
             "swing_loss": "You lost by {margin_pos_str} but had {optimal_diff:.1f} points on your bench — a lineup change would've swung the matchup. Brutal.",
-            "near_swing": "Left {optimal_diff:.1f} on the bench and lost by {margin_pos_str}. That's one move away from a win."
+            "near_swing": "Left {optimal_diff:.1f} on the bench and lost by {margin_pos_str}. That's one move away from a win.",
         },
         "optimal_win": "If you had set your optimal lineup, you would've scored {optimal_points:.1f} and {optimal_result}!",
         "optimal_record": "Your optimal lineup record this season is {optimal_wins}-{optimal_losses}. Your actual record is {wins}-{losses}. {optimal_comment}",
     },
-
     # ========================================================================
     # STREAKS & MOMENTUM
     # ========================================================================
@@ -207,7 +190,6 @@ CONTEXTUAL_MESSAGES = {
             "trouble": "Two straight losses. Time to stop the bleeding.",
         },
     },
-
     # ========================================================================
     # WEEKLY RANKING CONTEXT
     # ========================================================================
@@ -220,7 +202,6 @@ CONTEXTUAL_MESSAGES = {
         "percentile_mid": "You scored {team_points:.1f}, putting you in the {opp_pts_week_pct:.0f}th percentile this week.",
         "percentile_low": "Your {team_points:.1f} points ranked in the {opp_pts_week_pct:.0f}th percentile. Bottom tier this week.",
     },
-
     # ========================================================================
     # PLAYOFF IMPLICATIONS
     # ========================================================================
@@ -233,7 +214,6 @@ CONTEXTUAL_MESSAGES = {
         "bye_week_locked": "You've locked up a first-round bye! Rest those starters mentally.",
         "bye_week_chase": "Win this week and you're in position for a bye week!",
     },
-
     # ========================================================================
     # FELO RATING & POWER RANKINGS
     # ========================================================================
@@ -243,7 +223,6 @@ CONTEXTUAL_MESSAGES = {
         "falling": "Your power rating dropped to {power_rating:.1f}. Need to turn things around.",
         "dominant": "You have the highest power rating in the league at {power_rating:.1f}. Fear the champ!",
     },
-
     # ========================================================================
     # HEAD-TO-HEAD RECORDS
     # ========================================================================
@@ -254,7 +233,6 @@ CONTEXTUAL_MESSAGES = {
         "first_meeting": "This was your first ever matchup with {opponent}. {h2h_result}!",
         "season_sweep": "You've beaten {opponent} twice this season! Season sweep complete!",
     },
-
     # ========================================================================
     # SCHEDULE LUCK & WINS ANALYSIS
     # ========================================================================
@@ -265,7 +243,6 @@ CONTEXTUAL_MESSAGES = {
         "very_unlucky": "BRUTAL schedule luck! You've lost {wins_diff:.1f} wins to tough matchups despite strong scoring.",
         "fair": "Your schedule has been fair. Your {wins_to_date} wins align with your {exp_final_wins:.1f} expected wins.",
     },
-
     "alternate_schedules": {
         "playoffs_most": "In {shuffle_avg_playoffs:.0%} of possible schedules, you'd make the playoffs. You're in a good spot!",
         "playoffs_some": "In {shuffle_avg_playoffs:.0%} of schedules, you'd be playoff-bound. It's close!",
@@ -274,7 +251,6 @@ CONTEXTUAL_MESSAGES = {
         "avg_seed": "Your average playoff seed across all schedules would be #{shuffle_avg_seed:.1f} (currently #{playoff_seed_to_date}).",
         "bye_chance": "You'd get a bye week in {shuffle_avg_bye:.0%} of schedules.",
     },
-
     # ========================================================================
     # SEASON MILESTONES
     # ========================================================================
@@ -289,7 +265,6 @@ CONTEXTUAL_MESSAGES = {
         "above_500": "You're above .500 for the first time! {wins_to_date}-{losses_to_date} feels nice.",
         "playoff_elimination": "Your playoff hopes are mathematically eliminated. Play for pride!",
     },
-
     # ========================================================================
     # GRADE & GPA CONTEXT
     # ========================================================================
@@ -301,7 +276,6 @@ CONTEXTUAL_MESSAGES = {
         "d_range": "📉 {grade}? GPA of {gpa:.2f}? You're on academic probation, my friend.",
         "f_range": "❌ {grade}. GPA: {gpa:.2f}. You failed this week. Time to hit the books!",
     },
-
     # ========================================================================
     # FAAB & ROSTER MOVES
     # ========================================================================
@@ -331,7 +305,6 @@ PLAYER_PERFORMANCE = {
         "poor_week": "{player} struggled with a {percentile:.0f}th percentile showing for a {position}.",
         "awful_week": "{player} was AWFUL. Bottom {percentile:.0f}th percentile among all {position}s. Yikes.",
     },
-
     # ========================================================================
     # ALL-TIME & HISTORICAL CONTEXT
     # ========================================================================
@@ -342,7 +315,6 @@ PLAYER_PERFORMANCE = {
         "career_game": "{player} ({points:.1f} pts) is now #{rank} in your all-time single-game performances!",
         "position_record": "{player} set a new record for {position} on your team with {points:.1f} points!",
     },
-
     # ========================================================================
     # #1 PLAYER ACHIEVEMENTS
     # ========================================================================
@@ -354,7 +326,6 @@ PLAYER_PERFORMANCE = {
         "team_week": "⭐ {player} was your MVP this week, leading your team in scoring.",
         "team_season": "👏 {player} has been your most consistent player all season long.",
     },
-
     # ========================================================================
     # MANAGER/PLAYER/POSITION HISTORY HIGHLIGHTS (percentile-driven)
     # ========================================================================
@@ -364,17 +335,13 @@ PLAYER_PERFORMANCE = {
         "mgr_player_season_top": "This is a top {bucket} week with {player} this season.",
         "mgr_pos_all_time_top": "On your roster, this sits in the top {bucket} all-time for a {position}.",
         "mgr_pos_season_top": "For your {position} group this season, this is top {bucket}.",
-
         "player_personal_all_time_top": "For {player}, this is a top {bucket} career fantasy week.",
         "player_personal_season_top": "{player}'s season form: top {bucket} week.",
-
         "league_pos_all_time_top": "League-wide, a {position} score like this lands in the top {bucket} historically.",
         "league_pos_season_top": "Across the league this season, this is a top {bucket} {position} performance.",
-
         "league_player_all_time_top": "Across all managers, this week is a top {bucket} for {player} historically.",
         "league_player_season_top": "This season, {player}'s week ranks in the top {bucket} across the league.",
     },
-
     # ========================================================================
     # POSITION GROUP PERFORMANCE
     # ========================================================================
@@ -399,7 +366,6 @@ SEASON_ANALYSIS = {
         "dominant": "Your {wins}-{losses} record has you sitting pretty at #{seed}. Crushing it!",
         "struggling": "At {wins}-{losses}, you're #{seed} and fighting to stay relevant.",
     },
-
     "playoff_probability": {
         "locked": "You're a {playoff_pct} LOCK for the playoffs! Start planning your championship parade.",
         "high": "You have a {playoff_pct} chance of making the playoffs (projected #{avg_seed:.1f} seed). Looking good!",
@@ -408,7 +374,6 @@ SEASON_ANALYSIS = {
         "eliminated": "Mathematically eliminated from playoff contention. There's always next year!",
         "championship_odds": "Your championship odds? {champ_pct}. {champ_comment}",
     },
-
     "expected_wins": {
         "very_lucky": "You should have {exp_final_wins:.2f} wins based on points scored, but you have {wins}! You've been gifted {extra_wins:.2f} wins by an easy schedule. Enjoy it while it lasts!",
         "lucky": "You should have about {exp_final_wins:.2f} wins, but you have {wins}. That's {extra_wins:.2f} extra wins from favorable matchups!",
@@ -416,13 +381,11 @@ SEASON_ANALYSIS = {
         "unlucky": "Based on your scoring, you should have {exp_final_wins:.2f} wins, but you only have {wins}. You've been ROBBED of {abs_extra_wins:.2f} wins by a tough schedule!",
         "very_unlucky": "Brutal! You should have {exp_final_wins:.2f} wins but only have {wins}. The schedule has cost you {abs_extra_wins:.2f} wins!",
     },
-
     "possible_schedules": {
         "dominating": "About {playoff_pct_schedules:.0%} of possible schedules would have you in the playoffs. You're scoring enough to succeed!",
         "struggling": "Only {playoff_pct_schedules:.0%} of schedules put you in playoff position. Need to score more points, not just get lucky!",
         "bubble": "About {playoff_pct_schedules:.0%} of schedules have you playoff-bound. You're on the bubble no matter what!",
     },
-
     "efficiency": {
         "efficient_wins": "You're {win_eff:.1%} efficient in converting scoring into wins. Making the most of your points!",
         "inefficient_wins": "Only {win_eff:.1%} win efficiency? You're not converting your scoring into W's.",
@@ -434,24 +397,30 @@ SEASON_ANALYSIS = {
 # HELPER: Get outcome key from flags
 # ============================================================================
 
+
 def get_outcome_key(win: int, above_proj: int, proj_wins: int, win_ats: int) -> tuple:
     """Convert boolean flags to outcome key tuple."""
     return (win, above_proj, proj_wins, win_ats)
 
 
-def get_outcome_dialogue(win: int, above_proj: int, proj_wins: int, win_ats: int) -> dict:
+def get_outcome_dialogue(
+    win: int, above_proj: int, proj_wins: int, win_ats: int
+) -> dict:
     """
     Get the dialogue configuration for a specific outcome.
 
     Returns dict with keys: title, text, emoji, color
     """
     key = get_outcome_key(win, above_proj, proj_wins, win_ats)
-    return WEEKLY_RECAP_OUTCOMES.get(key, {
-        "title": "🤔 Unknown Outcome",
-        "text": "Hmm, we're not sure what happened here. The data is incomplete.",
-        "emoji": "🤔",
-        "color": "gray"
-    })
+    return WEEKLY_RECAP_OUTCOMES.get(
+        key,
+        {
+            "title": "🤔 Unknown Outcome",
+            "text": "Hmm, we're not sure what happened here. The data is incomplete.",
+            "emoji": "🤔",
+            "color": "gray",
+        },
+    )
 
 
 def format_dialogue(template: str, **kwargs) -> str:
@@ -461,9 +430,9 @@ def format_dialogue(template: str, **kwargs) -> str:
     """
     try:
         return template.format(**kwargs)
-    except KeyError as e:
+    except KeyError:
         # If a key is missing, try to continue with what we have
-        import re
+
         result = template
         for key, value in kwargs.items():
             result = result.replace(f"{{{key}}}", str(value))
@@ -474,30 +443,33 @@ def format_dialogue(template: str, **kwargs) -> str:
 # OUTCOME SUMMARY - Quick reference guide
 # ============================================================================
 
+
 def print_outcome_summary():
     """
     Prints a readable summary of all 16 possible outcomes.
     Useful for understanding what triggers each message.
     """
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("WEEKLY RECAP OUTCOMES REFERENCE GUIDE")
-    print("="*80)
+    print("=" * 80)
 
     labels = {
         "win": ["LOSS", "WIN"],
         "above_proj": ["Missed Proj", "Beat Proj"],
         "proj_wins": ["Underdog", "Favored"],
-        "win_ats": ["Didn't Cover", "Covered Spread"]
+        "win_ats": ["Didn't Cover", "Covered Spread"],
     }
 
     for key, config in sorted(WEEKLY_RECAP_OUTCOMES.items()):
         w, a, pw, ats = key
         print(f"\n{config['emoji']} {config['title']}")
-        print(f"   Outcome: {labels['win'][w]} | {labels['above_proj'][a]} | {labels['proj_wins'][pw]} | {labels['win_ats'][ats]}")
+        print(
+            f"   Outcome: {labels['win'][w]} | {labels['above_proj'][a]} | {labels['proj_wins'][pw]} | {labels['win_ats'][ats]}"
+        )
         print(f"   Color: {config['color']}")
         print(f"   Text: {config['text'][:100]}...")
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
 
 
 if __name__ == "__main__":
@@ -518,6 +490,6 @@ if __name__ == "__main__":
         "odds_pct": "65%",
         "margin_pos_str": "23.4",
         "spread_str": "18.5",
-        "proj_err_pos_str": "12.3"
+        "proj_err_pos_str": "12.3",
     }
-    print(format_dialogue(outcome['text'], **sample_data))
+    print(format_dialogue(outcome["text"], **sample_data))

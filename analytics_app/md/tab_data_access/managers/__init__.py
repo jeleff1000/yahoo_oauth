@@ -7,6 +7,7 @@ Optimized loaders for Managers/Matchups tab components:
 - Career matchup overview
 - Manager graphs
 """
+
 from .matchup_data import load_managers_matchup_data
 from .summary_data import load_managers_summary_data
 from .combined import load_optimized_managers_data

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any, Dict, Optional, List
 from datetime import datetime
-import re
 import sys
 from pathlib import Path
 
@@ -15,14 +14,18 @@ if str(_app_dir) not in sys.path:
     sys.path.insert(0, str(_app_dir))
 
 from .displays import weekly_recap, season_recap, player_recap
-from md.tab_data_access.homepage.recaps_player_data import load_player_two_week_slice  # ✅ Optimized: 18 cols vs 270+
-from shared.dataframe_utils import as_dataframe, get_matchup_df
+from md.tab_data_access.homepage.recaps_player_data import (
+    load_player_two_week_slice,
+)  # ✅ Optimized: 18 cols vs 270+
+from shared.dataframe_utils import get_matchup_df
+
 
 def _unique_numeric(df: pd.DataFrame, col: str) -> List[int]:
     if col not in df.columns:
         return []
     ser = pd.to_numeric(df[col], errors="coerce").dropna().astype(int)
     return sorted(ser.unique().tolist())
+
 
 def _weeks_for_year(df: pd.DataFrame, year: int) -> List[int]:
     if not {"year", "week"}.issubset(set(df.columns)):
@@ -32,16 +35,25 @@ def _weeks_for_year(df: pd.DataFrame, year: int) -> List[int]:
         return []
     return _unique_numeric(df_yr, "week")
 
+
 def _find_manager_column(df: pd.DataFrame) -> Optional[str]:
-    preferred = ["manager","manager_name","owner","owner_name","team_owner","team_manager"]
+    preferred = [
+        "manager",
+        "manager_name",
+        "owner",
+        "owner_name",
+        "team_owner",
+        "team_manager",
+    ]
     lower = {str(c).lower(): c for c in df.columns}
     for p in preferred:
         if p in lower:
             return lower[p]
-    for k,v in lower.items():
+    for k, v in lower.items():
         if "manager" in k or "owner" in k:
             return v
     return None
+
 
 def _manager_options(df: Optional[pd.DataFrame]) -> List[str]:
     if df is None:
@@ -56,15 +68,23 @@ def _manager_options(df: Optional[pd.DataFrame]) -> List[str]:
     ser = ser[(ser.notna()) & (ser != "")]
     return sorted(set(ser.tolist()), key=lambda x: x.lower())
 
+
 # ----- main -----
 @st.fragment
-def display_recap_overview(df_dict: Optional[Dict[str, Any]] = None, key_prefix: str = "") -> None:
+def display_recap_overview(
+    df_dict: Optional[Dict[str, Any]] = None, key_prefix: str = ""
+) -> None:
     matchup_df = get_matchup_df(df_dict)
     if matchup_df is None or matchup_df.empty:
         st.info("No matchup data available.")
         return
 
-    mode = st.radio("", options=["Start from Today's Date", "Choose a Date"], horizontal=True, key=f"{key_prefix}recap_overview_date_mode")
+    mode = st.radio(
+        "",
+        options=["Start from Today's Date", "Choose a Date"],
+        horizontal=True,
+        key=f"{key_prefix}recap_overview_date_mode",
+    )
     if mode == "Start from Today's Date":
         years = _unique_numeric(matchup_df, "year")
         selected_year = max(years) if years else datetime.now().year
@@ -75,10 +95,24 @@ def display_recap_overview(df_dict: Optional[Dict[str, Any]] = None, key_prefix:
         years = _unique_numeric(matchup_df, "year") or [datetime.now().year]
         col_year, col_week = st.columns(2)
         with col_year:
-            selected_year = st.selectbox("Year", options=years, index=len(years) - 1, key=f"{key_prefix}recap_overview_year")
-        weeks = _weeks_for_year(matchup_df, selected_year) or _unique_numeric(matchup_df, "week") or list(range(1,19))
+            selected_year = st.selectbox(
+                "Year",
+                options=years,
+                index=len(years) - 1,
+                key=f"{key_prefix}recap_overview_year",
+            )
+        weeks = (
+            _weeks_for_year(matchup_df, selected_year)
+            or _unique_numeric(matchup_df, "week")
+            or list(range(1, 19))
+        )
         with col_week:
-            selected_week = st.selectbox("Week", options=weeks, index=len(weeks) - 1, key=f"{key_prefix}recap_overview_week")
+            selected_week = st.selectbox(
+                "Week",
+                options=weeks,
+                index=len(weeks) - 1,
+                key=f"{key_prefix}recap_overview_week",
+            )
         st.caption(f"Selected Year: {selected_year} — Week: {selected_week}")
 
     st.subheader("Manager")
@@ -86,7 +120,12 @@ def display_recap_overview(df_dict: Optional[Dict[str, Any]] = None, key_prefix:
     if not managers:
         st.info("No managers found in the dataset.")
         return
-    selected_manager = st.selectbox("Select Manager", options=managers, index=0, key=f"{key_prefix}recap_overview_manager")
+    selected_manager = st.selectbox(
+        "Select Manager",
+        options=managers,
+        index=0,
+        key=f"{key_prefix}recap_overview_manager",
+    )
 
     # ---------- Recap sections that depend only on Matchup Data ----------
     st.divider()
@@ -109,7 +148,9 @@ def display_recap_overview(df_dict: Optional[Dict[str, Any]] = None, key_prefix:
 
     # ---------- Player Weekly Recap (now fetches the 2-week slice AFTER selection) ----------
     try:
-        player_two_week = load_player_two_week_slice(int(selected_year), int(selected_week))
+        player_two_week = load_player_two_week_slice(
+            int(selected_year), int(selected_week)
+        )
     except Exception as e:
         player_two_week = None
         st.warning(f"Two-week player slice unavailable: {e}")

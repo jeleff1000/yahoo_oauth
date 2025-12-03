@@ -2,13 +2,16 @@
 Optimal Lineup view for Career Player Stats
 Shows best possible lineups across all-time based on different criteria
 """
+
 import streamlit as st
 import pandas as pd
 import duckdb
-from typing import Optional, Literal
+from typing import Optional
 
 
-DEFAULT_HEADSHOT = "https://static.www.nfl.com/image/private/f_auto,q_auto/league/mdrlzgankwwjldxllgcx"
+DEFAULT_HEADSHOT = (
+    "https://static.www.nfl.com/image/private/f_auto,q_auto/league/mdrlzgankwwjldxllgcx"
+)
 
 
 class OptimalLineupCareerViewer:
@@ -20,7 +23,8 @@ class OptimalLineupCareerViewer:
     @st.fragment
     def display(self):
         """Main display method"""
-        st.markdown("""
+        st.markdown(
+            """
             <div style='background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
                         padding: 1.2rem; border-radius: 10px; margin-bottom: 1.5rem;
                         box-shadow: 0 4px 16px rgba(245, 158, 11, 0.25);'>
@@ -31,7 +35,9 @@ class OptimalLineupCareerViewer:
                     Build the greatest lineup of all time based on career performance
                 </p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         # Year range controls and filters
         col1, col2, col3 = st.columns([2, 2, 2])
@@ -45,7 +51,7 @@ class OptimalLineupCareerViewer:
                 value=1999,
                 step=1,
                 key="optimal_career_start_year",
-                label_visibility="collapsed"
+                label_visibility="collapsed",
             )
 
         with col2:
@@ -57,7 +63,7 @@ class OptimalLineupCareerViewer:
                 value=2024,
                 step=1,
                 key="optimal_career_end_year",
-                label_visibility="collapsed"
+                label_visibility="collapsed",
             )
 
         with col3:
@@ -66,7 +72,7 @@ class OptimalLineupCareerViewer:
                 "Include NFL Playoffs (POST)",
                 value=False,
                 key="optimal_career_include_playoffs",
-                help="Include games from NFL playoff weeks (season_type = 'POST')"
+                help="Include games from NFL playoff weeks (season_type = 'POST')",
             )
 
         # Validate year range
@@ -82,16 +88,20 @@ class OptimalLineupCareerViewer:
                 "Total Points",
                 "Points Per Game (PPG)",
                 "Max Single Game",
-                "Times in Optimal Lineup"
+                "Times in Optimal Lineup",
             ],
             horizontal=True,
-            key="optimal_career_criteria"
+            key="optimal_career_criteria",
         )
 
         # Load and display optimal lineup
-        self._render_optimal_lineup(start_year, end_year, scoring_criteria, include_playoffs)
+        self._render_optimal_lineup(
+            start_year, end_year, scoring_criteria, include_playoffs
+        )
 
-    def _load_player_data(self, start_year: int, end_year: int, include_playoffs: bool = False) -> Optional[pd.DataFrame]:
+    def _load_player_data(
+        self, start_year: int, end_year: int, include_playoffs: bool = False
+    ) -> Optional[pd.DataFrame]:
         """Load player career data from database
 
         NOTE: group across years by `NFL_player_id` (use `player` as display name via MAX(player)).
@@ -156,11 +166,7 @@ class OptimalLineupCareerViewer:
             st.error(f"Error loading player data: {e}")
             return None
 
-    def _build_optimal_lineup(
-        self,
-        df: pd.DataFrame,
-        criteria: str
-    ) -> dict:
+    def _build_optimal_lineup(self, df: pd.DataFrame, criteria: str) -> dict:
         """Build optimal lineup based on selected criteria"""
 
         # Map criteria to column name
@@ -168,7 +174,7 @@ class OptimalLineupCareerViewer:
             "Total Points": "total_points",
             "Points Per Game (PPG)": "ppg_all_time",
             "Max Single Game": "max_points",
-            "Times in Optimal Lineup": "times_optimal"
+            "Times in Optimal Lineup": "times_optimal",
         }
 
         sort_column = criteria_map[criteria]
@@ -177,46 +183,47 @@ class OptimalLineupCareerViewer:
         df_sorted = df.sort_values(by=sort_column, ascending=False)
 
         lineup = {}
-        used_players = set()  # track by NFL_player_id to avoid duplicates across selections
+        used_players = (
+            set()
+        )  # track by NFL_player_id to avoid duplicates across selections
 
         # Position requirements
-        positions_needed = {
-            "QB": 1,
-            "RB": 2,
-            "WR": 3,
-            "TE": 1,
-            "DEF": 1,
-            "K": 1
-        }
+        positions_needed = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DEF": 1, "K": 1}
 
         # Fill standard positions
         for pos, count in positions_needed.items():
             pos_players = df_sorted[
-                (df_sorted['position'] == pos) &
-                (~df_sorted['NFL_player_id'].isin(used_players))
+                (df_sorted["position"] == pos)
+                & (~df_sorted["NFL_player_id"].isin(used_players))
             ].head(count)
 
             for idx, player in pos_players.iterrows():
                 if pos not in lineup:
                     lineup[pos] = []
                 lineup[pos].append(player)
-                used_players.add(player['NFL_player_id'])
+                used_players.add(player["NFL_player_id"])
 
         # Fill W/R/T flex spot with highest remaining WR/RB/TE
         flex_candidates = df_sorted[
-            (df_sorted['position'].isin(['WR', 'RB', 'TE'])) &
-            (~df_sorted['NFL_player_id'].isin(used_players))
+            (df_sorted["position"].isin(["WR", "RB", "TE"]))
+            & (~df_sorted["NFL_player_id"].isin(used_players))
         ].head(1)
 
         if not flex_candidates.empty:
             flex_player = flex_candidates.iloc[0]
-            lineup['W/R/T'] = [flex_player]
-            used_players.add(flex_player['NFL_player_id'])
+            lineup["W/R/T"] = [flex_player]
+            used_players.add(flex_player["NFL_player_id"])
 
         return lineup
 
     @st.fragment
-    def _render_optimal_lineup(self, start_year: int, end_year: int, criteria: str, include_playoffs: bool = False):
+    def _render_optimal_lineup(
+        self,
+        start_year: int,
+        end_year: int,
+        criteria: str,
+        include_playoffs: bool = False,
+    ):
         """Render the optimal lineup display"""
 
         # Load data
@@ -231,7 +238,9 @@ class OptimalLineupCareerViewer:
         lineup = self._build_optimal_lineup(df, criteria)
 
         # Display year range info
-        year_text = f"{start_year}" if start_year == end_year else f"{start_year}-{end_year}"
+        year_text = (
+            f"{start_year}" if start_year == end_year else f"{start_year}-{end_year}"
+        )
         st.markdown(f"#### 🏆 All-Time Optimal Lineup ({year_text})")
         st.caption(f"Based on: **{criteria}**")
 
@@ -246,12 +255,12 @@ class OptimalLineupCareerViewer:
 
         for pos_players in lineup.values():
             for player in pos_players:
-                total_points += player['total_points']
-                total_ppg += player['ppg_all_time']
-                total_max += player['max_points']
-                total_optimal_count += player['times_optimal']
-                total_games += player['games_played']
-                total_seasons += player['seasons_played']
+                total_points += player["total_points"]
+                total_ppg += player["ppg_all_time"]
+                total_max += player["max_points"]
+                total_optimal_count += player["times_optimal"]
+                total_games += player["games_played"]
+                total_seasons += player["seasons_played"]
                 player_count += 1
 
         # Show lineup summary metrics
@@ -259,7 +268,10 @@ class OptimalLineupCareerViewer:
         with col1:
             st.metric("Total Points", f"{total_points:,.1f}")
         with col2:
-            st.metric("Avg PPG", f"{total_ppg / player_count:.2f}" if player_count > 0 else "0.0")
+            st.metric(
+                "Avg PPG",
+                f"{total_ppg / player_count:.2f}" if player_count > 0 else "0.0",
+            )
         with col3:
             st.metric("Best Week Total", f"{total_max:,.1f}")
         with col4:
@@ -280,7 +292,7 @@ class OptimalLineupCareerViewer:
             "Total Points": "total_points",
             "Points Per Game (PPG)": "ppg_all_time",
             "Max Single Game": "max_points",
-            "Times in Optimal Lineup": "times_optimal"
+            "Times in Optimal Lineup": "times_optimal",
         }
         value_column = criteria_map[criteria]
 
@@ -489,7 +501,7 @@ class OptimalLineupCareerViewer:
             "Total Points": "total_points",
             "Points Per Game (PPG)": "ppg_all_time",
             "Max Single Game": "max_points",
-            "Times in Optimal Lineup": "times_optimal"
+            "Times in Optimal Lineup": "times_optimal",
         }
 
         # Column headers based on criteria
@@ -531,7 +543,7 @@ class OptimalLineupCareerViewer:
         rows.append("</tr></thead><tbody>")
 
         # Position order
-        position_order = ['QB', 'RB', 'WR', 'TE', 'W/R/T', 'K', 'DEF']
+        position_order = ["QB", "RB", "WR", "TE", "W/R/T", "K", "DEF"]
 
         # Calculate max value for visualization bars
         max_value = 0
@@ -545,24 +557,28 @@ class OptimalLineupCareerViewer:
             if pos in lineup:
                 for i, player in enumerate(lineup[pos]):
                     headshot = str(player.get("headshot_url") or DEFAULT_HEADSHOT)
-                    if not headshot or headshot.lower() == 'nan' or headshot == '':
+                    if not headshot or headshot.lower() == "nan" or headshot == "":
                         headshot = DEFAULT_HEADSHOT
                     player_name = str(player.get("player_name") or "")
                     value = player.get(value_column, 0)
-                    games = int(player.get('games_played', 0))
-                    seasons = int(player.get('seasons_played', 0))
-                    max_week = player.get('max_week')
-                    max_year = player.get('max_year')
+                    games = int(player.get("games_played", 0))
+                    seasons = int(player.get("seasons_played", 0))
+                    max_week = player.get("max_week")
+                    max_year = player.get("max_year")
 
                     # Use appropriate manager field based on criteria
                     if criteria == "Max Single Game":
-                        managers = str(player.get('max_week_manager') or "-")
+                        managers = str(player.get("max_week_manager") or "-")
                     else:
-                        managers = str(player.get('all_managers') or "-")
+                        managers = str(player.get("all_managers") or "-")
 
                     # Filter out "Unrostered" if there are other managers
                     if "," in managers and "Unrostered" in managers:
-                        managers_list = [m.strip() for m in managers.split(",") if m.strip().lower() != "unrostered"]
+                        managers_list = [
+                            m.strip()
+                            for m in managers.split(",")
+                            if m.strip().lower() != "unrostered"
+                        ]
                         if managers_list:
                             managers = ", ".join(managers_list)
                         else:
@@ -583,32 +599,42 @@ class OptimalLineupCareerViewer:
                         max_week_display = "-"
 
                     # Position label with slot number for multi-position slots
-                    if pos in ['RB', 'WR'] and len(lineup[pos]) > 1:
+                    if pos in ["RB", "WR"] and len(lineup[pos]) > 1:
                         pos_label = f"{pos}{i+1}"
                     else:
-                        pos_label = pos if pos != 'W/R/T' else 'FLEX'
+                        pos_label = pos if pos != "W/R/T" else "FLEX"
 
                     # Determine position class for color coding
-                    base_pos = pos if pos != 'W/R/T' else 'FLEX'
+                    base_pos = pos if pos != "W/R/T" else "FLEX"
                     pos_class = f"pos-{base_pos}"
 
                     # Add def-logo class for defense team logos
-                    img_class = "opt-player-img def-logo" if pos == 'DEF' else "opt-player-img"
+                    img_class = (
+                        "opt-player-img def-logo" if pos == "DEF" else "opt-player-img"
+                    )
 
                     # Calculate percentage for visualization bar
                     bar_pct = (value / max_value * 100) if max_value > 0 else 0
 
                     rows.append("<tr>")
-                    rows.append(f"<td><span class='opt-pos-badge {pos_class}'>{pos_label}</span></td>")
+                    rows.append(
+                        f"<td><span class='opt-pos-badge {pos_class}'>{pos_label}</span></td>"
+                    )
                     # Player with photo stacked above name
                     rows.append("<td><div class='opt-player-stack'>")
-                    rows.append(f"<img src='{headshot}' class='{img_class}' alt='{player_name}' loading='lazy'>")
+                    rows.append(
+                        f"<img src='{headshot}' class='{img_class}' alt='{player_name}' loading='lazy'>"
+                    )
                     rows.append(f"<span class='opt-player-name'>{player_name}</span>")
                     rows.append("</div></td>")
                     # Stat value with visualization bar
-                    rows.append(f"<td><div class='opt-points-cell'>")
-                    rows.append(f"<div class='opt-points-bar' style='width:{bar_pct}%'></div>")
-                    rows.append(f"<span class='opt-points-value'>{value_display}</span>")
+                    rows.append("<td><div class='opt-points-cell'>")
+                    rows.append(
+                        f"<div class='opt-points-bar' style='width:{bar_pct}%'></div>"
+                    )
+                    rows.append(
+                        f"<span class='opt-points-value'>{value_display}</span>"
+                    )
                     rows.append("</div></td>")
                     rows.append(f"<td>{games}</td>")
                     rows.append(f"<td>{seasons}</td>")

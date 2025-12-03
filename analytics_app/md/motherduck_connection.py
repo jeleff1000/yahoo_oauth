@@ -17,13 +17,17 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
         token = (
             kwargs.pop("motherduck_token", None)
             or self._secrets.get("motherduck_token")
-            or st.secrets.get("connections", {}).get("motherduck", {}).get("motherduck_token")
+            or st.secrets.get("connections", {})
+            .get("motherduck", {})
+            .get("motherduck_token")
             or st.secrets.get("motherduck_token")
             or os.getenv("MOTHERDUCK_TOKEN")
         )
 
         if not token:
-            raise ValueError("MotherDuck token not found. Check your secrets configuration.")
+            raise ValueError(
+                "MotherDuck token not found. Check your secrets configuration."
+            )
 
         # Get the selected league database - this is now the primary source of truth
         selected_db = get_selected_league_db()
@@ -38,11 +42,15 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
         )
 
         # Determine alias - use selected_db if available, otherwise fall back to config
-        alias = selected_db if selected_db else (
-            kwargs.pop("alias", None)
-            or self._secrets.get("alias")
-            or st.secrets.get("connections", {}).get("motherduck", {}).get("alias")
-            or "kmffl"
+        alias = (
+            selected_db
+            if selected_db
+            else (
+                kwargs.pop("alias", None)
+                or self._secrets.get("alias")
+                or st.secrets.get("connections", {}).get("motherduck", {}).get("alias")
+                or "kmffl"
+            )
         )
 
         # Create connection once and reuse
@@ -53,7 +61,9 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
             con.execute(f"SET motherduck_token = '{token}'")
 
             # Check if already attached
-            attached_dbs = [row[1] for row in con.execute("PRAGMA database_list").fetchall()]
+            attached_dbs = [
+                row[1] for row in con.execute("PRAGMA database_list").fetchall()
+            ]
 
             # For the selected database, connect directly to MotherDuck
             # This allows access to any database without needing a share_path
@@ -63,10 +73,16 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
                     con.execute(f"ATTACH 'md:{alias}' AS {alias}")
                 except Exception:
                     # Fall back to share_path if direct connection fails
-                    if share_path and isinstance(share_path, str) and share_path.startswith("md:"):
+                    if (
+                        share_path
+                        and isinstance(share_path, str)
+                        and share_path.startswith("md:")
+                    ):
                         con.execute(f"ATTACH '{share_path}' AS {alias} (READ_ONLY)")
                     else:
-                        raise ValueError(f"Could not connect to database '{alias}'. No share_path configured.")
+                        raise ValueError(
+                            f"Could not connect to database '{alias}'. No share_path configured."
+                        )
 
             # Quick connection test - try to verify the database has expected tables
             try:
@@ -132,8 +148,12 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
                 error_msg = str(e).lower()
 
                 # Check error types
-                is_connection_error = "connection" in error_msg and "closed" in error_msg
-                is_catalog_error = "catalog" in error_msg or "remote catalog has changed" in error_msg
+                is_connection_error = (
+                    "connection" in error_msg and "closed" in error_msg
+                )
+                is_catalog_error = (
+                    "catalog" in error_msg or "remote catalog has changed" in error_msg
+                )
                 is_setter_error = "no setter" in error_msg
 
                 if attempt < max_retries - 1:
@@ -164,9 +184,9 @@ class MotherDuckConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]
 
     def reset(self):
         """Reset the connection"""
-        if hasattr(self, '_instance') and self._instance:
+        if hasattr(self, "_instance") and self._instance:
             try:
                 self._instance.close()
-            except:
+            except Exception:
                 pass
         super().reset()

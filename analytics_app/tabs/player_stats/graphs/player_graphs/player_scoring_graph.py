@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import streamlit as st
-import pandas as pd
 import plotly.graph_objects as go
 from md.core import list_player_seasons
 from md.tab_data_access.players import load_players_season_data
@@ -16,14 +15,17 @@ def display_player_scoring_graphs(prefix=""):
     """
     st.header("📈 Player Scoring Trends")
 
-    st.markdown("""
+    st.markdown(
+        """
     <div style="background: #f0f2f6; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
     <p style="margin: 0; color: #31333F; font-size: 0.9rem;">
     <strong>Track player performance:</strong> Search for players to see their scoring trends. 
     Single season view shows weekly points + cumulative average. Multi-season view shows yearly averages.
     </p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     # Year selection
     available_years = list_player_seasons()  # FIXED: was list_player_season_data()
@@ -35,11 +37,21 @@ def display_player_scoring_graphs(prefix=""):
 
     col1, col2 = st.columns(2)
     with col1:
-        start_year = st.number_input("Start Year", min_value=min_year, max_value=max_year,
-                                     value=max_year, key=f"{prefix}_start_year")
+        start_year = st.number_input(
+            "Start Year",
+            min_value=min_year,
+            max_value=max_year,
+            value=max_year,
+            key=f"{prefix}_start_year",
+        )
     with col2:
-        end_year = st.number_input("End Year", min_value=min_year, max_value=max_year,
-                                   value=max_year, key=f"{prefix}_end_year")
+        end_year = st.number_input(
+            "End Year",
+            min_value=min_year,
+            max_value=max_year,
+            value=max_year,
+            key=f"{prefix}_end_year",
+        )
 
     # Position filter
     position_order = ["QB", "RB", "WR", "TE", "K", "DEF"]
@@ -48,7 +60,7 @@ def display_player_scoring_graphs(prefix=""):
             "Select positions to include",
             options=position_order,
             default=position_order,
-            key=f"{prefix}_positions"
+            key=f"{prefix}_positions",
         )
 
     # Roster filter option
@@ -56,7 +68,7 @@ def display_player_scoring_graphs(prefix=""):
         "Show only rostered players (limits to manager history starting 2014)",
         value=False,
         key=f"{prefix}_rostered_only",
-        help="Unchecked = All players back to 1999. Checked = Only players with managers (2014+)"
+        help="Unchecked = All players back to 1999. Checked = Only players with managers (2014+)",
     )
 
     # Player search
@@ -64,7 +76,7 @@ def display_player_scoring_graphs(prefix=""):
         "🔍 Enter player names (comma separated):",
         value="",
         placeholder="e.g., Patrick Mahomes, Justin Jefferson",
-        key=f"{prefix}_player_search"
+        key=f"{prefix}_player_search",
     ).strip()
 
     if not player_search:
@@ -83,7 +95,7 @@ def display_player_scoring_graphs(prefix=""):
             year=years_to_load,
             rostered_only=roster_filter,  # Use the checkbox value
             sort_column="points",
-            sort_direction="DESC"
+            sort_direction="DESC",
         )
 
         if df.empty:
@@ -94,7 +106,9 @@ def display_player_scoring_graphs(prefix=""):
 
         # Filter by position if selected
         if selected_positions and "nfl_position" in player_data.columns:
-            player_data = player_data[player_data["nfl_position"].isin(selected_positions)]
+            player_data = player_data[
+                player_data["nfl_position"].isin(selected_positions)
+            ]
 
         # Filter by player names (case insensitive partial match)
         player_data["player_lower"] = player_data["player"].str.lower()
@@ -127,18 +141,25 @@ def display_player_scoring_graphs(prefix=""):
             player_df = filtered[filtered["player"] == player_name].copy()
 
             # For season view, we have aggregated data - show PPG
-            if "season_ppg" in player_df.columns and not player_df["season_ppg"].isna().all():
+            if (
+                "season_ppg" in player_df.columns
+                and not player_df["season_ppg"].isna().all()
+            ):
                 ppg = player_df["season_ppg"].iloc[0]
-                games = player_df["fantasy_games"].iloc[0] if "fantasy_games" in player_df.columns else 0
+                games = (
+                    player_df["fantasy_games"].iloc[0]
+                    if "fantasy_games" in player_df.columns
+                    else 0
+                )
 
                 # Create a simple display
                 st.metric(
-                    label=player_name,
-                    value=f"{ppg:.2f} PPG",
-                    delta=f"{games} games"
+                    label=player_name, value=f"{ppg:.2f} PPG", delta=f"{games} games"
                 )
 
-        st.info("💡 Weekly breakdown requires weekly data access. Showing season aggregates.")
+        st.info(
+            "💡 Weekly breakdown requires weekly data access. Showing season aggregates."
+        )
 
     else:
         # Multi-season view
@@ -152,25 +173,29 @@ def display_player_scoring_graphs(prefix=""):
             player_df["cumulative_avg"] = player_df["season_ppg"].expanding().mean()
 
             # Add yearly PPG
-            fig.add_trace(go.Scatter(
-                x=player_df["year"],
-                y=player_df["season_ppg"],
-                mode="markers+lines",
-                name=f"{player_name} PPG",
-                marker=dict(size=10),
-                line=dict(width=2),
-                hovertemplate=f"<b>{player_name}</b><br>Year: %{{x}}<br>PPG: %{{y:.2f}}<br><extra></extra>"
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=player_df["year"],
+                    y=player_df["season_ppg"],
+                    mode="markers+lines",
+                    name=f"{player_name} PPG",
+                    marker=dict(size=10),
+                    line=dict(width=2),
+                    hovertemplate=f"<b>{player_name}</b><br>Year: %{{x}}<br>PPG: %{{y:.2f}}<br><extra></extra>",
+                )
+            )
 
             # Add cumulative average
-            fig.add_trace(go.Scatter(
-                x=player_df["year"],
-                y=player_df["cumulative_avg"],
-                mode="lines",
-                name=f"{player_name} Cumulative Avg",
-                line=dict(dash="dash", width=2),
-                hovertemplate=f"<b>{player_name}</b><br>Year: %{{x}}<br>Career Avg: %{{y:.2f}}<br><extra></extra>"
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=player_df["year"],
+                    y=player_df["cumulative_avg"],
+                    mode="lines",
+                    name=f"{player_name} Cumulative Avg",
+                    line=dict(dash="dash", width=2),
+                    hovertemplate=f"<b>{player_name}</b><br>Year: %{{x}}<br>Career Avg: %{{y:.2f}}<br><extra></extra>",
+                )
+            )
 
         fig.update_layout(
             xaxis_title="Season",
@@ -178,16 +203,27 @@ def display_player_scoring_graphs(prefix=""):
             hovermode="x unified",
             showlegend=True,
             height=500,
-            template="plotly_white"
+            template="plotly_white",
         )
-        fig.update_xaxes(tickmode='linear', dtick=1, showgrid=True)
+        fig.update_xaxes(tickmode="linear", dtick=1, showgrid=True)
         fig.update_yaxes(showgrid=True)
 
-        st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_player_scoring_multi_year")
+        st.plotly_chart(
+            fig, use_container_width=True, key=f"{prefix}_player_scoring_multi_year"
+        )
 
         # Summary table
         with st.expander("📊 Detailed Stats", expanded=False):
-            summary_cols = ["player", "year", "season_ppg", "points", "fantasy_games", "games_started"]
+            summary_cols = [
+                "player",
+                "year",
+                "season_ppg",
+                "points",
+                "fantasy_games",
+                "games_started",
+            ]
             available_cols = [c for c in summary_cols if c in filtered.columns]
-            summary_df = filtered[available_cols].sort_values(["player", "year"], ascending=[True, False])
+            summary_df = filtered[available_cols].sort_values(
+                ["player", "year"], ascending=[True, False]
+            )
             st.dataframe(summary_df, hide_index=True, use_container_width=True)

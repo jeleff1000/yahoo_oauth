@@ -5,8 +5,7 @@ Combined data loader for Draft tab.
 Main entry point for loading all data needed by the draft tab.
 """
 from __future__ import annotations
-from typing import Dict, Any, Optional, List, Set
-import re
+from typing import Dict, Any, Optional, Set
 import streamlit as st
 from .draft_data import load_draft_data
 from md.core import run_query, T
@@ -15,16 +14,16 @@ from md.core import run_query, T
 # Position code mapping for parsing flex slots
 # Yahoo uses single letters: Q=QB, W=WR, R=RB, T=TE, K=K, D=DEF
 POSITION_CODE_MAP = {
-    'Q': 'QB',
-    'W': 'WR',
-    'R': 'RB',
-    'T': 'TE',
-    'K': 'K',
-    'D': 'DEF',
+    "Q": "QB",
+    "W": "WR",
+    "R": "RB",
+    "T": "TE",
+    "K": "K",
+    "D": "DEF",
 }
 
 # Known bench/IR slot names
-BENCH_SLOT_NAMES = {'BN', 'IR', 'IL'}
+BENCH_SLOT_NAMES = {"BN", "IR", "IL"}
 
 
 def parse_flex_eligibility(slot_name: str) -> Set[str]:
@@ -40,12 +39,12 @@ def parse_flex_eligibility(slot_name: str) -> Set[str]:
     Returns:
         Set of eligible position names
     """
-    if '/' not in slot_name:
+    if "/" not in slot_name:
         return set()
 
     eligible = set()
     # Split by / and map each code
-    for code in slot_name.replace('/', ''):
+    for code in slot_name.replace("/", ""):
         if code in POSITION_CODE_MAP:
             eligible.add(POSITION_CODE_MAP[code])
 
@@ -54,7 +53,7 @@ def parse_flex_eligibility(slot_name: str) -> Set[str]:
 
 def is_flex_slot(slot_name: str) -> bool:
     """Check if a slot name represents a flex position."""
-    return '/' in slot_name and slot_name not in BENCH_SLOT_NAMES
+    return "/" in slot_name and slot_name not in BENCH_SLOT_NAMES
 
 
 def is_bench_slot(slot_name: str) -> bool:
@@ -124,19 +123,23 @@ def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
         """
         df = run_query(sql)
 
-        if df is not None and not df.empty and 'settings_json' in df.columns:
-            settings_str = df.iloc[0]['settings_json']
+        if df is not None and not df.empty and "settings_json" in df.columns:
+            settings_str = df.iloc[0]["settings_json"]
             if settings_str:
-                settings = json.loads(settings_str) if isinstance(settings_str, str) else settings_str
-                roster_positions = settings.get('roster_positions', [])
+                settings = (
+                    json.loads(settings_str)
+                    if isinstance(settings_str, str)
+                    else settings_str
+                )
+                roster_positions = settings.get("roster_positions", [])
 
                 if roster_positions:
                     # Debug: show raw roster_positions
                     st.info(f"🔍 Raw roster_positions from DB: {roster_positions}")
                     position_counts = {}
                     for slot in roster_positions:
-                        pos = slot.get('position', '').upper()
-                        count = int(slot.get('count', 0))
+                        pos = slot.get("position", "").upper()
+                        count = int(slot.get("count", 0))
                         if pos and count > 0:
                             position_counts[pos] = count
                     st.info(f"🔍 Parsed position_counts: {position_counts}")
@@ -169,8 +172,8 @@ def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
             if df is not None and not df.empty:
                 position_counts = {}
                 for _, row in df.iterrows():
-                    pos = str(row['fantasy_position']).upper().strip()
-                    count = int(row['slot_count'])
+                    pos = str(row["fantasy_position"]).upper().strip()
+                    count = int(row["slot_count"])
                     position_counts[pos] = count
                 st.info(f"🔍 Roster from player data: {position_counts}")
 
@@ -196,11 +199,9 @@ def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
             bench_count += count
         elif is_flex_slot(slot_name):
             eligibility = parse_flex_eligibility(slot_name)
-            flex_slots.append({
-                'name': slot_name,
-                'count': count,
-                'eligible_positions': eligibility
-            })
+            flex_slots.append(
+                {"name": slot_name, "count": count, "eligible_positions": eligibility}
+            )
             flex_eligible_positions.update(eligibility)
         else:
             # Dedicated position slot
@@ -211,7 +212,7 @@ def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
     all_positions.update(flex_eligible_positions)
 
     # Calculate total flex slot count
-    total_flex_count = sum(fs['count'] for fs in flex_slots)
+    total_flex_count = sum(fs["count"] for fs in flex_slots)
 
     # Calculate total starters (dedicated + flex, excluding bench)
     total_starters = sum(dedicated_slots.values()) + total_flex_count
@@ -228,17 +229,15 @@ def load_roster_config_for_optimizer() -> Optional[Dict[str, Any]]:
         "all_positions": all_positions,
         "total_starters": total_starters,
         "budget": 200,
-
         # Legacy keys for backwards compatibility
-        "qb": dedicated_slots.get('QB', 0),
-        "rb": dedicated_slots.get('RB', 0),
-        "wr": dedicated_slots.get('WR', 0),
-        "te": dedicated_slots.get('TE', 0),
+        "qb": dedicated_slots.get("QB", 0),
+        "rb": dedicated_slots.get("RB", 0),
+        "wr": dedicated_slots.get("WR", 0),
+        "te": dedicated_slots.get("TE", 0),
         "flex": total_flex_count,
-        "def": dedicated_slots.get('DEF', 0),
-        "k": dedicated_slots.get('K', 0),
+        "def": dedicated_slots.get("DEF", 0),
+        "k": dedicated_slots.get("K", 0),
         "bench": bench_count,
-
         # Debug info
         "_position_counts": position_counts,
     }

@@ -19,7 +19,8 @@ import streamlit as st
 
 def apply_modern_styles():
     """Apply modern, decluttered CSS styling to Streamlit pages."""
-    st.markdown("""
+    st.markdown(
+        """
     <style>
     /* ===========================================
        CSS VARIABLES - Light Mode (default)
@@ -1266,60 +1267,78 @@ def apply_modern_styles():
         * { box-shadow: none !important; }
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 # =============================================================================
 # HELPER FUNCTIONS - Consolidated from tab-specific theme files
 # =============================================================================
 
+
 def render_info_box(message: str, icon: str = "") -> None:
     """Render a theme-aware info box."""
     icon_html = f"{icon} " if icon else ""
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="theme-info-box">
         <p style="margin: 0; font-size: 0.9rem;">{icon_html}{message}</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_success_box(message: str, icon: str = "") -> None:
     """Render a theme-aware success box."""
     icon_html = f"{icon} " if icon else ""
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="theme-success">
         <p style="margin: 0; font-size: 0.9rem;">{icon_html}{message}</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_warning_box(message: str, icon: str = "") -> None:
     """Render a theme-aware warning box."""
     icon_html = f"{icon} " if icon else ""
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="theme-warning">
         <p style="margin: 0; font-size: 0.9rem;">{icon_html}{message}</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_error_box(message: str, icon: str = "") -> None:
     """Render a theme-aware error box."""
     icon_html = f"{icon} " if icon else ""
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="theme-error">
         <p style="margin: 0; font-size: 0.9rem;">{icon_html}{message}</p>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_loading_indicator(message: str = "Loading...") -> None:
     """Render a theme-aware loading indicator."""
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="theme-loading">
         {message}
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_stats_count(filtered_count: int, total_count: int) -> None:
@@ -1331,11 +1350,14 @@ def render_stats_count(filtered_count: int, total_count: int) -> None:
     else:
         message = f"Showing all {total_count:,} matchups"
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="theme-stats-count">
         {message}
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_gradient_header(title: str, subtitle: str = None, icon: str = None) -> None:
@@ -1343,68 +1365,93 @@ def render_gradient_header(title: str, subtitle: str = None, icon: str = None) -
     icon_html = f"{icon} " if icon else ""
     subtitle_html = f"<p>{subtitle}</p>" if subtitle else ""
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="gradient-header">
         <h2>{icon_html}{title}</h2>
         {subtitle_html}
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_section_card(content: str) -> None:
     """Render a section card with themed background."""
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="section-card">
         {content}
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
-def render_metric_card(label: str, value, delta: float = None, delta_label: str = None) -> None:
+def render_metric_card(
+    label: str, value, delta: float = None, delta_label: str = None
+) -> None:
     """Render a styled metric card."""
-    delta_class = "positive" if delta and delta > 0 else "negative" if delta and delta < 0 else ""
+    delta_class = (
+        "positive" if delta and delta > 0 else "negative" if delta and delta < 0 else ""
+    )
     delta_icon = "+" if delta and delta > 0 else "" if delta and delta < 0 else ""
-    delta_text = delta_label if delta_label else f"{delta_icon}{delta:.1f}" if delta else ""
+    delta_text = (
+        delta_label if delta_label else f"{delta_icon}{delta:.1f}" if delta else ""
+    )
 
-    delta_html = f"""
+    delta_html = (
+        f"""
     <div class="metric-card-delta {delta_class}">
         {delta_text}
     </div>
-    """ if delta is not None else ""
+    """
+        if delta is not None
+        else ""
+    )
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="metric-card">
         <div class="metric-card-label">{label}</div>
         <div class="metric-card-value">{value}</div>
         {delta_html}
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_empty_state(
     title: str = "No Data Available",
     message: str = "Try adjusting your filters or selection.",
-    icon: str = ""
+    icon: str = "",
 ) -> None:
     """Render a styled empty state."""
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="empty-state">
         <div class="empty-state-icon">{icon}</div>
         <div class="empty-state-title">{title}</div>
         <div class="empty-state-message">{message}</div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_filter_count(filtered_count: int, total_count: int) -> None:
     """Render a badge showing filter results count."""
     percentage = (filtered_count / total_count * 100) if total_count > 0 else 0
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <span style="font-size: 0.9rem;">
         Showing <strong>{filtered_count:,}</strong> of <strong>{total_count:,}</strong> records
         <span class="theme-stats-count" style="padding: 0.125rem 0.5rem; margin-left: 0.25rem;">{percentage:.0f}%</span>
     </span>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_legend_box(title: str, items: list) -> None:
@@ -1419,19 +1466,22 @@ def render_legend_box(title: str, items: list) -> None:
     for item in items:
         if len(item) == 2:
             label, indicator = item
-            if indicator.startswith('#') or indicator.startswith('rgb'):
+            if indicator.startswith("#") or indicator.startswith("rgb"):
                 # It's a color
                 items_html += f'<span class="legend-item"><span style="display:inline-block;width:12px;height:12px;background:{indicator};border-radius:2px;"></span> {label}</span>'
             else:
                 # It's an emoji or text
                 items_html += f'<span class="legend-item">{indicator} {label}</span>'
 
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="legend-box">
         <h4>{title}</h4>
         {items_html}
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def format_value_with_color(value: float, format_str: str = "{:.2f}") -> str:

@@ -4,4 +4,3 @@
 from .top_players import TopPlayersViewer  # re-export
 
 __all__ = ["TopPlayersViewer"]
-

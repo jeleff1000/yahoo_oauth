@@ -55,22 +55,22 @@ SCRIPT_DIR = Path(__file__).parent
 # Only include transformations that update cumulative/career stats
 WEEKLY_TRANSFORMATIONS = [
     # Pass 1: Base calculations
-    ("multi_league/transformations/base/cumulative_stats_v2.py", "Cumulative Stats", 600),
-    ("multi_league/transformations/base/enrich_schedule_with_playoff_flags.py", "Enrich Schedule", 120),
+    ("multi_league/transformations/matchup/cumulative_stats.py", "Cumulative Stats", 600),
+    ("multi_league/transformations/schedule/enrich_schedule_with_playoff_flags.py", "Enrich Schedule", 120),
 
     # Pass 2: Player stats updates
-    ("multi_league/transformations/player_enrichment/matchup_to_player_v2.py", "Matchup -> Player", 600),
-    ("multi_league/transformations/player_enrichment/player_stats_v2.py", "Player Stats", 900),
-    ("multi_league/transformations/player_enrichment/replacement_level_v2.py", "Replacement Levels", 600),
+    ("multi_league/transformations/player/matchup_to_player_v2.py", "Matchup -> Player", 600),
+    ("multi_league/transformations/player/player_stats_v2.py", "Player Stats", 900),
+    ("multi_league/transformations/player/replacement_level_v2.py", "Replacement Levels", 600),
 
     # Pass 3: Cross-table updates
-    ("multi_league/transformations/matchup_enrichment/player_to_matchup_v2.py", "Player -> Matchup", 600),
-    ("multi_league/transformations/transaction_enrichment/fix_unknown_managers.py", "Fix Unknown Managers", 120),
-    ("multi_league/transformations/transaction_enrichment/player_to_transactions_v2.py", "Player <-> Transactions", 600),
-    ("multi_league/transformations/transaction_enrichment/transaction_value_metrics_v3.py", "Transaction Metrics", 600),
-    ("multi_league/transformations/player_enrichment/transactions_to_player_v2.py", "Transactions -> Player", 600),
-    ("multi_league/transformations/matchup_enrichment/expected_record_v2.py", "Expected Record", 900),
-    ("multi_league/transformations/matchup_enrichment/playoff_odds_import.py", "Playoff Odds", 1800),
+    ("multi_league/transformations/matchup/player_to_matchup_v2.py", "Player -> Matchup", 600),
+    ("multi_league/transformations/transaction/fix_unknown_managers.py", "Fix Unknown Managers", 120),
+    ("multi_league/transformations/transaction/player_to_transactions_v2.py", "Player <-> Transactions", 600),
+    ("multi_league/transformations/transaction/transaction_value_metrics_v3.py", "Transaction Metrics", 600),
+    ("multi_league/transformations/player/transactions_to_player_v2.py", "Transactions -> Player", 600),
+    ("multi_league/transformations/matchup/expected_record_v2.py", "Expected Record", 900),
+    ("multi_league/transformations/matchup/playoff_odds_import.py", "Playoff Odds", 1800),
     ("multi_league/transformations/aggregation/aggregate_player_season_v2.py", "Aggregate Player Season", 600),
     ("multi_league/transformations/finalize/normalize_canonical_types.py", "Normalize Types", 120),
 ]

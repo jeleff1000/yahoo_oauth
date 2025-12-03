@@ -14,8 +14,8 @@ from .draft_market_trends import display_draft_market_trends
 from .draft_keeper_analysis import display_draft_keeper_analysis
 
 __all__ = [
-    'display_draft_spending_trends',
-    'display_draft_round_efficiency',
-    'display_draft_market_trends',
-    'display_draft_keeper_analysis',
+    "display_draft_spending_trends",
+    "display_draft_round_efficiency",
+    "display_draft_market_trends",
+    "display_draft_keeper_analysis",
 ]

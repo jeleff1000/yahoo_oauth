@@ -9,7 +9,8 @@ import streamlit as st
 
 def apply_hall_of_fame_styles():
     """Apply clean CSS styles for Hall of Fame sections."""
-    st.markdown("""
+    st.markdown(
+        """
         <style>
         /* ========================================
            Hall of Fame Hero Banner - Subtle gradient
@@ -529,4 +530,6 @@ def apply_hall_of_fame_styles():
             }
         }
         </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )

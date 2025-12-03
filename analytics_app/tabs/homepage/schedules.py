@@ -15,6 +15,7 @@ is_playoffs, is_consolation, manager, team_name, manager_week, manager_year,
 opponent, opponent_week, opponent_year, week, year, team_points, opponent_points,
 win, loss
 """
+
 import streamlit as st
 import sys
 from pathlib import Path
@@ -28,10 +29,11 @@ from md.core import T, run_query
 from ..shared.modern_styles import apply_modern_styles
 from shared.themes import detect_theme
 
+
 class SchedulesViewer:
     def __init__(self):
         """No need to pass data - queries MotherDuck directly"""
-        self.table = T['schedule']
+        self.table = T["schedule"]
 
     def _get_regular_season_data(self, manager: str, year: str):
         """Get regular season schedule"""
@@ -100,9 +102,13 @@ class SchedulesViewer:
     def _get_summary_data(self, manager: str, year: str, section: str):
         """Get aggregated summary for a manager/year/section"""
         if section == "regular":
-            section_filter = "COALESCE(is_playoffs, 0) = 0 AND COALESCE(is_consolation, 0) = 0"
+            section_filter = (
+                "COALESCE(is_playoffs, 0) = 0 AND COALESCE(is_consolation, 0) = 0"
+            )
         else:  # postseason
-            section_filter = "(COALESCE(is_playoffs, 0) = 1 OR COALESCE(is_consolation, 0) = 1)"
+            section_filter = (
+                "(COALESCE(is_playoffs, 0) = 1 OR COALESCE(is_consolation, 0) = 1)"
+            )
 
         # Only count played games for PPG (where win or loss = 1)
         query = f"""
@@ -133,7 +139,7 @@ class SchedulesViewer:
             ORDER BY manager
         """
         df = run_query(query)
-        return df['manager'].tolist() if not df.empty else []
+        return df["manager"].tolist() if not df.empty else []
 
     def _get_years(self, manager: str):
         """Get years for a specific manager"""
@@ -144,7 +150,7 @@ class SchedulesViewer:
             ORDER BY year DESC
         """
         df = run_query(query)
-        return df['year'].tolist() if not df.empty else []
+        return df["year"].tolist() if not df.empty else []
 
     @st.fragment
     def display(self, prefix: str = "schedules"):
@@ -153,7 +159,8 @@ class SchedulesViewer:
         apply_modern_styles()
 
         # Add theme-aware CSS using CSS variables
-        st.markdown("""
+        st.markdown(
+            """
             <style>
             /* Schedule section styling - uses CSS variables for theming */
             .schedule-section {
@@ -209,7 +216,9 @@ class SchedulesViewer:
                 }
             }
             </style>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         # Get managers
         managers = self._get_managers()
@@ -222,10 +231,7 @@ class SchedulesViewer:
         col1, col2 = st.columns(2)
         with col1:
             selected_manager = st.selectbox(
-                "Manager",
-                managers,
-                index=0,
-                key=f"{prefix}_manager"
+                "Manager", managers, index=0, key=f"{prefix}_manager"
             )
 
         # Get years for selected manager
@@ -239,44 +245,48 @@ class SchedulesViewer:
                 "Year",
                 years,
                 index=0,  # Most recent year first (already sorted DESC)
-                key=f"{prefix}_year"
+                key=f"{prefix}_year",
             )
 
         st.markdown(f"### {selected_manager}'s {selected_year} Season")
 
         # Get theme-aware colors for pandas styling (requires actual values, not CSS vars)
-        is_dark = detect_theme() == 'dark'
+        is_dark = detect_theme() == "dark"
         colors = {
-            'win': '#10B981',  # success green
-            'loss': '#EF4444',  # error red
-            'text_muted': '#9CA3AF' if is_dark else '#6B7280',
+            "win": "#10B981",  # success green
+            "loss": "#EF4444",  # error red
+            "text_muted": "#9CA3AF" if is_dark else "#6B7280",
         }
 
         # Helper function to style schedule rows
         def style_schedule_row(row):
             n_cols = len(row)
-            styles = [''] * n_cols
+            styles = [""] * n_cols
 
-            result = row.get('Result', '')
-            margin = row.get('Margin', 0) if row.get('Margin') is not None else 0
+            result = row.get("Result", "")
+            margin = row.get("Margin", 0) if row.get("Margin") is not None else 0
 
             # Style Result column
-            if 'Result' in row.index:
-                result_idx = list(row.index).index('Result')
-                if result == 'W':
+            if "Result" in row.index:
+                result_idx = list(row.index).index("Result")
+                if result == "W":
                     styles[result_idx] = f'color: {colors["win"]}; font-weight: bold;'
-                elif result == 'L':
+                elif result == "L":
                     styles[result_idx] = f'color: {colors["loss"]}; font-weight: bold;'
 
             # Style Margin column
-            if 'Margin' in row.index:
-                margin_idx = list(row.index).index('Margin')
+            if "Margin" in row.index:
+                margin_idx = list(row.index).index("Margin")
                 try:
                     margin_val = float(margin) if margin is not None else 0
                     if margin_val > 0:
-                        styles[margin_idx] = f'color: {colors["win"]}; font-weight: bold;'
+                        styles[margin_idx] = (
+                            f'color: {colors["win"]}; font-weight: bold;'
+                        )
                     elif margin_val < 0:
-                        styles[margin_idx] = f'color: {colors["loss"]}; font-weight: bold;'
+                        styles[margin_idx] = (
+                            f'color: {colors["loss"]}; font-weight: bold;'
+                        )
                 except (ValueError, TypeError):
                     pass
 
@@ -284,27 +294,60 @@ class SchedulesViewer:
 
         # Helper function to display summary metrics
         def display_summary(section_key: str):
-            summary_df = self._get_summary_data(selected_manager, selected_year, section_key)
+            summary_df = self._get_summary_data(
+                selected_manager, selected_year, section_key
+            )
 
             if summary_df is not None and not summary_df.empty:
                 try:
-                    wins = int(summary_df['Win'].iloc[0]) if 'Win' in summary_df.columns else 0
-                    losses = int(summary_df['Loss'].iloc[0]) if 'Loss' in summary_df.columns else 0
-                    pf = float(summary_df['PF'].iloc[0]) if 'PF' in summary_df.columns and summary_df['PF'].iloc[0] else 0
-                    pa = float(summary_df['PA'].iloc[0]) if 'PA' in summary_df.columns and summary_df['PA'].iloc[0] else 0
-                    ppg = float(summary_df['PPG'].iloc[0]) if 'PPG' in summary_df.columns and summary_df['PPG'].iloc[0] else 0
+                    wins = (
+                        int(summary_df["Win"].iloc[0])
+                        if "Win" in summary_df.columns
+                        else 0
+                    )
+                    losses = (
+                        int(summary_df["Loss"].iloc[0])
+                        if "Loss" in summary_df.columns
+                        else 0
+                    )
+                    pf = (
+                        float(summary_df["PF"].iloc[0])
+                        if "PF" in summary_df.columns and summary_df["PF"].iloc[0]
+                        else 0
+                    )
+                    pa = (
+                        float(summary_df["PA"].iloc[0])
+                        if "PA" in summary_df.columns and summary_df["PA"].iloc[0]
+                        else 0
+                    )
+                    ppg = (
+                        float(summary_df["PPG"].iloc[0])
+                        if "PPG" in summary_df.columns and summary_df["PPG"].iloc[0]
+                        else 0
+                    )
                     point_diff = pf - pa
 
                     col1, col2, col3, col4 = st.columns(4)
 
                     with col1:
-                        record_color = colors['win'] if wins > losses else colors['loss'] if losses > wins else colors['text_muted']
-                        st.markdown(f"""
+                        record_color = (
+                            colors["win"]
+                            if wins > losses
+                            else (
+                                colors["loss"]
+                                if losses > wins
+                                else colors["text_muted"]
+                            )
+                        )
+                        st.markdown(
+                            f"""
                             <div style="text-align: center; padding: 0.5rem;">
                                 <div style="font-size: 0.85rem; color: var(--text-muted, {colors['text_muted']});">Record</div>
                                 <div style="font-size: 1.8rem; font-weight: bold; color: {record_color};">{wins}-{losses}</div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
                     with col2:
                         st.metric("PPG", f"{ppg:.2f}")
                     with col3:
@@ -323,17 +366,15 @@ class SchedulesViewer:
             if schedule_df is None or schedule_df.empty:
                 st.info("No regular season games found.")
             else:
-                styled_df = schedule_df.style.apply(style_schedule_row, axis=1).format({
-                    'PF': '{:.2f}',
-                    'PA': '{:.2f}',
-                    'Margin': '{:+.2f}'
-                }, na_rep='-')
+                styled_df = schedule_df.style.apply(style_schedule_row, axis=1).format(
+                    {"PF": "{:.2f}", "PA": "{:.2f}", "Margin": "{:+.2f}"}, na_rep="-"
+                )
 
                 st.dataframe(
                     styled_df,
                     hide_index=True,
                     use_container_width=True,
-                    height=min(500, len(schedule_df) * 35 + 38)
+                    height=min(500, len(schedule_df) * 35 + 38),
                 )
 
                 display_summary("regular")
@@ -344,17 +385,15 @@ class SchedulesViewer:
             if schedule_df is None or schedule_df.empty:
                 st.info("No postseason games found.")
             else:
-                styled_df = schedule_df.style.apply(style_schedule_row, axis=1).format({
-                    'PF': '{:.2f}',
-                    'PA': '{:.2f}',
-                    'Margin': '{:+.2f}'
-                }, na_rep='-')
+                styled_df = schedule_df.style.apply(style_schedule_row, axis=1).format(
+                    {"PF": "{:.2f}", "PA": "{:.2f}", "Margin": "{:+.2f}"}, na_rep="-"
+                )
 
                 st.dataframe(
                     styled_df,
                     hide_index=True,
                     use_container_width=True,
-                    height=min(300, len(schedule_df) * 35 + 38)
+                    height=min(300, len(schedule_df) * 35 + 38),
                 )
 
                 display_summary("postseason")

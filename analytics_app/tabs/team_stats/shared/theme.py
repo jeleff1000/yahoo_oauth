@@ -19,20 +19,7 @@ import pandas as pd
 
 # Re-export everything from the centralized styles module
 from ...shared.modern_styles import (
-    apply_modern_styles,
-    render_info_box,
-    render_success_box,
-    render_warning_box,
-    render_error_box,
-    render_loading_indicator,
-    render_stats_count,
-    render_gradient_header,
-    render_section_card,
     render_metric_card,
-    render_empty_state,
-    render_filter_count,
-    render_legend_box,
-    format_value_with_color,
 )
 
 
@@ -52,6 +39,7 @@ def apply_theme_styles():
 # ADDITIONAL UTILITY FUNCTIONS SPECIFIC TO TEAM STATS
 # ============================================================================
 
+
 def render_metric_grid(metrics: List[Dict[str, Any]], columns: int = 4):
     """
     Render a grid of metric cards.
@@ -64,17 +52,17 @@ def render_metric_grid(metrics: List[Dict[str, Any]], columns: int = 4):
     for idx, metric in enumerate(metrics):
         with cols[idx % columns]:
             render_metric_card(
-                label=metric['label'],
-                value=metric['value'],
-                delta=metric.get('delta'),
-                delta_label=metric.get('delta_label')
+                label=metric["label"],
+                value=metric["value"],
+                delta=metric.get("delta"),
+                delta_label=metric.get("delta_label"),
             )
 
 
 def style_dataframe(
     df: pd.DataFrame,
     highlight_columns: Optional[List[str]] = None,
-    format_dict: Optional[Dict[str, str]] = None
+    format_dict: Optional[Dict[str, str]] = None,
 ) -> pd.DataFrame:
     """
     Apply styling to a dataframe.
@@ -91,7 +79,7 @@ def style_dataframe(
     if format_dict:
         for col, fmt in format_dict.items():
             if col in df.columns:
-                df[col] = df[col].apply(lambda x: fmt.format(x) if pd.notna(x) else '-')
+                df[col] = df[col].apply(lambda x: fmt.format(x) if pd.notna(x) else "-")
 
     return df
 
@@ -116,9 +104,7 @@ def get_trend_indicator(current: float, previous: float) -> Tuple[str, str]:
 
 
 def format_value_with_trend(
-    value: float,
-    previous_value: Optional[float] = None,
-    format_str: str = "{:.1f}"
+    value: float, previous_value: Optional[float] = None, format_str: str = "{:.1f}"
 ) -> str:
     """
     Format a value with optional trend indicator.

@@ -1,9 +1,10 @@
 """
 Enhanced table display with better performance and UX.
 """
+
 import streamlit as st
 import pandas as pd
-from typing import Optional, List, Dict
+from typing import List, Dict
 
 
 class EnhancedTableDisplay:
@@ -23,7 +24,9 @@ class EnhancedTableDisplay:
         if self.rows_key not in st.session_state:
             st.session_state[self.rows_key] = self.initial_load
 
-    def get_position_specific_columns(self, df: pd.DataFrame, position: str = None) -> List[str]:
+    def get_position_specific_columns(
+        self, df: pd.DataFrame, position: str = None
+    ) -> List[str]:
         """
         Get position-specific default columns for skinnier, more relevant displays.
 
@@ -35,41 +38,117 @@ class EnhancedTableDisplay:
             List of column names that are most relevant for that position
         """
         # MATCHUP STATS: Show matchup-specific columns
-        if 'matchup' in self.key_prefix:
+        if "matchup" in self.key_prefix:
             matchup_cols = [
-                'Player', 'Pts', 'Pos', 'Team', 'GP', 'PPG',
-                'Manager', 'Unique Mgrs', 'Opponent',
-                'My Team', 'Opp Team', 'Margin',
-                'Wins', 'Losses',  # Career has Losses
-                'Playoffs', 'Playoff Apps',  # Career uses Playoff Apps
-                'Year', 'Week'  # Week only in weekly/season
+                "Player",
+                "Pts",
+                "Pos",
+                "Team",
+                "GP",
+                "PPG",
+                "Manager",
+                "Unique Mgrs",
+                "Opponent",
+                "My Team",
+                "Opp Team",
+                "Margin",
+                "Wins",
+                "Losses",  # Career has Losses
+                "Playoffs",
+                "Playoff Apps",  # Career uses Playoff Apps
+                "Year",
+                "Week",  # Week only in weekly/season
             ]
             return [col for col in matchup_cols if col in df.columns]
 
         # Core columns always shown (using renamed friendly names)
-        core_cols = ['Player', 'Team', 'Week', 'Year', 'Manager', 'Points']
+        core_cols = ["Player", "Team", "Week", "Year", "Manager", "Points"]
 
         # Position-specific relevant columns (using renamed friendly names)
         position_cols = {
-            'QB': ['Position', 'Pass Yds', 'Pass TD', 'Pass INT', 'Comp', 'Pass Att',
-                   'Rush Yds', 'Rush TD', 'Pass EPA', 'CPOE', 'PACR'],
-
-            'RB': ['Position', 'Rush Yds', 'Rush TD', 'Att', 'YPC',
-                   'Rec', 'Rec Yds', 'Rec TD', 'Tgt', 'Catch%',
-                   'Rush EPA', 'Rec EPA', 'Tgt %'],
-
-            'WR': ['Position', 'Rec', 'Rec Yds', 'Rec TD', 'Tgt', 'Catch%', 'YPR',
-                   'Tgt %', 'Rec Air Yds', 'Rec YAC', 'Air Yds %',
-                   'Rec EPA', 'WOPR', 'RACR'],
-
-            'TE': ['Position', 'Rec', 'Rec Yds', 'Rec TD', 'Tgt', 'Catch%', 'YPR',
-                   'Tgt %', 'Rec Air Yds', 'Rec YAC', 'Rec EPA'],
-
-            'K': ['Position', 'FGM', 'FGA', 'FG%', 'FG 0-19', 'FG 20-29', 'FG 30-39',
-                  'FG 40-49', 'FG 50+', 'XPM', 'XPA'],
-
-            'DEF': ['Position', 'Sacks', 'INT', 'PA', 'TD', 'FF', 'Fum Rec',
-                    'Total Tkl', 'TFL', 'PD', 'Total Yds Allow'],
+            "QB": [
+                "Position",
+                "Pass Yds",
+                "Pass TD",
+                "Pass INT",
+                "Comp",
+                "Pass Att",
+                "Rush Yds",
+                "Rush TD",
+                "Pass EPA",
+                "CPOE",
+                "PACR",
+            ],
+            "RB": [
+                "Position",
+                "Rush Yds",
+                "Rush TD",
+                "Att",
+                "YPC",
+                "Rec",
+                "Rec Yds",
+                "Rec TD",
+                "Tgt",
+                "Catch%",
+                "Rush EPA",
+                "Rec EPA",
+                "Tgt %",
+            ],
+            "WR": [
+                "Position",
+                "Rec",
+                "Rec Yds",
+                "Rec TD",
+                "Tgt",
+                "Catch%",
+                "YPR",
+                "Tgt %",
+                "Rec Air Yds",
+                "Rec YAC",
+                "Air Yds %",
+                "Rec EPA",
+                "WOPR",
+                "RACR",
+            ],
+            "TE": [
+                "Position",
+                "Rec",
+                "Rec Yds",
+                "Rec TD",
+                "Tgt",
+                "Catch%",
+                "YPR",
+                "Tgt %",
+                "Rec Air Yds",
+                "Rec YAC",
+                "Rec EPA",
+            ],
+            "K": [
+                "Position",
+                "FGM",
+                "FGA",
+                "FG%",
+                "FG 0-19",
+                "FG 20-29",
+                "FG 30-39",
+                "FG 40-49",
+                "FG 50+",
+                "XPM",
+                "XPA",
+            ],
+            "DEF": [
+                "Position",
+                "Sacks",
+                "INT",
+                "PA",
+                "TD",
+                "FF",
+                "Fum Rec",
+                "Total Tkl",
+                "TFL",
+                "PD",
+                "Total Yds Allow",
+            ],
         }
 
         # Get position-specific columns or default to common stats
@@ -77,14 +156,18 @@ class EnhancedTableDisplay:
             additional_cols = position_cols[position]
         else:
             # All positions / mixed - show general stats
-            additional_cols = ['Position', 'Roster Slot']
+            additional_cols = ["Position", "Roster Slot"]
 
         # Combine core + position-specific, filter to only existing columns
         all_cols = core_cols + additional_cols
         return [col for col in all_cols if col in df.columns]
 
-    def display_column_selector(self, df: pd.DataFrame, default_columns: List[str] = None,
-                                active_position: str = None):
+    def display_column_selector(
+        self,
+        df: pd.DataFrame,
+        default_columns: List[str] = None,
+        active_position: str = None,
+    ):
         """
         Display a column selector to reduce table width and improve performance.
         Now supports position-specific defaults that auto-update.
@@ -99,18 +182,28 @@ class EnhancedTableDisplay:
 
         # CRITICAL: Remove duplicate columns to prevent React errors
         if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='first')]
+            df = df.loc[:, ~df.columns.duplicated(keep="first")]
 
         all_columns = df.columns.tolist()
 
         # Smart defaults based on position or provided defaults
         if default_columns is None:
             if active_position:
-                default_columns = self.get_position_specific_columns(df, active_position)
+                default_columns = self.get_position_specific_columns(
+                    df, active_position
+                )
             else:
                 # General defaults when no position selected
-                priority_cols = ['Player', 'Points', 'Team', 'Week', 'Year', 'Manager',
-                               'Position', 'Roster Slot']
+                priority_cols = [
+                    "Player",
+                    "Points",
+                    "Team",
+                    "Week",
+                    "Year",
+                    "Manager",
+                    "Position",
+                    "Roster Slot",
+                ]
                 default_columns = [col for col in priority_cols if col in all_columns]
                 if not default_columns:
                     default_columns = all_columns[:8]
@@ -126,7 +219,10 @@ class EnhancedTableDisplay:
 
         # If position changed AND user hasn't manually customized, update default columns
         # This prevents infinite loops while still providing smart defaults
-        if st.session_state[position_key] != active_position and not st.session_state[manual_override_key]:
+        if (
+            st.session_state[position_key] != active_position
+            and not st.session_state[manual_override_key]
+        ):
             st.session_state[position_key] = active_position
             st.session_state[self.columns_key] = default_columns
 
@@ -137,7 +233,9 @@ class EnhancedTableDisplay:
         with st.expander("📊 Customize Columns", expanded=False):
             # Show position hint if active
             if active_position:
-                st.info(f"💡 Showing **{active_position}**-specific columns. Change position to see different stats!")
+                st.info(
+                    f"💡 Showing **{active_position}**-specific columns. Change position to see different stats!"
+                )
 
             col1, col2, col3 = st.columns([2, 1, 1])
 
@@ -147,13 +245,17 @@ class EnhancedTableDisplay:
             with col2:
                 if st.button("Select All", key=f"{self.key_prefix}_select_all"):
                     st.session_state[self.columns_key] = all_columns
-                    st.session_state[manual_override_key] = True  # Mark as manually overridden
+                    st.session_state[manual_override_key] = (
+                        True  # Mark as manually overridden
+                    )
                     st.rerun()
 
             with col3:
                 if st.button("Reset Default", key=f"{self.key_prefix}_reset_cols"):
                     st.session_state[self.columns_key] = default_columns
-                    st.session_state[manual_override_key] = False  # Reset manual override flag
+                    st.session_state[manual_override_key] = (
+                        False  # Reset manual override flag
+                    )
                     st.rerun()
 
             # Group columns by category for better organization
@@ -165,19 +267,25 @@ class EnhancedTableDisplay:
                     cols_per_row = 4
                     for i in range(0, len(columns), cols_per_row):
                         cols = st.columns(cols_per_row)
-                        for j, col in enumerate(columns[i:i+cols_per_row]):
+                        for j, col in enumerate(columns[i : i + cols_per_row]):
                             with cols[j]:
                                 is_selected = col in st.session_state[self.columns_key]
                                 # Use unique key with group name and index to avoid duplicates
-                                unique_key = f"{self.key_prefix}_col_{group_name}_{i+j}_{col}"
+                                unique_key = (
+                                    f"{self.key_prefix}_col_{group_name}_{i+j}_{col}"
+                                )
                                 if st.checkbox(col, value=is_selected, key=unique_key):
                                     if col not in st.session_state[self.columns_key]:
                                         st.session_state[self.columns_key].append(col)
-                                        st.session_state[manual_override_key] = True  # Mark as manually changed
+                                        st.session_state[manual_override_key] = (
+                                            True  # Mark as manually changed
+                                        )
                                 else:
                                     if col in st.session_state[self.columns_key]:
                                         st.session_state[self.columns_key].remove(col)
-                                        st.session_state[manual_override_key] = True  # Mark as manually changed
+                                        st.session_state[manual_override_key] = (
+                                            True  # Mark as manually changed
+                                        )
 
         return st.session_state[self.columns_key]
 
@@ -191,27 +299,59 @@ class EnhancedTableDisplay:
             "Defense": [],
             "Kicking": [],
             "Advanced": [],
-            "Other": []
+            "Other": [],
         }
 
         for col in columns:
             col_lower = col.lower()
-            if any(x in col_lower for x in ['player', 'team', 'week', 'year', 'manager',
-                                            'position', 'points', 'opponent']):
+            if any(
+                x in col_lower
+                for x in [
+                    "player",
+                    "team",
+                    "week",
+                    "year",
+                    "manager",
+                    "position",
+                    "points",
+                    "opponent",
+                ]
+            ):
                 groups["Core Info"].append(col)
-            elif any(x in col_lower for x in ['pass', 'completion', 'int', 'sack']):
+            elif any(x in col_lower for x in ["pass", "completion", "int", "sack"]):
                 groups["Passing"].append(col)
-            elif any(x in col_lower for x in ['rush', 'carry', 'attempt']):
+            elif any(x in col_lower for x in ["rush", "carry", "attempt"]):
                 groups["Rushing"].append(col)
-            elif any(x in col_lower for x in ['rec', 'target', 'catch', 'air_yards']):
+            elif any(x in col_lower for x in ["rec", "target", "catch", "air_yards"]):
                 groups["Receiving"].append(col)
-            elif any(x in col_lower for x in ['def', 'tackle', 'sack', 'interception',
-                                              'fumble_rec', 'allow']):
+            elif any(
+                x in col_lower
+                for x in [
+                    "def",
+                    "tackle",
+                    "sack",
+                    "interception",
+                    "fumble_rec",
+                    "allow",
+                ]
+            ):
                 groups["Defense"].append(col)
-            elif any(x in col_lower for x in ['fg', 'pat', 'field_goal', 'extra_point']):
+            elif any(
+                x in col_lower for x in ["fg", "pat", "field_goal", "extra_point"]
+            ):
                 groups["Kicking"].append(col)
-            elif any(x in col_lower for x in ['epa', 'cpoe', 'pacr', 'wopr', 'racr',
-                                              'share', 'target_share']):
+            elif any(
+                x in col_lower
+                for x in [
+                    "epa",
+                    "cpoe",
+                    "pacr",
+                    "wopr",
+                    "racr",
+                    "share",
+                    "target_share",
+                ]
+            ):
                 groups["Advanced"].append(col)
             else:
                 groups["Other"].append(col)
@@ -224,7 +364,7 @@ class EnhancedTableDisplay:
         df: pd.DataFrame,
         total_available: int,
         on_load_more_callback=None,
-        height: int = 600
+        height: int = 600,
     ):
         """
         Display table with 'Load More' functionality instead of pagination.
@@ -253,14 +393,17 @@ class EnhancedTableDisplay:
                 st.metric("Total Available", f"{total_available:,}")
             else:
                 # Check if there's more data available
-                has_more = getattr(df, 'attrs', {}).get('has_more', True)
-                st.metric("Total Available", "~" + f"{rows_shown:,}+" if has_more else f"{rows_shown:,}")
+                has_more = getattr(df, "attrs", {}).get("has_more", True)
+                st.metric(
+                    "Total Available",
+                    "~" + f"{rows_shown:,}+" if has_more else f"{rows_shown:,}",
+                )
         with col3:
             if total_available is not None:
                 remaining = max(0, total_available - rows_shown)
                 st.metric("Remaining", f"{remaining:,}")
             else:
-                has_more = getattr(df, 'attrs', {}).get('has_more', True)
+                has_more = getattr(df, "attrs", {}).get("has_more", True)
                 st.metric("More Available", "Yes" if has_more else "No")
 
         # Display the table with fixed height for consistent UX
@@ -272,7 +415,7 @@ class EnhancedTableDisplay:
         # CRITICAL: Remove duplicate columns before displaying to prevent React error #185
         # Check both exact and case-insensitive duplicates
         if display_df.columns.duplicated().any():
-            display_df = display_df.loc[:, ~display_df.columns.duplicated(keep='first')]
+            display_df = display_df.loc[:, ~display_df.columns.duplicated(keep="first")]
 
         # Also check for case-insensitive duplicates (e.g., "Player" and "player")
         lower_cols = [c.lower() for c in display_df.columns]
@@ -291,7 +434,7 @@ class EnhancedTableDisplay:
         if display_df.columns.duplicated().any():
             dup_cols = display_df.columns[display_df.columns.duplicated()].tolist()
             st.warning(f"Warning: Duplicate columns detected: {dup_cols}")
-            display_df = display_df.loc[:, ~display_df.columns.duplicated(keep='first')]
+            display_df = display_df.loc[:, ~display_df.columns.duplicated(keep="first")]
 
         # Replace None/NaN with "—" for cleaner display
         display_df = display_df.fillna("—")
@@ -300,17 +443,14 @@ class EnhancedTableDisplay:
         display_df = display_df.replace("none", "—")
 
         st.dataframe(
-            display_df,
-            hide_index=True,
-            use_container_width=True,
-            height=height
+            display_df, hide_index=True, use_container_width=True, height=height
         )
 
         # Load more controls only for non-season/career views
-        has_more = getattr(df, 'attrs', {}).get('has_more', True)
+        has_more = getattr(df, "attrs", {}).get("has_more", True)
         show_load_more = not is_season_or_career and (
-            (total_available is not None and rows_shown < total_available) or
-            (total_available is None and has_more)
+            (total_available is not None and rows_shown < total_available)
+            or (total_available is None and has_more)
         )
 
         if show_load_more:
@@ -320,7 +460,7 @@ class EnhancedTableDisplay:
                 if st.button(
                     f"⬇️ Load {self.load_increment} More",
                     key=f"{self.key_prefix}_load_more",
-                    use_container_width=True
+                    use_container_width=True,
                 ):
                     st.session_state[self.rows_key] = current_rows + self.load_increment
                     if on_load_more_callback:
@@ -332,7 +472,7 @@ class EnhancedTableDisplay:
                     "⬇️⬇️ Load All",
                     key=f"{self.key_prefix}_load_all",
                     use_container_width=True,
-                    type="secondary"
+                    type="secondary",
                 ):
                     st.session_state[self.rows_key] = total_available
                     if on_load_more_callback:
@@ -340,7 +480,9 @@ class EnhancedTableDisplay:
                     st.rerun()
 
             with col3:
-                st.caption(f"💡 Tip: Loading all {total_available:,} rows may take a moment")
+                st.caption(
+                    f"💡 Tip: Loading all {total_available:,} rows may take a moment"
+                )
         elif is_season_or_career:
             st.success(f"✅ All {total_available:,} rows loaded")
         else:
@@ -355,23 +497,50 @@ class EnhancedTableDisplay:
 
         # CRITICAL: Remove duplicate columns if they exist to prevent React errors
         if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='first')]
+            df = df.loc[:, ~df.columns.duplicated(keep="first")]
 
         # Ensure column names are strings
         df.columns = [str(col) for col in df.columns]
 
         # First, ensure numeric columns are actually numeric
-        numeric_stat_keywords = ['points', 'yds', 'yards', 'td', 'int', 'rec', 'att', 'attempt',
-                                  'fg', 'pat', 'sack', 'target', 'completion', 'carry',
-                                  'fum', 'fumble', 'epa', 'cpoe', 'pacr', 'wopr', 'racr',
-                                  'share', 'air_yards', 'tfl', 'def', 'allow', 'safe']
+        numeric_stat_keywords = [
+            "points",
+            "yds",
+            "yards",
+            "td",
+            "int",
+            "rec",
+            "att",
+            "attempt",
+            "fg",
+            "pat",
+            "sack",
+            "target",
+            "completion",
+            "carry",
+            "fum",
+            "fumble",
+            "epa",
+            "cpoe",
+            "pacr",
+            "wopr",
+            "racr",
+            "share",
+            "air_yards",
+            "tfl",
+            "def",
+            "allow",
+            "safe",
+        ]
 
         for col in df.columns:
             try:
                 col_lower = col.lower()
 
                 # Check if column should be numeric
-                is_numeric_col = any(keyword in col_lower for keyword in numeric_stat_keywords)
+                is_numeric_col = any(
+                    keyword in col_lower for keyword in numeric_stat_keywords
+                )
 
                 # Ensure we're working with a Series, not a DataFrame
                 col_data = df[col]
@@ -380,48 +549,55 @@ class EnhancedTableDisplay:
                     continue
 
                 # If it should be numeric but isn't, try to convert it
-                if is_numeric_col and col_data.dtype == 'object':
+                if is_numeric_col and col_data.dtype == "object":
                     try:
-                        df[col] = pd.to_numeric(col_data, errors='coerce')
+                        df[col] = pd.to_numeric(col_data, errors="coerce")
                         col_data = df[col]
-                    except:
+                    except Exception:
                         pass
 
                 # Number columns - configure with proper formatting
-                if col_data.dtype in ['int64', 'float64', 'Int64', 'Float64']:
-                    if 'points' in col_lower or 'yds' in col_lower or 'yards' in col_lower or 'epa' in col_lower:
+                if col_data.dtype in ["int64", "float64", "Int64", "Float64"]:
+                    if (
+                        "points" in col_lower
+                        or "yds" in col_lower
+                        or "yards" in col_lower
+                        or "epa" in col_lower
+                    ):
                         config[col] = st.column_config.NumberColumn(
-                            col,
-                            format="%.1f",
-                            help=f"{col} statistic"
+                            col, format="%.1f", help=f"{col} statistic"
                         )
-                    elif any(x in col_lower for x in ['%', 'percentage', 'rate', 'share', 'cpoe', 'pacr', 'wopr', 'racr']):
+                    elif any(
+                        x in col_lower
+                        for x in [
+                            "%",
+                            "percentage",
+                            "rate",
+                            "share",
+                            "cpoe",
+                            "pacr",
+                            "wopr",
+                            "racr",
+                        ]
+                    ):
                         config[col] = st.column_config.NumberColumn(
-                            col,
-                            format="%.2f",
-                            help=f"{col} statistic"
+                            col, format="%.2f", help=f"{col} statistic"
                         )
                     else:
                         config[col] = st.column_config.NumberColumn(
-                            col,
-                            format="%d",
-                            help=f"{col} statistic"
+                            col, format="%d", help=f"{col} statistic"
                         )
 
                 # Player names - wider column
-                elif 'player' in col_lower and 'optimal' not in col_lower:
+                elif "player" in col_lower and "optimal" not in col_lower:
                     config[col] = st.column_config.TextColumn(
-                        col,
-                        width="medium",
-                        help="Player name"
+                        col, width="medium", help="Player name"
                     )
 
                 # Boolean columns
-                elif col_data.dtype == 'bool':
+                elif col_data.dtype == "bool":
                     config[col] = st.column_config.CheckboxColumn(
-                        col,
-                        help=f"{col}",
-                        disabled=True
+                        col, help=f"{col}", disabled=True
                     )
             except Exception:
                 # Skip columns that cause errors
@@ -429,7 +605,9 @@ class EnhancedTableDisplay:
 
         return config
 
-    def display_quick_export(self, df: pd.DataFrame, filename_prefix: str = "player_data"):
+    def display_quick_export(
+        self, df: pd.DataFrame, filename_prefix: str = "player_data"
+    ):
         """
         Quick export button for users who want the full dataset.
         """
@@ -445,7 +623,7 @@ class EnhancedTableDisplay:
                     data=df.to_csv(index=False),
                     file_name=f"{filename_prefix}.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    use_container_width=True,
                 )
 
             with col2:
@@ -453,16 +631,17 @@ class EnhancedTableDisplay:
                 if len(df) < 10000:
                     try:
                         from io import BytesIO
+
                         buffer = BytesIO()
-                        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                            df.to_excel(writer, index=False, sheet_name='Data')
+                        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+                            df.to_excel(writer, index=False, sheet_name="Data")
 
                         st.download_button(
                             label="📥 Download as Excel",
                             data=buffer.getvalue(),
                             file_name=f"{filename_prefix}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
+                            use_container_width=True,
                         )
                     except ImportError:
                         st.caption("Excel export requires openpyxl")

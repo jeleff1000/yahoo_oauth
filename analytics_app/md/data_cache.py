@@ -2,6 +2,7 @@
 Enhanced data caching layer with intelligent invalidation
 Sits between app and data_access to provide smart caching
 """
+
 import streamlit as st
 import pandas as pd
 from typing import Optional, Dict, Any, Callable
@@ -38,7 +39,7 @@ class SmartCache:
         key_data = {
             "func": func_name,
             "args": str(args),
-            "kwargs": json.dumps(kwargs, sort_keys=True, default=str)
+            "kwargs": json.dumps(kwargs, sort_keys=True, default=str),
         }
         key_str = json.dumps(key_data, sort_keys=True)
         return hashlib.md5(key_str.encode()).hexdigest()
@@ -89,8 +90,7 @@ class SmartCache:
         else:
             # Clear matching pattern
             keys_to_remove = [
-                k for k in st.session_state._cache_store.keys()
-                if pattern in k
+                k for k in st.session_state._cache_store.keys() if pattern in k
             ]
             for k in keys_to_remove:
                 del st.session_state._cache_store[k]
@@ -117,14 +117,13 @@ smart_cache = SmartCache()
 
 
 def cached_data_loader(
-    ttl: int = 600,
-    show_spinner: bool = True,
-    spinner_text: str = "Loading data..."
+    ttl: int = 600, show_spinner: bool = True, spinner_text: str = "Loading data..."
 ):
     """
     Decorator for caching data loading functions
     Combines Streamlit cache_data with session-based caching
     """
+
     def decorator(func: Callable):
         # Create streamlit cached version
         st_cached = st.cache_data(ttl=ttl, show_spinner=False)(func)
@@ -161,10 +160,7 @@ def cached_data_loader(
 
 # Convenience functions for common data operations
 def get_or_load(
-    cache_key: str,
-    loader_func: Callable,
-    ttl: int = 600,
-    force_reload: bool = False
+    cache_key: str, loader_func: Callable, ttl: int = 600, force_reload: bool = False
 ) -> Any:
     """
     Get data from cache or load it using the provided function
@@ -199,7 +195,7 @@ def get_cache_size_mb() -> float:
             total_size += sys.getsizeof(value)
             if isinstance(value, pd.DataFrame):
                 total_size += value.memory_usage(deep=True).sum()
-        except:
+        except Exception:
             pass
     return total_size / (1024 * 1024)
 
@@ -212,7 +208,7 @@ def render_cache_stats():
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📊 Cache Stats")
     st.sidebar.metric("Hit Rate", f"{stats['hit_rate']:.1f}%")
-    st.sidebar.metric("Cached Items", stats['cached_items'])
+    st.sidebar.metric("Cached Items", stats["cached_items"])
     st.sidebar.metric("Cache Size", f"{cache_size:.2f} MB")
 
     if st.sidebar.button("Clear Cache"):

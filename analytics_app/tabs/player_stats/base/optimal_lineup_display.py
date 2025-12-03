@@ -15,18 +15,20 @@ def display_optimal_season_lineups(year_filter: str = "All"):
     st.subheader("🏆 Optimal Season Lineups")
 
     # Get available years
-    years_df = run_query(f"""
+    years_df = run_query(
+        f"""
         SELECT DISTINCT year 
         FROM {T['player_season']} 
         WHERE nfl_position IN ('QB', 'RB', 'WR', 'TE', 'K', 'DEF')
         ORDER BY year DESC
-    """)
+    """
+    )
 
     if years_df.empty:
         st.warning("No optimal lineup data available.")
         return
 
-    years = years_df['year'].tolist()
+    years = years_df["year"].tolist()
 
     # Year selection + View type
     col1, col2 = st.columns([2, 1])
@@ -34,10 +36,7 @@ def display_optimal_season_lineups(year_filter: str = "All"):
     with col1:
         year_options = ["All"] + [str(y) for y in years]
         selected_year = st.selectbox(
-            "Select Year",
-            options=year_options,
-            index=0,
-            key="optimal_season_year"
+            "Select Year", options=year_options, index=0, key="optimal_season_year"
         )
 
     with col2:
@@ -45,7 +44,7 @@ def display_optimal_season_lineups(year_filter: str = "All"):
             "View Type",
             ["Total Points", "Head-to-Head"],
             key="optimal_season_view",
-            horizontal=True
+            horizontal=True,
         )
 
     if view_type == "Total Points":
@@ -341,7 +340,9 @@ def _get_h2h_optimal_roster(year: int) -> pd.DataFrame:
 
 
 @st.fragment
-def display_optimal_career_lineups(start_year: int = 1999, end_year: int = 2025, metric: str = "total_points"):
+def display_optimal_career_lineups(
+    start_year: int = 1999, end_year: int = 2025, metric: str = "total_points"
+):
     """
     Display optimal career lineups with year range and metric selection.
     Enforces proper roster: 1 QB, 2 RB, 3 WR, 1 TE, 1 DEF, 1 K, 1 W/R/T
@@ -351,15 +352,27 @@ def display_optimal_career_lineups(start_year: int = 1999, end_year: int = 2025,
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
-        start = st.number_input("Start Year", min_value=1999, max_value=2025, value=start_year, key="career_opt_start")
+        start = st.number_input(
+            "Start Year",
+            min_value=1999,
+            max_value=2025,
+            value=start_year,
+            key="career_opt_start",
+        )
     with col2:
-        end = st.number_input("End Year", min_value=1999, max_value=2025, value=end_year, key="career_opt_end")
+        end = st.number_input(
+            "End Year",
+            min_value=1999,
+            max_value=2025,
+            value=end_year,
+            key="career_opt_end",
+        )
     with col3:
         metric_choice = st.radio(
             "Metric",
             ["Total Points", "PPG All-Time", "Max Single Game"],
             horizontal=False,
-            key="career_opt_metric"
+            key="career_opt_metric",
         )
 
     # Map metric choice to column name in the data (not display name)
@@ -688,32 +701,42 @@ def _get_career_optimal_max_game(start_year: int, end_year: int) -> pd.DataFrame
 
 
 @st.fragment
-def _display_optimal_lineup_table(data: pd.DataFrame, year_label: str, is_h2h: bool = False):
+def _display_optimal_lineup_table(
+    data: pd.DataFrame, year_label: str, is_h2h: bool = False
+):
     """Render optimal lineup table for season view"""
 
     # Create styled HTML table
     html = ["<style>"]
-    html.append("table.optimal {width: 100%; border-collapse: collapse; margin: 20px 0;}")
-    html.append("table.optimal th {background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px; text-align: left; font-weight: bold;}")
+    html.append(
+        "table.optimal {width: 100%; border-collapse: collapse; margin: 20px 0;}"
+    )
+    html.append(
+        "table.optimal th {background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px; text-align: left; font-weight: bold;}"
+    )
     html.append("table.optimal td {border: 1px solid #ddd; padding: 10px;}")
     html.append("table.optimal tr:nth-child(even) {background-color: #f9f9f9;}")
     html.append("table.optimal tr:hover {background-color: #f0f0f0;}")
-    html.append(".pos-badge {display: inline-block; background: #667eea; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; min-width: 50px; text-align: center;}")
-    html.append(".points-highlight {color: #2e7d32; font-weight: bold; font-size: 1.1em;}")
+    html.append(
+        ".pos-badge {display: inline-block; background: #667eea; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; min-width: 50px; text-align: center;}"
+    )
+    html.append(
+        ".points-highlight {color: #2e7d32; font-weight: bold; font-size: 1.1em;}"
+    )
     html.append("</style>")
 
     html.append("<table class='optimal'>")
     html.append("<thead><tr>")
     html.append("<th>Position</th><th>Player</th><th>Manager</th>")
 
-    if 'year' in data.columns:
+    if "year" in data.columns:
         html.append("<th>Year</th>")
 
     html.append("<th>Total Points</th>")
 
-    if 'games' in data.columns:
+    if "games" in data.columns:
         html.append("<th>Games</th>")
-    if 'avg_points' in data.columns:
+    if "avg_points" in data.columns:
         html.append("<th>Avg Points</th>")
 
     html.append("</tr></thead><tbody>")
@@ -725,29 +748,31 @@ def _display_optimal_lineup_table(data: pd.DataFrame, year_label: str, is_h2h: b
         html.append(f"<td><strong>{row['player']}</strong></td>")
         html.append(f"<td>{row.get('manager', '')}</td>")
 
-        if 'year' in data.columns:
+        if "year" in data.columns:
             html.append(f"<td>{row['year']}</td>")
 
-        pts = float(row['total_points'])
+        pts = float(row["total_points"])
         total_points += pts
         html.append(f"<td class='points-highlight'>{pts:,.1f}</td>")
 
-        if 'games' in data.columns:
+        if "games" in data.columns:
             html.append(f"<td>{int(row['games'])}</td>")
-        if 'avg_points' in data.columns:
+        if "avg_points" in data.columns:
             html.append(f"<td>{float(row['avg_points']):.1f}</td>")
 
         html.append("</tr>")
 
     # Total row
     html.append("<tr style='background: #f0f0f0; font-weight: bold;'>")
-    colspan = 3 + (1 if 'year' in data.columns else 0)
+    colspan = 3 + (1 if "year" in data.columns else 0)
     html.append(f"<td colspan='{colspan}' style='text-align: right;'>TOTAL:</td>")
-    html.append(f"<td class='points-highlight' style='font-size: 1.2em;'>{total_points:,.1f}</td>")
+    html.append(
+        f"<td class='points-highlight' style='font-size: 1.2em;'>{total_points:,.1f}</td>"
+    )
 
-    if 'games' in data.columns:
+    if "games" in data.columns:
         html.append("<td></td>")
-    if 'avg_points' in data.columns:
+    if "avg_points" in data.columns:
         html.append("<td></td>")
 
     html.append("</tr>")
@@ -757,23 +782,39 @@ def _display_optimal_lineup_table(data: pd.DataFrame, year_label: str, is_h2h: b
 
 
 @st.fragment
-def _display_optimal_career_table(data: pd.DataFrame, metric_col: str, metric_name: str, start_year: int, end_year: int):
+def _display_optimal_career_table(
+    data: pd.DataFrame,
+    metric_col: str,
+    metric_name: str,
+    start_year: int,
+    end_year: int,
+):
     """Render optimal career lineup table"""
 
     # Create styled HTML table
     html = ["<style>"]
-    html.append("table.optimal {width: 100%; border-collapse: collapse; margin: 20px 0;}")
-    html.append("table.optimal th {background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 12px; text-align: left; font-weight: bold;}")
+    html.append(
+        "table.optimal {width: 100%; border-collapse: collapse; margin: 20px 0;}"
+    )
+    html.append(
+        "table.optimal th {background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 12px; text-align: left; font-weight: bold;}"
+    )
     html.append("table.optimal td {border: 1px solid #ddd; padding: 10px;}")
     html.append("table.optimal tr:nth-child(even) {background-color: #f9f9f9;}")
     html.append("table.optimal tr:hover {background-color: #f0f0f0;}")
-    html.append(".pos-badge {display: inline-block; background: #f5576c; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; min-width: 50px; text-align: center;}")
-    html.append(".metric-highlight {color: #c62828; font-weight: bold; font-size: 1.1em;}")
+    html.append(
+        ".pos-badge {display: inline-block; background: #f5576c; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; min-width: 50px; text-align: center;}"
+    )
+    html.append(
+        ".metric-highlight {color: #c62828; font-weight: bold; font-size: 1.1em;}"
+    )
     html.append("</style>")
 
     html.append("<table class='optimal'>")
     html.append("<thead><tr>")
-    html.append(f"<th>Position</th><th>Player</th><th>Manager</th><th>{metric_name}</th><th>Games</th><th>Total Points</th>")
+    html.append(
+        f"<th>Position</th><th>Player</th><th>Manager</th><th>{metric_name}</th><th>Games</th><th>Total Points</th>"
+    )
     html.append("</tr></thead><tbody>")
 
     total_metric = 0
@@ -790,11 +831,11 @@ def _display_optimal_career_table(data: pd.DataFrame, metric_col: str, metric_na
         total_metric += metric_val
         html.append(f"<td class='metric-highlight'>{metric_val:,.1f}</td>")
 
-        games = int(row['games'])
+        games = int(row["games"])
         total_games += games
         html.append(f"<td>{games}</td>")
 
-        pts = float(row['total_points'])
+        pts = float(row["total_points"])
         total_points += pts
         html.append(f"<td>{pts:,.1f}</td>")
 
@@ -803,7 +844,9 @@ def _display_optimal_career_table(data: pd.DataFrame, metric_col: str, metric_na
     # Total row
     html.append("<tr style='background: #f0f0f0; font-weight: bold;'>")
     html.append("<td colspan='3' style='text-align: right;'>TOTAL:</td>")
-    html.append(f"<td class='metric-highlight' style='font-size: 1.2em;'>{total_metric:,.1f}</td>")
+    html.append(
+        f"<td class='metric-highlight' style='font-size: 1.2em;'>{total_metric:,.1f}</td>"
+    )
     html.append(f"<td>{total_games}</td>")
     html.append(f"<td>{total_points:,.1f}</td>")
     html.append("</tr>")
@@ -813,4 +856,3 @@ def _display_optimal_career_table(data: pd.DataFrame, metric_col: str, metric_na
     st.markdown("".join(html), unsafe_allow_html=True)
 
     st.caption(f"Career stats from {start_year} to {end_year}")
-

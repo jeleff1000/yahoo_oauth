@@ -16,30 +16,24 @@ RECAPS_PLAYER_COLUMNS = [
     "player",
     "manager",
     "headshot_url",
-
     # Time
     "year",
     "week",
     "cumulative_week",
-
     # Position
     "nfl_position",
     "fantasy_position",
     "yahoo_position",
     "optimal_position",
-
     # Points
     "points",
-
     # Lineup status
     "started",
     "optimal_player",
-
     # Team & opponent info
     "nfl_team",
     "opponent",
     "opponent_nfl_team",
-
     # Rankings & Percentiles (for exceptional performance detection)
     "position_week_rank",
     "position_week_pct",

@@ -98,7 +98,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     # Remove duplicate columns (keep first occurrence)
     if df.columns.duplicated().any():
-        df = df.loc[:, ~df.columns.duplicated(keep='first')]
+        df = df.loc[:, ~df.columns.duplicated(keep="first")]
 
     # Ensure all column names are strings
     df.columns = [str(col) for col in df.columns]
@@ -124,7 +124,7 @@ def ensure_numeric(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
     """
     for col in columns:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
     return df
 
@@ -150,78 +150,68 @@ def apply_common_renames(df: pd.DataFrame) -> pd.DataFrame:
     # Common renames used across all views
     renames = {
         # Core identification
-        'player': 'Player',
-        'nfl_team': 'Team',
-        'opponent_nfl_team': 'Vs',
-        'manager': 'Manager',
-        'opponent': 'Opponent',
-
+        "player": "Player",
+        "nfl_team": "Team",
+        "opponent_nfl_team": "Vs",
+        "manager": "Manager",
+        "opponent": "Opponent",
         # Time dimensions
-        'week': 'Week',
-        'year': 'Year',
-
+        "week": "Week",
+        "year": "Year",
         # Positions
-        'nfl_position': 'Position',
-        'fantasy_position': 'Roster Slot',
-        'lineup_position': 'Lineup Slot',
-
+        "nfl_position": "Position",
+        "fantasy_position": "Roster Slot",
+        "lineup_position": "Lineup Slot",
         # Points and scoring
-        'points': 'Points',
-        'fantasy_points': 'Fantasy Points',
-        'spar': 'SPAR',
-        'player_spar': 'Player SPAR',
-        'manager_spar': 'Manager SPAR',
-
+        "points": "Points",
+        "fantasy_points": "Fantasy Points",
+        "spar": "SPAR",
+        "player_spar": "Player SPAR",
+        "manager_spar": "Manager SPAR",
         # Passing stats
-        'passing_yards': 'Pass Yds',
-        'passing_tds': 'Pass TD',
-        'passing_interceptions': 'Pass INT',
-        'completions': 'Comp',
-        'attempts': 'Pass Att',
-        'passing_epa': 'Pass EPA',
-        'passing_cpoe': 'CPOE',
-        'pacr': 'PACR',
-
+        "passing_yards": "Pass Yds",
+        "passing_tds": "Pass TD",
+        "passing_interceptions": "Pass INT",
+        "completions": "Comp",
+        "attempts": "Pass Att",
+        "passing_epa": "Pass EPA",
+        "passing_cpoe": "CPOE",
+        "pacr": "PACR",
         # Rushing stats
-        'rushing_yards': 'Rush Yds',
-        'rushing_tds': 'Rush TD',
-        'carries': 'Att',
-        'rushing_epa': 'Rush EPA',
-
+        "rushing_yards": "Rush Yds",
+        "rushing_tds": "Rush TD",
+        "carries": "Att",
+        "rushing_epa": "Rush EPA",
         # Receiving stats
-        'receptions': 'Rec',
-        'receiving_yards': 'Rec Yds',
-        'receiving_tds': 'Rec TD',
-        'targets': 'Tgt',
-        'target_share': 'Tgt %',
-        'receiving_epa': 'Rec EPA',
-        'wopr': 'WOPR',
-        'racr': 'RACR',
-
+        "receptions": "Rec",
+        "receiving_yards": "Rec Yds",
+        "receiving_tds": "Rec TD",
+        "targets": "Tgt",
+        "target_share": "Tgt %",
+        "receiving_epa": "Rec EPA",
+        "wopr": "WOPR",
+        "racr": "RACR",
         # Kicker stats
-        'fg_made': 'FGM',
-        'fg_att': 'FGA',
-        'fg_pct': 'FG%',
-        'pat_made': 'XPM',
-        'pat_att': 'XPA',
-
+        "fg_made": "FGM",
+        "fg_att": "FGA",
+        "fg_pct": "FG%",
+        "pat_made": "XPM",
+        "pat_att": "XPA",
         # Defense stats
-        'def_sacks': 'Sacks',
-        'def_interceptions': 'INT',
-        'pts_allow': 'PA',
-        'def_tds': 'TD',
-
+        "def_sacks": "Sacks",
+        "def_interceptions": "INT",
+        "pts_allow": "PA",
+        "def_tds": "TD",
         # Matchup context
-        'matchup_name': 'Matchup',
-        'team_points': 'My Team',
-        'opponent_points': 'Opp Team',
-        'win': 'Won',
-        'loss': 'Lost',
-        'is_playoffs': 'Playoffs',
-
+        "matchup_name": "Matchup",
+        "team_points": "My Team",
+        "opponent_points": "Opp Team",
+        "win": "Won",
+        "loss": "Lost",
+        "is_playoffs": "Playoffs",
         # Flags
-        'started': 'Started',
-        'optimal_player': 'Optimal',
+        "started": "Started",
+        "optimal_player": "Optimal",
     }
 
     # Only rename columns that exist in the dataframe
@@ -241,7 +231,7 @@ def format_numeric_columns(df: pd.DataFrame, round_decimals: int = 2) -> pd.Data
     Returns:
         DataFrame with formatted numeric columns
     """
-    numeric_columns = df.select_dtypes(include=['float64', 'float32']).columns
+    numeric_columns = df.select_dtypes(include=["float64", "float32"]).columns
 
     for col in numeric_columns:
         df[col] = df[col].round(round_decimals)
@@ -266,39 +256,72 @@ def get_stat_columns_by_position(position: str) -> List[str]:
         ```
     """
     position_stats = {
-        'QB': [
-            'Pass Yds', 'Pass TD', 'Pass INT', 'Comp', 'Pass Att',
-            'Rush Yds', 'Rush TD', 'Pass EPA', 'CPOE', 'PACR'
+        "QB": [
+            "Pass Yds",
+            "Pass TD",
+            "Pass INT",
+            "Comp",
+            "Pass Att",
+            "Rush Yds",
+            "Rush TD",
+            "Pass EPA",
+            "CPOE",
+            "PACR",
         ],
-        'RB': [
-            'Rush Yds', 'Rush TD', 'Att', 'Rec', 'Rec Yds', 'Rec TD',
-            'Tgt', 'Rush EPA', 'Rec EPA', 'Tgt %'
+        "RB": [
+            "Rush Yds",
+            "Rush TD",
+            "Att",
+            "Rec",
+            "Rec Yds",
+            "Rec TD",
+            "Tgt",
+            "Rush EPA",
+            "Rec EPA",
+            "Tgt %",
         ],
-        'WR': [
-            'Rec', 'Rec Yds', 'Rec TD', 'Tgt', 'Tgt %',
-            'Rec EPA', 'WOPR', 'RACR', 'Rush Yds', 'Rush TD'
+        "WR": [
+            "Rec",
+            "Rec Yds",
+            "Rec TD",
+            "Tgt",
+            "Tgt %",
+            "Rec EPA",
+            "WOPR",
+            "RACR",
+            "Rush Yds",
+            "Rush TD",
         ],
-        'TE': [
-            'Rec', 'Rec Yds', 'Rec TD', 'Tgt', 'Tgt %',
-            'Rec EPA', 'Rush Yds', 'Rush TD'
+        "TE": [
+            "Rec",
+            "Rec Yds",
+            "Rec TD",
+            "Tgt",
+            "Tgt %",
+            "Rec EPA",
+            "Rush Yds",
+            "Rush TD",
         ],
-        'K': [
-            'FGM', 'FGA', 'FG%', 'FG 0-19', 'FG 20-29', 'FG 30-39',
-            'FG 40-49', 'FG 50+', 'XPM', 'XPA'
+        "K": [
+            "FGM",
+            "FGA",
+            "FG%",
+            "FG 0-19",
+            "FG 20-29",
+            "FG 30-39",
+            "FG 40-49",
+            "FG 50+",
+            "XPM",
+            "XPA",
         ],
-        'DEF': [
-            'Sacks', 'INT', 'PA', 'TD', 'FF', 'Fum Rec',
-            'Total Tkl', 'TFL', 'PD'
-        ],
+        "DEF": ["Sacks", "INT", "PA", "TD", "FF", "Fum Rec", "Total Tkl", "TFL", "PD"],
     }
 
     return position_stats.get(position, [])
 
 
 def create_display_dataframe(
-    df: pd.DataFrame,
-    position: Optional[str] = None,
-    include_core: bool = True
+    df: pd.DataFrame, position: Optional[str] = None, include_core: bool = True
 ) -> pd.DataFrame:
     """
     Create a display-ready dataframe with appropriate columns.
@@ -327,7 +350,7 @@ def create_display_dataframe(
     df = apply_common_renames(df)
 
     # Core columns to always include
-    core_cols = ['Player', 'Team', 'Week', 'Year', 'Manager', 'Points']
+    core_cols = ["Player", "Team", "Week", "Year", "Manager", "Points"]
 
     # Build column list
     display_cols = []

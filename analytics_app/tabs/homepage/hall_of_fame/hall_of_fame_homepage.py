@@ -4,8 +4,6 @@ from typing import Any, Dict, Optional, Tuple, List
 import streamlit as st
 import duckdb
 import pandas as pd
-import importlib.util
-import importlib.machinery
 import sys
 from pathlib import Path
 
@@ -14,7 +12,7 @@ _app_dir = Path(__file__).parent.parent.parent.parent.resolve()
 if str(_app_dir) not in sys.path:
     sys.path.insert(0, str(_app_dir))
 
-from shared.dataframe_utils import as_dataframe, get_matchup_df
+from shared.dataframe_utils import get_matchup_df
 
 # Import all Hall of Fame modules
 from .playoff_brackets import PlayoffBracketsViewer
@@ -25,9 +23,12 @@ from .styles import apply_hall_of_fame_styles
 
 _FALLBACK_CSV = "matchup.csv"
 
+
 # ---------- Styling / Helpers ----------
 @st.fragment
-def _render_df(df: pd.DataFrame, highlight_cols: Tuple[str, ...] = (), index: bool = False):
+def _render_df(
+    df: pd.DataFrame, highlight_cols: Tuple[str, ...] = (), index: bool = False
+):
     """Pretty, consistent dataframe styling with auto numeric formatting."""
     if df is None or df.empty:
         st.info("No data available.")
@@ -37,14 +38,27 @@ def _render_df(df: pd.DataFrame, highlight_cols: Tuple[str, ...] = (), index: bo
     for c in df_fmt.columns:
         if "year" in c.lower():
             # Safely convert values to integer-like strings when possible
-            df_fmt[c] = df_fmt[c].map(lambda x: None if pd.isna(x) else str(int(float(x))) if str(x).strip() != "" else None)
+            df_fmt[c] = df_fmt[c].map(
+                lambda x: (
+                    None
+                    if pd.isna(x)
+                    else str(int(float(x))) if str(x).strip() != "" else None
+                )
+            )
 
     for c in df_fmt.columns:
         if pd.api.types.is_numeric_dtype(df_fmt[c]):
-            if any(k in c.lower() for k in ["ppg", "avg", "mean", "margin", "proj", "points", "score_num"]):
-                df_fmt[c] = df_fmt[c].map(lambda x: None if pd.isna(x) else round(float(x), 2))
+            if any(
+                k in c.lower()
+                for k in ["ppg", "avg", "mean", "margin", "proj", "points", "score_num"]
+            ):
+                df_fmt[c] = df_fmt[c].map(
+                    lambda x: None if pd.isna(x) else round(float(x), 2)
+                )
             else:
-                df_fmt[c] = df_fmt[c].map(lambda x: None if pd.isna(x) else round(float(x), 1))
+                df_fmt[c] = df_fmt[c].map(
+                    lambda x: None if pd.isna(x) else round(float(x), 1)
+                )
 
     col_cfg = {}
     for c in df_fmt.columns:
@@ -58,6 +72,7 @@ def _render_df(df: pd.DataFrame, highlight_cols: Tuple[str, ...] = (), index: bo
         column_config=col_cfg,
     )
 
+
 def _col(df: pd.DataFrame, *candidates: str) -> Optional[str]:
     """Return the first column in df (case-insensitive match) from candidates."""
     cols = {c.lower(): c for c in df.columns}
@@ -66,23 +81,29 @@ def _col(df: pd.DataFrame, *candidates: str) -> Optional[str]:
             return cols[c.lower()]
     return None
 
+
 def _required(df: pd.DataFrame, *candidates: str) -> str:
     name = _col(df, *candidates)
     if not name:
         raise KeyError(f"Missing required column; tried {candidates}")
     return name
 
+
 def _numericify(df: pd.DataFrame, cols: Tuple[str, ...]) -> None:
     for c in cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
+
 def _flagify(series: pd.Series) -> pd.Series:
     mapping = {"true": 1, "false": 0, "1": 1, "0": 0}
     s = series.map(lambda x: mapping.get(x, mapping.get(str(x).lower(), None)))
     s = s.where(s.notna(), pd.to_numeric(series, errors="coerce"))
-    s = s.fillna(series.astype(str).str.lower().isin(["true", "t", "yes", "y"]).astype(int))
+    s = s.fillna(
+        series.astype(str).str.lower().isin(["true", "t", "yes", "y"]).astype(int)
+    )
     return s.fillna(0).astype(int)
+
 
 def _pill_nav(options: List[str], key: str, default: str) -> str:
     # Lightweight segmented control using radio (horizontal)
@@ -96,8 +117,10 @@ def _pill_nav(options: List[str], key: str, default: str) -> str:
     )
     return choice
 
+
 def _apply_hero():
-    st.markdown("""
+    st.markdown(
+        """
         <div style="background: linear-gradient(135deg,
                     var(--gradient-start, rgba(102, 126, 234, 0.1)) 0%,
                     var(--gradient-end, rgba(118, 75, 162, 0.06)) 100%);
@@ -111,7 +134,10 @@ def _apply_hero():
             Champions, legends, records — and the full playoff story in one place.
           </p>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
+
 
 class HallOfFameViewer:
     def __init__(self, df_dict: Optional[Dict[str, Any]]):
@@ -132,7 +158,9 @@ class HallOfFameViewer:
             self.week_col = _required(df, "week")
             self.win_col = _required(df, "win", "Win")
             self.loss_col = _col(df, "loss", "Loss")
-            self.is_playoffs_col = _required(df, "is_playoffs", "Is_Playoffs", "playoffs")
+            self.is_playoffs_col = _required(
+                df, "is_playoffs", "Is_Playoffs", "playoffs"
+            )
             self.is_consolation_col = _col(df, "is_consolation", "Is_Consolation")
             self.team_pts_col = _required(df, "team_points", "Team_Points")
             self.opp_pts_col = _required(df, "opponent_points", "Opponent_Points")
@@ -145,12 +173,22 @@ class HallOfFameViewer:
             self.final_l_col = _col(df, "final_losses")
 
             # Championship flags if present
-            self.championship_flag_col = _col(df, "championship", "is_championship", "final_game")
+            self.championship_flag_col = _col(
+                df, "championship", "is_championship", "final_game"
+            )
             self.champion_flag_col = _col(df, "champion", "is_champion")
 
             # Coerce types
-            _numericify(df, (self.year_col, self.week_col, self.team_pts_col, self.opp_pts_col))
-            for maybe_num in (self.team_proj_col, self.opp_proj_col, self.season_mean_col, self.final_w_col, self.final_l_col):
+            _numericify(
+                df, (self.year_col, self.week_col, self.team_pts_col, self.opp_pts_col)
+            )
+            for maybe_num in (
+                self.team_proj_col,
+                self.opp_proj_col,
+                self.season_mean_col,
+                self.final_w_col,
+                self.final_l_col,
+            ):
                 if maybe_num:
                     _numericify(df, (maybe_num,))
 
@@ -162,11 +200,15 @@ class HallOfFameViewer:
             if self.champion_flag_col:
                 df[self.champion_flag_col] = _flagify(df[self.champion_flag_col])
             if self.championship_flag_col:
-                df[self.championship_flag_col] = _flagify(df[self.championship_flag_col])
+                df[self.championship_flag_col] = _flagify(
+                    df[self.championship_flag_col]
+                )
 
             self.df = df
         else:
-            self.year_col = self.manager_col = self.opp_col = self.week_col = self.win_col = None
+            self.year_col = self.manager_col = self.opp_col = self.week_col = (
+                self.win_col
+            ) = None
             self.is_playoffs_col = self.is_consolation_col = None
             self.team_pts_col = self.opp_pts_col = None
             self.championship_flag_col = self.champion_flag_col = None
@@ -319,7 +361,11 @@ class HallOfFameViewer:
         return self.con.execute(q).fetchdf()
 
     def _projection_upsets(self) -> pd.DataFrame:
-        if self.df is None or self.df.empty or not (self.team_proj_col and self.opp_proj_col):
+        if (
+            self.df is None
+            or self.df.empty
+            or not (self.team_proj_col and self.opp_proj_col)
+        ):
             return pd.DataFrame()
         # De-duplicate matchups (one row per unique matchup) same as in _blowouts so upsets aren't doubled.
         q = f"""
@@ -359,27 +405,41 @@ class HallOfFameViewer:
         with col1:
             st.metric("Total Championships", len(champs_df))
         with col2:
-            st.metric("Unique Champions", champs_df["winner"].nunique() if not champs_df.empty else 0)
+            st.metric(
+                "Unique Champions",
+                champs_df["winner"].nunique() if not champs_df.empty else 0,
+            )
         with col3:
             try:
-                max_score = champs_df["winner_pts"].max() if "winner_pts" in champs_df else None
-                st.metric("Highest Champ Score", f"{max_score:.1f}" if max_score is not None else "—")
+                max_score = (
+                    champs_df["winner_pts"].max() if "winner_pts" in champs_df else None
+                )
+                st.metric(
+                    "Highest Champ Score",
+                    f"{max_score:.1f}" if max_score is not None else "—",
+                )
             except Exception:
                 st.metric("Highest Champ Score", "—")
         with col4:
             if not champs_df.empty:
-                st.metric("Era", f"{int(champs_df['year'].min())}–{int(champs_df['year'].max())}")
+                st.metric(
+                    "Era",
+                    f"{int(champs_df['year'].min())}–{int(champs_df['year'].max())}",
+                )
             else:
                 st.metric("Era", "—")
 
     @st.fragment
     def _render_champions(self):
-        st.markdown("""
+        st.markdown(
+            """
             <div class='hof-gradient-header hof-header-gold'>
                 <h3>🏆 Championship History</h3>
                 <p>Every champion, every season — the legacy of greatness</p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         champs = self._championship_rows()
         if champs.empty:
@@ -406,14 +466,17 @@ class HallOfFameViewer:
                         icon = "🏆"
                         label = "Champion"
 
-                    st.markdown(f"""
+                    st.markdown(
+                        f"""
                         <div class='hof-champ-badge {badge_class}'>
                             <div class='badge-icon'>{icon}</div>
                             <div class='badge-name'>{mgr}</div>
                             <div class='badge-count'>{cnt} {'Title' if cnt == 1 else 'Titles'}</div>
                             <div class='badge-label'>{label}</div>
                         </div>
-                    """, unsafe_allow_html=True)
+                    """,
+                        unsafe_allow_html=True,
+                    )
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("##### 📅 Championship Timeline")
@@ -427,22 +490,25 @@ class HallOfFameViewer:
                 if i + j < len(recent_champs):
                     row = recent_champs.iloc[i + j]
                     try:
-                        year = int(float(row['year']))
-                    except:
-                        year = row['year']
-                    winner = str(row['winner'])
-                    runner_up = str(row['runner_up'])
-                    score = str(row['score'])
+                        year = int(float(row["year"]))
+                    except Exception:
+                        year = row["year"]
+                    winner = str(row["winner"])
+                    runner_up = str(row["runner_up"])
+                    score = str(row["score"])
 
                     with col:
                         # Compact card design
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                             <div class='hof-timeline-card'>
                                 <div class='timeline-year'>{year}</div>
                                 <div class='timeline-winner'>🏆 {winner}</div>
                                 <div class='timeline-details'>def. {runner_up} • {score}</div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )
 
         # Show expander for full championship history if there are more
         if len(champs) > 6:
@@ -451,12 +517,15 @@ class HallOfFameViewer:
 
     @st.fragment
     def _render_rings(self):
-        st.markdown("""
+        st.markdown(
+            """
             <div class='hof-gradient-header hof-header-purple'>
                 <h4>💍 Rings Leaderboard</h4>
                 <p>Total championships won by each manager</p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         rings = self._rings()
         if rings.empty:
@@ -475,12 +544,15 @@ class HallOfFameViewer:
 
     @st.fragment
     def _render_finals(self):
-        st.markdown("""
+        st.markdown(
+            """
             <div class='hof-gradient-header hof-header-red'>
                 <h4>🥈 Finals Appearances</h4>
                 <p>Managers who made it to the championship game</p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         finals = self._finals_appearances()
         if finals.empty:
@@ -490,12 +562,15 @@ class HallOfFameViewer:
 
     @st.fragment
     def _render_ppg(self):
-        st.markdown("""
+        st.markdown(
+            """
             <div class='hof-gradient-header hof-header-orange'>
                 <h4>🔥 Best Playoff PPG</h4>
                 <p>Highest scoring averages in playoff games (min. 3 games)</p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         ppg = self._best_playoff_ppg()
         if ppg.empty:
@@ -505,12 +580,15 @@ class HallOfFameViewer:
 
     @st.fragment
     def _render_blowouts_and_upsets(self):
-        st.markdown("""
+        st.markdown(
+            """
             <div class='hof-gradient-header hof-header-fire'>
                 <h3>💥 Largest Playoff Margins</h3>
                 <p>The most dominant playoff victories in league history</p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         blow = self._blowouts()
         if blow.empty:
@@ -521,12 +599,15 @@ class HallOfFameViewer:
         upsets = self._projection_upsets()
         if not upsets.empty:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("""
+            st.markdown(
+                """
                 <div class='hof-gradient-header hof-header-violet'>
                     <h3>😲 Biggest Projection Upsets</h3>
                     <p>When the underdog defied the odds and shocked the favorite</p>
                 </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
             _render_df(upsets)
 
     @st.fragment
@@ -549,30 +630,43 @@ class HallOfFameViewer:
             return
 
         # ===== 4 main tabs (merged Top Teams + Top Players into Leaderboards) =====
-        tabs = st.tabs([
-            "🏆 Playoffs",
-            "🎮 Legendary Games",
-            "📊 Records",
-            "👑 Leaderboards",
-        ])
+        tabs = st.tabs(
+            [
+                "🏆 Playoffs",
+                "🎮 Legendary Games",
+                "📊 Records",
+                "👑 Leaderboards",
+            ]
+        )
 
         # ------------------- PLAYOFFS TAB -------------------
         with tabs[0]:
             # Optional quick filters (improve clarity, but non-destructive)
             with st.expander("Filters", expanded=False):
-                years = sorted(self.df[self.year_col].dropna().astype(int).unique().tolist())
-                managers = sorted(self.df[self.manager_col].dropna().astype(str).unique().tolist())
+                years = sorted(
+                    self.df[self.year_col].dropna().astype(int).unique().tolist()
+                )
+                managers = sorted(
+                    self.df[self.manager_col].dropna().astype(str).unique().tolist()
+                )
 
                 sel_years = st.multiselect("Years", years, default=years)
                 sel_mgrs = st.multiselect("Managers (any role)", managers, default=[])
-                include_consolation = st.toggle("Include consolation games", value=False, help="Affects some sections (blowouts/PPG)")
+                include_consolation = st.toggle(
+                    "Include consolation games",
+                    value=False,
+                    help="Affects some sections (blowouts/PPG)",
+                )
 
                 # Filter view dataframe for subviews
                 dfv = self.df.copy()
                 if sel_years:
                     dfv = dfv[dfv[self.year_col].astype(int).isin(sel_years)]
                 if sel_mgrs:
-                    dfv = dfv[(dfv[self.manager_col].astype(str).isin(sel_mgrs)) | (dfv[self.opp_col].astype(str).isin(sel_mgrs))]
+                    dfv = dfv[
+                        (dfv[self.manager_col].astype(str).isin(sel_mgrs))
+                        | (dfv[self.opp_col].astype(str).isin(sel_mgrs))
+                    ]
                 if not include_consolation and self.is_consolation_col in dfv.columns:
                     dfv = dfv[dfv[self.is_consolation_col] == 0]
                 # Re-register filtered view for queries in this tab

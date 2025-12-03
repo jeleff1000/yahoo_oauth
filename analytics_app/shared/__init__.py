@@ -33,38 +33,32 @@ from .chart_themes import (
     CATEGORICAL_COLORS,
 )
 
-from .dataframe_utils import (
-    clean_dataframe,
-    ensure_numeric,
-    apply_common_renames
-)
+from .dataframe_utils import clean_dataframe, ensure_numeric, apply_common_renames
 
 __all__ = [
     # Theme functions
-    'get_theme_colors',
-    'inject_theme_css',
-    'detect_theme',
-    'create_theme_toggle',
-
+    "get_theme_colors",
+    "inject_theme_css",
+    "detect_theme",
+    "create_theme_toggle",
     # Chart theming
-    'get_chart_theme',
-    'get_chart_colors',
-    'apply_chart_theme',
-    'get_plotly_template',
-    'create_grade_bar_chart',
-    'create_regret_bar_chart',
-    'create_faab_tier_chart',
-    'create_horizontal_bar_chart',
-    'get_grade_colors_list',
-    'get_regret_colors_list',
-    'get_faab_tier_colors_list',
-    'GRADE_COLORS',
-    'REGRET_COLORS',
-    'FAAB_TIER_COLORS',
-    'CATEGORICAL_COLORS',
-
+    "get_chart_theme",
+    "get_chart_colors",
+    "apply_chart_theme",
+    "get_plotly_template",
+    "create_grade_bar_chart",
+    "create_regret_bar_chart",
+    "create_faab_tier_chart",
+    "create_horizontal_bar_chart",
+    "get_grade_colors_list",
+    "get_regret_colors_list",
+    "get_faab_tier_colors_list",
+    "GRADE_COLORS",
+    "REGRET_COLORS",
+    "FAAB_TIER_COLORS",
+    "CATEGORICAL_COLORS",
     # DataFrame utilities
-    'clean_dataframe',
-    'ensure_numeric',
-    'apply_common_renames',
+    "clean_dataframe",
+    "ensure_numeric",
+    "apply_common_renames",
 ]

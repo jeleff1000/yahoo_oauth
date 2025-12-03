@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 import duckdb
 from .top_weeks import TopWeeksViewer
 
@@ -13,12 +12,15 @@ class TopTeamsViewer:
 
     @st.fragment
     def display(self):
-        st.markdown("""
+        st.markdown(
+            """
             <div class='hof-gradient-header hof-header-green'>
                 <h2>⭐ Top Teams</h2>
                 <p>The most dominant seasons and explosive weeks in league history</p>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         if self.df is None or self.df.empty:
             st.info("📊 No data available")
@@ -42,25 +44,41 @@ class TopTeamsViewer:
         with st.expander("🔍 Filters", expanded=False):
             col1, col2, col3 = st.columns(3)
             with col1:
-                regular_season = st.checkbox("Regular Season", value=True, key="top_seasons_regular")
+                regular_season = st.checkbox(
+                    "Regular Season", value=True, key="top_seasons_regular"
+                )
             with col2:
-                playoffs = st.checkbox("Playoffs", value=False, key="top_seasons_playoffs")
+                playoffs = st.checkbox(
+                    "Playoffs", value=False, key="top_seasons_playoffs"
+                )
             with col3:
-                min_games = st.number_input("Min Games", min_value=1, value=10, key="top_seasons_min_games")
+                min_games = st.number_input(
+                    "Min Games", min_value=1, value=10, key="top_seasons_min_games"
+                )
 
             col4, col5 = st.columns(2)
             with col4:
-                years = ["All Years"] + sorted([str(y) for y in self.df['year'].unique().tolist()])
-                selected_year = st.selectbox("Year", years, index=0, key="top_seasons_year")
+                years = ["All Years"] + sorted(
+                    [str(y) for y in self.df["year"].unique().tolist()]
+                )
+                selected_year = st.selectbox(
+                    "Year", years, index=0, key="top_seasons_year"
+                )
             with col5:
-                managers = ["All Managers"] + sorted(self.df['manager'].unique().tolist())
-                selected_manager = st.selectbox("Manager", managers, index=0, key="top_seasons_manager")
+                managers = ["All Managers"] + sorted(
+                    self.df["manager"].unique().tolist()
+                )
+                selected_manager = st.selectbox(
+                    "Manager", managers, index=0, key="top_seasons_manager"
+                )
 
         try:
             # Build SQL query
             where_conditions = []
             if regular_season and not playoffs:
-                where_conditions.append("is_playoffs = 0 AND COALESCE(is_consolation, 0) = 0")
+                where_conditions.append(
+                    "is_playoffs = 0 AND COALESCE(is_consolation, 0) = 0"
+                )
             elif playoffs and not regular_season:
                 where_conditions.append("is_playoffs = 1")
             elif not regular_season and not playoffs:
@@ -110,17 +128,23 @@ class TopTeamsViewer:
                 # Display KPIs
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.metric("Best Season", f"{top_seasons.iloc[0]['total_points']:.1f} pts",
-                              delta=f"{top_seasons.iloc[0]['manager']} ({int(top_seasons.iloc[0]['year'])})")
+                    st.metric(
+                        "Best Season",
+                        f"{top_seasons.iloc[0]['total_points']:.1f} pts",
+                        delta=f"{top_seasons.iloc[0]['manager']} ({int(top_seasons.iloc[0]['year'])})",
+                    )
                 with col2:
-                    avg_ppg = top_seasons['ppg'].mean()
+                    avg_ppg = top_seasons["ppg"].mean()
                     st.metric("Avg PPG (Top 25)", f"{avg_ppg:.1f}")
                 with col3:
-                    champs_in_top = len(top_seasons[top_seasons['is_champion'] == 1])
+                    champs_in_top = len(top_seasons[top_seasons["is_champion"] == 1])
                     st.metric("Champions in Top 25", champs_in_top)
                 with col4:
-                    best_record = top_seasons.nlargest(1, 'total_wins')
-                    st.metric("Best Record", f"{int(best_record.iloc[0]['total_wins'])}-{int(best_record.iloc[0]['total_losses'])}")
+                    best_record = top_seasons.nlargest(1, "total_wins")
+                    st.metric(
+                        "Best Record",
+                        f"{int(best_record.iloc[0]['total_wins'])}-{int(best_record.iloc[0]['total_losses'])}",
+                    )
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -149,10 +173,11 @@ class TopTeamsViewer:
                                 medal = f"#{rank}"
                                 border_color = "#E5E7EB"
 
-                            champ_badge = " 🏆" if row['is_champion'] == 1 else ""
+                            champ_badge = " 🏆" if row["is_champion"] == 1 else ""
 
                             with col:
-                                st.markdown(f"""
+                                st.markdown(
+                                    f"""
                                     <div class='hof-season-card' style='border-left: 4px solid {border_color};'>
                                         <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;'>
                                             <span class='season-rank'>{medal}</span>
@@ -174,15 +199,25 @@ class TopTeamsViewer:
                                             </div>
                                         </div>
                                     </div>
-                                """, unsafe_allow_html=True)
+                                """,
+                                    unsafe_allow_html=True,
+                                )
 
                 # Show rest in table if applicable
                 if len(top_seasons) > 10:
                     with st.expander(f"📊 View Ranks 11-{len(top_seasons)}"):
                         rest = top_seasons.iloc[10:].copy()
-                        rest['year'] = rest['year'].astype(str)
-                        rest.columns = ['Manager', 'Year', 'Total Points', 'Wins', 'Losses', 'PPG', 'Champion']
-                        rest['Champion'] = rest['Champion'].map({1: '🏆', 0: ''})
+                        rest["year"] = rest["year"].astype(str)
+                        rest.columns = [
+                            "Manager",
+                            "Year",
+                            "Total Points",
+                            "Wins",
+                            "Losses",
+                            "PPG",
+                            "Champion",
+                        ]
+                        rest["Champion"] = rest["Champion"].map({1: "🏆", 0: ""})
                         st.dataframe(rest, use_container_width=True, hide_index=True)
 
             else:
@@ -191,4 +226,5 @@ class TopTeamsViewer:
         except Exception as e:
             st.error(f"Error loading season data: {e}")
             import traceback
+
             st.code(traceback.format_exc())

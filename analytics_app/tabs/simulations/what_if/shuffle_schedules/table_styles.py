@@ -1,27 +1,38 @@
 """Shared modern table styling for simulation viewers using AgGrid with theme-adaptive red-yellow-green gradient"""
+
 import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
 
-def _get_responsive_width(col_name: str, is_first: bool = False, total_columns: int = 10) -> dict:
+def _get_responsive_width(
+    col_name: str, is_first: bool = False, total_columns: int = 10
+) -> dict:
     """
     Get responsive column width configuration based on column type.
     Returns dict with 'width', 'minWidth', 'maxWidth' for AgGrid.
     """
     if is_first:
-        return {'width': 100, 'minWidth': 80, 'maxWidth': 140}
-    elif col_name in ['Year', 'Week', 'Actual', 'Record']:
-        return {'width': 65, 'minWidth': 50, 'maxWidth': 85}
-    elif 'Seed' in col_name or 'seed' in col_name:
-        return {'width': 55, 'minWidth': 45, 'maxWidth': 75}
-    elif '-' in col_name and col_name[0].isdigit():  # Record columns like "10-4"
-        return {'width': 50, 'minWidth': 40, 'maxWidth': 65}
+        return {"width": 100, "minWidth": 80, "maxWidth": 140}
+    elif col_name in ["Year", "Week", "Actual", "Record"]:
+        return {"width": 65, "minWidth": 50, "maxWidth": 85}
+    elif "Seed" in col_name or "seed" in col_name:
+        return {"width": 55, "minWidth": 45, "maxWidth": 75}
+    elif "-" in col_name and col_name[0].isdigit():  # Record columns like "10-4"
+        return {"width": 50, "minWidth": 40, "maxWidth": 65}
     else:
-        return {'width': 60, 'minWidth': 45, 'maxWidth': 80}
+        return {"width": 60, "minWidth": 45, "maxWidth": 80}
 
 
-def render_modern_table(df, title="", color_columns=None, reverse_columns=None, format_specs=None, column_names=None, gradient_by_column=True):
+def render_modern_table(
+    df,
+    title="",
+    color_columns=None,
+    reverse_columns=None,
+    format_specs=None,
+    column_names=None,
+    gradient_by_column=True,
+):
     """
     Render a modern styled AgGrid table with red-yellow-green gradient coloring and sorting.
     Optimized for mobile and desktop with responsive column widths.
@@ -42,7 +53,10 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
     column_names = column_names or {}
 
     if title:
-        st.markdown(f"<h4 style='margin-top: 1rem; margin-bottom: 0.5rem;'>{title}</h4>", unsafe_allow_html=True)
+        st.markdown(
+            f"<h4 style='margin-top: 1rem; margin-bottom: 0.5rem;'>{title}</h4>",
+            unsafe_allow_html=True,
+        )
 
     # Prepare dataframe - reset index to make it a regular column
     display_df = df.reset_index()
@@ -58,17 +72,20 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
             # Check for Total row in first column(s)
             mask = pd.Series([True] * len(display_df))
             for c in display_df.columns[:3]:  # Check first few columns for 'Total'
-                if display_df[c].dtype == 'object' or display_df[c].dtype.name == 'string':
-                    mask &= display_df[c].astype(str).str.lower() != 'total'
+                if (
+                    display_df[c].dtype == "object"
+                    or display_df[c].dtype.name == "string"
+                ):
+                    mask &= display_df[c].astype(str).str.lower() != "total"
 
             col_data = col_data[mask]
-            numeric_vals = pd.to_numeric(col_data, errors='coerce').dropna()
+            numeric_vals = pd.to_numeric(col_data, errors="coerce").dropna()
 
             if len(numeric_vals) > 0:
                 gradients[col] = {
-                    'min': numeric_vals.min(),
-                    'max': numeric_vals.max(),
-                    'reverse': col in reverse_columns
+                    "min": numeric_vals.min(),
+                    "max": numeric_vals.max(),
+                    "reverse": col in reverse_columns,
                 }
 
     # Rename columns for display AFTER calculating gradients
@@ -101,30 +118,34 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
                     break
 
         # Get responsive width configuration
-        is_first = (idx == 0)
+        is_first = idx == 0
         width_config = _get_responsive_width(col, is_first, total_cols)
         col_config.update(width_config)
 
         # Apply number formatting
         if original_col in format_specs:
             format_str = format_specs[original_col]
-            if '.0f' in format_str:
-                col_config['type'] = 'numericColumn'
-                col_config['valueFormatter'] = JsCode(f"(params) => params.value !== null && params.value !== undefined ? params.value.toFixed(0) : '—'")
-            elif '.1f' in format_str or '.2f' in format_str:
-                decimals = 2 if '.2f' in format_str else 1
-                col_config['type'] = 'numericColumn'
-                col_config['valueFormatter'] = JsCode(f"(params) => params.value !== null && params.value !== undefined ? params.value.toFixed({decimals}) : '—'")
+            if ".0f" in format_str:
+                col_config["type"] = "numericColumn"
+                col_config["valueFormatter"] = JsCode(
+                    "(params) => params.value !== null && params.value !== undefined ? params.value.toFixed(0) : '—'"
+                )
+            elif ".1f" in format_str or ".2f" in format_str:
+                decimals = 2 if ".2f" in format_str else 1
+                col_config["type"] = "numericColumn"
+                col_config["valueFormatter"] = JsCode(
+                    f"(params) => params.value !== null && params.value !== undefined ? params.value.toFixed({decimals}) : '—'"
+                )
 
         # Enable sorting
-        col_config['sortable'] = True
-        col_config['filter'] = False
+        col_config["sortable"] = True
+        col_config["filter"] = False
 
         # Apply gradient coloring via cellStyle
         if original_col in gradients:
-            is_reverse = gradients[original_col]['reverse']
-            col_min = gradients[original_col]['min']
-            col_max = gradients[original_col]['max']
+            is_reverse = gradients[original_col]["reverse"]
+            col_min = gradients[original_col]["min"]
+            col_max = gradients[original_col]["max"]
 
             if gradient_by_column:
                 # Column-based gradient
@@ -173,8 +194,11 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
                 """
             else:
                 # Row-based gradient
-                display_gradient_cols = [renamed_gradient_cols[orig] for orig in all_gradient_cols
-                                         if renamed_gradient_cols[orig] in display_df.columns]
+                display_gradient_cols = [
+                    renamed_gradient_cols[orig]
+                    for orig in all_gradient_cols
+                    if renamed_gradient_cols[orig] in display_df.columns
+                ]
 
                 cell_style_js = f"""
                 function(params) {{
@@ -236,26 +260,23 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
                     }};
                 }}
                 """
-            col_config['cellStyle'] = JsCode(cell_style_js)
+            col_config["cellStyle"] = JsCode(cell_style_js)
 
         gb.configure_column(col, **col_config)
 
     # Configure default column settings
     gb.configure_default_column(
-        resizable=True,
-        filterable=False,
-        sortable=True,
-        editable=False
+        resizable=True, filterable=False, sortable=True, editable=False
     )
 
     # Configure grid options - compact for mobile
     gb.configure_grid_options(
-        domLayout='normal',
+        domLayout="normal",
         enableCellTextSelection=True,
         rowHeight=36,
         headerHeight=38,
         suppressColumnVirtualisation=True,
-        suppressHorizontalScroll=False
+        suppressHorizontalScroll=False,
     )
 
     # Theme-adaptive CSS for AgGrid - mobile optimized
@@ -266,17 +287,14 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
             "padding": "4px 6px",
             "white-space": "nowrap",
             "overflow": "hidden",
-            "text-overflow": "ellipsis"
+            "text-overflow": "ellipsis",
         },
-        ".ag-cell": {
-            "font-size": "0.85em",
-            "padding": "4px 6px"
-        },
+        ".ag-cell": {"font-size": "0.85em", "padding": "4px 6px"},
         ".ag-root-wrapper": {
             "border-radius": "8px",
             "overflow": "hidden",
-            "box-shadow": "0 2px 8px rgba(0,0,0,0.08)"
-        }
+            "box-shadow": "0 2px 8px rgba(0,0,0,0.08)",
+        },
     }
 
     grid_options = gb.build()
@@ -294,6 +312,6 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
         allow_unsafe_jscode=True,
         custom_css=custom_css,
         height=table_height,
-        theme='streamlit',
-        fit_columns_on_grid_load=True
+        theme="streamlit",
+        fit_columns_on_grid_load=True,
     )

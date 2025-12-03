@@ -3,24 +3,46 @@
 import streamlit as st
 import pandas as pd
 
-from .weekly_team_subprocesses.weekly_team_basic_stats import get_basic_stats as get_basic_stats_by_pos
-from .weekly_team_subprocesses.weekly_team_advanced_stats import get_advanced_stats as get_advanced_stats_by_pos
-from .weekly_team_subprocesses.weekly_team_basic_stats_by_manager import get_basic_stats as get_basic_stats_by_mgr
+from .weekly_team_subprocesses.weekly_team_basic_stats import (
+    get_basic_stats as get_basic_stats_by_pos,
+)
+from .weekly_team_subprocesses.weekly_team_advanced_stats import (
+    get_advanced_stats as get_advanced_stats_by_pos,
+)
+from .weekly_team_subprocesses.weekly_team_basic_stats_by_manager import (
+    get_basic_stats as get_basic_stats_by_mgr,
+)
 
 from .shared.theme import apply_theme_styles, render_empty_state
 from ..shared.modern_styles import apply_modern_styles
 from .shared.constants import TAB_LABELS
 from .shared.column_config import get_column_config_for_position
-from .shared.table_formatting import create_summary_stats
 
 
 class WeeklyTeamViewer:
     """Weekly team data viewer - shows stats aggregated by manager and/or position."""
 
-    def __init__(self, team_data_by_position: pd.DataFrame, team_data_by_manager: pd.DataFrame, team_data_by_lineup_position: pd.DataFrame = None):
-        self.team_data_by_position = team_data_by_position.copy() if team_data_by_position is not None else pd.DataFrame()
-        self.team_data_by_manager = team_data_by_manager.copy() if team_data_by_manager is not None else pd.DataFrame()
-        self.team_data_by_lineup_position = team_data_by_lineup_position.copy() if team_data_by_lineup_position is not None else pd.DataFrame()
+    def __init__(
+        self,
+        team_data_by_position: pd.DataFrame,
+        team_data_by_manager: pd.DataFrame,
+        team_data_by_lineup_position: pd.DataFrame = None,
+    ):
+        self.team_data_by_position = (
+            team_data_by_position.copy()
+            if team_data_by_position is not None
+            else pd.DataFrame()
+        )
+        self.team_data_by_manager = (
+            team_data_by_manager.copy()
+            if team_data_by_manager is not None
+            else pd.DataFrame()
+        )
+        self.team_data_by_lineup_position = (
+            team_data_by_lineup_position.copy()
+            if team_data_by_lineup_position is not None
+            else pd.DataFrame()
+        )
 
     def display(self):
         """Display weekly team stats with clean, mobile-friendly layout."""
@@ -45,7 +67,8 @@ class WeeklyTeamViewer:
     def _render_filter_ui(self) -> dict:
         """Render compact collapsible filter UI matching matchups style."""
         # Compact filter styling
-        st.markdown("""
+        st.markdown(
+            """
         <style>
         [data-testid="stExpander"] .stMultiSelect,
         [data-testid="stExpander"] .stCheckbox,
@@ -59,7 +82,9 @@ class WeeklyTeamViewer:
             margin-bottom: 0.25rem !important;
         }
         </style>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         with st.expander("🔎 Filters", expanded=False):
             col1, col2 = st.columns(2)
@@ -68,22 +93,24 @@ class WeeklyTeamViewer:
             with col1:
                 positions = ["All", "QB", "RB", "WR", "TE", "K", "DEF", "W/R/T"]
                 selected_position = st.selectbox(
-                    "Position",
-                    positions,
-                    index=0,
-                    key="weekly_team_position"
+                    "Position", positions, index=0, key="weekly_team_position"
                 )
 
             # Manager filter
             with col2:
-                if not self.team_data_by_position.empty and 'manager' in self.team_data_by_position.columns:
-                    managers = sorted(self.team_data_by_position['manager'].dropna().unique())
+                if (
+                    not self.team_data_by_position.empty
+                    and "manager" in self.team_data_by_position.columns
+                ):
+                    managers = sorted(
+                        self.team_data_by_position["manager"].dropna().unique()
+                    )
                     selected_managers = st.multiselect(
                         "Manager(s)",
                         managers,
                         default=[],
                         key="weekly_team_managers",
-                        placeholder="All managers"
+                        placeholder="All managers",
                     )
                     if not selected_managers:
                         selected_managers = managers
@@ -91,14 +118,17 @@ class WeeklyTeamViewer:
                     selected_managers = []
 
             # Year filter
-            if not self.team_data_by_position.empty and 'year' in self.team_data_by_position.columns:
-                years = sorted(self.team_data_by_position['year'].dropna().unique())
+            if (
+                not self.team_data_by_position.empty
+                and "year" in self.team_data_by_position.columns
+            ):
+                years = sorted(self.team_data_by_position["year"].dropna().unique())
                 selected_years = st.multiselect(
                     "Year(s)",
                     years,
                     default=[],
                     key="weekly_team_years",
-                    placeholder="All years"
+                    placeholder="All years",
                 )
                 if not selected_years:
                     selected_years = years
@@ -108,39 +138,45 @@ class WeeklyTeamViewer:
             # Game type toggles (inline, compact)
             st.markdown(
                 '<p style="margin: 0.5rem 0 0.25rem 0; font-size: 0.85rem; opacity: 0.7;">Game Types</p>',
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
             toggle_cols = st.columns(3)
 
             with toggle_cols[0]:
                 regular_season = st.checkbox(
                     "Regular",
-                    value=st.session_state.get("weekly_team_include_regular_season", True),
-                    key="weekly_team_include_regular_season"
+                    value=st.session_state.get(
+                        "weekly_team_include_regular_season", True
+                    ),
+                    key="weekly_team_include_regular_season",
                 )
             with toggle_cols[1]:
                 playoffs = st.checkbox(
                     "Playoffs",
                     value=st.session_state.get("weekly_team_include_playoffs", True),
-                    key="weekly_team_include_playoffs"
+                    key="weekly_team_include_playoffs",
                 )
             with toggle_cols[2]:
                 consolation = st.checkbox(
                     "Consolation",
-                    value=st.session_state.get("weekly_team_include_consolation", False),
-                    key="weekly_team_include_consolation"
+                    value=st.session_state.get(
+                        "weekly_team_include_consolation", False
+                    ),
+                    key="weekly_team_include_consolation",
                 )
 
         return {
-            'position': selected_position,
-            'managers': selected_managers,
-            'years': selected_years,
-            'regular_season': regular_season,
-            'playoffs': playoffs,
-            'consolation': consolation
+            "position": selected_position,
+            "managers": selected_managers,
+            "years": selected_years,
+            "regular_season": regular_season,
+            "playoffs": playoffs,
+            "consolation": consolation,
         }
 
-    def _apply_filters(self, data: pd.DataFrame, filters: dict, filter_position: bool = True) -> pd.DataFrame:
+    def _apply_filters(
+        self, data: pd.DataFrame, filters: dict, filter_position: bool = True
+    ) -> pd.DataFrame:
         """Apply filters to dataframe."""
         if data.empty:
             return data
@@ -148,16 +184,20 @@ class WeeklyTeamViewer:
         filtered = data.copy()
 
         # Position filter
-        if filter_position and filters['position'] != "All" and 'fantasy_position' in filtered.columns:
-            filtered = filtered[filtered['fantasy_position'] == filters['position']]
+        if (
+            filter_position
+            and filters["position"] != "All"
+            and "fantasy_position" in filtered.columns
+        ):
+            filtered = filtered[filtered["fantasy_position"] == filters["position"]]
 
         # Year filter
-        if filters['years'] and 'year' in filtered.columns:
-            filtered = filtered[filtered['year'].isin(filters['years'])]
+        if filters["years"] and "year" in filtered.columns:
+            filtered = filtered[filtered["year"].isin(filters["years"])]
 
         # Manager filter
-        if filters['managers'] and 'manager' in filtered.columns:
-            filtered = filtered[filtered['manager'].isin(filters['managers'])]
+        if filters["managers"] and "manager" in filtered.columns:
+            filtered = filtered[filtered["manager"].isin(filters["managers"])]
 
         return filtered
 
@@ -167,7 +207,7 @@ class WeeklyTeamViewer:
             render_empty_state(
                 title="No Data Available",
                 message="Weekly team data has not been loaded yet.",
-                icon="📭"
+                icon="📭",
             )
             return
 
@@ -178,15 +218,15 @@ class WeeklyTeamViewer:
             return
 
         # Stats tabs
-        stat_tabs = st.tabs([TAB_LABELS['basic_stats'], TAB_LABELS['advanced_stats']])
+        stat_tabs = st.tabs([TAB_LABELS["basic_stats"], TAB_LABELS["advanced_stats"]])
 
         with stat_tabs[0]:
-            df = get_basic_stats_by_pos(filtered_data, filters['position'])
-            self._render_data_table(df, "weekly_basic_pos", filters['position'])
+            df = get_basic_stats_by_pos(filtered_data, filters["position"])
+            self._render_data_table(df, "weekly_basic_pos", filters["position"])
 
         with stat_tabs[1]:
-            df = get_advanced_stats_by_pos(filtered_data, filters['position'])
-            self._render_data_table(df, "weekly_advanced_pos", filters['position'])
+            df = get_advanced_stats_by_pos(filtered_data, filters["position"])
+            self._render_data_table(df, "weekly_advanced_pos", filters["position"])
 
     def _display_by_lineup_position(self, filters: dict):
         """Display stats grouped by manager and lineup position."""
@@ -194,24 +234,30 @@ class WeeklyTeamViewer:
             render_empty_state(
                 title="No Data Available",
                 message="Weekly lineup position data has not been loaded yet.",
-                icon="📭"
+                icon="📭",
             )
             return
 
         # Apply filters (without position filter)
-        filtered_data = self._apply_filters(self.team_data_by_lineup_position, filters, filter_position=False)
+        filtered_data = self._apply_filters(
+            self.team_data_by_lineup_position, filters, filter_position=False
+        )
 
         # Lineup position selector
-        if 'lineup_position' in filtered_data.columns:
-            lineup_positions = ["All"] + sorted(filtered_data['lineup_position'].dropna().unique().tolist())
+        if "lineup_position" in filtered_data.columns:
+            lineup_positions = ["All"] + sorted(
+                filtered_data["lineup_position"].dropna().unique().tolist()
+            )
             selected_lp = st.selectbox(
                 "Lineup Position",
                 lineup_positions,
                 index=0,
-                key="weekly_team_lp_select"
+                key="weekly_team_lp_select",
             )
             if selected_lp != "All":
-                filtered_data = filtered_data[filtered_data['lineup_position'] == selected_lp]
+                filtered_data = filtered_data[
+                    filtered_data["lineup_position"] == selected_lp
+                ]
 
         if filtered_data.empty:
             st.warning("No data matches the selected filters.")
@@ -226,11 +272,13 @@ class WeeklyTeamViewer:
             render_empty_state(
                 title="No Data Available",
                 message="Weekly manager data has not been loaded yet.",
-                icon="📭"
+                icon="📭",
             )
             return
 
-        filtered_data = self._apply_filters(self.team_data_by_manager, filters, filter_position=False)
+        filtered_data = self._apply_filters(
+            self.team_data_by_manager, filters, filter_position=False
+        )
 
         if filtered_data.empty:
             st.warning("No data matches the selected filters.")
@@ -244,8 +292,19 @@ class WeeklyTeamViewer:
         if data.empty:
             return pd.DataFrame()
 
-        display_cols = [col for col in ['manager', 'year', 'week', 'lineup_position', 'player', 'points', 'manager_spar']
-                       if col in data.columns]
+        display_cols = [
+            col
+            for col in [
+                "manager",
+                "year",
+                "week",
+                "lineup_position",
+                "player",
+                "points",
+                "manager_spar",
+            ]
+            if col in data.columns
+        ]
 
         if not display_cols:
             return pd.DataFrame()
@@ -253,22 +312,30 @@ class WeeklyTeamViewer:
         result = data[display_cols].copy()
 
         # Round numeric columns
-        for col in ['points', 'manager_spar']:
+        for col in ["points", "manager_spar"]:
             if col in result.columns:
                 result[col] = result[col].round(2)
 
         # Rename columns
         rename_map = {
-            'manager': 'Manager', 'year': 'Year', 'week': 'Week',
-            'lineup_position': 'Lineup Position', 'player': 'Player',
-            'points': 'Points', 'manager_spar': 'Manager SPAR'
+            "manager": "Manager",
+            "year": "Year",
+            "week": "Week",
+            "lineup_position": "Lineup Position",
+            "player": "Player",
+            "points": "Points",
+            "manager_spar": "Manager SPAR",
         }
-        result = result.rename(columns={k: v for k, v in rename_map.items() if k in result.columns})
+        result = result.rename(
+            columns={k: v for k, v in rename_map.items() if k in result.columns}
+        )
 
         # Sort
-        sort_cols = [c for c in ['Year', 'Week', 'Manager'] if c in result.columns]
+        sort_cols = [c for c in ["Year", "Week", "Manager"] if c in result.columns]
         if sort_cols:
-            result = result.sort_values(sort_cols, ascending=[False, False, True][:len(sort_cols)])
+            result = result.sort_values(
+                sort_cols, ascending=[False, False, True][: len(sort_cols)]
+            )
 
         return result
 
@@ -277,8 +344,8 @@ class WeeklyTeamViewer:
         if df.empty:
             render_empty_state(
                 title="No Data Found",
-                message=f"No stats available for the selected filters",
-                icon="🔍"
+                message="No stats available for the selected filters",
+                icon="🔍",
             )
             return
 
@@ -292,15 +359,15 @@ class WeeklyTeamViewer:
             column_config=column_config,
             hide_index=True,
             use_container_width=True,
-            height=table_height
+            height=table_height,
         )
 
         # Export button
-        csv = df.to_csv(index=False).encode('utf-8')
+        csv = df.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="Download CSV",
             data=csv,
             file_name=f"{prefix}.csv",
             mime="text/csv",
-            key=f"{prefix}_download"
+            key=f"{prefix}_download",
         )

@@ -21,36 +21,73 @@ class CareerTeamRatingsViewer:
 
         # Coerce numerics
         self.numeric_cols: List[str] = [
-            "team_points", "win", "loss", "opponent_points",
-            "avg_seed", "p_playoffs", "p_bye", "exp_final_wins",
-            "p_semis", "p_final", "p_champ",
-            "x1_seed", "Final Playoff Seed",
-            "shuffle_1_seed", "shuffle_avg_wins",
-            "wins_vs_shuffle_wins", "shuffle_avg_playoffs",
-            "shuffle_avg_bye", "shuffle_avg_seed",
-            "seed_vs_shuffle_seed", "power_rating", "power rating",
-            "week", "year",
+            "team_points",
+            "win",
+            "loss",
+            "opponent_points",
+            "avg_seed",
+            "p_playoffs",
+            "p_bye",
+            "exp_final_wins",
+            "p_semis",
+            "p_final",
+            "p_champ",
+            "x1_seed",
+            "Final Playoff Seed",
+            "shuffle_1_seed",
+            "shuffle_avg_wins",
+            "wins_vs_shuffle_wins",
+            "shuffle_avg_playoffs",
+            "shuffle_avg_bye",
+            "shuffle_avg_seed",
+            "seed_vs_shuffle_seed",
+            "power_rating",
+            "power rating",
+            "week",
+            "year",
         ]
         for c in self.numeric_cols:
             if c in self.base_df.columns:
                 self.base_df[c] = pd.to_numeric(self.base_df[c], errors="coerce")
 
         # Columns not to show at career level
-        self.hidden_cols: List[str] = ["Opponent Week", "OpponentYear", "week", "opponent", "year"]
+        self.hidden_cols: List[str] = [
+            "Opponent Week",
+            "OpponentYear",
+            "week",
+            "opponent",
+            "year",
+        ]
 
         # Leading display order (career)
         self.leading_order: List[str] = [
-            "manager", "win", "loss",
-            "team_points", "opponent_points", "power_rating", "power rating",
+            "manager",
+            "win",
+            "loss",
+            "team_points",
+            "opponent_points",
+            "power_rating",
+            "power rating",
         ]
 
         # Remaining original known columns (career, excludes hidden)
         self.secondary_order: List[str] = [
-            "Winning Streak", "Losing Streak",
-            "avg_seed", "Final Playoff Seed",
-            "p_playoffs", "p_bye", "exp_final_wins", "p_semis", "p_final", "p_champ",
-            "shuffle_1_seed", "shuffle_avg_wins", "wins_vs_shuffle_wins",
-            "shuffle_avg_playoffs", "shuffle_avg_bye", "shuffle_avg_seed",
+            "Winning Streak",
+            "Losing Streak",
+            "avg_seed",
+            "Final Playoff Seed",
+            "p_playoffs",
+            "p_bye",
+            "exp_final_wins",
+            "p_semis",
+            "p_final",
+            "p_champ",
+            "shuffle_1_seed",
+            "shuffle_avg_wins",
+            "wins_vs_shuffle_wins",
+            "shuffle_avg_playoffs",
+            "shuffle_avg_bye",
+            "shuffle_avg_seed",
             "seed_vs_shuffle_seed",
         ]
 
@@ -83,11 +120,23 @@ class CareerTeamRatingsViewer:
         sum_cols = [c for c in ["win", "loss"] if c in present]
 
         # Means (season averages)
-        mean_cols = [c for c in [
-            "team_points", "opponent_points", "power_rating", "power rating",
-            "exp_final_wins", "avg_seed",
-            "p_playoffs", "p_bye", "p_semis", "p_final", "p_champ",
-        ] if c in present]
+        mean_cols = [
+            c
+            for c in [
+                "team_points",
+                "opponent_points",
+                "power_rating",
+                "power rating",
+                "exp_final_wins",
+                "avg_seed",
+                "p_playoffs",
+                "p_bye",
+                "p_semis",
+                "p_final",
+                "p_champ",
+            ]
+            if c in present
+        ]
         if "shuffle_1_seed" in present:
             mean_cols.append("shuffle_1_seed")
 
@@ -96,14 +145,20 @@ class CareerTeamRatingsViewer:
         min_cols = [c for c in ["Losing Streak"] if c in present]
 
         # Last-week-of-season values
-        last_cols = [c for c in [
-            "Final Playoff Seed",
-            "x1_seed",  # optional fallback
-            "shuffle_avg_wins",
-            "wins_vs_shuffle_wins",
-            "shuffle_avg_playoffs", "shuffle_avg_bye", "shuffle_avg_seed",
-            "seed_vs_shuffle_seed",
-        ] if c in present]
+        last_cols = [
+            c
+            for c in [
+                "Final Playoff Seed",
+                "x1_seed",  # optional fallback
+                "shuffle_avg_wins",
+                "wins_vs_shuffle_wins",
+                "shuffle_avg_playoffs",
+                "shuffle_avg_bye",
+                "shuffle_avg_seed",
+                "seed_vs_shuffle_seed",
+            ]
+            if c in present
+        ]
 
         agg_map: Dict[str, Callable] = {}
         agg_map.update({c: "sum" for c in sum_cols})
@@ -130,21 +185,41 @@ class CareerTeamRatingsViewer:
         group_keys = ["manager"]
 
         # Sums across seasons (per requirement)
-        sum_cols = [c for c in [
-            "win", "loss",
-            "wins_vs_shuffle_wins",
-            "seed_vs_shuffle_seed",
-        ] if c in present]
+        sum_cols = [
+            c
+            for c in [
+                "win",
+                "loss",
+                "wins_vs_shuffle_wins",
+                "seed_vs_shuffle_seed",
+            ]
+            if c in present
+        ]
 
         # Averages across seasons
-        mean_cols = [c for c in [
-            "team_points", "opponent_points", "power_rating", "power rating",
-            "exp_final_wins", "avg_seed",
-            "p_playoffs", "p_bye", "p_semis", "p_final", "p_champ",
-            "Final Playoff Seed",
-            "shuffle_avg_wins", "shuffle_avg_playoffs", "shuffle_avg_bye", "shuffle_avg_seed",
-            "shuffle_1_seed",
-        ] if c in present]
+        mean_cols = [
+            c
+            for c in [
+                "team_points",
+                "opponent_points",
+                "power_rating",
+                "power rating",
+                "exp_final_wins",
+                "avg_seed",
+                "p_playoffs",
+                "p_bye",
+                "p_semis",
+                "p_final",
+                "p_champ",
+                "Final Playoff Seed",
+                "shuffle_avg_wins",
+                "shuffle_avg_playoffs",
+                "shuffle_avg_bye",
+                "shuffle_avg_seed",
+                "shuffle_1_seed",
+            ]
+            if c in present
+        ]
 
         max_cols = [c for c in ["Winning Streak"] if c in present]
         min_cols = [c for c in ["Losing Streak"] if c in present]
@@ -162,7 +237,11 @@ class CareerTeamRatingsViewer:
         return [c for c in cols if c in df.columns]
 
     def _prob_cols(self, df: pd.DataFrame) -> List[str]:
-        return [c for c in ["p_playoffs", "p_bye", "p_semis", "p_final", "p_champ"] if c in df.columns]
+        return [
+            c
+            for c in ["p_playoffs", "p_bye", "p_semis", "p_final", "p_champ"]
+            if c in df.columns
+        ]
 
     @st.fragment
     def display(self, prefix: str = "career_team_ratings") -> None:
@@ -181,7 +260,9 @@ class CareerTeamRatingsViewer:
 
         # Only known columns: leading, then secondary; hide unwanted
         leading = self._present(df, self.leading_order)
-        secondary = [c for c in self._present(df, self.secondary_order) if c not in leading]
+        secondary = [
+            c for c in self._present(df, self.secondary_order) if c not in leading
+        ]
         show_cols = [c for c in (leading + secondary) if c not in self.hidden_cols]
 
         if not show_cols:
@@ -199,12 +280,28 @@ class CareerTeamRatingsViewer:
                 df_show[c] = df_show[c] * 100.0
 
         # Numeric formatting
-        for c in ["team_points", "power_rating", "power rating", "exp_final_wins", "avg_seed",
-                  "shuffle_avg_wins", "shuffle_avg_playoffs", "shuffle_avg_bye", "shuffle_avg_seed"]:
+        for c in [
+            "team_points",
+            "power_rating",
+            "power rating",
+            "exp_final_wins",
+            "avg_seed",
+            "shuffle_avg_wins",
+            "shuffle_avg_playoffs",
+            "shuffle_avg_bye",
+            "shuffle_avg_seed",
+        ]:
             if c in df_show.columns:
                 column_config[c] = st.column_config.NumberColumn(c, format="%.2f")
-        for c in ["win", "loss", "wins_vs_shuffle_wins", "shuffle_1_seed", "seed_vs_shuffle_seed",
-                  "opponent_points", "Final Playoff Seed"]:
+        for c in [
+            "win",
+            "loss",
+            "wins_vs_shuffle_wins",
+            "shuffle_1_seed",
+            "seed_vs_shuffle_seed",
+            "opponent_points",
+            "Final Playoff Seed",
+        ]:
             if c in df_show.columns:
                 column_config[c] = st.column_config.NumberColumn(c, format="%d")
 

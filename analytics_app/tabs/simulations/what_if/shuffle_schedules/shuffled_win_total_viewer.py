@@ -7,14 +7,28 @@ from .table_styles import render_modern_table
 try:
     from shared.chart_themes import get_chart_colors, apply_chart_theme
 except ImportError:
-        def get_chart_colors():
-            return {'positive': '#00C07F', 'negative': '#FF4B4B', 'categorical': ['#667eea', '#f093fb', '#4facfe']}
-        def apply_chart_theme(fig):
-            return fig
+
+    def get_chart_colors():
+        return {
+            "positive": "#00C07F",
+            "negative": "#FF4B4B",
+            "categorical": ["#667eea", "#f093fb", "#4facfe"],
+        }
+
+    def apply_chart_theme(fig):
+        return fig
+
 
 _REQUIRED_COLS = {
-    "manager", "year", "week", "is_playoffs", "is_consolation",
-    "wins_to_date", "losses_to_date", "shuffle_avg_wins", "wins_vs_shuffle_wins"
+    "manager",
+    "year",
+    "week",
+    "is_playoffs",
+    "is_consolation",
+    "wins_to_date",
+    "losses_to_date",
+    "shuffle_avg_wins",
+    "wins_vs_shuffle_wins",
 }
 
 
@@ -45,7 +59,12 @@ def _coerce_types(df: pd.DataFrame) -> pd.DataFrame:
     df["week"] = pd.to_numeric(df["week"], errors="coerce").astype("Int64")
     df["manager"] = df["manager"].astype(str).fillna("Unknown")
 
-    numeric_cols = ["wins_to_date", "losses_to_date", "shuffle_avg_wins", "wins_vs_shuffle_wins"]
+    numeric_cols = [
+        "wins_to_date",
+        "losses_to_date",
+        "shuffle_avg_wins",
+        "wins_vs_shuffle_wins",
+    ]
     for c in numeric_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
 
@@ -55,14 +74,15 @@ def _coerce_types(df: pd.DataFrame) -> pd.DataFrame:
 def _style_df(display_df: pd.DataFrame):
     """Consistent styling."""
     return (
-        display_df.style
-        .format({
-            "win": "{:.0f}",
-            "loss": "{:.0f}",
-            "xWins": "{:.2f}",
-            "xLosses": "{:.2f}",
-            "delta": "{:.2f}",
-        })
+        display_df.style.format(
+            {
+                "win": "{:.0f}",
+                "loss": "{:.0f}",
+                "xWins": "{:.2f}",
+                "xLosses": "{:.2f}",
+                "delta": "{:.2f}",
+            }
+        )
         .background_gradient(subset=["win", "xWins", "delta"], cmap="RdYlGn", axis=0)
         .background_gradient(subset=["loss", "xLosses"], cmap="RdYlGn_r", axis=0)
     )
@@ -70,13 +90,15 @@ def _style_df(display_df: pd.DataFrame):
 
 def _make_display_df(src: pd.DataFrame) -> pd.DataFrame:
     """Vectorized display dataframe creation."""
-    return pd.DataFrame({
-        "win": src["wins_to_date"],
-        "loss": src["losses_to_date"],
-        "xWins": src["shuffle_avg_wins"],
-        "xLosses": src["week"] - src["shuffle_avg_wins"],
-        "delta": src["wins_vs_shuffle_wins"],
-    })
+    return pd.DataFrame(
+        {
+            "win": src["wins_to_date"],
+            "loss": src["losses_to_date"],
+            "xWins": src["shuffle_avg_wins"],
+            "xLosses": src["week"] - src["shuffle_avg_wins"],
+            "delta": src["wins_vs_shuffle_wins"],
+        }
+    )
 
 
 def _build_manager_tab(df: pd.DataFrame):
@@ -102,16 +124,16 @@ def _build_manager_tab(df: pd.DataFrame):
             "loss": "{:.0f}",
             "xWins": "{:.2f}",
             "xLosses": "{:.2f}",
-            "delta": "{:+.2f}"
+            "delta": "{:+.2f}",
         },
         column_names={
             "win": "W",
             "loss": "L",
             "xWins": "Exp W",
             "xLosses": "Exp L",
-            "delta": "Luck"
+            "delta": "Luck",
         },
-        gradient_by_column=True
+        gradient_by_column=True,
     )
 
 
@@ -120,41 +142,45 @@ def _create_wins_chart(display_df: pd.DataFrame):
     colors = get_chart_colors()
 
     chart_df = display_df.reset_index()
-    chart_df.columns = ['Manager', 'Wins', 'Losses', 'xWins', 'xLosses', 'Delta']
+    chart_df.columns = ["Manager", "Wins", "Losses", "xWins", "xLosses", "Delta"]
 
-    if 'Total' in chart_df['Manager'].values:
-        chart_df = chart_df[chart_df['Manager'] != 'Total']
+    if "Total" in chart_df["Manager"].values:
+        chart_df = chart_df[chart_df["Manager"] != "Total"]
 
     fig = go.Figure()
 
     # Actual wins
-    fig.add_trace(go.Bar(
-        name='Actual Wins',
-        x=chart_df['Manager'],
-        y=chart_df['Wins'],
-        marker_color=colors['categorical'][0],
-        text=chart_df['Wins'].round(1),
-        textposition='auto',
-    ))
+    fig.add_trace(
+        go.Bar(
+            name="Actual Wins",
+            x=chart_df["Manager"],
+            y=chart_df["Wins"],
+            marker_color=colors["categorical"][0],
+            text=chart_df["Wins"].round(1),
+            textposition="auto",
+        )
+    )
 
     # Expected wins
-    fig.add_trace(go.Bar(
-        name='Expected Wins',
-        x=chart_df['Manager'],
-        y=chart_df['xWins'],
-        marker_color=colors['categorical'][2],
-        text=chart_df['xWins'].round(2),
-        textposition='auto',
-    ))
+    fig.add_trace(
+        go.Bar(
+            name="Expected Wins",
+            x=chart_df["Manager"],
+            y=chart_df["xWins"],
+            marker_color=colors["categorical"][2],
+            text=chart_df["xWins"].round(2),
+            textposition="auto",
+        )
+    )
 
     fig.update_layout(
         title="Actual vs Expected Wins",
         xaxis_title="Manager",
         yaxis_title="Wins",
-        barmode='group',
+        barmode="group",
         height=350,
-        hovermode='x unified',
-        margin=dict(l=20, r=20, t=40, b=20)
+        hovermode="x unified",
+        margin=dict(l=20, r=20, t=40, b=20),
     )
     apply_chart_theme(fig)
 
@@ -166,33 +192,37 @@ def _create_delta_chart(display_df: pd.DataFrame):
     colors = get_chart_colors()
 
     chart_df = display_df.reset_index()
-    chart_df.columns = ['Manager', 'Wins', 'Losses', 'xWins', 'xLosses', 'Delta']
+    chart_df.columns = ["Manager", "Wins", "Losses", "xWins", "xLosses", "Delta"]
 
-    if 'Total' in chart_df['Manager'].values:
-        chart_df = chart_df[chart_df['Manager'] != 'Total']
+    if "Total" in chart_df["Manager"].values:
+        chart_df = chart_df[chart_df["Manager"] != "Total"]
 
     # Sort by delta for better visualization
-    chart_df = chart_df.sort_values('Delta', ascending=True)
+    chart_df = chart_df.sort_values("Delta", ascending=True)
 
     # Color based on positive/negative
-    bar_colors = [colors['positive'] if x > 0 else colors['negative'] for x in chart_df['Delta']]
+    bar_colors = [
+        colors["positive"] if x > 0 else colors["negative"] for x in chart_df["Delta"]
+    ]
 
-    fig = go.Figure(go.Bar(
-        x=chart_df['Manager'],
-        y=chart_df['Delta'],
-        marker_color=bar_colors,
-        text=[f"{v:+.1f}" for v in chart_df['Delta']],
-        textposition='outside',
-        hovertemplate='%{x}<br>Luck: %{y:+.2f} wins<extra></extra>'
-    ))
+    fig = go.Figure(
+        go.Bar(
+            x=chart_df["Manager"],
+            y=chart_df["Delta"],
+            marker_color=bar_colors,
+            text=[f"{v:+.1f}" for v in chart_df["Delta"]],
+            textposition="outside",
+            hovertemplate="%{x}<br>Luck: %{y:+.2f} wins<extra></extra>",
+        )
+    )
 
     fig.update_layout(
         title="Schedule Luck (Wins Above/Below Expected)",
         xaxis_title="Manager",
         yaxis_title="Delta (Actual - Expected)",
         height=350,
-        hovermode='x unified',
-        margin=dict(l=20, r=20, t=40, b=20)
+        hovermode="x unified",
+        margin=dict(l=20, r=20, t=40, b=20),
     )
     fig.add_hline(y=0, line_dash="dash", line_color="gray")
     apply_chart_theme(fig)
@@ -209,26 +239,35 @@ def _build_year_tab(df: pd.DataFrame):
     default_label = year_labels[-1] if year_labels else "All"
     default_index = year_options.index(default_label)
 
-    selected_year_label = st.selectbox("Select Year", year_options,
-                                       index=default_index, key="gavi_year_sel")
+    selected_year_label = st.selectbox(
+        "Select Year", year_options, index=default_index, key="gavi_year_sel"
+    )
 
     if selected_year_label == "All":
         # Optimized aggregation
-        grp = df.groupby("manager", dropna=False, as_index=False).agg({
-            "wins_to_date": "sum",
-            "losses_to_date": "sum",
-            "shuffle_avg_wins": "sum",
-            "week": "sum",
-            "wins_vs_shuffle_wins": "sum",
-        }).set_index("manager")
+        grp = (
+            df.groupby("manager", dropna=False, as_index=False)
+            .agg(
+                {
+                    "wins_to_date": "sum",
+                    "losses_to_date": "sum",
+                    "shuffle_avg_wins": "sum",
+                    "week": "sum",
+                    "wins_vs_shuffle_wins": "sum",
+                }
+            )
+            .set_index("manager")
+        )
 
-        display_df = pd.DataFrame({
-            "win": grp["wins_to_date"],
-            "loss": grp["losses_to_date"],
-            "xWins": grp["shuffle_avg_wins"],
-            "xLosses": grp["week"] - grp["shuffle_avg_wins"],
-            "delta": grp["wins_vs_shuffle_wins"],
-        })
+        display_df = pd.DataFrame(
+            {
+                "win": grp["wins_to_date"],
+                "loss": grp["losses_to_date"],
+                "xWins": grp["shuffle_avg_wins"],
+                "xLosses": grp["week"] - grp["shuffle_avg_wins"],
+                "delta": grp["wins_vs_shuffle_wins"],
+            }
+        )
     else:
         year_int = int(selected_year_label)
         year_df = df[df["year"] == year_int].set_index("manager")
@@ -247,21 +286,23 @@ def _build_year_tab(df: pd.DataFrame):
             "loss": "{:.0f}",
             "xWins": "{:.2f}",
             "xLosses": "{:.2f}",
-            "delta": "{:+.2f}"
+            "delta": "{:+.2f}",
         },
         column_names={
             "win": "W",
             "loss": "L",
             "xWins": "Exp W",
             "xLosses": "Exp L",
-            "delta": "Luck"
+            "delta": "Luck",
         },
-        gradient_by_column=True
+        gradient_by_column=True,
     )
 
     # Add visualization toggle below table
     st.markdown("---")
-    show_charts = st.checkbox("📊 Show Visualizations", value=True, key="show_gavi_charts")
+    show_charts = st.checkbox(
+        "📊 Show Visualizations", value=True, key="show_gavi_charts"
+    )
 
     if show_charts:
         col1, col2 = st.columns([1, 1])
@@ -289,16 +330,16 @@ def _build_all_tab(df: pd.DataFrame):
             "loss": "{:.0f}",
             "xWins": "{:.2f}",
             "xLosses": "{:.2f}",
-            "delta": "{:+.2f}"
+            "delta": "{:+.2f}",
         },
         column_names={
             "win": "W",
             "loss": "L",
             "xWins": "Exp W",
             "xLosses": "Exp L",
-            "delta": "Luck"
+            "delta": "Luck",
         },
-        gradient_by_column=True
+        gradient_by_column=True,
     )
 
 
@@ -309,7 +350,9 @@ class GaviStatViewer:
     @st.fragment
     def display(self):
         st.subheader("📊 Expected Wins with Shuffled Schedules")
-        st.caption("What would your record be against randomized opponents? Based on 100K simulations.")
+        st.caption(
+            "What would your record be against randomized opponents? Based on 100K simulations."
+        )
 
         if not _validate_matchup_df(self.df):
             return
@@ -317,7 +360,9 @@ class GaviStatViewer:
         df = _coerce_types(self.df)
         df = _filter_largest_week(df)
 
-        tab_year, tab_manager, tab_all = st.tabs(["📅 By Year", "👤 By Manager", "📋 All Data"])
+        tab_year, tab_manager, tab_all = st.tabs(
+            ["📅 By Year", "👤 By Manager", "📋 All Data"]
+        )
         with tab_year:
             _build_year_tab(df)
         with tab_manager:

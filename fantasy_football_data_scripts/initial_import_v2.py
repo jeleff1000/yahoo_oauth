@@ -98,35 +98,35 @@ YAHOO_FETCHER = "multi_league/data_fetchers/yahoo_fantasy_data.py"
 # CRITICAL: Split into multiple passes to handle dependencies
 # Pass 1: Base calculations (no dependencies)
 TRANSFORMATIONS_PASS_1 = [
-    ("multi_league/transformations/base/resolve_hidden_managers.py", "Resolve Hidden Managers", 120),  # Unify --hidden-- manager names by GUID FIRST (before any other transformations)
-    ("multi_league/transformations/base/cumulative_stats_v2.py", "Cumulative Stats", 600),  # FIX matchup playoff flags FIRST using seed-based detection
-    ("multi_league/transformations/base/enrich_schedule_with_playoff_flags.py", "Enrich Schedule w/ Playoff Flags", 120),  # Merge playoff flags from matchup into schedule (needed by playoff_odds_import)
+    ("multi_league/transformations/matchup/resolve_hidden_managers.py", "Resolve Hidden Managers", 120),  # Unify --hidden-- manager names by GUID FIRST (before any other transformations)
+    ("multi_league/transformations/matchup/cumulative_stats.py", "Cumulative Stats", 600),  # FIX matchup playoff flags FIRST using seed-based detection
+    ("multi_league/transformations/schedule/enrich_schedule_with_playoff_flags.py", "Enrich Schedule w/ Playoff Flags", 120),  # Merge playoff flags from matchup into schedule (needed by playoff_odds_import)
 ]
 
 # Pass 2: Joins that need cumulative stats
 TRANSFORMATIONS_PASS_2 = [
-    ("multi_league/transformations/player_enrichment/matchup_to_player_v2.py", "Matchup -> Player", 600),  # Join matchup columns INTO player (now with fixed playoff flags)
-    ("multi_league/transformations/player_enrichment/player_stats_v2.py", "Player Stats", 900),  # MUST run before player_to_matchup (adds optimal_points to player)
-    ("multi_league/transformations/player_enrichment/replacement_level_v2.py", "Replacement Levels", 600),  # Calculate position replacement baselines for SPAR (needs fantasy_points from player_stats)
+    ("multi_league/transformations/player/matchup_to_player_v2.py", "Matchup -> Player", 600),  # Join matchup columns INTO player (now with fixed playoff flags)
+    ("multi_league/transformations/player/player_stats_v2.py", "Player Stats", 900),  # MUST run before player_to_matchup (adds optimal_points to player)
+    ("multi_league/transformations/player/replacement_level_v2.py", "Replacement Levels", 600),  # Calculate position replacement baselines for SPAR (needs fantasy_points from player_stats)
 ]
 
 # Pass 3: Everything else that depends on above
 TRANSFORMATIONS_PASS_3 = [
-    ("multi_league/transformations/matchup_enrichment/player_to_matchup_v2.py", "Player -> Matchup", 600),  # Join player aggregates INTO matchup
+    ("multi_league/transformations/matchup/player_to_matchup_v2.py", "Player -> Matchup", 600),  # Join player aggregates INTO matchup
     # CRITICAL ENRICHMENT ORDER: Draft enrichment MUST run BEFORE transaction enrichment
     # This ensures transactions_to_player preserves the draft columns added by draft_to_player
     # CRITICAL KEEPER ECONOMICS ORDER: Must run in this exact sequence for keeper columns to reach player table
-    ("multi_league/transformations/draft_enrichment/player_to_draft_v2.py", "Player -> Draft", 600),  # [1] Add player stats TO draft (needed for SPAR calculations)
-    ("multi_league/transformations/draft_enrichment/draft_value_metrics_v3.py", "Draft SPAR Metrics", 600),  # [2] Calculate SPAR + keeper economics, add TO draft (creates kept_next_year, spar, pgvor, etc.)
-    ("multi_league/transformations/player_enrichment/draft_to_player_v2.py", "Draft -> Player", 600),  # [3] Import keeper/draft columns FROM draft TO player (now they exist!)
+    ("multi_league/transformations/draft/player_to_draft_v2.py", "Player -> Draft", 600),  # [1] Add player stats TO draft (needed for SPAR calculations)
+    ("multi_league/transformations/draft/draft_value_metrics_v3.py", "Draft SPAR Metrics", 600),  # [2] Calculate SPAR + keeper economics, add TO draft (creates kept_next_year, spar, pgvor, etc.)
+    ("multi_league/transformations/player/draft_to_player_v2.py", "Draft -> Player", 600),  # [3] Import keeper/draft columns FROM draft TO player (now they exist!)
     # Transaction enrichment runs AFTER draft so it preserves draft columns when it writes player.parquet
-    ("multi_league/transformations/transaction_enrichment/fix_unknown_managers.py", "Fix Unknown Managers", 120),  # Fix manager="Unknown" by backfilling from most recent add - MUST run before any transaction joins
-    ("multi_league/transformations/transaction_enrichment/player_to_transactions_v2.py", "Player <-> Transactions", 600),  # Add ROS performance TO transactions - MUST run before transaction_value_metrics
-    ("multi_league/transformations/transaction_enrichment/transaction_value_metrics_v3.py", "Transaction SPAR Metrics", 600),  # SPAR-based transaction value (replaces old VOR metrics in player_to_transactions)
-    ("multi_league/transformations/player_enrichment/transactions_to_player_v2.py", "Transactions -> Player", 600),  # Add FAAB data TO player (preserves draft columns added above)
-    ("multi_league/transformations/draft_enrichment/keeper_economics_v2.py", "Keeper Economics", 600),  # Calculate keeper_price for next year planning (needs draft cost + FAAB from transactions)
-    ("multi_league/transformations/matchup_enrichment/expected_record_v2.py", "Expected Record (V2)", 900),  # Needs wins_to_date and playoff_seed_to_date from cumulative_stats
-    ("multi_league/transformations/matchup_enrichment/playoff_odds_import.py", "Playoff Odds", 1800),  # 30 min timeout - Monte Carlo sims are slow but shouldn't take 2+ hours
+    ("multi_league/transformations/transaction/fix_unknown_managers.py", "Fix Unknown Managers", 120),  # Fix manager="Unknown" by backfilling from most recent add - MUST run before any transaction joins
+    ("multi_league/transformations/transaction/player_to_transactions_v2.py", "Player <-> Transactions", 600),  # Add ROS performance TO transactions - MUST run before transaction_value_metrics
+    ("multi_league/transformations/transaction/transaction_value_metrics_v3.py", "Transaction SPAR Metrics", 600),  # SPAR-based transaction value (replaces old VOR metrics in player_to_transactions)
+    ("multi_league/transformations/player/transactions_to_player_v2.py", "Transactions -> Player", 600),  # Add FAAB data TO player (preserves draft columns added above)
+    ("multi_league/transformations/draft/keeper_economics_v2.py", "Keeper Economics", 600),  # Calculate keeper_price for next year planning (needs draft cost + FAAB from transactions)
+    ("multi_league/transformations/matchup/expected_record_v2.py", "Expected Record (V2)", 900),  # Needs wins_to_date and playoff_seed_to_date from cumulative_stats
+    ("multi_league/transformations/matchup/playoff_odds_import.py", "Playoff Odds", 1800),  # 30 min timeout - Monte Carlo sims are slow but shouldn't take 2+ hours
     ("multi_league/transformations/aggregation/aggregate_player_season_v2.py", "Aggregate Player Season", 600),  # Create players_by_year
     ("multi_league/transformations/finalize/normalize_canonical_types.py", "Normalize Join Key Types", 120),  # MUST BE LAST - ensures all join keys have consistent Int64 types for cross-table joins
     # ("multi_league/transformations/validation/validate_outputs.py", "Validate Outputs", 600),  # TODO: Create this script

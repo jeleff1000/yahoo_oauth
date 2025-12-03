@@ -2,6 +2,7 @@
 Enhanced Narrative Engine for Player Recaps
 Uses the recap_narratives.csv file for dynamic, procedurally-generated player stories
 """
+
 import pandas as pd
 import random
 from pathlib import Path
@@ -40,13 +41,13 @@ class NarrativeEngine:
         if pd.isna(condition) or not condition:
             return True
 
-        parts = condition.split('&')
+        parts = condition.split("&")
         for part in parts:
             part = part.strip()
 
             # Handle comparison operators
-            if '>=' in part:
-                key, val = part.split('>=')
+            if ">=" in part:
+                key, val = part.split(">=")
                 key, val = key.strip(), val.strip()
                 context_val = context.get(key)
                 if context_val is None:
@@ -57,8 +58,8 @@ class NarrativeEngine:
                 except (ValueError, TypeError):
                     return False
 
-            elif '<=' in part:
-                key, val = part.split('<=')
+            elif "<=" in part:
+                key, val = part.split("<=")
                 key, val = key.strip(), val.strip()
                 context_val = context.get(key)
                 if context_val is None:
@@ -69,8 +70,8 @@ class NarrativeEngine:
                 except (ValueError, TypeError):
                     return False
 
-            elif '>' in part:
-                key, val = part.split('>')
+            elif ">" in part:
+                key, val = part.split(">")
                 key, val = key.strip(), val.strip()
                 context_val = context.get(key)
                 if context_val is None:
@@ -81,8 +82,8 @@ class NarrativeEngine:
                 except (ValueError, TypeError):
                     return False
 
-            elif '<' in part:
-                key, val = part.split('<')
+            elif "<" in part:
+                key, val = part.split("<")
                 key, val = key.strip(), val.strip()
                 context_val = context.get(key)
                 if context_val is None:
@@ -93,8 +94,8 @@ class NarrativeEngine:
                 except (ValueError, TypeError):
                     return False
 
-            elif '=' in part:
-                key, val = part.split('=')
+            elif "=" in part:
+                key, val = part.split("=")
                 key, val = key.strip(), val.strip()
                 context_val = context.get(key)
                 if context_val is None:
@@ -122,12 +123,16 @@ class NarrativeEngine:
             if placeholder in result:
                 # Format based on type
                 if isinstance(value, float):
-                    if 'percentile' in key.lower():
+                    if "percentile" in key.lower():
                         # Convert to percentile display (e.g., 0.95 -> "95th")
                         pct = int(value * 100) if value <= 1 else int(value)
                         suffix = self._ordinal_suffix(pct)
                         formatted = f"{pct}{suffix}"
-                    elif 'points' in key.lower() or 'margin' in key.lower() or 'spread' in key.lower():
+                    elif (
+                        "points" in key.lower()
+                        or "margin" in key.lower()
+                        or "spread" in key.lower()
+                    ):
                         formatted = f"{abs(value):.1f}"
                     else:
                         formatted = f"{value:.2f}"
@@ -142,11 +147,13 @@ class NarrativeEngine:
     def _ordinal_suffix(self, n: int) -> str:
         """Get ordinal suffix for a number (e.g., 1st, 2nd, 3rd)"""
         if 10 <= n % 100 <= 20:
-            return 'th'
+            return "th"
         else:
-            return {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+            return {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
 
-    def get_narrative(self, category: str, context: Dict[str, Any], subcategory: Optional[str] = None) -> Optional[str]:
+    def get_narrative(
+        self, category: str, context: Dict[str, Any], subcategory: Optional[str] = None
+    ) -> Optional[str]:
         """
         Get a narrative based on category and context
 
@@ -162,10 +169,10 @@ class NarrativeEngine:
             return None
 
         # Filter by category
-        candidates = self.templates[self.templates['category'] == category].copy()
+        candidates = self.templates[self.templates["category"] == category].copy()
 
         if subcategory:
-            candidates = candidates[candidates['subcategory'] == subcategory]
+            candidates = candidates[candidates["subcategory"] == subcategory]
 
         if candidates.empty:
             return None
@@ -173,18 +180,18 @@ class NarrativeEngine:
         # Filter by conditions that match
         matching = []
         for _, row in candidates.iterrows():
-            if self._evaluate_condition(row['condition'], context):
+            if self._evaluate_condition(row["condition"], context):
                 matching.append(row)
 
         if not matching:
             return None
 
         # Weight-based random selection
-        weights = [row['weight'] for row in matching]
+        weights = [row["weight"] for row in matching]
         selected = random.choices(matching, weights=weights, k=1)[0]
 
         # Format and return
-        return self._format_template(selected['template'], context)
+        return self._format_template(selected["template"], context)
 
     def get_player_narrative(self, player_data: Dict[str, Any]) -> List[str]:
         """
@@ -199,29 +206,29 @@ class NarrativeEngine:
         narratives = []
 
         # Add context to player_data for percentile display
-        if 'percentile' in player_data:
-            pct_val = player_data['percentile']
+        if "percentile" in player_data:
+            pct_val = player_data["percentile"]
             if isinstance(pct_val, (int, float)):
                 pct = int(pct_val * 100) if pct_val <= 1 else int(pct_val)
-                player_data['percentile_display'] = f"{pct}{self._ordinal_suffix(pct)}"
+                player_data["percentile_display"] = f"{pct}{self._ordinal_suffix(pct)}"
 
         # 1. Player performance level
-        perf_narrative = self.get_narrative('player_performance', player_data)
+        perf_narrative = self.get_narrative("player_performance", player_data)
         if perf_narrative:
             narratives.append(perf_narrative)
 
         # 2. Historical context (career/season bests)
-        history_narrative = self.get_narrative('player_history', player_data)
+        history_narrative = self.get_narrative("player_history", player_data)
         if history_narrative:
             narratives.append(history_narrative)
 
         # 3. Manager-specific history
-        manager_narrative = self.get_narrative('manager_history', player_data)
+        manager_narrative = self.get_narrative("manager_history", player_data)
         if manager_narrative:
             narratives.append(manager_narrative)
 
         # 4. Context (consistency, breakout, regression)
-        context_narrative = self.get_narrative('context', player_data)
+        context_narrative = self.get_narrative("context", player_data)
         if context_narrative:
             narratives.append(context_narrative)
 
@@ -237,11 +244,12 @@ class NarrativeEngine:
         Returns:
             Formatted narrative string
         """
-        return self.get_narrative('projection_outcome', matchup_data)
+        return self.get_narrative("projection_outcome", matchup_data)
 
 
 # Singleton instance
 _engine = None
+
 
 def get_engine() -> NarrativeEngine:
     """Get or create the narrative engine singleton"""

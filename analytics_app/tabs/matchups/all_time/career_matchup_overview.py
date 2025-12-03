@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 import random
 from datetime import datetime
 from ...shared.modern_styles import apply_modern_styles
@@ -33,10 +32,7 @@ class CareerMatchupOverviewViewer:
 
         # Render filter UI (with positions for career view)
         filters = render_filter_ui(
-            df=self.matchup_df,
-            prefix=prefix,
-            show_weeks=False,
-            show_positions=True
+            df=self.matchup_df, prefix=prefix, show_weeks=False, show_positions=True
         )
 
         # Apply filters with loading indicator
@@ -44,7 +40,9 @@ class CareerMatchupOverviewViewer:
 
         # Check if we have data after filtering
         if filtered_df.empty:
-            st.warning("⚠️ No matchups found with the selected filters. Try adjusting your filter criteria.")
+            st.warning(
+                "⚠️ No matchups found with the selected filters. Try adjusting your filter criteria."
+            )
             return
 
         # Create tabs
@@ -52,34 +50,48 @@ class CareerMatchupOverviewViewer:
 
         # --- Data Tabs ---
         # Career/all-time uses lazy imports for stats viewers
-        tab_keys = ['matchup_stats', 'advanced_stats', 'projected_stats', 'team_ratings', 'optimal_lineups', 'head_to_head']
+        tab_keys = [
+            "matchup_stats",
+            "advanced_stats",
+            "projected_stats",
+            "team_ratings",
+            "optimal_lineups",
+            "head_to_head",
+        ]
 
         for tab_idx, tab_key in enumerate(tab_keys, start=0):
             with tabs[tab_idx]:
                 try:
-                    if tab_key == 'matchup_stats':
+                    if tab_key == "matchup_stats":
                         from .career_matchup_stats import CareerMatchupStatsViewer
+
                         viewer = CareerMatchupStatsViewer(filtered_df)
                         viewer.display(prefix=f"{prefix}_{tab_key}")
 
-                    elif tab_key == 'advanced_stats':
-                        from .career_advanced_stats import SeasonAdvancedStatsViewer as CareerAdvancedStatsViewer
+                    elif tab_key == "advanced_stats":
+                        from .career_advanced_stats import (
+                            SeasonAdvancedStatsViewer as CareerAdvancedStatsViewer,
+                        )
+
                         viewer = CareerAdvancedStatsViewer(filtered_df)
                         viewer.display(prefix=f"{prefix}_{tab_key}")
 
-                    elif tab_key == 'projected_stats':
-                        from .career_projected_stats import SeasonProjectedStatsViewer as CareerProjectedStatsViewer
+                    elif tab_key == "projected_stats":
+                        from .career_projected_stats import (
+                            SeasonProjectedStatsViewer as CareerProjectedStatsViewer,
+                        )
+
                         viewer = CareerProjectedStatsViewer(filtered_df)
                         viewer.display(prefix=f"{prefix}_{tab_key}")
 
-                    elif tab_key == 'optimal_lineups':
+                    elif tab_key == "optimal_lineups":
                         display_alltime_optimal_lineup(filtered_df)
 
-                    elif tab_key == 'team_ratings':
+                    elif tab_key == "team_ratings":
                         viewer = CareerTeamRatingsViewer(filtered_df)
                         viewer.display(prefix=f"{prefix}_{tab_key}")
 
-                    elif tab_key == 'head_to_head':
+                    elif tab_key == "head_to_head":
                         head_to_head_viewer = CareerHeadToHeadViewer(filtered_df)
                         head_to_head_viewer.display()
 
@@ -90,13 +102,13 @@ class CareerMatchupOverviewViewer:
 
         # --- About Tab (Last) ---
         with tabs[6]:
-            view_desc = VIEW_DESCRIPTIONS['career']
-            st.title(view_desc['title'])
+            view_desc = VIEW_DESCRIPTIONS["career"]
+            st.title(view_desc["title"])
             st.markdown(f"### {view_desc['subtitle']}")
             st.markdown("**What can you do here?**")
 
             # Display features
-            for tab_name, description in view_desc['features'].items():
+            for tab_name, description in view_desc["features"].items():
                 st.markdown(f"- **{tab_name}:** {description}")
 
             st.markdown("---")
@@ -107,5 +119,5 @@ class CareerMatchupOverviewViewer:
             # Success message
             render_info_box(
                 "<strong>Tip:</strong> Use the filter options above to customize your view, then explore the tabs!",
-                icon="👉"
+                icon="👉",
             )

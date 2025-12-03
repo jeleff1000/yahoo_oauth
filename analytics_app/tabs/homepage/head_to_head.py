@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 import sys
 from pathlib import Path
 
@@ -13,10 +13,18 @@ if str(_app_dir) not in sys.path:
     sys.path.insert(0, str(_app_dir))
 
 # Reuse the proven viewer from player_stats
-from ..player_stats.weekly_player_subprocesses.head_to_head import H2HViewer, filter_h2h_data
-from md.core import list_optimal_seasons, list_optimal_weeks, list_player_seasons, list_player_weeks
+from ..player_stats.weekly_player_subprocesses.head_to_head import (
+    H2HViewer,
+)
+from md.core import (
+    list_optimal_seasons,
+    list_optimal_weeks,
+    list_player_seasons,
+    list_player_weeks,
+)
 from md.tab_data_access.players import load_optimal_week, load_player_week
-from shared.dataframe_utils import as_dataframe, get_matchup_df
+from shared.dataframe_utils import get_matchup_df
+
 
 @st.fragment
 def display_head_to_head(df_dict: Dict[str, Any]):
@@ -38,7 +46,13 @@ def display_head_to_head(df_dict: Dict[str, Any]):
     seasons_from_mdf = []
     if mdf is not None and not mdf.empty and "year" in mdf.columns:
         try:
-            seasons_from_mdf = pd.to_numeric(mdf["year"], errors="coerce").dropna().astype(int).unique().tolist()
+            seasons_from_mdf = (
+                pd.to_numeric(mdf["year"], errors="coerce")
+                .dropna()
+                .astype(int)
+                .unique()
+                .tolist()
+            )
         except Exception:
             seasons_from_mdf = []
     all_seasons = sorted(set(map(int, seasons_opt + seasons_player + seasons_from_mdf)))
@@ -55,9 +69,15 @@ def display_head_to_head(df_dict: Dict[str, Any]):
     if mdf is not None and not mdf.empty and {"year", "week"}.issubset(mdf.columns):
         try:
             weeks_from_mdf = (
-                mdf.loc[pd.to_numeric(mdf["year"], errors="coerce") == int(default_year), "week"]
+                mdf.loc[
+                    pd.to_numeric(mdf["year"], errors="coerce") == int(default_year),
+                    "week",
+                ]
                 .pipe(pd.to_numeric, errors="coerce")
-                .dropna().astype(int).unique().tolist()
+                .dropna()
+                .astype(int)
+                .unique()
+                .tolist()
             )
         except Exception:
             weeks_from_mdf = []
@@ -81,9 +101,15 @@ def display_head_to_head(df_dict: Dict[str, Any]):
         if mdf is not None and not mdf.empty and {"year", "week"}.issubset(mdf.columns):
             try:
                 weeks_from_mdf = (
-                    mdf.loc[pd.to_numeric(mdf["year"], errors="coerce") == int(sel_year), "week"]
+                    mdf.loc[
+                        pd.to_numeric(mdf["year"], errors="coerce") == int(sel_year),
+                        "week",
+                    ]
                     .pipe(pd.to_numeric, errors="coerce")
-                    .dropna().astype(int).unique().tolist()
+                    .dropna()
+                    .astype(int)
+                    .unique()
+                    .tolist()
                 )
             except Exception:
                 weeks_from_mdf = []
@@ -106,7 +132,9 @@ def display_head_to_head(df_dict: Dict[str, Any]):
     optimal_df = load_optimal_week(int(sel_year), int(sel_week))
     player_week_df = load_player_week(int(sel_year), int(sel_week))
 
-    if (optimal_df is None or optimal_df.empty) and (player_week_df is None or player_week_df.empty):
+    if (optimal_df is None or optimal_df.empty) and (
+        player_week_df is None or player_week_df.empty
+    ):
         st.warning("No player rows for that Year/Week.")
         return
 
@@ -117,11 +145,14 @@ def display_head_to_head(df_dict: Dict[str, Any]):
             st.error("Column 'matchup_name' is missing in player data.")
             return
         raw_matchup_names = (
-            player_week_df["matchup_name"]
-            .dropna().astype(str).unique().tolist()
+            player_week_df["matchup_name"].dropna().astype(str).unique().tolist()
         )
         # Format matchup names: replace "__vs__" with " vs "
-        formatted_matchups = [m.replace("__vs__", " vs ") for m in raw_matchup_names if m.lower() not in ['none vs none', 'nan vs nan', 'none', 'nan', '']]
+        formatted_matchups = [
+            m.replace("__vs__", " vs ")
+            for m in raw_matchup_names
+            if m.lower() not in ["none vs none", "nan vs nan", "none", "nan", ""]
+        ]
         matchup_options.extend(sorted(formatted_matchups))
 
     # ✅ Default selection index = 0 ("Optimal")
@@ -144,4 +175,6 @@ def display_head_to_head(df_dict: Dict[str, Any]):
             st.warning("No Head-to-Head data available for this Week/Year.")
         else:
             # Use the H2HViewer which now has built-in score headers for both actual and optimal tabs
-            H2HViewer(player_week_df).display(prefix="home_h2h", matchup_name=sel_matchup)
+            H2HViewer(player_week_df).display(
+                prefix="home_h2h", matchup_name=sel_matchup
+            )

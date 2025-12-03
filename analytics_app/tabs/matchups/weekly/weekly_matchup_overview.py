@@ -1,4 +1,3 @@
-import pandas as pd
 import streamlit as st
 import random
 from datetime import datetime
@@ -40,7 +39,7 @@ class WeeklyMatchupDataViewer:
             prefix=prefix,
             show_weeks=True,
             show_positions=False,
-            consolation_default=True
+            consolation_default=True,
         )
 
         # Apply filters with loading indicator
@@ -48,7 +47,9 @@ class WeeklyMatchupDataViewer:
 
         # Check if we have data after filtering
         if filtered_df.empty:
-            st.warning("⚠️ No matchups found with the selected filters. Try adjusting your filter criteria.")
+            st.warning(
+                "⚠️ No matchups found with the selected filters. Try adjusting your filter criteria."
+            )
             return
 
         # Create tabs
@@ -56,18 +57,18 @@ class WeeklyMatchupDataViewer:
 
         # --- Data Tabs ---
         tab_viewers = {
-            0: ('matchup_stats', WeeklyMatchupStatsViewer),
-            1: ('advanced_stats', WeeklyAdvancedStatsViewer),
-            2: ('projected_stats', WeeklyProjectedStatsViewer),
-            3: ('team_ratings', WeeklyTeamRatingsViewer),
-            4: ('optimal_lineups', None),  # Special handling
-            5: ('head_to_head', WeeklyHeadToHeadViewer),
+            0: ("matchup_stats", WeeklyMatchupStatsViewer),
+            1: ("advanced_stats", WeeklyAdvancedStatsViewer),
+            2: ("projected_stats", WeeklyProjectedStatsViewer),
+            3: ("team_ratings", WeeklyTeamRatingsViewer),
+            4: ("optimal_lineups", None),  # Special handling
+            5: ("head_to_head", WeeklyHeadToHeadViewer),
         }
 
         for tab_idx, (tab_key, viewer_class) in tab_viewers.items():
             with tabs[tab_idx]:
                 try:
-                    if tab_key == 'optimal_lineups':
+                    if tab_key == "optimal_lineups":
                         # Special case: function instead of class
                         display_weekly_optimal_lineup(filtered_df)
                     elif viewer_class:
@@ -78,15 +79,16 @@ class WeeklyMatchupDataViewer:
 
         # --- About Tab (Last) ---
         with tabs[6]:
-            view_desc = VIEW_DESCRIPTIONS['weekly']
+            view_desc = VIEW_DESCRIPTIONS["weekly"]
 
             # Build features HTML
             features_html = ""
-            for tab_name, description in view_desc['features'].items():
+            for tab_name, description in view_desc["features"].items():
                 features_html += f"<li><strong>{tab_name}:</strong> {description}</li>"
 
             # Render about content in styled card
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div class="about-content">
                 <h2>{view_desc['title']}</h2>
                 <p style="font-size: 1.1rem; margin-bottom: 1rem;">{view_desc['subtitle']}</p>
@@ -95,7 +97,9 @@ class WeeklyMatchupDataViewer:
                     {features_html}
                 </ul>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
             # Display a random fun fact
             st.info(f"**Fun Fact:** {random.choice(fun_facts)}")
