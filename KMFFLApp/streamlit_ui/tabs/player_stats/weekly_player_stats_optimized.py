@@ -224,20 +224,33 @@ class OptimizedWeeklyPlayerViewer:
         # Compact CSS for player stats page
         st.markdown("""
         <style>
-        /* Reduce spacing above tabs */
+        /* View mode label - caption size, low contrast */
+        .view-mode-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.45;
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+        }
+        /* Tab container styling */
         .player-stats-view .stTabs {
-            margin-top: -0.5rem !important;
+            margin-top: 0 !important;
         }
         .player-stats-view .stTabs [data-baseweb="tab-list"] {
-            gap: 0.25rem !important;
+            gap: 0.5rem !important;
+            background: rgba(128, 128, 128, 0.08);
+            padding: 0.35rem;
+            border-radius: 8px;
         }
-        /* View mode label */
-        .view-mode-label {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            opacity: 0.6;
-            margin-bottom: 0.25rem;
+        .player-stats-view .stTabs [data-baseweb="tab"] {
+            border-radius: 6px !important;
+            padding: 0.4rem 0.75rem !important;
+            font-size: 0.85rem !important;
+        }
+        .player-stats-view .stTabs [data-baseweb="tab"][aria-selected="true"] {
+            background: var(--primary-color, #ff4b4b) !important;
+            color: white !important;
         }
         /* Compact metrics row */
         .player-stats-view [data-testid="stMetricValue"] {
@@ -254,7 +267,7 @@ class OptimizedWeeklyPlayerViewer:
         <div class="player-stats-view">
         """, unsafe_allow_html=True)
 
-        # View mode label above tabs
+        # View mode label above tabs - subtle caption
         st.markdown('<p class="view-mode-label">View Mode</p>', unsafe_allow_html=True)
 
         # Create tabs
