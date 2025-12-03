@@ -143,23 +143,35 @@ def apply_modern_styles():
     /* ===========================================
        GLOBAL SPACING OVERRIDES - Tight, consistent layout
        =========================================== */
-    /* FIX #1: Consistent left margin for ALL content (32px) */
+    /* FIX: Consistent left margin for ALL content */
     .main .block-container {
         padding-top: 0.5rem !important;
         padding-bottom: 1rem !important;
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
         max-width: 100% !important;
     }
 
-    /* Ensure all major elements share the same left edge */
+    /* CRITICAL: Force ALL elements to same left edge (0 offset from container) */
     .stTabs,
+    .stTabs > div,
     [data-testid="stExpander"],
     [data-testid="stDataFrame"],
+    [data-testid="stDataFrameResizable"],
     .tab-header,
-    [data-testid="stMarkdown"] {
+    [data-testid="stMarkdown"],
+    [data-testid="stVerticalBlock"],
+    [data-testid="stVerticalBlockBorderWrapper"],
+    [data-baseweb="tab-panel"],
+    .element-container {
         margin-left: 0 !important;
         padding-left: 0 !important;
+    }
+
+    /* Remove any nested indentation */
+    [data-testid="stVerticalBlock"] > div {
+        padding-left: 0 !important;
+        margin-left: 0 !important;
     }
 
     /* Reduce spacing between ALL stacked elements */
@@ -263,26 +275,35 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       TAB HEADERS - FIX #2: Very tight spacing to subtabs
+       TAB HEADERS - Section titles, pulled up tight
        =========================================== */
     .tab-header {
-        margin-top: -0.25rem !important;  /* Pull up closer to subtabs */
+        margin-top: 0 !important;
         margin-bottom: 0.25rem;
+        padding-top: 0 !important;
         padding-bottom: 0.125rem;
         border-bottom: 1px solid var(--border);
     }
     .tab-header h2 {
-        font-size: 1rem;
+        font-size: 0.9rem;
         font-weight: 600;
         color: var(--text-primary);
         margin: 0 !important;
+        padding: 0 !important;
         line-height: 1.2;
     }
     .tab-header p {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         color: var(--text-secondary);
         margin: 0 !important;
+        padding: 0 !important;
         line-height: 1.2;
+    }
+
+    /* Pull section content up after subtabs */
+    [data-baseweb="tab-panel"] > div:first-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
     }
 
     /* ===========================================
@@ -657,32 +678,34 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       STREAMLIT NATIVE TABS - FIX #3: Lighter, less heavy
+       STREAMLIT NATIVE TABS - Compact navigation style
        =========================================== */
-    /* Container for top-level tabs */
+    /* Container for tabs */
     .stTabs {
-        margin-bottom: 0.25rem !important;
+        margin-bottom: 0.375rem !important;
     }
 
-    /* Tab list container - subtle, not heavy */
+    /* Tab list container - minimal */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0.25rem;
-        border-bottom: none;
-        padding: 0.25rem;
+        gap: 0.375rem;
+        border-bottom: 1px solid var(--border);
+        padding: 0 0 0.375rem 0;
         margin-bottom: 0.25rem;
         flex-wrap: wrap;
         background: transparent;
-        border-radius: var(--radius-sm);
-        border: none;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        border-top: none;
     }
 
-    /* Individual tabs - MUCH lighter */
+    /* Individual tabs - SMALL, navigation-like */
     .stTabs [data-baseweb="tab"] {
         height: auto;
-        padding: 0.25rem 0.625rem;
-        border-radius: var(--radius-sm);
+        padding: 0.2rem 0.5rem;
+        border-radius: 3px;
         font-weight: 500;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         background-color: var(--bg-secondary);
         color: var(--text-secondary);
         border: 1px solid var(--border-subtle);
@@ -691,7 +714,7 @@ def apply_modern_styles():
         white-space: nowrap;
     }
 
-    /* Selected tab - accent but not heavy */
+    /* Selected tab */
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
         background-color: var(--accent);
         color: white;
@@ -714,15 +737,7 @@ def apply_modern_styles():
     /* Tab panel - minimal top spacing */
     .stTabs [data-baseweb="tab-panel"] {
         padding-top: 0.25rem !important;
-    }
-
-    /* Subtabs divider line */
-    .stTabs [data-baseweb="tab-panel"]::before {
-        content: '';
-        display: block;
-        height: 1px;
-        background: var(--border);
-        margin-bottom: 0.375rem;
+        margin-top: 0 !important;
     }
 
     /* ===========================================
