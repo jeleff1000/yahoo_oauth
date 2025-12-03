@@ -6,7 +6,7 @@ Import from here for backwards compatibility, but all styles are now centralized
 """
 
 # Re-export everything from the centralized styles module
-from streamlit_ui.tabs.shared.modern_styles import (
+from ...shared.modern_styles import (
     apply_modern_styles,
     render_info_box,
     render_success_box,

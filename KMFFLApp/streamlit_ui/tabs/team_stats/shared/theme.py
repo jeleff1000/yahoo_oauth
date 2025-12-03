@@ -18,7 +18,7 @@ from typing import Optional, Dict, Any, List, Tuple
 import pandas as pd
 
 # Re-export everything from the centralized styles module
-from streamlit_ui.tabs.shared.modern_styles import (
+from ...shared.modern_styles import (
     apply_modern_styles,
     render_info_box,
     render_success_box,

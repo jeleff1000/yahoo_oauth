@@ -331,7 +331,7 @@ def apply_all_styles() -> None:
 
     Call this once at the start of each page.
     """
-    from streamlit_ui.tabs.shared.modern_styles import apply_modern_styles
+    from ..tabs.shared.modern_styles import apply_modern_styles
 
     # apply_modern_styles now includes all CSS variables and theme support
     apply_modern_styles()
