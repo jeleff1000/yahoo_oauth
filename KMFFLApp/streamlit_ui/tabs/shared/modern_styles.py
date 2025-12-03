@@ -143,11 +143,23 @@ def apply_modern_styles():
     /* ===========================================
        GLOBAL SPACING OVERRIDES - Tight, consistent layout
        =========================================== */
-    /* Consistent left margin for all content */
+    /* FIX #1: Consistent left margin for ALL content (32px) */
     .main .block-container {
         padding-top: 0.5rem !important;
         padding-bottom: 1rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
         max-width: 100% !important;
+    }
+
+    /* Ensure all major elements share the same left edge */
+    .stTabs,
+    [data-testid="stExpander"],
+    [data-testid="stDataFrame"],
+    .tab-header,
+    [data-testid="stMarkdown"] {
+        margin-left: 0 !important;
+        padding-left: 0 !important;
     }
 
     /* Reduce spacing between ALL stacked elements */
@@ -251,26 +263,26 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       TAB HEADERS - Very tight spacing
+       TAB HEADERS - FIX #2: Very tight spacing to subtabs
        =========================================== */
     .tab-header {
-        margin-top: 0 !important;
-        margin-bottom: 0.375rem;
-        padding-bottom: 0.25rem;
+        margin-top: -0.25rem !important;  /* Pull up closer to subtabs */
+        margin-bottom: 0.25rem;
+        padding-bottom: 0.125rem;
         border-bottom: 1px solid var(--border);
     }
     .tab-header h2 {
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 600;
         color: var(--text-primary);
         margin: 0 !important;
-        line-height: 1.3;
+        line-height: 1.2;
     }
     .tab-header p {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: var(--text-secondary);
-        margin: 0.125rem 0 0 0 !important;
-        line-height: 1.3;
+        margin: 0 !important;
+        line-height: 1.2;
     }
 
     /* ===========================================
@@ -645,47 +657,49 @@ def apply_modern_styles():
     }
 
     /* ===========================================
-       STREAMLIT NATIVE TABS - COMPACT PILLS
+       STREAMLIT NATIVE TABS - FIX #3: Lighter, less heavy
        =========================================== */
     /* Container for top-level tabs */
     .stTabs {
         margin-bottom: 0.25rem !important;
     }
 
+    /* Tab list container - subtle, not heavy */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0.375rem;
-        border-bottom: 1px solid var(--border);
-        padding-bottom: 0.375rem;
-        margin-bottom: 0.375rem;
+        gap: 0.25rem;
+        border-bottom: none;
+        padding: 0.25rem;
+        margin-bottom: 0.25rem;
         flex-wrap: wrap;
-        background: var(--bg-secondary);
-        padding: 0.375rem;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border);
+        background: transparent;
+        border-radius: var(--radius-sm);
+        border: none;
     }
 
+    /* Individual tabs - MUCH lighter */
     .stTabs [data-baseweb="tab"] {
         height: auto;
-        padding: 0.35rem 0.75rem;
+        padding: 0.25rem 0.625rem;
         border-radius: var(--radius-sm);
         font-weight: 500;
         font-size: 0.8rem;
-        background-color: transparent;
+        background-color: var(--bg-secondary);
         color: var(--text-secondary);
-        border: 1px solid transparent;
+        border: 1px solid var(--border-subtle);
         margin-bottom: 0;
         transition: all var(--transition-fast);
         white-space: nowrap;
     }
 
+    /* Selected tab - accent but not heavy */
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
         background-color: var(--accent);
         color: white;
         border-color: var(--accent);
         font-weight: 600;
-        box-shadow: var(--shadow-sm);
     }
 
+    /* Hover state */
     .stTabs [data-baseweb="tab"]:hover:not([aria-selected="true"]) {
         color: var(--text-primary);
         background-color: var(--bg-tertiary);
@@ -699,7 +713,7 @@ def apply_modern_styles():
 
     /* Tab panel - minimal top spacing */
     .stTabs [data-baseweb="tab-panel"] {
-        padding-top: 0.375rem !important;
+        padding-top: 0.25rem !important;
     }
 
     /* Subtabs divider line */
@@ -708,7 +722,7 @@ def apply_modern_styles():
         display: block;
         height: 1px;
         background: var(--border);
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.375rem;
     }
 
     /* ===========================================
