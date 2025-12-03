@@ -6,6 +6,7 @@ import re
 import pandas as pd
 import streamlit as st
 from .table_styles import render_modern_table
+from ..shared.simulation_styles import render_section_header, compact_week_selector
 
 
 def _select_week_for_record(base_df: pd.DataFrame):
@@ -113,9 +114,8 @@ def _render_expected_record(base_df: pd.DataFrame, year: int, week: int):
         df['_sort_prob'] = df[best_records].sum(axis=1)
         df = df.sort_values('_sort_prob', ascending=False).drop(columns=['_sort_prob'])
 
-    st.markdown("---")
-    st.subheader("📊 Predicted Final Records")
-    st.caption(f"Season length: {season_len} games | Showing probability of each win-loss record")
+    render_section_header("Predicted Final Records", "")
+    st.caption(f"Season: {season_len} games | Probability of each win-loss record")
 
     # Identify numeric columns for gradient (all columns)
     numeric_cols = list(df.columns)

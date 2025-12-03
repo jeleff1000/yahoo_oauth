@@ -110,77 +110,200 @@ def display_weekly_add_drop(
         if len(worst) > 0:
             worst_drop = worst.iloc[0]
 
+    # Compact CSS for transactions page
+    st.markdown("""
+    <style>
+    /* Transaction stat cards */
+    .txn-stats-container {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .txn-stat-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
+        border: 1px solid rgba(100, 116, 139, 0.3);
+        border-radius: 12px;
+        padding: 1rem;
+        flex: 1;
+    }
+    .txn-stat-card h4 {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.6;
+        margin: 0 0 0.75rem 0;
+        font-weight: 500;
+    }
+    .txn-stat-row {
+        display: flex;
+        justify-content: space-around;
+        gap: 0.5rem;
+    }
+    .txn-stat-item {
+        text-align: center;
+    }
+    .txn-stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #4ade80;
+    }
+    .txn-stat-value.neutral { color: #94a3b8; }
+    .txn-stat-value.negative { color: #f87171; }
+    .txn-stat-value.faab { color: #fbbf24; }
+    .txn-stat-label {
+        font-size: 0.7rem;
+        opacity: 0.7;
+        margin-top: 0.25rem;
+    }
+    /* Grade badges */
+    .grade-badge {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    .grade-A { background: #22c55e; color: white; }
+    .grade-B { background: #3b82f6; color: white; }
+    .grade-C { background: #6b7280; color: white; }
+    .grade-D { background: #f97316; color: white; }
+    .grade-F { background: #ef4444; color: white; }
+    /* Compact filter styling */
+    .txn-filters [data-testid="stExpander"] {
+        margin-bottom: 0.5rem !important;
+    }
+    .txn-filters .stSelectbox, .txn-filters .stTextInput {
+        margin-bottom: 0.25rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("## 📄 Weekly Add/Drop Transactions")
 
     tab1, tab2, tab3 = st.tabs(["📋 Transactions", "📊 Analytics", "🏆 Leaderboards"])
 
     with tab1:
-        # Summary metrics
-        st.markdown("### 📈 Quick Stats")
+        # Grouped stats in cards
         value_label = "SPAR" if 'manager_spar_ros_managed' in t.columns else "PPG"
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
-        with col1:
-            st.metric("Total Moves", f"{total_moves:,}")
-        with col2:
-            st.metric("Adds", f"{total_adds:,}")
-        with col3:
-            st.metric("Drops", f"{total_drops:,}")
-        with col4:
-            st.metric("Total FAAB", f"${total_faab:,.0f}")
-        with col5:
-            st.metric("Avg FAAB", f"${avg_faab:.1f}" if pd.notna(avg_faab) else "$0")
-        with col6:
-            st.metric(f"Net {value_label}", f"{net_value:.1f}", delta=f"{total_value_added:.0f} added")
 
-        if best_pickup is not None:
+        # Create 3 card columns
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown("""
+            <div class="txn-stat-card">
+                <h4>📊 Volume</h4>
+                <div class="txn-stat-row">
+                    <div class="txn-stat-item">
+                        <div class="txn-stat-value neutral">{:,}</div>
+                        <div class="txn-stat-label">Total</div>
+                    </div>
+                    <div class="txn-stat-item">
+                        <div class="txn-stat-value">{:,}</div>
+                        <div class="txn-stat-label">➕ Adds</div>
+                    </div>
+                    <div class="txn-stat-item">
+                        <div class="txn-stat-value negative">{:,}</div>
+                        <div class="txn-stat-label">➖ Drops</div>
+                    </div>
+                </div>
+            </div>
+            """.format(total_moves, total_adds, total_drops), unsafe_allow_html=True)
+
+        with col2:
+            avg_faab_display = f"${avg_faab:.0f}" if pd.notna(avg_faab) else "$0"
+            st.markdown("""
+            <div class="txn-stat-card">
+                <h4>💰 FAAB</h4>
+                <div class="txn-stat-row">
+                    <div class="txn-stat-item">
+                        <div class="txn-stat-value faab">${:,.0f}</div>
+                        <div class="txn-stat-label">Total Spent</div>
+                    </div>
+                    <div class="txn-stat-item">
+                        <div class="txn-stat-value faab">{}</div>
+                        <div class="txn-stat-label">Avg Bid</div>
+                    </div>
+                </div>
+            </div>
+            """.format(total_faab, avg_faab_display), unsafe_allow_html=True)
+
+        with col3:
+            net_class = "" if net_value >= 0 else "negative"
+            st.markdown("""
+            <div class="txn-stat-card">
+                <h4>📈 Performance</h4>
+                <div class="txn-stat-row">
+                    <div class="txn-stat-item">
+                        <div class="txn-stat-value">{:+.1f}</div>
+                        <div class="txn-stat-label">{} Gained</div>
+                    </div>
+                    <div class="txn-stat-item">
+                        <div class="txn-stat-value negative">{:.1f}</div>
+                        <div class="txn-stat-label">{} Lost</div>
+                    </div>
+                    <div class="txn-stat-item">
+                        <div class="txn-stat-value {}">{:+.1f}</div>
+                        <div class="txn-stat-label">Net {}</div>
+                    </div>
+                </div>
+            </div>
+            """.format(total_value_added, value_label, total_value_dropped, value_label, net_class, net_value, value_label), unsafe_allow_html=True)
+
+        # Best/Worst highlights
+        if best_pickup is not None or worst_drop is not None:
             col1, col2 = st.columns(2)
             with col1:
-                best_val = best_pickup[add_value_col] if pd.notna(best_pickup[add_value_col]) else 0
-                faab_val = best_pickup.get('faab_bid', 0)
-                faab_val = faab_val if pd.notna(faab_val) else 0
-                st.success(
-                    f"🌟 **Best Pickup:** {best_pickup['player_name']} ({best_val:.1f} {value_label}, ${faab_val:.0f}) - {best_pickup['manager']}")
+                if best_pickup is not None:
+                    best_val = best_pickup[add_value_col] if pd.notna(best_pickup[add_value_col]) else 0
+                    faab_val = best_pickup.get('faab_bid', 0)
+                    faab_val = faab_val if pd.notna(faab_val) else 0
+                    st.success(f"🌟 **Best:** {best_pickup['player_name']} (+{best_val:.1f} {value_label}, ${faab_val:.0f}) - {best_pickup['manager']}")
             with col2:
                 if worst_drop is not None:
                     worst_val = worst_drop[drop_value_col] if pd.notna(worst_drop[drop_value_col]) else 0
-                    st.error(
-                        f"💔 **Worst Drop:** {worst_drop['player_name']} ({worst_val:.1f} {value_label}) - {worst_drop['manager']}")
+                    st.error(f"💔 **Worst:** {worst_drop['player_name']} ({worst_val:.1f} {value_label} lost) - {worst_drop['manager']}")
 
-        st.divider()
+        st.markdown("<div style='margin: 0.75rem 0; border-top: 1px solid rgba(100,116,139,0.3);'></div>", unsafe_allow_html=True)
 
-        # Filters
-        with st.expander("🔍 Filters", expanded=True):
-            col1, col2, col3, col4 = st.columns(4)
+        # Compact two-row filters
+        st.markdown('<div class="txn-filters">', unsafe_allow_html=True)
+        with st.expander("🔍 Filters", expanded=False):
+            # Row 1: Time + Manager + Type + Grade + Sort
+            col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1.5, 1, 1, 1.5])
             with col1:
                 year_filter = st.selectbox("Year", ["All"] + sorted(t['year'].unique().tolist(), reverse=True),
-                                           key="weekly_year")
+                                           key="weekly_year", label_visibility="collapsed")
             with col2:
                 week_filter = st.selectbox("Week", ["All"] + sorted(t['week'].dropna().unique().tolist()),
-                                           key="weekly_week")
+                                           key="weekly_week", label_visibility="collapsed")
             with col3:
                 manager_filter = st.selectbox("Manager", ["All"] + sorted(t['manager'].dropna().unique().tolist()),
-                                              key="weekly_manager")
+                                              key="weekly_manager", label_visibility="collapsed")
             with col4:
-                trans_type_filter = st.selectbox("Type", ["All", "Adds", "Drops"], key="weekly_type")
-
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                player_search = st.text_input("Player Name", key="weekly_player")
-            with col2:
-                position_filter = st.selectbox("Position", ["All"] + sorted(t['position'].dropna().unique().tolist()),
-                                               key="weekly_position")
-            with col3:
-                # Use pre-computed transaction_result for filtering
-                result_options = ["All"]
-                if 'transaction_result' in t.columns:
-                    result_options += sorted(t['transaction_result'].dropna().unique().tolist())
-                result_filter = st.selectbox("Result", result_options, key="weekly_result")
-            with col4:
-                # Use pre-computed transaction_grade for filtering
+                trans_type_filter = st.selectbox("Type", ["All", "➕ Adds", "➖ Drops"], key="weekly_type", label_visibility="collapsed")
+            with col5:
                 grade_options = ["All"]
                 if 'transaction_grade' in t.columns:
                     grade_options += sorted([g for g in t['transaction_grade'].dropna().unique().tolist() if g])
-                grade_filter = st.selectbox("Grade", grade_options, key="weekly_grade")
+                grade_filter = st.selectbox("Grade", grade_options, key="weekly_grade", label_visibility="collapsed")
+            with col6:
+                sort_by = st.selectbox("Sort", ["Recent First", "Score ↓", "SPAR ↓", "Grade ↓", "FAAB ↓", "ROI ↓"],
+                                       key="weekly_sort", label_visibility="collapsed")
+
+            # Row 2: Player search (full width) + Position + Result
+            col1, col2, col3 = st.columns([3, 1, 1.5])
+            with col1:
+                player_search = st.text_input("Player", placeholder="Search player name...", key="weekly_player", label_visibility="collapsed")
+            with col2:
+                position_filter = st.selectbox("Position", ["All", "QB", "RB", "WR", "TE", "K", "DEF"],
+                                               key="weekly_position", label_visibility="collapsed")
+            with col3:
+                result_options = ["All"]
+                if 'transaction_result' in t.columns:
+                    result_options += sorted(t['transaction_result'].dropna().unique().tolist())
+                result_filter = st.selectbox("Result", result_options, key="weekly_result", label_visibility="collapsed")
+        st.markdown('</div>', unsafe_allow_html=True)
 
         # Apply filters
         filtered = t.copy()
@@ -190,9 +313,9 @@ def display_weekly_add_drop(
             filtered = filtered[filtered['week'] == week_filter]
         if manager_filter != "All":
             filtered = filtered[filtered['manager'] == manager_filter]
-        if trans_type_filter == "Adds":
+        if trans_type_filter == "➕ Adds":
             filtered = filtered[filtered['transaction_type'] == 'add']
-        elif trans_type_filter == "Drops":
+        elif trans_type_filter == "➖ Drops":
             filtered = filtered[filtered['transaction_type'] == 'drop']
         if player_search:
             filtered = filtered[filtered['player_name'].str.contains(player_search, case=False, na=False)]
@@ -202,12 +325,6 @@ def display_weekly_add_drop(
             filtered = filtered[filtered['transaction_result'] == result_filter]
         if grade_filter != "All" and 'transaction_grade' in filtered.columns:
             filtered = filtered[filtered['transaction_grade'] == grade_filter]
-
-        # Sorting
-        col1, col2 = st.columns([3, 1])
-        with col2:
-            sort_by = st.selectbox("Sort by", ["Recent First", "Score ↓", "SPAR ↓", "Grade ↓", "FAAB ↓", "ROI ↓"],
-                                   key="weekly_sort")
 
         # Group by transaction_id for combined add/drop view
         if 'transaction_id' in filtered.columns and len(filtered) > 0:
@@ -369,37 +486,54 @@ def display_weekly_add_drop(
             else:
                 combined = combined.sort_values(['year', 'week'], ascending=[False, False])
 
-            # Display columns
-            display_cols = ['week', 'year', 'manager', 'grade', 'total_score', 'Result',
+            # Reordered columns for better cognitive flow: When → Who → What (Added) → What (Dropped) → Impact
+            display_cols = ['week', 'year', 'manager', 'grade',
                            'player_added', 'pos_added', 'spar_added',
                            'player_dropped', 'pos_dropped', 'spar_dropped',
-                           'net_spar', 'faab', 'value_tier', 'efficiency']
+                           'net_spar', 'faab', 'efficiency', 'Result']
             display_cols = [c for c in display_cols if c in combined.columns]
-            display_data = combined[display_cols]
+            display_data = combined[display_cols].copy()
 
-            st.markdown(f"**Showing {len(display_data):,} transactions** (grouped from {len(filtered):,} individual adds/drops)")
+            # Apply color formatting using background gradient for SPAR columns
+            def style_spar_column(val):
+                """Return color for SPAR values."""
+                if pd.isna(val) or val == 0:
+                    return ''
+                if val > 0:
+                    intensity = min(abs(val) / 100, 1)  # Normalize to 0-1
+                    return f'background-color: rgba(34, 197, 94, {intensity * 0.4})'  # Green
+                else:
+                    intensity = min(abs(val) / 100, 1)
+                    return f'background-color: rgba(239, 68, 68, {intensity * 0.4})'  # Red
+
+            st.markdown(f"**{len(display_data):,} transactions** (from {len(filtered):,} adds/drops)")
+
+            # Create styled dataframe
+            styled_df = display_data.style.applymap(
+                style_spar_column,
+                subset=[c for c in ['spar_added', 'spar_dropped', 'net_spar'] if c in display_data.columns]
+            )
 
             st.dataframe(
                 display_data,
                 hide_index=True,
                 use_container_width=True,
+                height=500,
                 column_config={
-                    'week': st.column_config.NumberColumn("Wk", format="%d"),
-                    'year': st.column_config.TextColumn("Year"),
-                    'manager': st.column_config.TextColumn("Manager"),
-                    'grade': st.column_config.TextColumn("Grade", width="small"),
-                    'total_score': st.column_config.NumberColumn("Score", format="%+.0f", help="Weighted transaction score"),
-                    'Result': st.column_config.TextColumn("Result"),
-                    'player_added': st.column_config.TextColumn("Added"),
+                    'week': st.column_config.NumberColumn("Wk", format="%d", width="small", help="Week of transaction"),
+                    'year': st.column_config.TextColumn("Yr", width="small"),
+                    'manager': st.column_config.TextColumn("Manager", width="medium"),
+                    'grade': st.column_config.TextColumn("📊", width="small", help="Transaction grade (A-F)"),
+                    'player_added': st.column_config.TextColumn("➕ Added", width="medium"),
                     'pos_added': st.column_config.TextColumn("Pos", width="small"),
-                    'spar_added': st.column_config.NumberColumn("SPAR+", format="%.1f", help="SPAR gained from adds"),
-                    'player_dropped': st.column_config.TextColumn("Dropped"),
+                    'spar_added': st.column_config.NumberColumn("SPAR+", format="%.1f", help="SPAR gained from pickup"),
+                    'player_dropped': st.column_config.TextColumn("➖ Dropped", width="medium"),
                     'pos_dropped': st.column_config.TextColumn("Pos", width="small"),
-                    'spar_dropped': st.column_config.NumberColumn("SPAR-", format="%.1f", help="SPAR lost from drops"),
-                    'net_spar': st.column_config.NumberColumn("NET", format="%.1f", help="Net SPAR for transaction"),
-                    'faab': st.column_config.NumberColumn("FAAB", format="$%.0f"),
-                    'value_tier': st.column_config.TextColumn("Value", width="small", help="FAAB value tier"),
-                    'efficiency': st.column_config.NumberColumn("SPAR/$", format="%.2f", help="SPAR per FAAB dollar"),
+                    'spar_dropped': st.column_config.NumberColumn("SPAR-", format="%.1f", help="SPAR lost from drop"),
+                    'net_spar': st.column_config.NumberColumn("NET", format="%+.1f", help="Net SPAR = SPAR+ minus SPAR-"),
+                    'faab': st.column_config.NumberColumn("💰", format="$%.0f", help="FAAB spent"),
+                    'efficiency': st.column_config.NumberColumn("$/PT", format="%.2f", help="SPAR per FAAB dollar"),
+                    'Result': st.column_config.TextColumn("Outcome", width="medium", help="Transaction result classification"),
                 }
             )
 

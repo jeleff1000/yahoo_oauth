@@ -6,6 +6,7 @@ import re
 import pandas as pd
 import streamlit as st
 from .table_styles import render_modern_table
+from ..shared.simulation_styles import render_section_header, compact_week_selector
 
 
 def _select_week_for_seed(base_df: pd.DataFrame):
@@ -112,9 +113,8 @@ def _render_expected_seed(base_df: pd.DataFrame, year: int, week: int):
         df['_sort_prob'] = df[top_seeds].sum(axis=1)
         df = df.sort_values('_sort_prob', ascending=False).drop(columns=['_sort_prob'])
 
-    st.markdown("---")
-    st.subheader("🎯 Predicted Playoff Seeding")
-    st.caption("Showing probability of finishing in each playoff seed position")
+    render_section_header("Predicted Playoff Seeding", "")
+    st.caption("Probability of finishing in each playoff seed position")
 
     # Identify numeric columns for gradient (all seed columns)
     numeric_cols = list(df.columns)

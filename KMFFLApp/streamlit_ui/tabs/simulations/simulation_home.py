@@ -4,6 +4,7 @@ import streamlit as st
 import duckdb
 import pandas as pd
 from ..shared.modern_styles import apply_modern_styles
+from .shared.simulation_styles import apply_simulation_styles, start_simulation_container, end_simulation_container
 
 # ---- WHAT-IF viewers ----
 from .what_if.shuffle_schedules.shuffled_win_total_viewer import GaviStatViewer
@@ -43,12 +44,15 @@ class SimulationDataViewer:
     @st.fragment
     def display(self):
         apply_modern_styles()
+        apply_simulation_styles()
 
         if self.matchup_data_df is None or self.matchup_data_df.empty:
-            st.info("📊 No matchup data available. Please ensure data is loaded.")
+            st.info("No matchup data available. Please ensure data is loaded.")
             return
 
-        # Top-level navigation buttons
+        start_simulation_container()
+
+        # Top-level navigation - unified pill style matching Weekly/Season/Career
         main_tab_names = ["Predictive", "What-If"]
         current_main_idx = st.session_state.get("subtab_Simulations", 0)
 
@@ -62,15 +66,17 @@ class SimulationDataViewer:
                         st.session_state["subtab_Simulations"] = idx
                         st.rerun()
 
+        st.markdown('<div style="height: 0.5rem;"></div>', unsafe_allow_html=True)
+
         # ==================== PREDICTIVE ANALYTICS ====================
         if current_main_idx == 0:
             pred_tabs = st.tabs([
-                "🏆 Playoff Dashboard",
-                "🎰 Playoff Machine",
-                "📊 Final Records",
-                "🎯 Playoff Seeds",
-                "📅 Weekly Odds",
-                "📈 Multi-Year Trends"
+                "Playoff Dashboard",
+                "Playoff Machine",
+                "Final Records",
+                "Playoff Seeds",
+                "Weekly Odds",
+                "Multi-Year Trends"
             ])
 
             with pred_tabs[0]:
@@ -112,19 +118,19 @@ class SimulationDataViewer:
         # ==================== WHAT-IF SCENARIOS ====================
         elif current_main_idx == 1:
             whatif_tabs = st.tabs([
-                "🔀 Schedule Shuffles",
-                "💪 Strength of Schedule",
-                "⚖️ Score Sensitivity"
+                "Schedule Shuffles",
+                "Strength of Schedule",
+                "Score Sensitivity"
             ])
 
             # ---- Schedule Shuffles (4 sub-tabs) ----
             with whatif_tabs[0]:
                 st.caption("What if you kept your scores but faced randomized opponents?")
                 schedule_subtabs = st.tabs([
-                    "📊 Win Distribution",
-                    "🤝 Head-to-Head",
-                    "📈 Expected Records",
-                    "🎯 Expected Seeding"
+                    "Win Distribution",
+                    "Head-to-Head",
+                    "Expected Records",
+                    "Expected Seeding"
                 ])
 
                 with schedule_subtabs[0]:
@@ -155,10 +161,10 @@ class SimulationDataViewer:
             with whatif_tabs[1]:
                 st.caption("What if everyone faced your opponents? Measures schedule difficulty.")
                 opponent_subtabs = st.tabs([
-                    "📊 Win Distribution",
-                    "📅 Everyone's Schedule",
-                    "📈 Expected Records",
-                    "🎯 Expected Seeding"
+                    "Win Distribution",
+                    "Everyone's Schedule",
+                    "Expected Records",
+                    "Expected Seeding"
                 ])
 
                 with opponent_subtabs[0]:
@@ -191,6 +197,8 @@ class SimulationDataViewer:
                     TweakScoringViewer(self.matchup_data_df).display()
                 except Exception as e:
                     st.warning(f"Score sensitivity analysis unavailable: {e}")
+
+        end_simulation_container()
 
 
 @st.fragment

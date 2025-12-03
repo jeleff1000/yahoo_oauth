@@ -27,11 +27,17 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
 # Import data access
 from md.data_access import run_query, T
+from ..shared.simulation_styles import (
+    render_section_header,
+    render_odds_card,
+    close_card,
+    render_manager_filter
+)
 
 # Slim simulation settings
 SLIM_N_SIMS = 1000  # Fast enough for real-time updates
@@ -553,8 +559,8 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
     - See instant standings updates
     - Simulate unpicked games
     """
-    st.subheader("🎰 Playoff Machine")
-    st.caption("Pick winners and see how it affects the playoff picture. Click team names to select winner.")
+    render_section_header("Playoff Machine", "")
+    st.caption("Pick winners to see playoff picture changes.")
 
     # Load data if not provided
     if matchup_data_df is None:
@@ -691,44 +697,47 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
 
 
 def _render_remaining_games(remaining_games: pd.DataFrame):
-    """Render remaining games with styled matchup cards."""
-    st.markdown("### 📅 Pick Winners")
+    """Render remaining games with compact styled matchup cards."""
+    st.markdown("**Pick Winners**")
 
     if remaining_games.empty:
         st.info("No remaining games - regular season complete!")
         return
 
-    # Inject CSS for matchup styling - scope to matchup-picks class
+    # Inject CSS for compact matchup styling
     st.markdown("""
     <style>
     .week-label {
-        font-size: 1.1em;
+        font-size: 0.9em;
         font-weight: 600;
         color: #6c5ce7;
-        margin: 20px 0 12px 0;
+        margin: 0.5rem 0 0.375rem 0;
     }
     .vs-text {
         text-align: center;
-        font-size: 0.8em;
+        font-size: 0.7em;
         font-weight: 700;
         color: #888;
-        padding: 8px 0;
+        padding: 4px 0;
     }
 
-    /* Yellow buttons ONLY inside matchup-picks section bordered containers */
+    /* Compact buttons inside matchup-picks */
+    .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] {
+        margin-bottom: 0.375rem !important;
+    }
     .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"] > button {
         background-color: #f1c40f !important;
         color: #000 !important;
-        border: 2px solid #d4ac0d !important;
+        border: 1px solid #d4ac0d !important;
         font-weight: 600 !important;
-        min-height: 42px !important;
-        height: 42px !important;
-        border-radius: 8px !important;
+        min-height: 32px !important;
+        height: 32px !important;
+        border-radius: 4px !important;
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
-        padding: 0 8px !important;
-        font-size: 0.85em !important;
+        padding: 0 6px !important;
+        font-size: 0.75em !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
@@ -738,7 +747,7 @@ def _render_remaining_games(remaining_games: pd.DataFrame):
         border-color: #b7950b !important;
     }
 
-    /* Winner button - green (inside matchup-picks bordered containers) */
+    /* Winner button - green */
     .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"] > button[kind="primary"] {
         background-color: #27ae60 !important;
         color: #fff !important;
@@ -748,14 +757,26 @@ def _render_remaining_games(remaining_games: pd.DataFrame):
         background-color: #2ecc71 !important;
     }
 
-    /* Make button columns equal width inside matchups */
+    /* Make button columns equal width */
     .matchup-picks [data-testid="stHorizontalBlock"] > div {
         flex: 1 1 0 !important;
         min-width: 0 !important;
     }
 
+    /* More compact bordered containers */
+    .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] > div {
+        padding: 0.375rem !important;
+    }
+
     @media (prefers-color-scheme: dark) {
         .week-label { color: #a55eea; }
+    }
+    @media (max-width: 600px) {
+        .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"] > button {
+            min-height: 28px !important;
+            height: 28px !important;
+            font-size: 0.7em !important;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -886,7 +907,7 @@ def _inject_loser_button_styles():
 
 def _render_standings(current_standings: pd.DataFrame, remaining_games: pd.DataFrame, picks: Dict):
     """Render original and adjusted playoff odds tables side by side."""
-    st.markdown("### 🏆 Playoff Odds Comparison")
+    st.markdown("**Playoff Odds Comparison**")
 
     # Get playoff config (default 6 teams, 2 byes)
     num_playoff_teams = 6
@@ -921,18 +942,18 @@ def _render_standings(current_standings: pd.DataFrame, remaining_games: pd.DataF
         st.info("Unable to calculate odds.")
         return
 
-    # Display side by side
+    # Display side by side with compact headers
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("#### 📊 Original Odds")
-        st.caption("Before any picks")
+        render_odds_card("Original Odds", "", "Before picks")
         _render_scenario_odds_table(original_odds, num_playoff_teams, num_bye_teams, color_scheme="original", table_key="pm_original_odds")
+        close_card()
 
     with col2:
-        st.markdown("#### 🎯 Adjusted Odds")
-        st.caption("Based on your selections")
+        render_odds_card("Adjusted Odds", "", "With selections")
         _render_scenario_odds_table(adjusted_odds, num_playoff_teams, num_bye_teams, color_scheme="original", table_key="pm_adjusted_odds")
+        close_card()
 
 
 def display_playoff_machine_compact(matchup_data_df: pd.DataFrame = None):

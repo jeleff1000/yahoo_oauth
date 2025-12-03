@@ -12,6 +12,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from md.data_access import run_query, T
 from .table_styles import render_modern_table
+from ..shared.simulation_styles import (
+    render_summary_tiles,
+    render_section_header,
+    render_group_card,
+    close_card,
+    compact_week_selector
+)
 
 # Import chart theming for light/dark mode support
 import sys
@@ -97,8 +104,8 @@ def _render_playoff_dashboard(playoff_data: pd.DataFrame, year: int, week: int, 
 
     # Create tabs - focused on unique analytics only
     tab1, tab2 = st.tabs([
-        "🏆 Championship Path",
-        "🔥 Critical Moments"
+        "Championship Path",
+        "Critical Moments"
     ])
 
     with tab1:
@@ -111,12 +118,12 @@ def _render_playoff_dashboard(playoff_data: pd.DataFrame, year: int, week: int, 
 @st.fragment
 def display_playoff_simulation_dashboard(prefix=""):
     """Enhanced playoff simulation analysis with modern visualizations."""
-    st.header("🏈 Playoff Simulation Dashboard")
+    render_section_header("Playoff Simulation Dashboard", "")
 
-    st.info("Deep-dive analytics: championship funnels, critical turning points, and comprehensive season trajectories.")
+    st.caption("Championship funnels, critical turning points, and season trajectories.")
 
     # Load data
-    with st.spinner("Loading playoff simulation data..."):
+    with st.spinner("Loading..."):
         playoff_data = run_query(f"""
             SELECT
                 year, week, manager,
@@ -155,44 +162,46 @@ def display_playoff_simulation_dashboard(prefix=""):
 
 
 def _render_metric_cards(final_data: pd.DataFrame):
-    """Render compact metric summary cards at the top."""
+    """Render compact metric summary tiles at the top."""
     # Get key stats
     top_playoff = final_data.nlargest(1, 'p_playoffs').iloc[0]
     top_champ = final_data.nlargest(1, 'p_champ').iloc[0]
     top_power = final_data.nlargest(1, 'exp_final_wins').iloc[0]
+    top_seed = final_data.nsmallest(1, 'avg_seed').iloc[0]
 
-    # Get theme colors
-    colors = get_chart_colors()
-
-    # Create compact metric row
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric(
-            label="Top Playoff Odds",
-            value=f"{top_playoff['p_playoffs']:.0f}%",
-            delta=top_playoff.name
-        )
-
-    with col2:
-        st.metric(
-            label="Championship Favorite",
-            value=f"{top_champ['p_champ']:.1f}%",
-            delta=top_champ.name
-        )
-
-    with col3:
-        st.metric(
-            label="Projected Most Wins",
-            value=f"{top_power['exp_final_wins']:.1f}",
-            delta=top_power.name
-        )
+    # Use summary tiles for compact, visually consistent display
+    render_summary_tiles([
+        {
+            "icon": "",
+            "label": "Highest Playoff Odds",
+            "value": f"{top_playoff['p_playoffs']:.0f}%",
+            "sublabel": top_playoff.name
+        },
+        {
+            "icon": "",
+            "label": "Championship Favorite",
+            "value": f"{top_champ['p_champ']:.1f}%",
+            "sublabel": top_champ.name
+        },
+        {
+            "icon": "",
+            "label": "Most Likely #1 Seed",
+            "value": f"{top_seed['avg_seed']:.2f}",
+            "sublabel": top_seed.name
+        },
+        {
+            "icon": "",
+            "label": "Projected Most Wins",
+            "value": f"{top_power['exp_final_wins']:.1f}",
+            "sublabel": top_power.name
+        }
+    ])
 
 
 @st.fragment
 def _display_championship_path(data, year, week, prefix):
     """Show path to championship with responsive design."""
-    st.subheader(f"🏆 Championship Path - {year} Week {week}")
+    render_section_header(f"Championship Path - {year} Week {week}", "")
 
     # Use selected week data
     final_week = week
@@ -207,16 +216,14 @@ def _display_championship_path(data, year, week, prefix):
         'p_champ': 'mean'
     }).sort_values('avg_seed', ascending=True)
 
-    # Render metric cards first
+    # Render metric tiles first
     _render_metric_cards(final_data)
-
-    st.markdown("---")
 
     # Reset index for table display
     final_data = final_data.reset_index()
 
-    # Championship odds table - DISPLAYED FIRST
-    st.markdown("### 🏆 Championship Odds & Projections")
+    # Championship odds table - compact header
+    st.markdown("**Championship Odds & Projections**")
 
     # Prepare data for render_modern_table
     table_df = final_data.copy()
@@ -260,10 +267,8 @@ def _display_championship_path(data, year, week, prefix):
         gradient_mode="column"
     )
 
-    st.markdown("---")
-
-    # Visualization section
-    st.markdown("### 📊 Visual Analysis")
+    # Visualization section - compact
+    st.markdown("**Visual Analysis**")
 
     # Get theme-aware colors
     colors = get_chart_colors()
@@ -321,9 +326,9 @@ def _display_championship_path(data, year, week, prefix):
 @st.fragment
 def _display_critical_moments(data, year, week, prefix):
     """Critical turning points with theme-aware charts."""
-    st.subheader(f"🔥 Critical Moments - {year} Week {week}")
+    render_section_header(f"Critical Moments - {year} Week {week}", "")
 
-    st.caption("Identify the biggest swings in playoff odds. Which weeks had the most drama?")
+    st.caption("Biggest swings in playoff odds - which weeks had the most drama?")
 
     # Get theme colors
     colors = get_chart_colors()
@@ -351,7 +356,7 @@ def _display_critical_moments(data, year, week, prefix):
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        st.markdown("**📈 Biggest Weekly Gains**")
+        render_group_card("Biggest Weekly Gains", "")
         biggest_gains_display = biggest_gains.copy()
         biggest_gains_display.columns = ['Week', 'Manager', 'Change', 'New Odds']
 
@@ -368,10 +373,11 @@ def _display_critical_moments(data, year, week, prefix):
             return ['' for _ in s]
 
         styled_gains = biggest_gains_display.style.apply(highlight_gains)
-        st.dataframe(styled_gains, hide_index=True, use_container_width=True, height=400)
+        st.dataframe(styled_gains, hide_index=True, use_container_width=True, height=320)
+        close_card()
 
     with col2:
-        st.markdown("**📉 Biggest Weekly Drops**")
+        render_group_card("Biggest Weekly Drops", "")
         biggest_losses_display = biggest_losses.copy()
         biggest_losses_display.columns = ['Week', 'Manager', 'Change', 'New Odds']
 
@@ -388,11 +394,11 @@ def _display_critical_moments(data, year, week, prefix):
             return ['' for _ in s]
 
         styled_losses = biggest_losses_display.style.apply(highlight_losses)
-        st.dataframe(styled_losses, hide_index=True, use_container_width=True, height=400)
+        st.dataframe(styled_losses, hide_index=True, use_container_width=True, height=320)
+        close_card()
 
-    # Volatility chart
-    st.markdown("### 🎢 Season Volatility")
-    st.caption("Higher = more roller coaster season")
+    # Volatility chart - compact
+    st.markdown("**Season Volatility** (higher = more roller coaster season)")
 
     volatility = data.groupby('manager')['p_playoffs'].std().sort_values(ascending=False)
 

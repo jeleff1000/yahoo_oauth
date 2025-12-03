@@ -294,7 +294,7 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
         suppressHorizontalScroll=False  # Allow horizontal scroll on mobile
     )
 
-    # Theme-adaptive CSS for AgGrid - optimized for mobile & desktop
+    # Theme-adaptive CSS for AgGrid - improved heatmap styling
     custom_css = {
         ".ag-header-cell": {
             "font-weight": "600",
@@ -302,16 +302,32 @@ def render_modern_table(df, title="", color_columns=None, reverse_columns=None, 
             "padding": "4px 6px",
             "white-space": "nowrap",
             "overflow": "hidden",
-            "text-overflow": "ellipsis"
+            "text-overflow": "ellipsis",
+            "background": "linear-gradient(135deg, #667eea, #764ba2)",
+            "color": "white"
         },
         ".ag-cell": {
             "font-size": "0.85em",
-            "padding": "4px 6px"
+            "padding": "4px 6px",
+            "border-radius": "3px",
+            "border": "1px solid rgba(255, 255, 255, 0.1)"
         },
         ".ag-root-wrapper": {
             "border-radius": "8px",
             "overflow": "hidden",
-            "box-shadow": "0 2px 8px rgba(0,0,0,0.08)"
+            "box-shadow": "0 2px 8px rgba(102, 126, 234, 0.12)",
+            "border": "1px solid rgba(102, 126, 234, 0.2)"
+        },
+        # Row striping for better legibility
+        ".ag-row-even": {
+            "background-color": "rgba(0, 0, 0, 0.02)"
+        },
+        ".ag-row-odd": {
+            "background-color": "transparent"
+        },
+        # Hover effect
+        ".ag-row:hover": {
+            "background-color": "rgba(102, 126, 234, 0.08) !important"
         },
         # Mobile optimizations
         "@media (max-width: 768px)": {
