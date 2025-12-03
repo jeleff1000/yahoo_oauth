@@ -1055,8 +1055,26 @@ def apply_modern_styles():
        RESPONSIVE - MOBILE (600px) - KEY MOBILE FIXES
        =========================================== */
     @media (max-width: 600px) {
-        /* ===== FIX #1: SHRINK TOP NAV BUTTONS - AGGRESSIVE ===== */
-        /* Target ALL Streamlit button variants with maximum specificity */
+        /* ===== FIX #1: TOP NAV BUTTONS AS 2x2 GRID ===== */
+        /* Make the columns container wrap into 2x2 grid */
+        [data-testid="stHorizontalBlock"]:first-of-type,
+        .main [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"]:first-child {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+        }
+
+        /* Each column takes 50% width minus gap */
+        [data-testid="stHorizontalBlock"]:first-of-type > [data-testid="column"],
+        .main [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"]:first-child > [data-testid="column"] {
+            flex: 0 0 calc(50% - 3px) !important;
+            width: calc(50% - 3px) !important;
+            min-width: calc(50% - 3px) !important;
+            max-width: calc(50% - 3px) !important;
+            padding: 0 !important;
+        }
+
+        /* Compact buttons inside */
         button[kind="primary"],
         button[kind="secondary"],
         button[data-testid="baseButton-primary"],
@@ -1067,22 +1085,18 @@ def apply_modern_styles():
         .stButton > button,
         [data-testid="column"] button,
         [data-testid="stHorizontalBlock"] button {
-            padding-top: 6px !important;
-            padding-bottom: 6px !important;
-            padding-left: 8px !important;
-            padding-right: 8px !important;
-            font-size: 0.8rem !important;
+            padding: 8px 12px !important;
+            font-size: 0.85rem !important;
             min-height: unset !important;
             height: auto !important;
             line-height: 1.3 !important;
         }
 
-        /* Tighter column gaps */
-        [data-testid="stHorizontalBlock"],
-        [data-testid="stColumns"] {
+        /* Other horizontal blocks (not nav) - keep normal */
+        [data-testid="stHorizontalBlock"]:not(:first-of-type) {
             gap: 4px !important;
         }
-        [data-testid="column"] {
+        [data-testid="stHorizontalBlock"]:not(:first-of-type) > [data-testid="column"] {
             padding: 0 2px !important;
         }
 
