@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from md.data_access import run_query, T, list_seasons
+from md.core import T, list_seasons, run_query
 
 
 @st.fragment

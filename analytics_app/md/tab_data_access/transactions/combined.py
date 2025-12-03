@@ -10,7 +10,7 @@ from typing import Dict, Any
 import streamlit as st
 from .transaction_data import load_transaction_data
 from .summary_data import load_transaction_summary, load_manager_transaction_summary
-from md.data_access import run_query, T, get_current_league_db
+from md.core import run_query, T, get_current_league_db
 
 
 @st.cache_data(show_spinner=True, ttl=120)

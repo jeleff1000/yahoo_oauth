@@ -12,16 +12,8 @@ from .weekly_player_subprocesses.weekly_player_matchup_stats import CombinedMatc
 from .base.table_display import EnhancedTableDisplay
 from .base.smart_filters import SmartFilterPanel
 from .weekly_player_subprocesses.head_to_head import H2HViewer
-from md.data_access import (
-    load_filtered_weekly_data,
-    load_players_weekly_data,
-    list_player_seasons,
-    list_player_weeks,
-    list_optimal_seasons,
-    list_optimal_weeks,
-    load_player_week,
-    load_optimal_week,
-)
+from md.core import list_optimal_seasons, list_optimal_weeks, list_player_seasons, list_player_weeks
+from md.tab_data_access.players import load_filtered_weekly_data, load_optimal_week, load_player_week, load_players_weekly_data
 
 
 class OptimizedWeeklyPlayerViewer:

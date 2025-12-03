@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Dict, Any
 import streamlit as st
 import pandas as pd
-from md.data_access import run_query, T
+from md.core import run_query, T
 
 
 # Essential columns for transaction display and analysis

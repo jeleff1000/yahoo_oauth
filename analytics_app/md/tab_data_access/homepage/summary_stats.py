@@ -7,7 +7,7 @@ Handles missing tables gracefully - not all leagues have all tables.
 from __future__ import annotations
 from typing import Dict, Any
 import streamlit as st
-from md.data_access import run_query, T, get_current_league_db
+from md.core import run_query, T, get_current_league_db
 
 
 def _safe_count(table_name: str) -> int:

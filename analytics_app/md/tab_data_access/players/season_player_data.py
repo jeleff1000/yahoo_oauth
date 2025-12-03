@@ -15,7 +15,7 @@ IMPORTANT: Column names verified against actual players_by_year table schema.
 from __future__ import annotations
 from typing import Sequence
 import streamlit as st
-from md.data_access import run_query, T, sql_quote, sql_in_list, sql_upper, sql_upper_in_list, sql_manager_norm
+from md.core import run_query, T, sql_quote, sql_in_list, sql_upper, sql_upper_in_list, sql_manager_norm
 import pandas as pd
 
 # Columns needed for season player stats (~116 out of 237 columns = 51% reduction)

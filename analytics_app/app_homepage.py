@@ -33,7 +33,7 @@ monitor = PerformanceMonitor()
 def _safe_boot() -> bool:
     """Cheap health check for MD connectivity."""
     try:
-        from md.data_access import run_query
+        from md.core import run_query
         run_query("SELECT 1")
         return True
     except Exception as e:
@@ -46,7 +46,7 @@ def _init_session_defaults():
     """Initialize session state with smart defaults - no MD queries on bootup"""
     # Only query latest_season_and_week if not already cached
     if "year" not in st.session_state or "week" not in st.session_state:
-        from md.data_access import latest_season_and_week
+        from md.core import latest_season_and_week
         try:
             y, w = latest_season_and_week()
             st.session_state["year"] = int(y) if y else 0
@@ -183,7 +183,7 @@ def render_players_tab():
 @st.fragment
 def render_players_weekly():
     """Weekly players view"""
-    from md.data_access import load_players_weekly_data
+    from md.tab_data_access.players import load_weekly_player_data
     from tabs.player_stats.weekly_player_stats_optimized import OptimizedWeeklyPlayerViewer
 
     st.session_state.setdefault("weekly_offset", 0)
@@ -191,7 +191,7 @@ def render_players_weekly():
 
     @st.cache_data(ttl=300, show_spinner=False)
     def get_weekly_data(offset, limit):
-        return load_players_weekly_data(year=None, week=None, limit=limit, offset=offset)
+        return load_weekly_player_data(year=None, week=None, limit=limit, offset=offset)
 
     with st.spinner("Loading weekly player data..."):
         weekly_data = get_weekly_data(

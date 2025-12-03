@@ -97,7 +97,7 @@ class OptimalLineupSeasonViewer:
         NOTE: group by NFL_player_id + year (source column `player` holds the display name).
         """
         try:
-            from md.data_access import run_query, T
+            from md.core import T, run_query
 
             # Season type filter
             season_type_filter = "" if include_playoffs else "AND season_type != 'POST'"

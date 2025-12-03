@@ -31,7 +31,7 @@ from typing import Dict, Tuple, Optional
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
 # Import data access
-from md.data_access import run_query, T
+from md.core import T, run_query
 from ..shared.simulation_styles import (
     render_section_header,
     render_odds_card,

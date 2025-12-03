@@ -5,7 +5,7 @@ Filters out Unrostered players and groups by manager, year, week, and fantasy_po
 """
 from __future__ import annotations
 import streamlit as st
-from md.data_access import run_query, T
+from md.core import run_query, T
 
 # Same columns as weekly player data but we'll aggregate them
 WEEKLY_TEAM_COLUMNS = [

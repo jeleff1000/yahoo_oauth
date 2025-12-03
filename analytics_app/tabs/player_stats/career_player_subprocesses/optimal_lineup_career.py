@@ -97,7 +97,7 @@ class OptimalLineupCareerViewer:
         NOTE: group across years by `NFL_player_id` (use `player` as display name via MAX(player)).
         """
         try:
-            from md.data_access import run_query, T
+            from md.core import T, run_query
 
             # Season type filter
             season_type_filter = "" if include_playoffs else "AND season_type != 'POST'"

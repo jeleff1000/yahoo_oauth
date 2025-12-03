@@ -10,7 +10,7 @@ This reduces data transfer by ~87% and memory usage significantly.
 from __future__ import annotations
 from typing import Dict, Any
 import streamlit as st
-from md.data_access import run_query, T
+from md.core import run_query, T
 
 # Core columns needed across all homepage components (36 out of 276!)
 HOMEPAGE_MATCHUP_COLUMNS = [

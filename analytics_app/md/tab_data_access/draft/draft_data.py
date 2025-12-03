@@ -7,8 +7,9 @@ rather than SELECT * which would load all columns.
 """
 from __future__ import annotations
 from typing import Dict, Any
+import pandas as pd
 import streamlit as st
-from md.data_access import run_query, T
+from md.core import run_query, T
 
 # Only the columns actually used by draft tab components
 DRAFT_COLUMNS = [
@@ -230,3 +231,41 @@ def load_draft_data() -> Dict[str, Any]:
     except Exception as e:
         st.error(f"Failed to load draft data: {e}")
         return {"error": str(e)}
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def load_draft_optimizer_data(start_year: int, end_year: int) -> pd.DataFrame:
+    """
+    Optimized loader for draft optimizer - aggregates at DB level.
+    Returns position/cost_bucket aggregates only, not individual draft picks.
+    """
+    try:
+        q = f"""
+            SELECT
+                primary_position,
+                cost_bucket,
+                AVG(cost) AS cost,
+                MEDIAN(season_ppg) AS PPG
+            FROM {T['draft']}
+            WHERE year BETWEEN {int(start_year)} AND {int(end_year)}
+              AND cost > 0
+              AND cost_bucket > 0
+              AND season_ppg > 0
+              AND (is_keeper_status IS NULL OR is_keeper_status != 1)
+            GROUP BY primary_position, cost_bucket
+            HAVING AVG(cost) > 0 AND MEDIAN(season_ppg) > 0
+            ORDER BY primary_position, cost_bucket
+        """
+        df = run_query(q)
+        if df.empty:
+            return pd.DataFrame(columns=['primary_position', 'cost_bucket', 'cost', 'PPG'])
+
+        # Clean dtypes
+        df['cost'] = df['cost'].round(2).astype(float)
+        df['PPG'] = df['PPG'].round(2).astype(float)
+        df['cost_bucket'] = df['cost_bucket'].astype(int)
+
+        return df
+    except Exception as e:
+        st.error(f"Failed to load draft optimizer data: {e}")
+        return pd.DataFrame(columns=['primary_position', 'cost_bucket', 'cost', 'PPG'])

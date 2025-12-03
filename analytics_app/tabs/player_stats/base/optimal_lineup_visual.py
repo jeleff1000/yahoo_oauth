@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
-from md.data_access import load_players_season_data, load_players_career_data, run_query, T
+from md.core import T, run_query
+from md.tab_data_access.players import load_players_career_data, load_players_season_data
 
 # Import theme system
 from shared.themes import inject_theme_css

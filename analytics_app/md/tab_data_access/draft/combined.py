@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional, List, Set
 import re
 import streamlit as st
 from .draft_data import load_draft_data
-from md.data_access import run_query, T
+from md.core import run_query, T
 
 
 # Position code mapping for parsing flex slots

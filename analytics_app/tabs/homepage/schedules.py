@@ -24,7 +24,7 @@ _app_dir = Path(__file__).parent.parent.parent.resolve()
 if str(_app_dir) not in sys.path:
     sys.path.insert(0, str(_app_dir))
 
-from md.data_access import run_query, T
+from md.core import T, run_query
 from ..shared.modern_styles import apply_modern_styles
 from shared.themes import detect_theme
 

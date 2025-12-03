@@ -14,14 +14,8 @@ if str(_app_dir) not in sys.path:
 
 # Reuse the proven viewer from player_stats
 from ..player_stats.weekly_player_subprocesses.head_to_head import H2HViewer, filter_h2h_data
-from md.data_access import (
-    list_player_seasons,
-    list_player_weeks,
-    list_optimal_seasons,
-    list_optimal_weeks,
-    load_player_week,
-    load_optimal_week,
-)
+from md.core import list_optimal_seasons, list_optimal_weeks, list_player_seasons, list_player_weeks
+from md.tab_data_access.players import load_optimal_week, load_player_week
 from shared.dataframe_utils import as_dataframe, get_matchup_df
 
 @st.fragment

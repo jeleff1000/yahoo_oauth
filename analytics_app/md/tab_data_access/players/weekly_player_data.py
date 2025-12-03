@@ -17,7 +17,7 @@ Only includes columns that actually exist in the database.
 from __future__ import annotations
 from typing import Dict, Any
 import streamlit as st
-from md.data_access import run_query, T, sql_in_list
+from md.core import run_query, T, sql_in_list
 
 # Columns needed for weekly player stats (123 out of 276 columns = 55% reduction)
 # All columns verified to exist in actual player table

@@ -8,7 +8,7 @@ instead of all 270+ columns from players_by_year table.
 from __future__ import annotations
 import pandas as pd
 import streamlit as st
-from md.data_access import run_query, get_current_league_db
+from md.core import run_query, get_current_league_db
 
 # Columns needed for player recaps
 RECAPS_PLAYER_COLUMNS = [

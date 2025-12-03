@@ -5,7 +5,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from md.tab_data_access.players.weekly_player_data import load_filtered_weekly_player_data
-from md.data_access import load_players_season_data, list_player_seasons
+from md.core import list_player_seasons
+from md.tab_data_access.players import load_players_season_data
 
 
 @st.fragment

@@ -138,7 +138,7 @@ class SmartFilterPanel:
     def _get_managers(self) -> List[str]:
         """Get list of managers."""
         try:
-            from md.data_access import list_managers
+            from md.core import list_managers
             managers = list_managers(year=None)
             return sorted(managers) if managers else []
         except:

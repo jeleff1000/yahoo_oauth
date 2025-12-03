@@ -36,7 +36,7 @@ Playoff Scenario Columns (NEW):
 from __future__ import annotations
 from typing import Dict, Any
 import streamlit as st
-from md.data_access import run_query, T
+from md.core import run_query, T
 
 
 @st.cache_data(show_spinner=True, ttl=120)

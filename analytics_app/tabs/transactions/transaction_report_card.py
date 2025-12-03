@@ -11,7 +11,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import random
-from md.data_access import run_query, T
+from md.core import T, run_query
 
 
 def get_league_name() -> str:

@@ -5,7 +5,7 @@ draft_spending_trends.py - Fixed version of cost over time analysis
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from md.data_access import run_query, T
+from md.core import T, run_query
 
 
 @st.fragment

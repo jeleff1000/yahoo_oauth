@@ -10,7 +10,7 @@ This reduces data transfer by ~91% and memory usage significantly.
 from __future__ import annotations
 from typing import Dict, Any
 import streamlit as st
-from md.data_access import run_query, T
+from md.core import run_query, T
 
 # Columns needed for managers/matchups tab (~86 out of 275)
 # Comprehensively analyzed ALL sub-sub tabs in: Weekly, Seasons, Career, Visualize

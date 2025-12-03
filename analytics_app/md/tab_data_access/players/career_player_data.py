@@ -16,7 +16,7 @@ Only includes columns that actually exist in the database.
 from __future__ import annotations
 import streamlit as st
 import pandas as pd
-from md.data_access import run_query, T, sql_in_list
+from md.core import run_query, T, sql_in_list
 
 # Columns needed for career player stats (~113 out of 237 columns = 52% reduction)
 # All columns verified to exist in actual players_by_year table

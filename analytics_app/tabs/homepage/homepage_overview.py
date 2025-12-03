@@ -25,7 +25,7 @@ from shared.themes import inject_theme_css
 from ..shared.modern_styles import apply_modern_styles
 
 # Data helpers
-from md.data_access import load_player_two_week_slice
+from md.tab_data_access.homepage import load_player_two_week_slice
 from shared.dataframe_utils import as_dataframe, get_matchup_df
 
 # Homepage sections

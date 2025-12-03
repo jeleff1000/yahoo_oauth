@@ -8,7 +8,7 @@ Recaps need many contextual columns for narrative generation.
 from __future__ import annotations
 from typing import Dict, Any
 import streamlit as st
-from md.data_access import run_query, T
+from md.core import run_query, T
 
 # Columns needed for recaps (in addition to base homepage columns, this is a superset)
 RECAPS_MATCHUP_COLUMNS = [

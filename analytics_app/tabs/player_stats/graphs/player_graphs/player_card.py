@@ -4,7 +4,8 @@ from __future__ import annotations
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
-from md.data_access import load_players_season_data, load_players_career_data, list_player_seasons
+from md.core import list_player_seasons
+from md.tab_data_access.players import load_players_career_data, load_players_season_data
 from md.tab_data_access.players.weekly_player_data import load_filtered_weekly_player_data
 
 

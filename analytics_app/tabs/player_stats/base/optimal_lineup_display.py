@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
-from md.data_access import run_query, T
+from md.core import T, run_query
 
 
 @st.fragment

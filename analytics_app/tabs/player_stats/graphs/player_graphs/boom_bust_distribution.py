@@ -7,7 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
-from md.data_access import list_player_seasons
+from md.core import list_player_seasons
 from md.tab_data_access.players.weekly_player_data import load_filtered_weekly_player_data
 
 

@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 from pulp import LpMaximize, LpProblem, LpVariable, lpSum, value, PULP_CBC_CMD
 from scipy import stats as scipy_stats
-from md.data_access import run_query, T, detect_roster_structure
+from md.core import T, detect_roster_structure, run_query
 from typing import Dict, Optional
 
 # League Intelligence imports
