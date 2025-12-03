@@ -825,20 +825,44 @@ jobs:
                   """).fetchone()[0] > 0
 
                   if main_exists:
-                      # Get columns that exist in both tables
+                      # Get columns with types from both tables
                       staging_cols = con.execute(f"DESCRIBE {db_name}.staging.{staging_name}").fetchall()
                       main_cols = con.execute(f"DESCRIBE {db_name}.public.{main_table}").fetchall()
 
-                      staging_col_names = {row[0] for row in staging_cols}
-                      main_col_names = {row[0] for row in main_cols}
-                      common_cols = staging_col_names & main_col_names
+                      # Build type mappings: {col_name: col_type}
+                      staging_col_types = {row[0]: row[1] for row in staging_cols}
+                      main_col_types = {row[0]: row[1] for row in main_cols}
+
+                      # Find common columns
+                      common_cols = set(staging_col_types.keys()) & set(main_col_types.keys())
 
                       if common_cols:
-                          col_list = ", ".join(common_cols)
-                          # Insert new rows (external data is typically for years not in Yahoo)
+                          # Build SELECT with type casting to handle empty strings and type mismatches
+                          select_parts = []
+                          for col in sorted(common_cols):
+                              main_type = main_col_types[col].upper()
+                              staging_type = staging_col_types[col].upper()
+
+                              # If types match, just use column directly
+                              if main_type == staging_type:
+                                  select_parts.append(col)
+                              # Handle empty string → NULL for numeric types
+                              elif 'INT' in main_type or 'DOUBLE' in main_type or 'FLOAT' in main_type or 'DECIMAL' in main_type:
+                                  select_parts.append(f"CASE WHEN TRIM({col}) = '' OR {col} IS NULL THEN NULL ELSE TRY_CAST({col} AS {main_type}) END AS {col}")
+                              # Handle date/timestamp conversions
+                              elif 'DATE' in main_type or 'TIME' in main_type:
+                                  select_parts.append(f"TRY_CAST({col} AS {main_type}) AS {col}")
+                              # Default: try cast with fallback
+                              else:
+                                  select_parts.append(f"TRY_CAST({col} AS {main_type}) AS {col}")
+
+                          col_list = ", ".join(sorted(common_cols))
+                          select_list = ", ".join(select_parts)
+
+                          # Insert new rows with type-safe casting
                           con.execute(f"""
                               INSERT INTO {db_name}.public.{main_table} ({col_list})
-                              SELECT {col_list} FROM {db_name}.staging.{staging_name}
+                              SELECT {select_list} FROM {db_name}.staging.{staging_name}
                           """)
                           cnt = con.execute(f"SELECT COUNT(*) FROM {db_name}.staging.{staging_name}").fetchone()[0]
                           print(f"    ✓ Merged {cnt} rows")
