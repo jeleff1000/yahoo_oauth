@@ -187,7 +187,7 @@ class WeeklyOptimalLineupsViewer:
         total_bench = df["Bench Pts"].sum()
 
         # Outcome changes
-        would_have_won = len(df[(not df["Result"]) & (df["Opt Result"])])
+        would_have_won = len(df[(~df["Result"]) & (df["Opt Result"])])
         lucky_wins = len(df[(df["Result"]) & (df["Efficiency"] < 80)])
 
         # Points
