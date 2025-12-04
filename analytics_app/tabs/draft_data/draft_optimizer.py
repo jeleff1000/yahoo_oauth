@@ -2210,70 +2210,93 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
         else:
             st.info("All slots filled!")
 
-        st.markdown("---")
+    # =========================================================================
+    # FULL-WIDTH SECTION: Optimal Plan + Filled Picks (below both columns)
+    # =========================================================================
+    st.markdown("---")
 
-        # --- Optimal Plan Table ---
-        if result is not None and len(result) > 0:
-            st.markdown("#### Optimal Plan")
-            st.caption(f"{total_remaining_slots} slots remaining")
+    # --- Filled Picks (show first if any exist) ---
+    if filled_picks:
+        st.markdown("#### Filled Picks")
 
-            rows = []
-            for _, row in result.iterrows():
-                is_bench = row.get("is_bench", False) if "is_bench" in result.columns else False
-                is_flex = row.get("is_flex", False) if "is_flex" in result.columns else False
-                pos = row["yahoo_position"]
+        # Use a more compact layout for filled picks
+        fp_cols = st.columns([1, 3, 1, 1, 0.5])
+        with fp_cols[0]:
+            st.caption("**Slot**")
+        with fp_cols[1]:
+            st.caption("**Player**")
+        with fp_cols[2]:
+            st.caption("**Cost**")
+        with fp_cols[3]:
+            st.caption("**Type**")
 
-                if is_bench:
-                    slot_label = f"BN ({pos})"
-                elif is_flex:
-                    slot_label = f"FLEX ({pos})"
-                else:
-                    slot_label = pos
+        for i, p in enumerate(filled_picks):
+            slot_label = (
+                f"FLEX ({p['position']})" if p.get("is_flex")
+                else f"BN ({p['position']})" if p["slot_type"] == "bench"
+                else p["position"]
+            )
+            player_label = p.get("player", "") or "—"
+            type_label = "Bench" if p["slot_type"] == "bench" else "Starter"
 
-                rows.append({
-                    "Slot": slot_label,
-                    "Target": f"${row['avg_cost']:.0f}",
-                    "SPAR": round(row.get("median_spar", 0), 1),
-                    "PPG": round(row.get("median_ppg", 0), 1),
-                })
+            fp_c1, fp_c2, fp_c3, fp_c4, fp_c5 = st.columns([1, 3, 1, 1, 0.5])
+            with fp_c1:
+                st.write(f"**{slot_label}**")
+            with fp_c2:
+                st.write(player_label)
+            with fp_c3:
+                st.write(f"${p['cost']:.0f}")
+            with fp_c4:
+                st.write(type_label)
+            with fp_c5:
+                if st.button("X", key=f"del_{i}", help="Remove"):
+                    st.session_state.draft_tracker["filled_picks"].pop(i)
+                    st.rerun(scope="fragment")
 
-            plan_df = pd.DataFrame(rows)
-            st.dataframe(plan_df, hide_index=True, use_container_width=True, height=280)
-
-            total_planned = result["avg_cost"].sum()
-            st.caption(f"Planned: ${total_planned:.0f} | Unallocated: ${remaining_budget - total_planned:.0f}")
-
-        # --- Filled Picks ---
-        if filled_picks:
-            st.markdown("---")
-            st.markdown("#### Filled Picks")
-
-            for i, p in enumerate(filled_picks):
-                slot_label = (
-                    f"FLEX ({p['position']})" if p.get("is_flex")
-                    else f"BN ({p['position']})" if p["slot_type"] == "bench"
-                    else p["position"]
-                )
-                player_label = p.get("player", "") or "—"
-
-                fp_c1, fp_c2, fp_c3, fp_c4 = st.columns([1, 2, 1, 0.5])
-                with fp_c1:
-                    st.write(f"**{slot_label}**")
-                with fp_c2:
-                    st.write(player_label)
-                with fp_c3:
-                    st.write(f"${p['cost']:.0f}")
-                with fp_c4:
-                    if st.button("X", key=f"del_{i}", help="Remove"):
-                        st.session_state.draft_tracker["filled_picks"].pop(i)
-                        st.rerun(scope="fragment")
-
-            picks_total = sum(p["cost"] for p in filled_picks)
+        picks_total = sum(p["cost"] for p in filled_picks)
+        reset_col1, reset_col2 = st.columns([4, 1])
+        with reset_col1:
             st.caption(f"Total: ${picks_total:.0f} ({len(filled_picks)} picks)")
-
-            if st.button("Reset All", key="reset_all"):
+        with reset_col2:
+            if st.button("Reset All", key="reset_all", use_container_width=True):
                 st.session_state.draft_tracker["filled_picks"] = []
                 st.rerun(scope="fragment")
+
+        st.markdown("---")
+
+    # --- Optimal Plan Table ---
+    if result is not None and len(result) > 0:
+        plan_header_col1, plan_header_col2 = st.columns([3, 1])
+        with plan_header_col1:
+            st.markdown("#### Optimal Plan")
+        with plan_header_col2:
+            st.caption(f"{total_remaining_slots} slots remaining")
+
+        rows = []
+        for _, row in result.iterrows():
+            is_bench = row.get("is_bench", False) if "is_bench" in result.columns else False
+            is_flex = row.get("is_flex", False) if "is_flex" in result.columns else False
+            pos = row["yahoo_position"]
+
+            if is_bench:
+                slot_label = f"BN ({pos})"
+            elif is_flex:
+                slot_label = f"FLEX ({pos})"
+            else:
+                slot_label = pos
+
+            rows.append({
+                "Slot": slot_label,
+                "Target": f"${row['avg_cost']:.0f}",
+                "SPAR": round(row.get("median_spar", 0), 1),
+                "PPG": round(row.get("median_ppg", 0), 1),
+            })
+
+        plan_df = pd.DataFrame(rows)
+        st.dataframe(plan_df, hide_index=True, use_container_width=True, height=350)
+
+        total_planned = result["avg_cost"].sum()
+        st.caption(f"Planned: ${total_planned:.0f} | Unallocated: ${remaining_budget - total_planned:.0f}")
 
 
 def run_optimization(
