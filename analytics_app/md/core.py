@@ -57,6 +57,7 @@ def get_table_dict() -> Dict[str, str]:
         "schedule": f"{db}.public.schedule",
         "transactions": f"{db}.public.transactions",
         "league_settings": f"{db}.public.league_settings",
+        "league_context": f"{db}.public.league_context",
     }
 
 
@@ -100,6 +101,17 @@ def get_motherduck_connection():
     except Exception as e:
         st.error(f"Failed to create MotherDuck connection: {e}")
         raise
+
+
+def get_connection():
+    """
+    Get a raw DuckDB connection for write operations.
+    NOT cached - each call returns a fresh connection.
+    Use this for UPDATE/INSERT/DELETE operations.
+    Caller is responsible for closing the connection.
+    """
+    conn = get_motherduck_connection()
+    return conn._instance  # Return the underlying DuckDB connection
 
 
 @st.cache_data(ttl=120, show_spinner=True)

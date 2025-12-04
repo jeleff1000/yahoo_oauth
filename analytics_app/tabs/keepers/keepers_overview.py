@@ -69,7 +69,7 @@ class KeeperDataViewer:
             )
 
         # Tab navigation buttons at top
-        sub_tab_names = ["Explorer", "Analytics", "Best Keepers"]
+        sub_tab_names = ["Explorer", "Analytics", "Best Keepers", "Settings"]
         current_idx = st.session_state.get("subtab_Keepers", 0)
 
         cols = st.columns(len(sub_tab_names))
@@ -94,6 +94,8 @@ class KeeperDataViewer:
             self._display_analytics(df)
         elif current_idx == 2:
             self._display_best_keepers(df)
+        elif current_idx == 3:
+            self._display_settings()
 
     def _get_color_scale(self, value, min_val, max_val, reverse=False):
         """Get color for a value on a scale from red to green"""
@@ -627,6 +629,12 @@ class KeeperDataViewer:
             st.info(
                 f"ℹ️ Note: {missing_count} keeper(s) excluded due to missing performance data"
             )
+
+    @st.fragment
+    def _display_settings(self):
+        """Display keeper settings configuration."""
+        from .keeper_settings import KeeperSettingsViewer
+        KeeperSettingsViewer().display()
 
 
 @st.fragment

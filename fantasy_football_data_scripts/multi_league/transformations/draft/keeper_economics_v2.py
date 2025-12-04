@@ -53,13 +53,32 @@ sys.path.insert(0, str(_multi_league_dir))
 
 from multi_league.core.league_context import LeagueContext
 
-# Import draft type detection utilities
+# Import consecutive keeper calculator
 try:
-    from multi_league.transformations.draft.modules.draft_type_utils import (
-        detect_draft_type_for_year
+    from multi_league.transformations.draft.modules.consecutive_keeper_calculator import (
+        calculate_consecutive_keeper_years
     )
 except ImportError:
-    # Fallback if modules not available
+    # Fallback if consecutive_keeper_calculator not available
+    def calculate_consecutive_keeper_years(df, player_id_col='yahoo_player_id', keeper_col='is_keeper_status',
+                                           year_col='year', manager_col=None):
+        """Fallback: simple keeper year calculation without module."""
+        result = df.copy()
+        result['consecutive_years_kept'] = 0
+        result['first_kept_year'] = pd.NA
+        result['keeper_streak_id'] = pd.NA
+
+        if keeper_col not in result.columns:
+            return result
+
+        # Simple calculation: just mark keepers as year 1
+        result.loc[result[keeper_col] == 1, 'consecutive_years_kept'] = 1
+        return result
+
+# Fallback draft type detection if module not available
+try:
+    from multi_league.transformations.draft.modules.draft_type_utils import detect_draft_type_for_year
+except ImportError:
     def detect_draft_type_for_year(df, year, year_column='year', draft_type_column='draft_type', cost_column='cost'):
         """Fallback draft type detection."""
         year_df = df[df[year_column] == year]
@@ -456,31 +475,51 @@ def calculate_keeper_economics(
     if 'max_faab_bid' not in draft.columns:
         draft['max_faab_bid'] = 0.0
 
-    # Calculate keeper_year (how many consecutive years kept)
-    # This requires tracking keeper history
-    print(f"\n[Calculating] Keeper years and prices...")
+    # Calculate consecutive keeper years using the dedicated module
+    # This properly tracks per (player, manager) streaks
+    print(f"\n[Calculating] Consecutive keeper years...")
 
-    # Sort by year to process chronologically
-    draft = draft.sort_values(['yahoo_player_id', 'year']).copy()
+    # Use the consecutive keeper calculator module
+    draft = calculate_consecutive_keeper_years(
+        draft,
+        player_id_col='yahoo_player_id',
+        keeper_col='is_keeper_status',
+        year_col='year',
+        manager_col='manager' if 'manager' in draft.columns else None
+    )
 
-    # Track keeper history: {yahoo_player_id: {year: keeper_price}}
-    keeper_history = {}
+    # Rename for consistency with keeper_year expected by calculator
+    draft['keeper_year'] = draft['consecutive_years_kept']
+
+    print(f"   Found {(draft['keeper_year'] > 0).sum():,} keeper instances")
+    print(f"   Max consecutive years: {draft['keeper_year'].max()}")
 
     # Add draft_type column based on year
     draft['detected_draft_type'] = draft['year'].map(draft_types)
 
     # Initialize output columns
     draft['keeper_price'] = pd.NA
-    draft['keeper_year'] = pd.NA
     draft['previous_keeper_price'] = pd.NA
 
-    # Process each row
+    # Build keeper price history for escalation calculations
+    # We need to track prices per (player_id, manager) to get previous year's price
+    print(f"\n[Calculating] Keeper prices...")
+
+    # Sort by player, manager, year for proper sequential processing
+    sort_cols = ['yahoo_player_id', 'year']
+    if 'manager' in draft.columns:
+        sort_cols = ['yahoo_player_id', 'manager', 'year']
+    draft = draft.sort_values(sort_cols).copy()
+
+    # Track keeper prices: {(player_id, manager): {year: price}}
+    keeper_price_history = {}
     keeper_prices_calculated = 0
 
     for idx, row in draft.iterrows():
         player_id = str(row.get('yahoo_player_id', ''))
         year = row.get('year')
-        is_keeper = bool(row.get('is_keeper_status', 0))
+        manager = str(row.get('manager', '')) if 'manager' in draft.columns else ''
+        keeper_year = int(row.get('keeper_year', 0))
 
         if pd.isna(year) or not player_id:
             continue
@@ -488,30 +527,15 @@ def calculate_keeper_economics(
         year = int(year)
         draft_type = draft_types.get(year, 'snake')
 
-        # Initialize player history if needed
-        if player_id not in keeper_history:
-            keeper_history[player_id] = {}
+        # Create key for tracking
+        key = (player_id, manager)
 
-        # Determine keeper_year (consecutive years kept)
-        # Look back to see if player was kept in previous year
+        if key not in keeper_price_history:
+            keeper_price_history[key] = {}
+
+        # Get previous keeper price from history
         prev_year = year - 1
-        if prev_year in keeper_history[player_id]:
-            # Player was in roster last year
-            if is_keeper:
-                # Consecutive keep
-                keeper_year = keeper_history[player_id].get(f'{prev_year}_keeper_year', 0) + 1
-            else:
-                # Not a keeper this year (fresh draft or new acquisition)
-                keeper_year = 0
-        else:
-            # First time with this owner
-            if is_keeper:
-                keeper_year = 1  # First year keeping
-            else:
-                keeper_year = 0  # Not a keeper
-
-        # Get previous keeper price
-        previous_keeper_price = keeper_history[player_id].get(prev_year, 0.0)
+        previous_keeper_price = keeper_price_history[key].get(prev_year, 0.0)
 
         # Calculate keeper price
         cost = float(row.get('cost', 0)) if not pd.isna(row.get('cost')) else 0.0
@@ -521,6 +545,7 @@ def calculate_keeper_economics(
 
         # Only calculate keeper_price for drafted players (not undrafted pool)
         is_drafted = pd.notna(row.get('pick')) or (cost > 0)
+        is_keeper = keeper_year > 0
 
         if is_drafted:
             keeper_price = calculator.calculate_keeper_price(
@@ -535,12 +560,10 @@ def calculate_keeper_economics(
             )
 
             # Store in history for next year's calculation
-            keeper_history[player_id][year] = keeper_price
-            keeper_history[player_id][f'{year}_keeper_year'] = keeper_year
+            keeper_price_history[key][year] = keeper_price
 
             # Update dataframe
             draft.at[idx, 'keeper_price'] = keeper_price
-            draft.at[idx, 'keeper_year'] = keeper_year if keeper_year > 0 else pd.NA
             draft.at[idx, 'previous_keeper_price'] = previous_keeper_price if previous_keeper_price > 0 else pd.NA
 
             keeper_prices_calculated += 1
