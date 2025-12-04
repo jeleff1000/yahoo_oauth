@@ -1022,23 +1022,20 @@ def run_register_flow():
                             if st.session_state.get("import_job_id"):
                                 st.info(f"Job ID: `{st.session_state.import_job_id}`")
                         else:
-                            # Show URL preview
+                            # Show URL preview inline
                             db_name = sanitize_league_name_for_db(selected_league['name'])
                             league_url = f"https://leaguehistory.streamlit.app/?league={db_name}"
-
-                            st.caption("Your league URL:")
-                            st.code(league_url, language=None)
+                            st.markdown(f"**Your league URL:** `{league_url}`")
 
                             # Optional Settings (collapsed by default)
                             st.markdown("##### Optional Settings")
 
-                            # Privacy setting first
+                            # Privacy setting with inline explanation
                             is_private = st.checkbox(
-                                "Make my league private (direct link only)",
+                                "Make my league private — only accessible via direct link, won't appear in public search",
                                 value=False,
                                 key="league_private",
                             )
-                            st.caption("If checked, your league will only be accessible via the direct link above and won't appear in the public league search on the landing page.")
                             st.session_state.configured_is_private = is_private
 
                             # Keeper Rules Tab
