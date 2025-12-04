@@ -745,6 +745,38 @@ def apply_simulation_styles():
     }
 
     /* ===========================================
+       EQUAL HEIGHT ROW
+       =========================================== */
+    .sim-equal-height-row {
+        display: flex;
+        align-items: stretch;
+    }
+
+    .sim-equal-height-row > div {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sim-equal-height-row [data-testid="stVerticalBlock"] > div:has(> [data-testid="stContainer"]) {
+        flex: 1;
+    }
+
+    /* Text link button style */
+    .sim-text-link {
+        background: none !important;
+        border: none !important;
+        color: var(--accent, #667eea) !important;
+        font-size: 0.75rem !important;
+        padding: 0 !important;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .sim-text-link:hover {
+        text-decoration: underline;
+    }
+
+    /* ===========================================
        SUMMARY STRIP (NEW)
        =========================================== */
     .sim-summary-strip {

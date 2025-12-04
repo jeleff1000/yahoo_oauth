@@ -684,6 +684,7 @@ def display_playoff_machine(
 def _render_remaining_games(remaining_games: pd.DataFrame):
     """Render remaining games with compact styled matchup cards."""
     st.markdown("**Pick Winners**")
+    st.caption("Click a team to select them as the winner")
 
     if remaining_games.empty:
         st.info("No remaining games - regular season complete!")
@@ -918,8 +919,8 @@ def _inject_loser_button_styles():
 def _render_standings(
     current_standings: pd.DataFrame, remaining_games: pd.DataFrame, picks: Dict
 ):
-    """Render original and adjusted playoff odds tables side by side."""
-    st.markdown("**Playoff Odds Comparison**")
+    """Render original vs adjusted playoff odds in a single comparison table."""
+    st.markdown("**Original vs Adjusted Playoff Odds**")
 
     # Get playoff config (default 6 teams, 2 byes)
     num_playoff_teams = 6
@@ -954,30 +955,79 @@ def _render_standings(
         st.info("Unable to calculate odds.")
         return
 
-    # Display side by side with compact headers
-    col1, col2 = st.columns(2)
+    # Build combined comparison table
+    comparison_df = original_odds[["manager", "p_playoffs", "p_champ"]].copy()
+    comparison_df = comparison_df.rename(columns={
+        "p_playoffs": "Orig %",
+        "p_champ": "Champ Orig"
+    })
 
-    with col1:
-        render_odds_card("Original Odds", "", "Before picks")
-        _render_scenario_odds_table(
-            original_odds,
-            num_playoff_teams,
-            num_bye_teams,
-            color_scheme="original",
-            table_key="pm_original_odds",
-        )
-        close_card()
+    adjusted_sub = adjusted_odds[["manager", "p_playoffs", "p_champ"]].copy()
+    comparison_df = comparison_df.merge(adjusted_sub, on="manager", how="left")
+    comparison_df = comparison_df.rename(columns={
+        "p_playoffs": "New %",
+        "p_champ": "Champ New"
+    })
 
-    with col2:
-        render_odds_card("Adjusted Odds", "", "With selections")
-        _render_scenario_odds_table(
-            adjusted_odds,
-            num_playoff_teams,
-            num_bye_teams,
-            color_scheme="original",
-            table_key="pm_adjusted_odds",
-        )
-        close_card()
+    # Calculate deltas
+    comparison_df["Δ"] = comparison_df["New %"] - comparison_df["Orig %"]
+    comparison_df["Δ Champ"] = comparison_df["Champ New"] - comparison_df["Champ Orig"]
+
+    # Sort by delta (biggest gainers first)
+    comparison_df = comparison_df.sort_values("Δ", ascending=False)
+
+    # Format for display
+    display_df = comparison_df[["manager", "Orig %", "New %", "Δ", "Champ Orig", "Champ New", "Δ Champ"]].copy()
+    display_df = display_df.set_index("manager")
+
+    # Style the dataframe with conditional formatting
+    def style_delta(val):
+        if pd.isna(val):
+            return ""
+        if val > 0:
+            return "color: #10B981; font-weight: 600"
+        elif val < 0:
+            return "color: #EF4444; font-weight: 600"
+        return ""
+
+    styled_df = display_df.style.applymap(
+        style_delta, subset=["Δ", "Δ Champ"]
+    ).format({
+        "Orig %": "{:.1f}",
+        "New %": "{:.1f}",
+        "Δ": "{:+.1f}",
+        "Champ Orig": "{:.1f}",
+        "Champ New": "{:.1f}",
+        "Δ Champ": "{:+.1f}",
+    })
+
+    st.dataframe(styled_df, use_container_width=True, height=350)
+
+    # Expander for detailed odds tables
+    with st.expander("Show detailed odds tables", expanded=False):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            render_odds_card("Original Odds", "", "Before picks")
+            _render_scenario_odds_table(
+                original_odds,
+                num_playoff_teams,
+                num_bye_teams,
+                color_scheme="original",
+                table_key="pm_original_odds",
+            )
+            close_card()
+
+        with col2:
+            render_odds_card("Adjusted Odds", "", "With selections")
+            _render_scenario_odds_table(
+                adjusted_odds,
+                num_playoff_teams,
+                num_bye_teams,
+                color_scheme="original",
+                table_key="pm_adjusted_odds",
+            )
+            close_card()
 
 
 def display_playoff_machine_compact(matchup_data_df: pd.DataFrame = None):

@@ -419,7 +419,132 @@ jobs:
       - name: Create data directory
         run: |
           mkdir -p fantasy_football_data
-          echo "✅ Data directory ready"
+          mkdir -p fantasy_football_data/matchup_data
+          mkdir -p fantasy_football_data/player_data
+          mkdir -p fantasy_football_data/draft_data
+          mkdir -p fantasy_football_data/transaction_data
+          mkdir -p fantasy_football_data/schedule_data
+          echo "✅ Data directories ready"
+
+      - name: Download external staging data for transformations
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          DATABASE_NAME: ${{ steps.parse.outputs.database_name }}
+        run: |
+          echo "========================================"
+          echo "Checking for external staging data to include in transformations"
+          echo "========================================"
+
+          python - <<'PYEOF'
+          import os
+          import re
+          import json
+
+          def _slug(s, prefix_if_digit="l"):
+              x = re.sub(r"[^a-zA-Z0-9]+", "_", s.strip().lower()).strip("_")
+              if re.match(r"^\d", x):
+                  x = f"{prefix_if_digit}_{x}"
+              return x[:63]
+
+          # Check if has_external_data flag is set
+          with open("league_data_input.json") as f:
+              league_data = json.load(f)
+
+          has_external_data = league_data.get("has_external_data", False)
+
+          if not has_external_data:
+              print("ℹ️ No external data flag - skipping staging download")
+              exit(0)
+
+          token = os.environ.get("MOTHERDUCK_TOKEN")
+          league_name = league_data.get("league_name", "")
+          db_name = _slug(league_name, "l")
+
+          if not token or not db_name:
+              print("⚠️ Missing token or database name")
+              exit(0)
+
+          print(f"🔍 Checking for staging data in {db_name}...")
+
+          try:
+              import duckdb
+              os.environ["MOTHERDUCK_TOKEN"] = token
+              con = duckdb.connect("md:")
+
+              # Check for staging tables
+              staging_tables = con.execute(f"""
+                  SELECT table_name
+                  FROM information_schema.tables
+                  WHERE table_catalog = '{db_name}'
+                  AND table_schema = 'staging'
+              """).fetchall()
+
+              if not staging_tables:
+                  print("ℹ️ No staging tables found")
+                  con.close()
+                  exit(0)
+
+              print(f"Found {len(staging_tables)} staging tables")
+
+              # Map staging tables to output directories
+              table_dirs = {
+                  "staging_matchup": "fantasy_football_data/matchup_data",
+                  "staging_player": "fantasy_football_data/player_data",
+                  "staging_draft": "fantasy_football_data/draft_data",
+                  "staging_transactions": "fantasy_football_data/transaction_data",
+                  "staging_schedule": "fantasy_football_data/schedule_data",
+              }
+
+              for (staging_name,) in staging_tables:
+                  output_dir = table_dirs.get(staging_name)
+                  if not output_dir:
+                      print(f"  ⚠️ Unknown staging table: {staging_name}")
+                      continue
+
+                  # Get data from staging
+                  df = con.execute(f"SELECT * FROM {db_name}.staging.{staging_name}").fetchdf()
+
+                  if df.empty:
+                      print(f"  ⚠️ {staging_name} is empty")
+                      continue
+
+                  # Get unique years
+                  if 'year' in df.columns:
+                      years = df['year'].dropna().unique()
+                      for year in years:
+                          year_df = df[df['year'] == year]
+                          year_int = int(year)
+
+                          # Determine output filename based on table type
+                          if staging_name == "staging_matchup":
+                              filename = f"matchup_data_week_all_year_{year_int}.parquet"
+                          elif staging_name == "staging_player":
+                              filename = f"yahoo_player_stats_{year_int}_all_weeks.parquet"
+                          elif staging_name == "staging_draft":
+                              filename = f"draft_data_{year_int}.parquet"
+                          elif staging_name == "staging_transactions":
+                              filename = f"transactions_year_{year_int}.parquet"
+                          elif staging_name == "staging_schedule":
+                              filename = f"schedule_data_year_{year_int}.parquet"
+                          else:
+                              filename = f"{staging_name}_{year_int}.parquet"
+
+                          output_path = f"{output_dir}/{filename}"
+                          year_df.to_parquet(output_path, index=False)
+                          print(f"  ✓ {staging_name} year {year_int}: {len(year_df)} rows → {output_path}")
+                  else:
+                      # No year column - save as single file
+                      output_path = f"{output_dir}/{staging_name.replace('staging_', '')}_external.parquet"
+                      df.to_parquet(output_path, index=False)
+                      print(f"  ✓ {staging_name}: {len(df)} rows → {output_path}")
+
+              con.close()
+              print("✅ External staging data downloaded for transformation processing")
+
+          except Exception as e:
+              print(f"⚠️ Error downloading staging data: {e}")
+              print("   Import will continue with Yahoo data only")
+          PYEOF
 
       - name: Run initial import
         id: import
@@ -710,15 +835,17 @@ jobs:
             exit $UPLOAD_EXIT
           fi
 
-      - name: Merge external staging data
+      - name: Cleanup external staging data
         if: steps.motherduck.outputs.upload_success == 'true'
         env:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
-          DATABASE_NAME: ${{ steps.parse.outputs.database_name }}
         run: |
           echo "========================================"
-          echo "Checking for external staging data"
+          echo "Cleaning up staging tables"
           echo "========================================"
+
+          # External data was already downloaded and processed during transformations
+          # Now we just clean up the staging tables in MotherDuck
 
           python - <<'PYEOF'
           import json
@@ -727,7 +854,6 @@ jobs:
           import duckdb
 
           def _slug(s, prefix_if_digit="l"):
-              """Consistent slug function matching Streamlit app."""
               x = re.sub(r"[^a-zA-Z0-9]+", "_", s.strip().lower()).strip("_")
               if re.match(r"^\d", x):
                   x = f"{prefix_if_digit}_{x}"
@@ -740,164 +866,50 @@ jobs:
           has_external_data = league_data.get("has_external_data", False)
 
           if not has_external_data:
-              print("ℹ️ No external data flag set - skipping staging merge")
+              print("ℹ️ No external data - no staging cleanup needed")
               exit(0)
 
-          # Use league_name and apply same slug as Streamlit upload
           league_name = league_data.get("league_name", "")
           db_name = _slug(league_name, "l")
           token = os.environ.get("MOTHERDUCK_TOKEN")
 
           if not token or not db_name:
-              print("⚠️ Missing MOTHERDUCK_TOKEN or DATABASE_NAME")
+              print("⚠️ Missing token or database name")
               exit(0)
 
-          print(f"🔄 Merging staging data for database: {db_name}")
-          print(f"   (from league_name: {league_name})")
+          print(f"🧹 Cleaning up staging tables for: {db_name}")
 
-          os.environ["MOTHERDUCK_TOKEN"] = token
-          con = duckdb.connect("md:")
-
-          # First, list all databases to verify our target exists
-          print("\n📋 Checking available databases...")
-          all_dbs = con.execute("SELECT DISTINCT catalog_name FROM information_schema.schemata WHERE catalog_name NOT IN ('memory', 'system', 'temp')").fetchall()
-          print(f"   Available databases: {[d[0] for d in all_dbs]}")
-
-          # USE the database to ensure correct context
           try:
-              con.execute(f"USE {db_name}")
-              print(f"   ✓ Connected to database: {db_name}")
-          except Exception as e:
-              print(f"   ❌ Could not connect to database {db_name}: {e}")
-              con.close()
-              exit(0)
+              os.environ["MOTHERDUCK_TOKEN"] = token
+              con = duckdb.connect("md:")
 
-          # Check if staging schema exists
-          try:
+              # Check for staging tables
               staging_tables = con.execute(f"""
                   SELECT table_name
                   FROM information_schema.tables
                   WHERE table_catalog = '{db_name}'
                   AND table_schema = 'staging'
               """).fetchall()
-              print(f"   Staging tables query returned: {staging_tables}")
-          except Exception as e:
-              print(f"   Staging tables query error: {e}")
-              staging_tables = []
 
-          if not staging_tables:
-              print("ℹ️ No staging tables found - nothing to merge")
-              # List all schemas/tables in the database for debugging
-              try:
-                  all_tables = con.execute(f"""
-                      SELECT table_schema, table_name
-                      FROM information_schema.tables
-                      WHERE table_catalog = '{db_name}'
-                  """).fetchall()
-                  print(f"   All tables in {db_name}: {all_tables}")
-              except:
-                  pass
+              if not staging_tables:
+                  print("ℹ️ No staging tables to clean up")
+                  con.close()
+                  exit(0)
+
+              print(f"Found {len(staging_tables)} staging tables to clean up")
+
+              for (staging_name,) in staging_tables:
+                  try:
+                      con.execute(f"DROP TABLE IF EXISTS {db_name}.staging.{staging_name}")
+                      print(f"  ✓ Dropped {staging_name}")
+                  except Exception as e:
+                      print(f"  ⚠️ Could not drop {staging_name}: {e}")
+
               con.close()
-              exit(0)
+              print("✅ Staging cleanup complete")
 
-          print(f"Found {len(staging_tables)} staging tables to merge")
-
-          # Table mapping: staging name -> main table name
-          table_map = {
-              "staging_matchup": "matchup",
-              "staging_player": "player",
-              "staging_draft": "draft",
-              "staging_transactions": "transactions",
-              "staging_schedule": "schedule",
-          }
-
-          for (staging_name,) in staging_tables:
-              main_table = table_map.get(staging_name, staging_name.replace("staging_", ""))
-              print(f"  Merging {db_name}.staging.{staging_name} → {db_name}.public.{main_table}")
-
-              try:
-                  # Check if main table exists
-                  main_exists = con.execute(f"""
-                      SELECT COUNT(*) FROM information_schema.tables
-                      WHERE table_catalog = '{db_name}'
-                      AND table_schema = 'public'
-                      AND table_name = '{main_table}'
-                  """).fetchone()[0] > 0
-
-                  if main_exists:
-                      # Get columns with types from both tables
-                      staging_cols = con.execute(f"DESCRIBE {db_name}.staging.{staging_name}").fetchall()
-                      main_cols = con.execute(f"DESCRIBE {db_name}.public.{main_table}").fetchall()
-
-                      # Build type mappings: {col_name: col_type}
-                      staging_col_types = {row[0]: row[1] for row in staging_cols}
-                      main_col_types = {row[0]: row[1] for row in main_cols}
-
-                      # Find common columns
-                      common_cols = set(staging_col_types.keys()) & set(main_col_types.keys())
-
-                      if common_cols:
-                          # Build SELECT with type casting to handle empty strings and type mismatches
-                          select_parts = []
-                          for col in sorted(common_cols):
-                              main_type = main_col_types[col].upper()
-                              staging_type = staging_col_types[col].upper()
-
-                              # Check if staging column is a string type (can have empty strings)
-                              staging_is_string = 'VARCHAR' in staging_type or 'TEXT' in staging_type or 'CHAR' in staging_type or 'STRING' in staging_type
-                              main_is_numeric = 'INT' in main_type or 'DOUBLE' in main_type or 'FLOAT' in main_type or 'DECIMAL' in main_type or 'BIGINT' in main_type
-
-                              # If types match, just use column directly
-                              if main_type == staging_type:
-                                  select_parts.append(col)
-                              # String → Numeric: handle empty strings as NULL
-                              elif staging_is_string and main_is_numeric:
-                                  select_parts.append(f"CASE WHEN TRIM({col}) = '' OR {col} IS NULL THEN NULL ELSE TRY_CAST({col} AS {main_type}) END AS {col}")
-                              # Numeric → Numeric: just cast (no TRIM needed)
-                              elif main_is_numeric:
-                                  select_parts.append(f"TRY_CAST({col} AS {main_type}) AS {col}")
-                              # Handle date/timestamp conversions
-                              elif 'DATE' in main_type or 'TIME' in main_type:
-                                  select_parts.append(f"TRY_CAST({col} AS {main_type}) AS {col}")
-                              # Default: try cast with fallback
-                              else:
-                                  select_parts.append(f"TRY_CAST({col} AS {main_type}) AS {col}")
-
-                          col_list = ", ".join(sorted(common_cols))
-                          select_list = ", ".join(select_parts)
-
-                          # Insert new rows with type-safe casting
-                          con.execute(f"""
-                              INSERT INTO {db_name}.public.{main_table} ({col_list})
-                              SELECT {select_list} FROM {db_name}.staging.{staging_name}
-                          """)
-                          cnt = con.execute(f"SELECT COUNT(*) FROM {db_name}.staging.{staging_name}").fetchone()[0]
-                          print(f"    ✓ Merged {cnt} rows")
-                      else:
-                          print(f"    ⚠️ No common columns between staging and main table")
-                  else:
-                      # Main table doesn't exist - create it from staging
-                      con.execute(f"""
-                          CREATE TABLE {db_name}.public.{main_table} AS
-                          SELECT * FROM {db_name}.staging.{staging_name}
-                      """)
-                      cnt = con.execute(f"SELECT COUNT(*) FROM {db_name}.public.{main_table}").fetchone()[0]
-                      print(f"    ✓ Created new table with {cnt} rows")
-
-              except Exception as e:
-                  print(f"    ❌ Error merging {staging_name}: {e}")
-
-          # Clean up staging tables
-          print("\n🧹 Cleaning up staging tables...")
-          for (staging_name,) in staging_tables:
-              try:
-                  con.execute(f"DROP TABLE IF EXISTS {db_name}.staging.{staging_name}")
-                  print(f"    ✓ Dropped {staging_name}")
-              except:
-                  pass
-
-          con.close()
-          print("\n✅ External data merge complete")
+          except Exception as e:
+              print(f"⚠️ Staging cleanup error: {e}")
           PYEOF
 
       - name: Store credentials for weekly updates
