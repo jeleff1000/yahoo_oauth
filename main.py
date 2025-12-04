@@ -728,6 +728,18 @@ def main():
                 st.error(f"Authentication failed: {e}")
         return
 
+    # Handle shareable league URLs: ?league=kmffl_2025
+    league_from_url = qp.get("league")
+    if league_from_url and "app_mode" not in st.session_state:
+        # Validate the league exists before jumping to analytics
+        existing_dbs = get_existing_league_databases()
+        if league_from_url in existing_dbs:
+            st.session_state.selected_league_db = league_from_url
+            st.session_state.app_mode = "analytics"
+        else:
+            # League not found - show landing page with error
+            st.warning(f"League '{format_league_display_name(league_from_url)}' not found. Please select from available leagues.")
+
     # Initialize app mode if not set
     if "app_mode" not in st.session_state:
         st.session_state.app_mode = "landing"
