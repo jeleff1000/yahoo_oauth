@@ -53,22 +53,8 @@ def detect_roster_config() -> dict:
         from md.tab_data_access.draft.combined import load_roster_config_for_optimizer
 
         result = load_roster_config_for_optimizer()
-        # Debug: show what we got
-        import streamlit as st
-
-        if result:
-            st.info(
-                f"🔧 Roster detected: QB={result.get('qb')}, RB={result.get('rb')}, WR={result.get('wr')}, TE={result.get('te')}, FLEX={result.get('flex')}, DEF={result.get('def')}, K={result.get('k')}, Bench={result.get('bench')}"
-            )
-            if "_position_counts" in result:
-                st.caption(f"Raw position_counts: {result['_position_counts']}")
-        else:
-            st.warning("⚠️ Roster detection returned None - using preset defaults")
         return result
-    except Exception as e:
-        import streamlit as st
-
-        st.error(f"❌ Roster detection error: {e}")
+    except Exception:
         return None
 
 
@@ -1767,34 +1753,6 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
     st.header("🔧 Draft Optimizer")
     st.caption("Build your optimal roster using historical performance data.")
 
-    # IMMEDIATE DEBUG - shows at very top
-    st.info(f"🔍 DEBUG: Received {len(draft_history)} rows")
-    with st.expander("📊 Data Column Debug", expanded=True):
-        st.write(
-            f"**Tier columns:** cost_bucket={'cost_bucket' in draft_history.columns}, position_tier={'position_tier' in draft_history.columns}"
-        )
-        st.write(
-            f"**Key columns:** season_ppg={'season_ppg' in draft_history.columns}, cost={'cost' in draft_history.columns}, yahoo_position={'yahoo_position' in draft_history.columns}"
-        )
-        if "season_ppg" in draft_history.columns:
-            ppg_valid = (
-                pd.to_numeric(draft_history["season_ppg"], errors="coerce") > 0
-            ).sum()
-            st.write(f"**season_ppg > 0:** {ppg_valid} rows")
-        if "cost_bucket" in draft_history.columns:
-            bucket_vals = draft_history["cost_bucket"].dropna().unique()[:10]
-            st.write(f"**cost_bucket values:** {list(bucket_vals)}")
-        if "position_tier" in draft_history.columns:
-            tier_vals = draft_history["position_tier"].dropna().unique()[:10]
-            st.write(f"**position_tier values:** {list(tier_vals)}")
-
-    # === LEAGUE INTELLIGENCE PANEL ===
-    league_insights = None
-    if LEAGUE_INTELLIGENCE_AVAILABLE:
-        league_insights = render_league_insights_panel(draft_history)
-        if league_insights:
-            st.markdown("---")
-
     # Validate data
     required_cols = ["yahoo_position", "year", "cost", "season_ppg"]
     # cost_bucket OR position_tier is needed for tiering
@@ -1863,36 +1821,6 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
         bench_count = detected_config.get("bench", 0)
         if bench_count > 0:
             st.caption(f"✅ Detected: {bench_count} bench spots")
-        # Debug: show full detected config
-        with st.expander("🔧 Detected Roster Config", expanded=False):
-            # Show dedicated slots
-            dedicated = detected_config.get("dedicated_slots", {})
-            if dedicated:
-                slots_str = ", ".join(
-                    f"{pos}={count}" for pos, count in dedicated.items()
-                )
-                st.write(f"**Dedicated slots:** {slots_str}")
-
-            # Show flex slots with eligibility
-            flex_slots = detected_config.get("flex_slots", [])
-            if flex_slots:
-                for fs in flex_slots:
-                    eligible = fs.get("eligible_positions", set())
-                    st.write(
-                        f"**{fs['name']}** ({fs['count']} slot{'s' if fs['count'] > 1 else ''}): can be {', '.join(sorted(eligible))}"
-                    )
-
-            # Show bench count
-            st.write(
-                f"**Bench:** {detected_config.get('bench_count', detected_config.get('bench', 0))} slots"
-            )
-
-            # Show flex-eligible positions
-            flex_eligible = detected_config.get("flex_eligible_positions", set())
-            if flex_eligible:
-                st.write(
-                    f"**Flex-eligible positions:** {', '.join(sorted(flex_eligible))}"
-                )
 
     st.markdown("---")
 
@@ -2277,26 +2205,6 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
                 st.error(
                     "❌ No valid data after filtering. Try expanding your year range."
                 )
-                # Debug info
-                with st.expander("🔍 Debug: Data filtering details"):
-                    st.write(f"Year range: {start_year} - {end_year}")
-                    st.write(f"Draft history rows: {len(draft_history)}")
-                    years_in_data = (
-                        draft_history["year"].unique()
-                        if "year" in draft_history.columns
-                        else []
-                    )
-                    st.write(f"Years in data: {sorted(years_in_data)}")
-                    has_tier = (
-                        "position_tier" in draft_history.columns
-                        or "cost_bucket" in draft_history.columns
-                    )
-                    st.write(f"Has tier column: {has_tier}")
-                    has_ppg = "season_ppg" in draft_history.columns
-                    st.write(f"Has season_ppg: {has_ppg}")
-                    if has_ppg:
-                        ppg_positive = (draft_history["season_ppg"] > 0).sum()
-                        st.write(f"Rows with season_ppg > 0: {ppg_positive}")
                 return
 
             # Apply global max bid if set, but don't cap by remaining budget
@@ -2362,57 +2270,6 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
                     bench_budget=remaining_bench_budget,
                     roster_config=remaining_roster_config,
                 )
-                # Debug if optimization returns empty
-                if result is None or (
-                    isinstance(result, pd.DataFrame) and result.empty
-                ):
-                    with st.expander(
-                        "🔍 Debug: Optimization returned empty", expanded=True
-                    ):
-                        st.write(
-                            f"**Filtered agg_data rows:** {len(filtered_agg_data)}"
-                        )
-                        st.write(f"**Remaining budget:** ${remaining_budget}")
-                        st.write(
-                            f"**Slots needed:** QB={remaining_qb}, RB={remaining_rb}, WR={remaining_wr}, TE={remaining_te}, FLEX={remaining_flex}, DEF={remaining_def}, K={remaining_k}, Bench={remaining_bench}"
-                        )
-                        st.write(
-                            f"**Positions in data:** {filtered_agg_data['yahoo_position'].unique().tolist() if not filtered_agg_data.empty else 'none'}"
-                        )
-                        st.write(
-                            f"**Starter budget:** ${remaining_starter_budget}, **Bench budget:** ${remaining_bench_budget}"
-                        )
-
-                        # Show roster_config being used
-                        if remaining_roster_config:
-                            st.write("**Using dynamic roster_config:**")
-                            st.write(
-                                f"  - dedicated_slots: {remaining_roster_config.get('dedicated_slots')}"
-                            )
-                            st.write(
-                                f"  - flex_eligible: {remaining_roster_config.get('flex_eligible_positions')}"
-                            )
-                            st.write(
-                                f"  - total_flex_count: {remaining_roster_config.get('total_flex_count')}"
-                            )
-                            st.write(
-                                f"  - bench_count: {remaining_roster_config.get('bench_count')}"
-                            )
-                        else:
-                            st.write("**Using legacy mode** (no roster_config)")
-
-                        # Show cost distribution in data
-                        if (
-                            not filtered_agg_data.empty
-                            and "avg_cost" in filtered_agg_data.columns
-                        ):
-                            st.write(
-                                f"**Cost range in data:** ${filtered_agg_data['avg_cost'].min():.1f} - ${filtered_agg_data['avg_cost'].max():.1f}"
-                            )
-                            cheap_options = len(
-                                filtered_agg_data[filtered_agg_data["avg_cost"] <= 3]
-                            )
-                            st.write(f"**Cheap options (≤$3):** {cheap_options} rows")
             else:
                 result = None  # All slots filled
 
@@ -2646,88 +2503,6 @@ def run_optimization(
         st.error(
             "❌ No optimal solution found. Try relaxing constraints or increasing budget."
         )
-        # Debug: show constraint analysis
-        with st.expander("🔍 Constraint Analysis", expanded=True):
-            bench_rows = (
-                dual_data[dual_data["slot_type"] == "bench"]
-                if "slot_type" in dual_data.columns
-                else pd.DataFrame()
-            )
-            starter_rows_data = (
-                dual_data[dual_data["slot_type"] == "starter"]
-                if "slot_type" in dual_data.columns
-                else dual_data
-            )
-
-            st.write(
-                f"**Data rows:** {len(dual_data)} total, {len(starter_rows_data)} starter, {len(bench_rows)} bench"
-            )
-
-            # Show constraint parameters
-            st.write("---")
-            st.write("**Constraint Parameters:**")
-            st.write(f"  dedicated_slots: {dedicated_slots}")
-            st.write(f"  flex_eligible_positions: {flex_eligible_positions}")
-            st.write(f"  total_flex_count: {total_flex_count}")
-            st.write(f"  total_starters: {total_starters}")
-            st.write(f"  bench_count: {bench_count}")
-
-            # Per-position availability
-            st.write("---")
-            st.write("**Starter rows per position:**")
-            for pos in sorted(set(positions)):
-                pos_starter_count = (
-                    (positions == pos) & (slot_types == "starter")
-                ).sum()
-                pos_bench_count = ((positions == pos) & (slot_types == "bench")).sum()
-                st.write(
-                    f"  {pos}: {pos_starter_count} starter, {pos_bench_count} bench"
-                )
-
-            # Check feasibility
-            st.write("---")
-            st.write("**Feasibility checks:**")
-            min_cost_per_starter = (
-                starter_rows_data.groupby("yahoo_position")["avg_cost"].min()
-                if not starter_rows_data.empty
-                else {}
-            )
-            min_starter_cost = sum(
-                min_cost_per_starter.get(pos, 0) * count
-                for pos, count in dedicated_slots.items()
-            )
-            st.write(f"  Min cost for dedicated starters: ${min_starter_cost:.1f}")
-
-            if not bench_rows.empty:
-                bench_eligible_mask = bench_rows["yahoo_position"].isin(
-                    ["QB", "RB", "WR", "TE"]
-                )
-                eligible_bench = bench_rows[bench_eligible_mask]
-                if not eligible_bench.empty:
-                    min_bench_costs = (
-                        eligible_bench.nsmallest(bench_count, "avg_cost")[
-                            "avg_cost"
-                        ].sum()
-                        if len(eligible_bench) >= bench_count
-                        else float("inf")
-                    )
-                    st.write(
-                        f"  Min cost for {bench_count} bench spots: ${min_bench_costs:.1f}"
-                    )
-                    st.write(f"  Bench budget available: ${bench_budget}")
-                else:
-                    st.write("  No bench-eligible rows!")
-
-            st.write(
-                f"**Budget:** total=${budget}, starter=${starter_budget}, bench=${bench_budget}"
-            )
-            st.write(
-                f"**Slots needed:** {total_starters} starters, {bench_count} bench"
-            )
-            st.write(
-                f"**Avg bench budget per slot:** ${bench_budget/max(1,bench_count):.1f}"
-            )
-
         return None
 
     # Extract selected tiers from dual_data
@@ -2807,14 +2582,6 @@ def display_draft_tracker(
     Enforces position spending caps from constraint_data.
     """
     constraint_data = constraint_data or {}
-
-    # Early debug
-    opt_type = type(optimal_draft).__name__
-    opt_len = len(optimal_draft) if optimal_draft is not None else 0
-    agg_len = len(agg_data) if agg_data is not None else 0
-    st.caption(
-        f"🔍 Tracker Debug: optimal={opt_type}(len={opt_len}), agg_data={agg_len} rows"
-    )
 
     # Calculate spent by category
     starter_spent = sum(
@@ -3038,11 +2805,6 @@ def display_draft_tracker(
 
     # === OPTIMAL PLAN ===
     st.markdown("---")
-
-    # Debug: Show what we received
-    st.caption(
-        f"🔍 Debug: optimal_draft type={type(optimal_draft).__name__}, len={len(optimal_draft) if optimal_draft is not None else 'None'}"
-    )
 
     if optimal_draft is not None and len(optimal_draft) > 0:
         # Highlight NEXT recommended pick

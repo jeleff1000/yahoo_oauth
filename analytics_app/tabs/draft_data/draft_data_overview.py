@@ -528,11 +528,20 @@ def display_draft_data_overview(
         with overview_tabs[2]:
             display_value_analysis(df)
 
-    # ==================== ANALYSIS (Optimizer, Trends, Pricing, Career) ====================
+    # ==================== ANALYSIS (Intelligence, Optimizer, Trends, Pricing, Career) ====================
     elif current_main_idx == 1:
-        analysis_tabs = st.tabs(["Optimizer", "Trends", "Pricing", "Career"])
+        analysis_tabs = st.tabs(["Intelligence", "Optimizer", "Trends", "Pricing", "Career"])
 
         with analysis_tabs[0]:
+            # League Intelligence - market inefficiencies and strategy insights
+            try:
+                from .optimizer_ui_enhancements import render_league_insights_panel
+
+                render_league_insights_panel(df)
+            except Exception as e:
+                st.error(f"Intelligence rendering error: {e}")
+
+        with analysis_tabs[1]:
             if display_draft_optimizer:
                 try:
                     display_draft_optimizer(df)
@@ -541,7 +550,7 @@ def display_draft_data_overview(
             else:
                 st.info("Optimizer module unavailable")
 
-        with analysis_tabs[1]:
+        with analysis_tabs[2]:
             if display_draft_preferences:
                 try:
                     display_draft_preferences(df)
@@ -563,7 +572,7 @@ def display_draft_data_overview(
             except Exception as e:
                 st.warning(f"Trend graphs unavailable: {e}")
 
-        with analysis_tabs[2]:
+        with analysis_tabs[3]:
             if display_draft_overview:
                 try:
                     display_draft_overview(df)
@@ -572,7 +581,7 @@ def display_draft_data_overview(
             else:
                 st.info("Pricing module unavailable")
 
-        with analysis_tabs[3]:
+        with analysis_tabs[4]:
             if display_career_draft:
                 try:
                     display_career_draft(df)
