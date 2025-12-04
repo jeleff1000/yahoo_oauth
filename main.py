@@ -69,7 +69,10 @@ from streamlit_helpers.yahoo_api import (
 )
 from streamlit_helpers.database import (
     format_league_display_name,
+    sanitize_league_name_for_db,
     get_existing_league_databases,
+    get_private_leagues,
+    set_league_private,
     validate_league_database,
     create_import_job_in_motherduck,
     get_job_status,
@@ -764,12 +767,21 @@ def render_open_league_card(existing_dbs: list[str]):
     """
     Render the Open Existing League card with search + results list.
     Handles 1000+ leagues efficiently with search filtering.
+    Excludes private (link-only) leagues from search results.
     """
     st.subheader("Open Existing League")
     st.caption("Browse any league that's already been imported.")
 
     if not existing_dbs:
         st.info("No existing leagues found. Register a new league to get started!")
+        return
+
+    # Filter out private leagues from search
+    private_leagues = get_private_leagues()
+    public_dbs = [db for db in existing_dbs if db not in private_leagues]
+
+    if not public_dbs:
+        st.info("No public leagues found. Register a new league to get started!")
         return
 
     # Search box
@@ -781,7 +793,7 @@ def render_open_league_card(existing_dbs: list[str]):
     )
 
     # Sort by display name (what users see) for alphabetical order
-    existing_dbs_sorted = sorted(existing_dbs, key=lambda db: format_league_display_name(db).lower())
+    existing_dbs_sorted = sorted(public_dbs, key=lambda db: format_league_display_name(db).lower())
 
     # For small lists, show all; for large lists, require search
     show_all_threshold = 20
@@ -1046,7 +1058,22 @@ def run_register_flow():
                                     st.success("No hidden managers found!")
                                     st.session_state.configured_manager_overrides = {}
 
+                            # Privacy Settings
+                            with st.expander("Privacy", expanded=False):
+                                is_private = st.checkbox(
+                                    "Link only (not searchable)",
+                                    value=False,
+                                    key="league_private",
+                                    help="If checked, your league won't appear in the public search. Only people with the direct link can access it."
+                                )
+                                st.session_state.configured_is_private = is_private
+
                             st.markdown("---")
+
+                            # Show URL preview
+                            db_name = sanitize_league_name_for_db(selected_league['name'])
+                            st.caption("Your league URL:")
+                            st.code(f"?league={db_name}", language=None)
 
                             # Import button with league name
                             if st.button(f"Import {selected_league['name']}", key="start_import_btn", type="primary", use_container_width=True):
@@ -1059,6 +1086,7 @@ def run_register_flow():
                                     "keeper_rules": st.session_state.get("configured_keeper_rules"),
                                     "external_data": st.session_state.get("configured_external_data"),
                                     "manager_name_overrides": st.session_state.get("configured_manager_overrides", {}),
+                                    "is_private": st.session_state.get("configured_is_private", False),
                                 }
                                 perform_import_flow(league_info)
                                 return  # Don't continue rendering - import flow handles display
@@ -1193,6 +1221,10 @@ def perform_import_flow(league_info: dict):
                     st.warning(f"⚠️ Could not upload external data: {e}")
                     st.caption("External data will be skipped. Yahoo data will still import.")
 
+        # Get the database name for privacy setting
+        db_name = sanitize_league_name_for_db(league_name)
+        is_private = league_info.get("is_private", False)
+
         league_data = {
             "league_id": league_info.get("league_key") or league_info.get("league_id"),
             "league_name": league_name,
@@ -1228,6 +1260,10 @@ def perform_import_flow(league_info: dict):
                 st.session_state.import_in_progress = False  # Reset since workflow is now queued
                 st.session_state.import_league_name = league_data['league_name']
                 st.session_state.workflow_run_url = result['workflow_run_url']
+
+                # Save privacy setting
+                if is_private:
+                    set_league_private(db_name, is_private=True)
 
                 # Try to get the actual run ID (poll for a few seconds)
                 # Pass user_id to enable MotherDuck-based lookup (more reliable than timestamp)

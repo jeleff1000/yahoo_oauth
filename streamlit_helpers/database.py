@@ -55,6 +55,95 @@ def format_league_display_name(db_name: str) -> str:
     return name
 
 
+def sanitize_league_name_for_db(league_name: str) -> str:
+    """
+    Convert a league name to a valid database name.
+
+    Examples:
+        'Family League' -> 'family_league'
+        'KMFFL' -> 'kmffl'
+        '5 Towns Football' -> 'l_5_towns_football'
+    """
+    if not league_name:
+        return league_name
+
+    # Lowercase, replace spaces and dashes with underscores
+    db_name = league_name.lower().replace(' ', '_').replace('-', '_')
+
+    # Remove any characters that aren't alphanumeric or underscore
+    db_name = re.sub(r'[^a-z0-9_]', '', db_name)
+
+    # If starts with a digit, prefix with 'l_'
+    if db_name and db_name[0].isdigit():
+        db_name = f"l_{db_name}"
+
+    return db_name
+
+
+def get_private_leagues() -> set[str]:
+    """
+    Get set of league database names that are marked as private (link-only).
+    """
+    if not MOTHERDUCK_TOKEN:
+        return set()
+
+    try:
+        con = _get_motherduck_connection()
+
+        # Check if table exists
+        tables = con.execute("SHOW TABLES IN ops").fetchall()
+        table_names = {row[0].lower() for row in tables}
+
+        if "league_settings" not in table_names:
+            con.close()
+            return set()
+
+        result = con.execute(
+            "SELECT db_name FROM ops.league_settings WHERE is_private = true"
+        ).fetchall()
+        con.close()
+
+        return {row[0] for row in result}
+    except Exception:
+        return set()
+
+
+def set_league_private(db_name: str, is_private: bool = True) -> bool:
+    """
+    Mark a league as private (link-only) or public.
+    Returns True if successful.
+    """
+    if not MOTHERDUCK_TOKEN or not db_name:
+        return False
+
+    try:
+        con = _get_motherduck_connection()
+
+        # Create table if it doesn't exist
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS ops.league_settings (
+                db_name TEXT PRIMARY KEY,
+                is_private BOOLEAN DEFAULT false,
+                created_at TIMESTAMP DEFAULT now(),
+                updated_at TIMESTAMP DEFAULT now()
+            )
+        """)
+
+        # Upsert the setting
+        con.execute("""
+            INSERT INTO ops.league_settings (db_name, is_private, updated_at)
+            VALUES (?, ?, now())
+            ON CONFLICT (db_name) DO UPDATE SET
+                is_private = EXCLUDED.is_private,
+                updated_at = now()
+        """, [db_name, is_private])
+
+        con.close()
+        return True
+    except Exception:
+        return False
+
+
 def _get_motherduck_connection(token: str = None):
     """
     Get a MotherDuck connection using token in connection string (not env var).
