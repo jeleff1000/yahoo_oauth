@@ -1724,14 +1724,12 @@ def get_bench_strategy(
 
 @st.fragment
 def display_draft_optimizer(draft_history: pd.DataFrame):
-    """Enhanced optimizer with presets and better UX"""
+    """Enhanced optimizer with wizard-style 2-column layout"""
 
-    st.header("🔧 Draft Optimizer")
-    st.caption("Build your optimal roster using historical performance data.")
+    st.header("Draft Optimizer")
 
     # Validate data
     required_cols = ["yahoo_position", "year", "cost", "season_ppg"]
-    # cost_bucket OR position_tier is needed for tiering
     has_tier_col = (
         "cost_bucket" in draft_history.columns
         or "position_tier" in draft_history.columns
@@ -1739,13 +1737,11 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
 
     missing = [col for col in required_cols if col not in draft_history.columns]
     if missing:
-        st.error(f"❌ Missing required columns: {', '.join(missing)}")
-        st.caption(f"Available columns: {list(draft_history.columns)[:15]}...")
+        st.error(f"Missing required columns: {', '.join(missing)}")
         return
 
     if not has_tier_col:
-        st.error("❌ Missing tier column: need either 'cost_bucket' or 'position_tier'")
-        st.caption(f"Available columns: {list(draft_history.columns)[:15]}...")
+        st.error("Missing tier column: need either 'cost_bucket' or 'position_tier'")
         return
 
     draft_with_cost = draft_history[
@@ -1753,219 +1749,124 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
     ].copy()
 
     if draft_with_cost.empty:
-        st.error("❌ No draft data with cost > 0 found.")
+        st.error("No draft data with cost > 0 found.")
         return
 
     # Year range
     min_year = int(pd.to_numeric(draft_with_cost["year"], errors="coerce").min())
     max_year = int(pd.to_numeric(draft_with_cost["year"], errors="coerce").max())
 
-    # Try to auto-detect roster config (includes bench size)
+    # Auto-detect roster config
     detected_config = detect_roster_config()
+    preset_config = get_roster_preset("Your League", detected_config) if detected_config else get_roster_preset("Standard", None)
 
-    # Analyze historical bench performance (position-level)
+    # Analyze historical data
     bench_analysis = analyze_bench_history()
-
-    # Analyze optimal budget allocation (starter/bench split) - pure data-driven
     budget_allocation = analyze_optimal_budget_allocation()
-
-    # Analyze optimal roster construction (full roster, not just bench)
     roster_analysis = analyze_optimal_roster_construction()
-
-    # Calculate data-driven bench insurance metrics (replaces hardcoded discounts)
     bench_insurance_metrics = calculate_bench_insurance_metrics()
 
-    # === PRESET SELECTION ===
-    st.subheader("🎨 Quick Start")
+    # Initialize session state for draft tracker
+    if "draft_tracker" not in st.session_state:
+        st.session_state.draft_tracker = {"filled_picks": []}
 
-    # Build preset list - include "Your League" if we detected config
-    preset_options = ["Standard", "2 QB", "PPR Flex Heavy", "Best Ball", "Custom"]
-    if detected_config:
-        preset_options.insert(0, "Your League")
+    filled_picks = st.session_state.draft_tracker.get("filled_picks", [])
 
-    preset = st.selectbox(
-        "Roster Template",
-        preset_options,
-        index=0,
-        help="'Your League' uses auto-detected settings",
-    )
+    # =========================================================================
+    # TWO-COLUMN LAYOUT: Controls (left) | Results (right)
+    # =========================================================================
+    left_col, right_col = st.columns([3, 2])
 
-    preset_config = get_roster_preset(preset, detected_config)
+    # =========================================================================
+    # LEFT COLUMN: Configuration wizard
+    # =========================================================================
+    with left_col:
+        # --- Step 1: Strategy ---
+        st.subheader("1. Strategy")
+        st.caption("Choose how aggressive you want to be with your picks.")
 
-    # Show detected config info
-    if preset == "Your League" and detected_config:
-        bench_count = detected_config.get("bench", 0)
-        if bench_count > 0:
-            st.caption(f"✅ Detected: {bench_count} bench spots")
+        strat_col1, strat_col2 = st.columns(2)
+        with strat_col1:
+            lineup_strategy = st.selectbox(
+                "Lineup Strategy",
+                ["Balanced", "Zero RB", "Hero RB", "Robust RB", "Late-Round QB", "Stars & Scrubs"],
+                key="lineup_strat",
+                label_visibility="visible",
+            )
+        with strat_col2:
+            bench_strategy_name = st.selectbox(
+                "Bench Strategy",
+                ["Data-Driven", "Max Starters", "Balanced"],
+                key="bench_strat",
+                label_visibility="visible",
+            )
 
-    st.markdown("---")
+        strategy_preset = get_strategy_preset(lineup_strategy, preset_config)
 
-    # === STRATEGY SELECTION ===
-    st.subheader("📊 Strategy")
+        st.markdown("---")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        lineup_strategy = st.selectbox(
-            "Lineup Strategy",
-            [
-                "Balanced",
-                "Zero RB",
-                "Hero RB",
-                "Robust RB",
-                "Late-Round QB",
-                "Stars & Scrubs",
-            ],
-            help="Guide your starter spending",
-        )
-    with col2:
-        # Simplified bench strategy options
-        bench_strategy_options = ["Data-Driven", "Max Starters", "Balanced"]
+        # --- Step 2: Budget ---
+        st.subheader("2. Budget")
+        st.caption("How much of your budget belongs to starters vs bench?")
 
-        bench_strategy_name = st.selectbox(
-            "Bench Strategy",
-            bench_strategy_options,
-            index=0,
-            help="Max Starters: 90/10 split | Balanced: 70/30 split | Data-Driven: uses historical slot values",
-        )
+        total_budget = preset_config["budget"]
 
-    strategy_preset = get_strategy_preset(lineup_strategy, preset_config)
+        # Bench strategy determines the split percentage
+        if bench_strategy_name == "Max Starters":
+            bench_pct = 10
+        elif bench_strategy_name == "Balanced":
+            bench_pct = 30
+        else:  # Data-Driven
+            bench_pct = budget_allocation.get("optimal_bench_pct", 20) if budget_allocation else 20
 
-    # Show strategy descriptions
-    if lineup_strategy != "Balanced" and "description" in strategy_preset:
-        st.caption(f"_Lineup: {strategy_preset['description']}_")
+        default_bench = int(total_budget * bench_pct / 100)
+        default_starter = total_budget - default_bench
 
-    st.markdown("---")
+        budget_col1, budget_col2 = st.columns(2)
+        with budget_col1:
+            starter_budget = st.number_input(
+                "Starters ($)", min_value=0, value=default_starter, key="starter_budget_input"
+            )
+            start_year = st.number_input(
+                "From Year", min_value=min_year, max_value=max_year,
+                value=max(min_year, max_year - 3), key="start_year_input"
+            )
+        with budget_col2:
+            bench_budget_input = st.number_input(
+                "Bench ($)", min_value=0, value=default_bench, key="bench_budget_input"
+            )
+            end_year = st.number_input(
+                "To Year", min_value=min_year, max_value=max_year,
+                value=max_year, key="end_year_input"
+            )
 
-    # === CORE SETTINGS ===
-    st.subheader("⚙️ Settings")
+        budget = starter_budget + bench_budget_input
 
-    # Budget split based on bench strategy
-    total_budget = preset_config["budget"]
+        # Detect bench spots
+        if detected_config and detected_config.get("bench", 0) > 0:
+            detected_bench = detected_config.get("bench")
+        elif budget_allocation and budget_allocation.get("detected_bench_count", 0) > 0:
+            detected_bench = budget_allocation.get("detected_bench_count")
+        else:
+            detected_bench = 6
 
-    # Bench strategy determines the split percentage
-    if bench_strategy_name == "Max Starters":
-        bench_pct = 10
-    elif bench_strategy_name == "Balanced":
-        bench_pct = 30
-    else:  # Data-Driven
-        bench_pct = (
-            budget_allocation.get("optimal_bench_pct", 20) if budget_allocation else 20
-        )
-
-    # Calculate split: floor bench, give extra to starters
-    default_bench = int(total_budget * bench_pct / 100)
-    default_starter = (
-        total_budget - default_bench
-    )  # Extra dollar always goes to starters
-
-    col1, col2 = st.columns(2)
-    with col1:
-        starter_budget = st.number_input(
-            "Starters ($)",
-            min_value=0,
-            value=default_starter,
-            help="Budget for starting lineup",
-            label_visibility="visible",
-        )
-    with col2:
-        bench_budget = st.number_input(
-            "Bench ($)",
-            min_value=0,
-            value=default_bench,
-            help="Budget for bench players",
-            label_visibility="visible",
+        bench_spots = st.number_input(
+            "Bench Spots", min_value=1, max_value=15, value=detected_bench, key="bench_spots_input"
         )
 
-    budget = starter_budget + bench_budget
-
-    # Year range
-    col1, col2 = st.columns(2)
-    with col1:
-        start_year = st.number_input(
-            "From Year",
-            min_value=min_year,
-            max_value=max_year,
-            value=max(min_year, max_year - 3),
-            key="start_year_input",
+        # Get bench strategy configuration
+        bench_config = get_bench_strategy(
+            bench_strategy_name, bench_spots, budget,
+            bench_analysis=bench_analysis, budget_allocation=budget_allocation,
         )
-    with col2:
-        end_year = st.number_input(
-            "To Year",
-            min_value=min_year,
-            max_value=max_year,
-            value=max_year,
-            key="end_year_input",
-        )
+        starter_budget = budget - bench_config["budget"]
 
-    # === BENCH CONFIGURATION ===
-    # Detect bench size from multiple sources (prioritize most accurate)
-    if detected_config and detected_config.get("bench", 0) > 0:
-        detected_bench = detected_config.get("bench")
-        bench_source = "player lineup data"
-    elif budget_allocation and budget_allocation.get("detected_bench_count", 0) > 0:
-        detected_bench = budget_allocation.get("detected_bench_count")
-        bench_source = "draft history patterns"
-    else:
-        detected_bench = 6
-        bench_source = None
+        # Store for later
+        st.session_state["bench_budget"] = bench_config["budget"]
+        st.session_state["bench_spots"] = bench_spots
+        st.session_state["bench_config"] = bench_config
 
-    bench_spots = st.number_input(
-        "Bench Spots",
-        min_value=1,
-        max_value=15,
-        value=detected_bench,
-        help=(
-            f"Detected from {bench_source}"
-            if bench_source
-            else "Number of bench roster spots"
-        ),
-    )
-
-    # Get bench strategy configuration
-    bench_config = get_bench_strategy(
-        bench_strategy_name,
-        bench_spots,
-        budget,
-        bench_analysis=bench_analysis,
-        budget_allocation=budget_allocation,
-    )
-    starter_budget = budget - bench_config["budget"]
-
-    # Store bench info for later
-    st.session_state["bench_budget"] = bench_config["budget"]
-    st.session_state["bench_spots"] = bench_spots
-    st.session_state["bench_config"] = bench_config
-    st.session_state["bench_analysis"] = bench_analysis
-    st.session_state["budget_allocation"] = budget_allocation
-    st.session_state["roster_analysis"] = roster_analysis
-    st.session_state["bench_insurance_metrics"] = bench_insurance_metrics
-
-    st.markdown("---")
-
-    # === ROSTER REQUIREMENTS ===
-    if preset == "Custom":
-        st.subheader("📋 Roster")
-        col1, col2 = st.columns(2)
-        with col1:
-            num_qb = st.number_input("QB", 0, 3, preset_config["qb"], key="qb")
-            num_rb = st.number_input("RB", 0, 5, preset_config["rb"], key="rb")
-            num_wr = st.number_input("WR", 0, 5, preset_config["wr"], key="wr")
-            num_te = st.number_input("TE", 0, 3, preset_config["te"], key="te")
-        with col2:
-            num_flex = st.number_input("FLEX", 0, 3, preset_config["flex"], key="flex")
-            num_def = st.number_input("DEF", 0, 2, preset_config["def"], key="def")
-            num_k = st.number_input("K", 0, 2, preset_config["k"], key="k")
-    else:
-        # Compact roster display
-        roster_str = f"**Roster:** {preset_config['qb']}QB, {preset_config['rb']}RB, {preset_config['wr']}WR, {preset_config['te']}TE"
-        if preset_config["flex"] > 0:
-            roster_str += f", {preset_config['flex']}FLEX"
-        if preset_config["def"] > 0:
-            roster_str += f", {preset_config['def']}DEF"
-        if preset_config["k"] > 0:
-            roster_str += f", {preset_config['k']}K"
-        st.caption(roster_str)
-
+        # Extract roster counts
         num_qb = preset_config["qb"]
         num_rb = preset_config["rb"]
         num_wr = preset_config["wr"]
@@ -1974,166 +1875,120 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
         num_def = preset_config["def"]
         num_k = preset_config["k"]
 
-    # === ADVANCED OPTIONS - Auto-populated by Lineup Strategy ===
-    # Get caps from lineup strategy preset
-    preset_caps = {
-        "qb": strategy_preset.get("qb", []),
-        "rb": strategy_preset.get("rb", []),
-        "wr": strategy_preset.get("wr", []),
-        "te": strategy_preset.get("te", []),
-        "flex": strategy_preset.get("flex", []),
-        "def": strategy_preset.get("def", []),
-        "k": strategy_preset.get("k", []),
-    }
-
-    with st.expander("🎛️ Advanced: Position Spending Caps", expanded=False):
-        st.caption(
-            f"💡 Pre-filled from **{lineup_strategy}** strategy. Adjust as needed."
-        )
-
-        # Compact constraint inputs
-        constraint_data = {}
-
-        if num_qb > 0:
-            st.markdown("**QB Limits**")
-            qb_cols = st.columns(min(num_qb, 4))
-            constraint_data["qb"] = []
-            for i in range(num_qb):
-                with qb_cols[i % 4]:
-                    # Use preset if available, else previous value or 100
-                    default = (
-                        preset_caps["qb"][i]
-                        if i < len(preset_caps["qb"])
-                        else (constraint_data["qb"][i - 1] if i > 0 else 100)
-                    )
-                    constraint_data["qb"].append(
-                        st.slider(f"QB{i + 1}", 0, 100, default, key=f"qb_cap_{i}")
-                    )
-
-        if num_rb > 0:
-            st.markdown("**RB Limits**")
-            rb_cols = st.columns(min(num_rb, 4))
-            constraint_data["rb"] = []
-            for i in range(num_rb):
-                with rb_cols[i % 4]:
-                    default = (
-                        preset_caps["rb"][i]
-                        if i < len(preset_caps["rb"])
-                        else (constraint_data["rb"][i - 1] if i > 0 else 100)
-                    )
-                    constraint_data["rb"].append(
-                        st.slider(f"RB{i + 1}", 0, 100, default, key=f"rb_cap_{i}")
-                    )
-
-        if num_wr > 0:
-            st.markdown("**WR Limits**")
-            wr_cols = st.columns(min(num_wr, 4))
-            constraint_data["wr"] = []
-            for i in range(num_wr):
-                with wr_cols[i % 4]:
-                    default = (
-                        preset_caps["wr"][i]
-                        if i < len(preset_caps["wr"])
-                        else (constraint_data["wr"][i - 1] if i > 0 else 100)
-                    )
-                    constraint_data["wr"].append(
-                        st.slider(f"WR{i + 1}", 0, 100, default, key=f"wr_cap_{i}")
-                    )
-
-        if num_te > 0:
-            st.markdown("**TE Limits**")
-            te_cols = st.columns(min(num_te, 4))
-            constraint_data["te"] = []
-            for i in range(num_te):
-                with te_cols[i % 4]:
-                    default = (
-                        preset_caps["te"][i]
-                        if i < len(preset_caps["te"])
-                        else (constraint_data["te"][i - 1] if i > 0 else 100)
-                    )
-                    constraint_data["te"].append(
-                        st.slider(f"TE{i + 1}", 0, 100, default, key=f"te_cap_{i}")
-                    )
-
+        # Show compact roster summary
+        roster_parts = [f"{num_qb}QB", f"{num_rb}RB", f"{num_wr}WR", f"{num_te}TE"]
         if num_flex > 0:
-            st.markdown("**FLEX Limits**")
-            flex_cols = st.columns(min(num_flex, 4))
-            constraint_data["flex"] = []
-            for i in range(num_flex):
-                with flex_cols[i % 4]:
-                    default = (
-                        preset_caps["flex"][i] if i < len(preset_caps["flex"]) else 100
-                    )
-                    constraint_data["flex"].append(
-                        st.slider(f"FLEX{i + 1}", 0, 100, default, key=f"flex_cap_{i}")
-                    )
-
-        # DEF/K
-        col1, col2 = st.columns(2)
-        with col1:
-            if num_def > 0:
-                st.markdown("**DEF Limits**")
-                constraint_data["def"] = []
-                for i in range(num_def):
-                    default = (
-                        preset_caps["def"][i] if i < len(preset_caps["def"]) else 100
-                    )
-                    constraint_data["def"].append(
-                        st.slider(f"DEF{i + 1}", 0, 100, default, key=f"def_cap_{i}")
-                    )
-        with col2:
-            if num_k > 0:
-                st.markdown("**K Limits**")
-                constraint_data["k"] = []
-                for i in range(num_k):
-                    default = preset_caps["k"][i] if i < len(preset_caps["k"]) else 100
-                    constraint_data["k"].append(
-                        st.slider(f"K{i + 1}", 0, 100, default, key=f"k_cap_{i}")
-                    )
+            roster_parts.append(f"{num_flex}FLEX")
+        if num_def > 0:
+            roster_parts.append(f"{num_def}DEF")
+        if num_k > 0:
+            roster_parts.append(f"{num_k}K")
+        st.caption(f"Roster: {', '.join(roster_parts)}")
 
         st.markdown("---")
-        max_bid = st.slider(
-            "Global Max Bid", 0, 100, 100, help="Maximum spend on any single player"
-        )
 
-    # === LIVE DRAFT TRACKER WITH RE-OPTIMIZATION ===
-    st.markdown("---")
-
-    # Initialize session state for draft tracker
-    if "draft_tracker" not in st.session_state:
-        st.session_state.draft_tracker = {
-            "filled_picks": [],  # List of {position, slot_type, cost, tier}
+        # --- Step 3: Advanced Caps (optional) ---
+        preset_caps = {
+            "qb": strategy_preset.get("qb", []),
+            "rb": strategy_preset.get("rb", []),
+            "wr": strategy_preset.get("wr", []),
+            "te": strategy_preset.get("te", []),
+            "flex": strategy_preset.get("flex", []),
+            "def": strategy_preset.get("def", []),
+            "k": strategy_preset.get("k", []),
         }
 
-    filled_picks = st.session_state.draft_tracker.get("filled_picks", [])
+        with st.expander("3. Advanced: Position Spending Caps (optional)", expanded=False):
+            st.caption("Fine-tune max bids per slot. Defaults come from your strategy.")
 
-    # Calculate spent budget by category (starter vs bench)
-    starter_spent = sum(
-        p["cost"] for p in filled_picks if p.get("slot_type") != "bench"
-    )
-    bench_spent = sum(p["cost"] for p in filled_picks if p.get("slot_type") == "bench")
-    total_spent = starter_spent + bench_spent
-    remaining_budget = budget - total_spent
+            constraint_data = {}
 
-    # Get budget split from strategy
-    strategy_starter_budget = bench_config.get("starter_budget", int(budget * 0.85))
-    strategy_bench_budget = bench_config.get("budget", int(budget * 0.15))
+            # QB row
+            if num_qb > 0:
+                constraint_data["qb"] = []
+                qb_cols = st.columns(max(num_qb, 2))
+                for i in range(num_qb):
+                    with qb_cols[i]:
+                        default = preset_caps["qb"][i] if i < len(preset_caps["qb"]) else 100
+                        constraint_data["qb"].append(
+                            st.slider(f"QB{i+1}", 0, 100, default, key=f"qb_cap_{i}")
+                        )
 
-    # Calculate remaining budget per category
-    remaining_starter_budget = max(0, strategy_starter_budget - starter_spent)
-    remaining_bench_budget = max(0, strategy_bench_budget - bench_spent)
+            # RB row
+            if num_rb > 0:
+                constraint_data["rb"] = []
+                rb_cols = st.columns(min(num_rb, 4))
+                for i in range(num_rb):
+                    with rb_cols[i % 4]:
+                        default = preset_caps["rb"][i] if i < len(preset_caps["rb"]) else 100
+                        constraint_data["rb"].append(
+                            st.slider(f"RB{i+1}", 0, 100, default, key=f"rb_cap_{i}")
+                        )
 
-    # Count filled positions by type
-    filled_counts = {
-        "QB": 0,
-        "RB": 0,
-        "WR": 0,
-        "TE": 0,
-        "DEF": 0,
-        "K": 0,
-        "FLEX": 0,
-        "BENCH": 0,
-    }
+            # WR row
+            if num_wr > 0:
+                constraint_data["wr"] = []
+                wr_cols = st.columns(min(num_wr, 4))
+                for i in range(num_wr):
+                    with wr_cols[i % 4]:
+                        default = preset_caps["wr"][i] if i < len(preset_caps["wr"]) else 100
+                        constraint_data["wr"].append(
+                            st.slider(f"WR{i+1}", 0, 100, default, key=f"wr_cap_{i}")
+                        )
+
+            # TE row
+            if num_te > 0:
+                constraint_data["te"] = []
+                te_cols = st.columns(max(num_te, 2))
+                for i in range(num_te):
+                    with te_cols[i]:
+                        default = preset_caps["te"][i] if i < len(preset_caps["te"]) else 100
+                        constraint_data["te"].append(
+                            st.slider(f"TE{i+1}", 0, 100, default, key=f"te_cap_{i}")
+                        )
+
+            # FLEX row
+            if num_flex > 0:
+                constraint_data["flex"] = []
+                flex_cols = st.columns(max(num_flex, 2))
+                for i in range(num_flex):
+                    with flex_cols[i]:
+                        default = preset_caps["flex"][i] if i < len(preset_caps["flex"]) else 100
+                        constraint_data["flex"].append(
+                            st.slider(f"FLEX{i+1}", 0, 100, default, key=f"flex_cap_{i}")
+                        )
+
+            # DEF/K row
+            dk_cols = st.columns(2)
+            if num_def > 0:
+                with dk_cols[0]:
+                    constraint_data["def"] = []
+                    for i in range(num_def):
+                        default = preset_caps["def"][i] if i < len(preset_caps["def"]) else 100
+                        constraint_data["def"].append(
+                            st.slider(f"DEF{i+1}", 0, 100, default, key=f"def_cap_{i}")
+                        )
+            if num_k > 0:
+                with dk_cols[1]:
+                    constraint_data["k"] = []
+                    for i in range(num_k):
+                        default = preset_caps["k"][i] if i < len(preset_caps["k"]) else 100
+                        constraint_data["k"].append(
+                            st.slider(f"K{i+1}", 0, 100, default, key=f"k_cap_{i}")
+                        )
+
+            max_bid = st.slider("Global Max Bid", 0, 100, 100, key="global_max_bid")
+
+        # Default constraint_data if expander wasn't opened
+        if "constraint_data" not in dir() or not constraint_data:
+            constraint_data = {}
+            max_bid = 100
+
+    # =========================================================================
+    # Calculate optimization inputs
+    # =========================================================================
+    # Count filled positions
+    filled_counts = {"QB": 0, "RB": 0, "WR": 0, "TE": 0, "DEF": 0, "K": 0, "FLEX": 0, "BENCH": 0}
     for pick in filled_picks:
         if pick.get("slot_type") == "bench":
             filled_counts["BENCH"] += 1
@@ -2144,7 +1999,18 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
             if pos in filled_counts:
                 filled_counts[pos] += 1
 
-    # Calculate remaining slots needed
+    # Calculate spent and remaining
+    starter_spent = sum(p["cost"] for p in filled_picks if p.get("slot_type") != "bench")
+    bench_spent = sum(p["cost"] for p in filled_picks if p.get("slot_type") == "bench")
+    total_spent = starter_spent + bench_spent
+    remaining_budget = budget - total_spent
+
+    strategy_starter_budget = bench_config.get("starter_budget", int(budget * 0.85))
+    strategy_bench_budget = bench_config.get("budget", int(budget * 0.15))
+    remaining_starter_budget = max(0, strategy_starter_budget - starter_spent)
+    remaining_bench_budget = max(0, strategy_bench_budget - bench_spent)
+
+    # Calculate remaining slots
     remaining_qb = max(0, num_qb - filled_counts["QB"])
     remaining_rb = max(0, num_rb - filled_counts["RB"])
     remaining_wr = max(0, num_wr - filled_counts["WR"])
@@ -2154,127 +2020,260 @@ def display_draft_optimizer(draft_history: pd.DataFrame):
     remaining_k = max(0, num_k - filled_counts["K"])
     remaining_bench = max(0, bench_spots - filled_counts["BENCH"])
 
-    total_remaining_slots = (
-        remaining_qb
-        + remaining_rb
-        + remaining_wr
-        + remaining_te
-        + remaining_flex
-        + remaining_def
-        + remaining_k
-        + remaining_bench
-    )
+    total_slots = num_qb + num_rb + num_wr + num_te + num_flex + num_def + num_k + bench_spots
+    slots_filled = len(filled_picks)
+    total_remaining_slots = total_slots - slots_filled
 
-    # Run optimization for REMAINING slots
-    st.warning(
-        f"🔍 RUNNING OPTIMIZER: {total_remaining_slots} slots, ${remaining_budget} budget, years {start_year}-{end_year}"
-    )
+    # =========================================================================
+    # Run optimization
+    # =========================================================================
+    result = None
+    agg_data = None
 
-    with st.spinner("🔄 Optimizing..."):
-        try:
-            # Preprocess data
-            agg_data = preprocess_optimizer_data(
-                draft_history, int(start_year), int(end_year), min_sample_size=2
-            )
+    try:
+        agg_data = preprocess_optimizer_data(
+            draft_history, int(start_year), int(end_year), min_sample_size=2
+        )
 
-            if agg_data.empty:
-                st.error(
-                    "❌ No valid data after filtering. Try expanding your year range."
-                )
-                return
-
-            # Apply global max bid if set, but don't cap by remaining budget
-            # (the LP optimizer handles budget constraints)
-            if "max_bid" in locals() and max_bid < 200:
+        if not agg_data.empty and total_remaining_slots > 0:
+            # Apply max bid filter
+            if max_bid < 100:
                 agg_data = agg_data[agg_data["avg_cost"] <= float(max_bid)]
 
-            if agg_data.empty and total_remaining_slots > 0:
-                st.error("❌ No players available. Try adjusting constraints.")
-                return
+            # Apply position caps
+            filtered_agg_data = agg_data.copy()
+            for pos_key, caps in constraint_data.items():
+                if not caps:
+                    continue
+                pos_upper = pos_key.upper()
+                if pos_upper in ["QB", "RB", "WR", "TE", "DEF", "K"]:
+                    max_cap = max(caps) if caps else 100
+                    if max_cap < 100:
+                        filtered_agg_data = filtered_agg_data[
+                            (filtered_agg_data["yahoo_position"] != pos_upper)
+                            | (filtered_agg_data["avg_cost"] <= max_cap)
+                        ]
 
-            # Run optimization for remaining slots WITH budget split constraints
-            if total_remaining_slots > 0:
-                # Apply position caps from constraint_data to filter agg_data
-                filtered_agg_data = agg_data.copy()
-                for pos_key, caps in constraint_data.items():
-                    if not caps:
-                        continue
-                    pos_upper = pos_key.upper()
-                    if pos_upper in ["QB", "RB", "WR", "TE", "DEF", "K"]:
-                        # Get max cap for this position (use highest cap as filter)
-                        max_cap = max(caps) if caps else 100
-                        if max_cap < 100:
-                            filtered_agg_data = filtered_agg_data[
-                                (filtered_agg_data["yahoo_position"] != pos_upper)
-                                | (filtered_agg_data["avg_cost"] <= max_cap)
-                            ]
+            # Build roster config
+            remaining_roster_config = None
+            if preset_config and "dedicated_slots" in preset_config:
+                remaining_dedicated = {}
+                for pos, count in preset_config.get("dedicated_slots", {}).items():
+                    remaining = max(0, count - filled_counts.get(pos, 0))
+                    if remaining > 0:
+                        remaining_dedicated[pos] = remaining
 
-                # Build dynamic roster_config for remaining slots
-                # This enables the optimizer to use dynamic constraints
-                remaining_roster_config = None
-                if preset_config and "dedicated_slots" in preset_config:
-                    # Use dynamic config with remaining counts
-                    remaining_dedicated = {}
-                    for pos, count in preset_config.get("dedicated_slots", {}).items():
-                        remaining = max(0, count - filled_counts.get(pos, 0))
-                        if remaining > 0:
-                            remaining_dedicated[pos] = remaining
+                remaining_roster_config = {
+                    "dedicated_slots": remaining_dedicated,
+                    "flex_slots": preset_config.get("flex_slots", []),
+                    "flex_eligible_positions": preset_config.get("flex_eligible_positions", set()),
+                    "total_flex_count": remaining_flex,
+                    "bench_count": remaining_bench,
+                }
 
-                    remaining_roster_config = {
-                        "dedicated_slots": remaining_dedicated,
-                        "flex_slots": preset_config.get("flex_slots", []),
-                        "flex_eligible_positions": preset_config.get(
-                            "flex_eligible_positions", set()
-                        ),
-                        "total_flex_count": remaining_flex,
-                        "bench_count": remaining_bench,
-                    }
-
-                result = run_optimization(
-                    filtered_agg_data,
-                    remaining_budget,
-                    remaining_qb,
-                    remaining_rb,
-                    remaining_wr,
-                    remaining_te,
-                    remaining_flex,
-                    remaining_def,
-                    remaining_k,
-                    num_bench=remaining_bench,
-                    bench_metrics=bench_insurance_metrics,
-                    starter_budget=remaining_starter_budget,
-                    bench_budget=remaining_bench_budget,
-                    roster_config=remaining_roster_config,
-                )
-            else:
-                result = None  # All slots filled
-
-            # Display the live draft tracker
-            display_draft_tracker(
-                result,
-                budget,
-                remaining_budget,
-                filled_picks,
-                num_qb,
-                num_rb,
-                num_wr,
-                num_te,
-                num_flex,
-                num_def,
-                num_k,
-                bench_spots,
-                agg_data,
-                strategy_starter_budget,
-                strategy_bench_budget,
-                remaining_starter_budget,
-                remaining_bench_budget,
-                constraint_data,
+            result = run_optimization(
+                filtered_agg_data, remaining_budget,
+                remaining_qb, remaining_rb, remaining_wr, remaining_te,
+                remaining_flex, remaining_def, remaining_k,
+                num_bench=remaining_bench,
+                bench_metrics=bench_insurance_metrics,
+                starter_budget=remaining_starter_budget,
+                bench_budget=remaining_bench_budget,
+                roster_config=remaining_roster_config,
             )
+    except Exception as e:
+        st.error(f"Optimization failed: {str(e)}")
 
-        except Exception as e:
-            st.error(f"❌ Optimization failed: {str(e)}")
-            with st.expander("Show error details"):
-                st.exception(e)
+    # =========================================================================
+    # RIGHT COLUMN: Results
+    # =========================================================================
+    with right_col:
+        # --- Draft Summary ---
+        st.subheader("Draft Summary")
+
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.metric("Remaining", f"${remaining_budget:.0f}", f"of ${budget}")
+        with c2:
+            st.metric("Starters", f"${remaining_starter_budget:.0f}", f"of ${strategy_starter_budget}")
+        with c3:
+            st.metric("Bench", f"${remaining_bench_budget:.0f}", f"of ${strategy_bench_budget}")
+        with c4:
+            st.metric("Slots", f"{slots_filled}/{total_slots}")
+
+        st.markdown("---")
+
+        # --- Next Pick Card ---
+        if result is not None and len(result) > 0:
+            next_row = result.iloc[0]
+            next_pos = next_row["yahoo_position"]
+            next_cost = next_row["avg_cost"]
+            next_spar = next_row.get("median_spar", 0) if "median_spar" in result.columns else 0
+
+            is_bench = next_row.get("is_bench", False) if "is_bench" in result.columns else False
+            is_flex = next_row.get("is_flex", False) if "is_flex" in result.columns else False
+
+            if is_bench:
+                next_label = f"BN ({next_pos})"
+            elif is_flex:
+                next_label = f"FLEX ({next_pos})"
+            else:
+                next_label = next_pos
+
+            st.subheader("Next Pick")
+            np_c1, np_c2, np_c3 = st.columns(3)
+            with np_c1:
+                st.caption("Position")
+                st.markdown(f"### {next_label}")
+            with np_c2:
+                st.caption("Target Bid")
+                st.markdown(f"### ${next_cost:.0f}")
+            with np_c3:
+                st.caption("Exp. SPAR")
+                st.markdown(f"### {next_spar:.1f}")
+
+            st.caption("Suggested next buy based on your strategy and remaining budget.")
+
+        elif total_remaining_slots == 0:
+            st.success("Draft Complete! All slots filled.")
+
+        st.markdown("---")
+
+        # --- Log a Pick ---
+        st.markdown("#### Log a Pick")
+
+        # Determine available slots
+        available_slots = []
+        if filled_counts["QB"] < num_qb:
+            available_slots.append("QB")
+        if filled_counts["RB"] < num_rb:
+            available_slots.append("RB")
+        if filled_counts["WR"] < num_wr:
+            available_slots.append("WR")
+        if filled_counts["TE"] < num_te:
+            available_slots.append("TE")
+        if filled_counts["FLEX"] < num_flex:
+            available_slots.extend(["FLEX (RB)", "FLEX (WR)", "FLEX (TE)"])
+        if filled_counts["DEF"] < num_def:
+            available_slots.append("DEF")
+        if filled_counts["K"] < num_k:
+            available_slots.append("K")
+        if filled_counts["BENCH"] < bench_spots:
+            available_slots.extend(["BN (QB)", "BN (RB)", "BN (WR)", "BN (TE)"])
+
+        if available_slots:
+            add_c1, add_c2 = st.columns([1, 2])
+            with add_c1:
+                slot_choice = st.selectbox("Pos", available_slots, key="add_slot", label_visibility="collapsed")
+            with add_c2:
+                player_name = st.text_input("Player", "", key="player_name", placeholder="e.g. Josh Allen", label_visibility="collapsed")
+
+            add_c3, add_c4 = st.columns([2, 1])
+
+            # Calculate max cost for slot
+            max_cost = int(remaining_budget)
+            if slot_choice and slot_choice.startswith("BN"):
+                max_cost = min(max_cost, int(remaining_bench_budget))
+            elif slot_choice:
+                max_cost = min(max_cost, int(remaining_starter_budget))
+
+            with add_c3:
+                cost_input = st.number_input(
+                    "Cost", min_value=1, max_value=max(1, max_cost), value=min(1, max(1, max_cost)),
+                    key="add_cost", label_visibility="collapsed"
+                )
+            with add_c4:
+                if st.button("Add", type="primary", use_container_width=True, key="add_pick_btn"):
+                    if slot_choice:
+                        if slot_choice.startswith("FLEX"):
+                            position = slot_choice.split("(")[1].replace(")", "")
+                            is_flex_pick = True
+                            slot_type = "starter"
+                        elif slot_choice.startswith("BN"):
+                            position = slot_choice.split("(")[1].replace(")", "")
+                            is_flex_pick = False
+                            slot_type = "bench"
+                        else:
+                            position = slot_choice
+                            is_flex_pick = False
+                            slot_type = "starter"
+
+                        new_pick = {
+                            "position": position,
+                            "slot_type": slot_type,
+                            "is_flex": is_flex_pick,
+                            "cost": cost_input,
+                            "player": player_name if player_name else None,
+                        }
+                        st.session_state.draft_tracker["filled_picks"].append(new_pick)
+                        st.rerun(scope="fragment")
+        else:
+            st.info("All slots filled!")
+
+        st.markdown("---")
+
+        # --- Optimal Plan Table ---
+        if result is not None and len(result) > 0:
+            st.markdown("#### Optimal Plan")
+            st.caption(f"{total_remaining_slots} slots remaining")
+
+            rows = []
+            for _, row in result.iterrows():
+                is_bench = row.get("is_bench", False) if "is_bench" in result.columns else False
+                is_flex = row.get("is_flex", False) if "is_flex" in result.columns else False
+                pos = row["yahoo_position"]
+
+                if is_bench:
+                    slot_label = f"BN ({pos})"
+                elif is_flex:
+                    slot_label = f"FLEX ({pos})"
+                else:
+                    slot_label = pos
+
+                rows.append({
+                    "Slot": slot_label,
+                    "Target": f"${row['avg_cost']:.0f}",
+                    "SPAR": round(row.get("median_spar", 0), 1),
+                    "PPG": round(row.get("median_ppg", 0), 1),
+                })
+
+            plan_df = pd.DataFrame(rows)
+            st.dataframe(plan_df, hide_index=True, use_container_width=True, height=280)
+
+            total_planned = result["avg_cost"].sum()
+            st.caption(f"Planned: ${total_planned:.0f} | Unallocated: ${remaining_budget - total_planned:.0f}")
+
+        # --- Filled Picks ---
+        if filled_picks:
+            st.markdown("---")
+            st.markdown("#### Filled Picks")
+
+            for i, p in enumerate(filled_picks):
+                slot_label = (
+                    f"FLEX ({p['position']})" if p.get("is_flex")
+                    else f"BN ({p['position']})" if p["slot_type"] == "bench"
+                    else p["position"]
+                )
+                player_label = p.get("player", "") or "—"
+
+                fp_c1, fp_c2, fp_c3, fp_c4 = st.columns([1, 2, 1, 0.5])
+                with fp_c1:
+                    st.write(f"**{slot_label}**")
+                with fp_c2:
+                    st.write(player_label)
+                with fp_c3:
+                    st.write(f"${p['cost']:.0f}")
+                with fp_c4:
+                    if st.button("X", key=f"del_{i}", help="Remove"):
+                        st.session_state.draft_tracker["filled_picks"].pop(i)
+                        st.rerun(scope="fragment")
+
+            picks_total = sum(p["cost"] for p in filled_picks)
+            st.caption(f"Total: ${picks_total:.0f} ({len(filled_picks)} picks)")
+
+            if st.button("Reset All", key="reset_all"):
+                st.session_state.draft_tracker["filled_picks"] = []
+                st.rerun(scope="fragment")
 
 
 def run_optimization(
@@ -2528,398 +2527,6 @@ def run_optimization(
     optimal_draft = optimal_draft.sort_values("_sort").drop(columns=["_sort"])
 
     return optimal_draft
-
-
-def display_draft_tracker(
-    optimal_draft,
-    budget,
-    remaining_budget,
-    filled_picks,
-    num_qb,
-    num_rb,
-    num_wr,
-    num_te,
-    num_flex,
-    num_def,
-    num_k,
-    num_bench,
-    agg_data,
-    starter_budget,
-    bench_budget,
-    remaining_starter_budget,
-    remaining_bench_budget,
-    constraint_data=None,
-):
-    """
-    Display live draft tracker with re-optimization after each pick.
-
-    Shows filled picks at top, then optimized plan for remaining slots.
-    When you add a pick, it re-runs optimization with reduced budget and slots.
-    Enforces position spending caps from constraint_data.
-    """
-    constraint_data = constraint_data or {}
-
-    # Calculate spent by category
-    starter_spent = sum(
-        p["cost"] for p in filled_picks if p.get("slot_type") != "bench"
-    )
-    bench_spent = sum(p["cost"] for p in filled_picks if p.get("slot_type") == "bench")
-    total_spent = starter_spent + bench_spent
-
-    total_slots = (
-        num_qb + num_rb + num_wr + num_te + num_flex + num_def + num_k + num_bench
-    )
-    num_qb + num_rb + num_wr + num_te + num_flex + num_def + num_k
-    slots_filled = len(filled_picks)
-    slots_remaining = total_slots - slots_filled
-
-    # === VISUAL PROGRESS ===
-    progress_pct = slots_filled / total_slots if total_slots > 0 else 0
-    budget_pct = total_spent / budget if budget > 0 else 0
-    expected_budget_pct = slots_filled / total_slots if total_slots > 0 else 0
-
-    if budget_pct > expected_budget_pct + 0.15:
-        st.warning(
-            f"⚠️ Spending ahead of pace ({budget_pct:.0%} budget, {progress_pct:.0%} picks)"
-        )
-    elif budget_pct < expected_budget_pct - 0.15 and slots_filled > 2:
-        st.info(
-            f"💰 Budget available ({budget_pct:.0%} spent, {progress_pct:.0%} picks)"
-        )
-
-    st.progress(
-        progress_pct, text=f"Draft Progress: {slots_filled}/{total_slots} picks"
-    )
-
-    # === COMPACT STATUS BAR ===
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Remaining", f"${remaining_budget:.0f}", delta=f"of ${budget}")
-    with col2:
-        st.metric(
-            "Starters",
-            f"${remaining_starter_budget:.0f}",
-            delta=f"of ${starter_budget}",
-        )
-    with col3:
-        st.metric(
-            "Progress",
-            f"{slots_filled}/{total_slots}",
-            delta=f"Bench: ${remaining_bench_budget:.0f}",
-        )
-
-    # === ADD PICK ROW ===
-    st.markdown("---")
-
-    # Count filled positions by type and track which slot number we're on
-    filled_counts = {
-        "QB": 0,
-        "RB": 0,
-        "WR": 0,
-        "TE": 0,
-        "DEF": 0,
-        "K": 0,
-        "FLEX": 0,
-        "BENCH": 0,
-    }
-    for pick in filled_picks:
-        if pick.get("slot_type") == "bench":
-            filled_counts["BENCH"] += 1
-        elif pick.get("is_flex"):
-            filled_counts["FLEX"] += 1
-        else:
-            pos = pick["position"]
-            if pos in filled_counts:
-                filled_counts[pos] += 1
-
-    # Determine available slot types based on what's still needed
-    available_slots = []
-    if filled_counts["QB"] < num_qb:
-        available_slots.append("QB")
-    if filled_counts["RB"] < num_rb:
-        available_slots.append("RB")
-    if filled_counts["WR"] < num_wr:
-        available_slots.append("WR")
-    if filled_counts["TE"] < num_te:
-        available_slots.append("TE")
-    if filled_counts["FLEX"] < num_flex:
-        available_slots.extend(["FLEX (RB)", "FLEX (WR)", "FLEX (TE)"])
-    if filled_counts["DEF"] < num_def:
-        available_slots.append("DEF")
-    if filled_counts["K"] < num_k:
-        available_slots.append("K")
-    if filled_counts["BENCH"] < num_bench:
-        available_slots.extend(["BN (QB)", "BN (RB)", "BN (WR)", "BN (TE)"])
-
-    # Calculate max cost for selected slot
-    slot_choice = available_slots[0] if available_slots else None
-    max_cost = int(remaining_budget)
-    position_cap = None
-
-    if slot_choice:
-        if slot_choice.startswith("BN"):
-            max_cost = min(max_cost, int(remaining_bench_budget))
-        else:
-            max_cost = min(max_cost, int(remaining_starter_budget))
-            if slot_choice.startswith("FLEX"):
-                pos_key = "flex"
-                slot_num = filled_counts["FLEX"]
-            else:
-                pos_key = slot_choice.lower()
-                slot_num = filled_counts.get(slot_choice, 0)
-            caps = constraint_data.get(pos_key, [])
-            if slot_num < len(caps):
-                position_cap = caps[slot_num]
-                max_cost = min(max_cost, position_cap)
-
-    # Compact add pick row with player name
-    col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
-
-    with col1:
-        if available_slots:
-            slot_choice = st.selectbox(
-                "Slot", available_slots, key="add_slot", label_visibility="collapsed"
-            )
-        else:
-            st.info("✅ All slots filled!")
-
-    with col2:
-        if available_slots:
-            player_name = st.text_input(
-                "Player",
-                "",
-                key="player_name",
-                placeholder="e.g. Josh Allen",
-                label_visibility="collapsed",
-            )
-
-    with col3:
-        if available_slots:
-            cost_input = st.number_input(
-                f"${max_cost}",
-                min_value=1,
-                max_value=max(1, max_cost),
-                value=min(1, max_cost),
-                key="add_cost",
-                label_visibility="collapsed",
-            )
-
-    with col4:
-        if available_slots:
-            add_disabled = cost_input > max_cost or max_cost < 1
-            if st.button(
-                "➕",
-                type="primary",
-                disabled=add_disabled,
-                key="add_pick_btn",
-                use_container_width=True,
-                help="Add pick",
-            ):
-                if slot_choice:
-                    if slot_choice.startswith("FLEX"):
-                        position = slot_choice.split("(")[1].replace(")", "")
-                        is_flex = True
-                        slot_type = "starter"
-                    elif slot_choice.startswith("BN"):
-                        position = slot_choice.split("(")[1].replace(")", "")
-                        is_flex = False
-                        slot_type = "bench"
-                    else:
-                        position = slot_choice
-                        is_flex = False
-                        slot_type = "starter"
-
-                    new_pick = {
-                        "position": position,
-                        "slot_type": slot_type,
-                        "is_flex": is_flex,
-                        "cost": cost_input,
-                        "player": (
-                            player_name
-                            if "player_name" in dir() and player_name
-                            else None
-                        ),
-                    }
-                    st.session_state.draft_tracker["filled_picks"].append(new_pick)
-                    st.rerun(scope="fragment")
-
-    # === FILLED PICKS TABLE ===
-    if filled_picks:
-        st.markdown("---")
-        st.subheader("✅ Filled Picks")
-
-        for i, p in enumerate(filled_picks):
-            slot_label = (
-                f"FLEX ({p['position']})"
-                if p.get("is_flex")
-                else (
-                    f"BN ({p['position']})"
-                    if p["slot_type"] == "bench"
-                    else p["position"]
-                )
-            )
-            player_label = p.get("player", "") or ""
-
-            col1, col2, col3, col4 = st.columns([1, 2, 1, 0.5])
-            with col1:
-                st.write(f"**{slot_label}**")
-            with col2:
-                st.write(player_label if player_label else "—")
-            with col3:
-                st.write(f"${p['cost']:.0f}")
-            with col4:
-                if st.button("🗑️", key=f"del_{i}", help="Remove this pick"):
-                    st.session_state.draft_tracker["filled_picks"].pop(i)
-                    st.rerun(scope="fragment")
-
-        picks_total = sum(p["cost"] for p in filled_picks)
-        st.caption(f"**Total: ${picks_total:.0f}** ({len(filled_picks)} picks)")
-
-        if st.button("🔄 Reset All Picks", key="reset_all"):
-            st.session_state.draft_tracker["filled_picks"] = []
-            st.rerun(scope="fragment")
-
-    # === OPTIMAL PLAN ===
-    st.markdown("---")
-
-    if optimal_draft is not None and len(optimal_draft) > 0:
-        # Highlight NEXT recommended pick
-        next_row = optimal_draft.iloc[0]
-        next_pos = next_row["yahoo_position"]
-        next_cost = next_row["avg_cost"]
-        next_spar = (
-            next_row.get("median_spar", 0)
-            if "median_spar" in optimal_draft.columns
-            else 0
-        )
-
-        is_bench = (
-            next_row.get("is_bench", False)
-            if "is_bench" in optimal_draft.columns
-            else False
-        )
-        is_flex = (
-            next_row.get("is_flex", False)
-            if "is_flex" in optimal_draft.columns
-            else False
-        )
-
-        if is_bench:
-            next_label = f"BN ({next_pos})"
-        elif is_flex:
-            next_label = f"FLEX ({next_pos})"
-        else:
-            next_label = next_pos
-
-        st.markdown("### 🎯 Next Pick")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Position", next_label)
-        with col2:
-            st.metric("Target", f"${next_cost:.0f}")
-        with col3:
-            st.metric("Exp. SPAR", f"{next_spar:.1f}")
-
-        st.markdown("---")
-
-        st.markdown(
-            f"**Optimal Plan** — {slots_remaining} slots, ${remaining_budget:.0f} remaining"
-        )
-
-        # Build display dataframe
-        display_source = optimal_draft.reset_index(drop=True)
-        rows = []
-        for i, row in display_source.iterrows():
-            is_bench = (
-                row.get("is_bench", False)
-                if "is_bench" in display_source.columns
-                else False
-            )
-            is_flex = (
-                row.get("is_flex", False)
-                if "is_flex" in display_source.columns
-                else False
-            )
-            pos = row["yahoo_position"]
-
-            if is_bench:
-                slot_label = f"BN ({pos})"
-            elif is_flex:
-                slot_label = f"FLEX ({pos})"
-            else:
-                slot_label = pos
-
-            rows.append(
-                {
-                    "Slot": slot_label,
-                    "Target": f"${row['avg_cost']:.0f}",
-                    "SPAR": round(row.get("median_spar", 0), 1),
-                    "PPG": round(row.get("median_ppg", 0), 1),
-                }
-            )
-
-        plan_df = pd.DataFrame(rows)
-        st.dataframe(plan_df, hide_index=True, use_container_width=True)
-
-        total_planned = optimal_draft["avg_cost"].sum()
-        st.caption(
-            f"Planned: ${total_planned:.0f} | Unallocated: ${remaining_budget - total_planned:.0f}"
-        )
-
-    elif slots_remaining == 0:
-        st.success("🎉 Draft Complete! All slots filled.")
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Spent", f"${total_spent:.0f}")
-        with col2:
-            st.metric("Remaining", f"${budget - total_spent:.0f}")
-        with col3:
-            st.metric("Picks", f"{len(filled_picks)}")
-
-        st.markdown("---")
-        st.subheader("📥 Export Your Draft")
-
-        export_df = pd.DataFrame(
-            [
-                {
-                    "Pick": i + 1,
-                    "Slot": (
-                        f"FLEX ({p['position']})"
-                        if p.get("is_flex")
-                        else (
-                            f"BN ({p['position']})"
-                            if p["slot_type"] == "bench"
-                            else p["position"]
-                        )
-                    ),
-                    "Player": p.get("player", "") or "",
-                    "Cost": p["cost"],
-                }
-                for i, p in enumerate(filled_picks)
-            ]
-        )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            csv_data = export_df.to_csv(index=False)
-            st.download_button(
-                "📄 Download CSV",
-                csv_data,
-                file_name="my_draft.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-        with col2:
-            text_format = "\n".join(
-                [
-                    f"{r['Slot']}: {r['Player'] or '(unnamed)'} - ${r['Cost']}"
-                    for _, r in export_df.iterrows()
-                ]
-            )
-            st.text_area("Copy Draft", text_format, height=150)
-    else:
-        st.warning("No optimization result - check constraints.")
 
 
 @st.fragment
