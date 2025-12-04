@@ -20,10 +20,7 @@ from ..shared.simulation_styles import (
     render_summary_panel,
     render_manager_filter,
 )
-from ..shared.unified_header import (
-    render_summary_strip,
-    render_delta_pill,
-)
+from ..shared.unified_header import render_delta_pill
 
 # Import chart theming for light/dark mode support
 import sys
@@ -418,8 +415,8 @@ def _display_championship_path(data, year, week, prefix):
 @st.fragment
 def _display_critical_moments(data, year, week, prefix):
     """Critical turning points with theme-aware charts."""
-    # Summary strip at top
-    render_summary_strip("Biggest weekly swings in playoff odds - who rode the roller coaster?")
+    # Subtitle caption above cards
+    st.caption("Biggest weekly swings in playoff odds — who rode the roller coaster?")
 
     # Get theme colors
     colors = get_chart_colors()
@@ -449,7 +446,8 @@ def _display_critical_moments(data, year, week, prefix):
         data.groupby("manager")["p_playoffs"].std().sort_values(ascending=False)
     )
 
-    # 3-column layout
+    # 3-column layout with equal heights via CSS class
+    st.markdown('<div class="sim-equal-height-row">', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1, 1.5])
 
     with col1:
@@ -462,9 +460,17 @@ def _display_critical_moments(data, year, week, prefix):
                     unsafe_allow_html=True,
                 )
 
-            # Show all toggle
+            # Show all as right-aligned text link
             show_all_key = f"{prefix}_show_all_gains"
-            if st.button("Show all", key=show_all_key, use_container_width=True):
+            if show_all_key not in st.session_state:
+                st.session_state[show_all_key] = False
+
+            link_cols = st.columns([3, 1])
+            with link_cols[1]:
+                if st.button("Show all ›", key=f"{show_all_key}_btn", type="tertiary"):
+                    st.session_state[show_all_key] = not st.session_state[show_all_key]
+
+            if st.session_state[show_all_key]:
                 all_gains = all_changes.nlargest(10, "p_change")[
                     ["week", "manager", "p_change"]
                 ]
@@ -481,9 +487,17 @@ def _display_critical_moments(data, year, week, prefix):
                     unsafe_allow_html=True,
                 )
 
-            # Show all toggle
+            # Show all as right-aligned text link
             show_all_key = f"{prefix}_show_all_drops"
-            if st.button("Show all", key=show_all_key, use_container_width=True):
+            if show_all_key not in st.session_state:
+                st.session_state[show_all_key] = False
+
+            link_cols = st.columns([3, 1])
+            with link_cols[1]:
+                if st.button("Show all ›", key=f"{show_all_key}_btn", type="tertiary"):
+                    st.session_state[show_all_key] = not st.session_state[show_all_key]
+
+            if st.session_state[show_all_key]:
                 all_losses = all_changes.nsmallest(10, "p_change")[
                     ["week", "manager", "p_change"]
                 ]
@@ -526,3 +540,5 @@ def _display_critical_moments(data, year, week, prefix):
             apply_chart_theme(fig)
 
             st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_volatility_{year}")
+
+    st.markdown("</div>", unsafe_allow_html=True)
