@@ -390,8 +390,10 @@ def upload_to_motherduck(files: list[Path], db_name: str, token: str = None) -> 
     con.execute(f"CREATE SCHEMA IF NOT EXISTS public")
 
     # Table name mapping (handle common aliases)
+    # NOTE: players_by_year should NOT be aliased to player - they are DIFFERENT tables!
+    # - player table = weekly player data (one row per player per week)
+    # - players_by_year table = season-aggregated data (one row per player per year)
     aliases = {
-        "players_by_year": "player",
         "yahoo_player_stats_multi_year_all_weeks": "player",
         "matchups": "matchup",
         "schedules": "schedule",
