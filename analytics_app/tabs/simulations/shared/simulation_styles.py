@@ -696,19 +696,16 @@ def apply_simulation_styles():
         color: var(--text-muted, #9CA3AF);
         text-transform: uppercase;
         letter-spacing: 0.03em;
-        margin-bottom: 0.25rem;
-        letter-spacing: 0.03em;
-        margin-top: 0.25rem;
     }
 
     .sim-kpi-owner {
         display: inline-block;
-        margin-top: 0.375rem;
-        padding: 0.125rem 0.5rem;
+        margin-top: 0.2rem;
+        padding: 0.1rem 0.4rem;
         background: var(--accent, #667eea);
         color: white;
-        border-radius: 12px;
-        font-size: 0.7rem;
+        border-radius: 10px;
+        font-size: 0.65rem;
         font-weight: 500;
     }
 
