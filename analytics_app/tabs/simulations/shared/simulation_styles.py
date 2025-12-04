@@ -777,6 +777,14 @@ def apply_simulation_styles():
     }
 
     /* ===========================================
+       CENTERED CONSTRAINED CONTENT
+       =========================================== */
+    .sim-centered-content {
+        max-width: 1100px;
+        margin: 0 auto;
+    }
+
+    /* ===========================================
        SUMMARY STRIP (NEW)
        =========================================== */
     .sim-summary-strip {

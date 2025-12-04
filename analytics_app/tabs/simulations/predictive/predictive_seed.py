@@ -115,6 +115,13 @@ def display_predicted_seed(
     if week is None:
         week = int(base_df[base_df["year"] == year]["week"].max())
 
-    # Render directly (year/week comes from unified header)
+    # Centered constrained-width layout
+    st.markdown(
+        '<div class="sim-centered-content">',
+        unsafe_allow_html=True,
+    )
+
     with st.container(border=True):
         _render_expected_seed(base_df, year, week)
+
+    st.markdown("</div>", unsafe_allow_html=True)
