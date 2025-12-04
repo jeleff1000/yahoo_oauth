@@ -1001,15 +1001,6 @@ def run_register_flow():
                             # Store selected league in session for import
                             st.session_state.selected_league = selected_league
 
-                            # Use a proper Streamlit button to preserve session state
-                            # Anchor links lose session state on Streamlit Cloud!
-                            st.markdown(f"""
-                            <div style="background: linear-gradient(135deg,#667eea,#7f5af0); padding:1.5rem; border-radius:0.75rem; color:white; text-align:center; margin-bottom:1rem;">
-                                <h2 style="margin:0;">🚀 Import {selected_league['name']}</h2>
-                                <p style="margin:0.25rem 0 0.75rem; opacity:0.95;">Season {selected_league['season']} — {selected_league['num_teams']} teams</p>
-                            </div>
-                            """, unsafe_allow_html=True)
-
                             # Check if import can be started (pass league name for server-side check)
                             can_import, block_reason = can_start_import(league_name=selected_league.get('name'))
 
@@ -1057,8 +1048,8 @@ def run_register_flow():
 
                                 st.markdown("---")
 
-                                # Single import button that uses all configured settings
-                                if st.button("Start Import", key="start_import_btn", type="primary", use_container_width=True):
+                                # Import button with league name
+                                if st.button(f"Import {selected_league['name']}", key="start_import_btn", type="primary", use_container_width=True):
                                     mark_import_started()
                                     league_info = {
                                         "league_key": selected_league.get("league_key"),
