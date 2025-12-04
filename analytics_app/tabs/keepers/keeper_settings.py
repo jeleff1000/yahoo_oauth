@@ -2,10 +2,7 @@
 Keeper Settings Tab
 
 Dedicated configuration page for keeper/dynasty league rules.
-This tab allows users to:
-1. Configure keeper cost formulas
-2. View and edit keeper rules stored in MotherDuck
-3. Re-run keeper economics calculations with updated rules
+Uses a 3-step wizard approach with live summary for clarity.
 """
 
 import streamlit as st
@@ -15,31 +12,500 @@ import json
 
 
 class KeeperSettingsViewer:
-    """Keeper league settings configuration interface."""
+    """Keeper league settings configuration interface with wizard UX."""
 
     def __init__(self):
-        pass
+        # Initialize session state for wizard
+        if "keeper_wizard_step" not in st.session_state:
+            st.session_state.keeper_wizard_step = 0
+        if "keeper_draft_values" not in st.session_state:
+            st.session_state.keeper_draft_values = {}
 
     @st.fragment
     def display(self):
-        st.markdown("## Keeper League Settings")
-        st.caption("Configure how keeper costs are calculated for your league.")
-
-        # Try to load existing rules from MotherDuck
+        # Load existing rules
         existing_rules = self._load_rules_from_db()
 
-        # Tab navigation
-        tab_names = ["Configuration", "Current Rules", "Recalculate"]
-        tabs = st.tabs(tab_names)
+        # Initialize values from existing rules or defaults
+        self._init_values(existing_rules)
 
-        with tabs[0]:
-            self._display_configuration_form(existing_rules)
+        # Two-column layout: Settings (left) + Live Summary (right)
+        col_main, col_summary = st.columns([2, 1])
 
-        with tabs[1]:
-            self._display_current_rules(existing_rules)
+        with col_main:
+            st.markdown("## Keeper League Settings")
 
-        with tabs[2]:
-            self._display_recalculate_section(existing_rules)
+            # Step indicator
+            steps = ["Basic Rules", "First-Year Price", "Escalation & Preview"]
+            current_step = st.session_state.keeper_wizard_step
+
+            # Tab-style step navigation
+            step_cols = st.columns(len(steps))
+            for i, (col, step_name) in enumerate(zip(step_cols, steps)):
+                with col:
+                    if i == current_step:
+                        st.markdown(f"**{i+1}. {step_name}**")
+                    elif i < current_step:
+                        if st.button(f"{i+1}. {step_name}", key=f"step_nav_{i}", use_container_width=True):
+                            st.session_state.keeper_wizard_step = i
+                            st.rerun()
+                    else:
+                        st.markdown(f":gray[{i+1}. {step_name}]")
+
+            st.markdown("---")
+
+            # Render current step
+            if current_step == 0:
+                self._render_step_basic()
+            elif current_step == 1:
+                self._render_step_first_year()
+            elif current_step == 2:
+                self._render_step_escalation_preview(existing_rules)
+
+        with col_summary:
+            self._render_live_summary()
+
+    def _init_values(self, existing_rules: Optional[dict]):
+        """Initialize form values from existing rules or defaults."""
+        v = st.session_state.keeper_draft_values
+
+        if existing_rules and not v:
+            # Load from existing rules
+            v["draft_type"] = existing_rules.get("draft_type", "auction")
+            v["max_keepers"] = existing_rules.get("max_keepers", 3)
+            v["max_years"] = existing_rules.get("max_years") or 3
+            v["min_price"] = existing_rules.get("min_price", 1)
+            v["budget"] = existing_rules.get("budget", 200)
+
+            base = existing_rules.get("base_cost_rules", {})
+            auction = base.get("auction", {})
+            faab = base.get("faab_only", {})
+
+            v["draft_mult"] = auction.get("multiplier", 1.0)
+            v["draft_flat"] = auction.get("flat", 0.0)
+            v["faab_mult"] = faab.get("multiplier", 1.0)
+            v["faab_flat"] = faab.get("flat", 10.0)
+
+            esc = existing_rules.get("formulas_by_keeper_year", {}).get("2+", {})
+            year1 = existing_rules.get("formulas_by_keeper_year", {}).get("1", {})
+
+            v["esc_mult"] = esc.get("multiplier", 1.0)
+            v["esc_flat"] = esc.get("flat_add", 5.0)
+            v["esc_from_year1"] = year1.get("apply_year1", False)
+
+        elif not v:
+            # Set defaults
+            v["draft_type"] = "auction"
+            v["max_keepers"] = 3
+            v["max_years"] = 3
+            v["min_price"] = 1
+            v["budget"] = 200
+            v["draft_mult"] = 1.0
+            v["draft_flat"] = 0.0
+            v["faab_mult"] = 1.0
+            v["faab_flat"] = 10.0
+            v["esc_mult"] = 1.0
+            v["esc_flat"] = 5.0
+            v["esc_from_year1"] = False
+
+    def _render_step_basic(self):
+        """Step 1: Basic Rules - draft type and limits."""
+        v = st.session_state.keeper_draft_values
+
+        st.markdown("### Step 1: Basic Rules")
+        st.caption("Define your league's keeper format and constraints.")
+
+        # Draft Type - simple radio
+        st.markdown("**What type of draft does your league use?**")
+        draft_type = st.radio(
+            "Draft type",
+            ["Auction", "Snake"],
+            index=0 if v["draft_type"] == "auction" else 1,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="basic_draft_type"
+        )
+        v["draft_type"] = "auction" if draft_type == "Auction" else "snake"
+
+        st.markdown("")
+
+        # Core limits in a clean grid
+        col1, col2 = st.columns(2)
+
+        with col1:
+            v["max_keepers"] = st.number_input(
+                "Maximum keepers per team",
+                min_value=1, max_value=15,
+                value=v["max_keepers"],
+                key="basic_max_keepers"
+            )
+
+        with col2:
+            max_years = st.number_input(
+                "Maximum years a player can be kept",
+                min_value=0, max_value=20,
+                value=v["max_years"],
+                help="0 = unlimited",
+                key="basic_max_years"
+            )
+            v["max_years"] = max_years if max_years > 0 else None
+
+        # Auction-specific settings
+        if v["draft_type"] == "auction":
+            col1, col2 = st.columns(2)
+            with col1:
+                v["budget"] = st.number_input(
+                    "Auction budget ($)",
+                    min_value=50, max_value=1000,
+                    value=v["budget"],
+                    key="basic_budget"
+                )
+            with col2:
+                v["min_price"] = st.number_input(
+                    "Minimum keeper price ($)",
+                    min_value=0, max_value=50,
+                    value=v["min_price"],
+                    key="basic_min_price"
+                )
+
+        # Advanced options (collapsed by default)
+        with st.expander("Advanced Constraints"):
+            st.caption("Additional rules (most leagues don't need these)")
+            st.checkbox("Prevent keeping players drafted in round 1", key="adv_no_rd1", disabled=True)
+            st.checkbox("Require minimum games played to keep", key="adv_min_games", disabled=True)
+            st.info("Advanced constraints coming soon.")
+
+        # Navigation
+        st.markdown("---")
+        col1, col2 = st.columns([3, 1])
+        with col2:
+            if st.button("Next: First-Year Price", type="primary", use_container_width=True):
+                st.session_state.keeper_wizard_step = 1
+                st.rerun()
+
+    def _render_step_first_year(self):
+        """Step 2: First-Year Keeper Price."""
+        v = st.session_state.keeper_draft_values
+
+        st.markdown("### Step 2: First-Year Keeper Cost")
+        st.caption("How is the keeper price calculated the FIRST time a player is kept?")
+
+        if v["draft_type"] == "auction":
+            # Two scenarios: Drafted vs FAAB pickup
+            st.markdown("**Drafted Players**")
+            st.markdown("Players acquired in the draft.")
+
+            # Show as friendly sentence
+            draft_cost = self._calculate_example_cost(25, v["draft_mult"], v["draft_flat"], v["min_price"])
+            st.success(f"A $25 drafted player costs **${draft_cost}** to keep")
+
+            with st.expander("Edit formula"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    v["draft_mult"] = st.number_input(
+                        "Multiply draft price by",
+                        min_value=0.1, max_value=5.0,
+                        value=float(v["draft_mult"]),
+                        step=0.1,
+                        key="fy_draft_mult"
+                    )
+                with col2:
+                    v["draft_flat"] = st.number_input(
+                        "Then add ($)",
+                        min_value=-50.0, max_value=100.0,
+                        value=float(v["draft_flat"]),
+                        step=1.0,
+                        key="fy_draft_flat"
+                    )
+
+            st.markdown("")
+            st.markdown("**FAAB/Waiver Pickups**")
+            st.markdown("Players acquired via free agency during the season.")
+
+            faab_cost = self._calculate_example_cost(15, v["faab_mult"], v["faab_flat"], v["min_price"])
+            st.success(f"A $15 FAAB pickup costs **${faab_cost}** to keep")
+
+            with st.expander("Edit formula"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    v["faab_mult"] = st.number_input(
+                        "Multiply FAAB bid by",
+                        min_value=0.1, max_value=5.0,
+                        value=float(v["faab_mult"]),
+                        step=0.1,
+                        key="fy_faab_mult"
+                    )
+                with col2:
+                    v["faab_flat"] = st.number_input(
+                        "Then add ($)",
+                        min_value=-50.0, max_value=100.0,
+                        value=float(v["faab_flat"]),
+                        step=1.0,
+                        key="fy_faab_flat"
+                    )
+
+        else:
+            # Snake draft
+            st.info("Snake draft keeper costs are based on draft round.")
+            st.markdown("Players are kept at the round they were drafted, minus any escalation.")
+
+        # Navigation
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("Back", use_container_width=True):
+                st.session_state.keeper_wizard_step = 0
+                st.rerun()
+        with col3:
+            if st.button("Next: Escalation", type="primary", use_container_width=True):
+                st.session_state.keeper_wizard_step = 2
+                st.rerun()
+
+    def _render_step_escalation_preview(self, existing_rules: Optional[dict]):
+        """Step 3: Escalation & Preview."""
+        v = st.session_state.keeper_draft_values
+
+        st.markdown("### Step 3: Escalation & Preview")
+        st.caption("How does the keeper cost change each additional year?")
+
+        if v["draft_type"] == "auction":
+            # Friendly escalation summary
+            esc_desc = self._format_escalation_friendly(v["esc_mult"], v["esc_flat"], v["esc_from_year1"])
+            st.success(f"Escalation: **{esc_desc}**")
+
+            with st.expander("Edit escalation formula"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    v["esc_mult"] = st.number_input(
+                        "Multiply previous year's cost by",
+                        min_value=0.5, max_value=5.0,
+                        value=float(v["esc_mult"]),
+                        step=0.1,
+                        key="esc_mult"
+                    )
+                with col2:
+                    v["esc_flat"] = st.number_input(
+                        "Then add ($)",
+                        min_value=0.0, max_value=100.0,
+                        value=float(v["esc_flat"]),
+                        step=1.0,
+                        key="esc_flat"
+                    )
+
+                v["esc_from_year1"] = st.checkbox(
+                    "Apply escalation starting Year 1 (instead of Year 2)",
+                    value=v["esc_from_year1"],
+                    key="esc_year1"
+                )
+
+        # Preview tables
+        st.markdown("---")
+        st.markdown("### Preview: Cost Progression")
+
+        if v["draft_type"] == "auction":
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**$25 Drafted Player**")
+                self._show_preview_table(v, 25, "draft")
+
+            with col2:
+                st.markdown("**$15 FAAB Pickup**")
+                self._show_preview_table(v, 15, "faab")
+        else:
+            st.info("Snake draft preview coming soon.")
+
+        # Final actions
+        st.markdown("---")
+
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button("Back", use_container_width=True):
+                st.session_state.keeper_wizard_step = 1
+                st.rerun()
+
+        with col2:
+            if st.button("Save to Session", use_container_width=True):
+                config = self._build_config(v)
+                st.session_state.configured_keeper_rules = config
+                st.success("Saved to session!")
+
+        with col3:
+            if st.button("Save to Database", type="primary", use_container_width=True):
+                config = self._build_config(v)
+                st.session_state.configured_keeper_rules = config
+                if self._save_rules_to_db(config):
+                    st.success("Saved to database!")
+                    st.info("Go to 'Recalculate' to update keeper prices.")
+
+        # Recalculate section
+        st.markdown("---")
+        st.markdown("### Recalculate Keeper Prices")
+
+        if existing_rules:
+            st.caption("Apply your rules to recalculate all keeper prices in MotherDuck.")
+            if st.button("Recalculate Now", type="secondary"):
+                with st.spinner("Recalculating..."):
+                    config = self._build_config(v)
+                    success = self._run_recalculation(config)
+                    if success:
+                        st.success("Keeper prices recalculated!")
+                        st.cache_data.clear()
+        else:
+            st.warning("Save your rules first before recalculating.")
+
+    def _render_live_summary(self):
+        """Right sidebar: live summary of current settings."""
+        v = st.session_state.keeper_draft_values
+
+        st.markdown("### Your Rules")
+        st.markdown("---")
+
+        # Basic info
+        st.markdown(f"**Draft Type:** {v.get('draft_type', 'auction').title()}")
+        st.markdown(f"**Max Keepers:** {v.get('max_keepers', 3)}")
+
+        max_years = v.get('max_years')
+        st.markdown(f"**Max Years:** {max_years if max_years else 'Unlimited'}")
+
+        if v.get("draft_type") == "auction":
+            st.markdown(f"**Budget:** ${v.get('budget', 200)}")
+            st.markdown(f"**Min Price:** ${v.get('min_price', 1)}")
+
+            st.markdown("---")
+            st.markdown("**First-Year Cost**")
+
+            draft_formula = self._format_formula_friendly(v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), "draft price")
+            faab_formula = self._format_formula_friendly(v.get("faab_mult", 1.0), v.get("faab_flat", 10.0), "FAAB bid")
+
+            st.markdown(f"Drafted: {draft_formula}")
+            st.markdown(f"FAAB: {faab_formula}")
+
+            st.markdown("---")
+            st.markdown("**Escalation**")
+
+            esc_desc = self._format_escalation_friendly(
+                v.get("esc_mult", 1.0),
+                v.get("esc_flat", 5.0),
+                v.get("esc_from_year1", False)
+            )
+            st.markdown(esc_desc)
+
+    def _format_formula_friendly(self, mult: float, flat: float, source: str) -> str:
+        """Format a formula as friendly text."""
+        if mult == 1.0 and flat == 0.0:
+            return f"= {source}"
+        elif mult == 1.0 and flat > 0:
+            return f"= {source} + ${flat:.0f}"
+        elif mult == 1.0 and flat < 0:
+            return f"= {source} - ${abs(flat):.0f}"
+        elif flat == 0.0:
+            return f"= {mult}x {source}"
+        elif flat > 0:
+            return f"= {mult}x {source} + ${flat:.0f}"
+        else:
+            return f"= {mult}x {source} - ${abs(flat):.0f}"
+
+    def _format_escalation_friendly(self, mult: float, flat: float, from_year1: bool) -> str:
+        """Format escalation as friendly text."""
+        parts = []
+
+        if mult != 1.0:
+            parts.append(f"{mult}x previous cost")
+
+        if flat > 0:
+            if parts:
+                parts.append(f"+ ${flat:.0f}")
+            else:
+                parts.append(f"+${flat:.0f}/year")
+
+        if not parts:
+            return "None (cost stays the same)"
+
+        result = " ".join(parts)
+        start = "Year 1" if from_year1 else "Year 2"
+        return f"{result} (starting {start})"
+
+    def _calculate_example_cost(self, base: float, mult: float, flat: float, min_price: int) -> int:
+        """Calculate example keeper cost."""
+        cost = base * mult + flat
+        return max(min_price, round(cost))
+
+    def _show_preview_table(self, v: dict, base_value: float, acq_type: str):
+        """Show preview table of keeper cost progression."""
+        if acq_type == "draft":
+            mult = v.get("draft_mult", 1.0)
+            flat = v.get("draft_flat", 0.0)
+        else:
+            mult = v.get("faab_mult", 1.0)
+            flat = v.get("faab_flat", 10.0)
+
+        base_cost = base_value * mult + flat
+
+        esc_mult = v.get("esc_mult", 1.0)
+        esc_flat = v.get("esc_flat", 5.0)
+        apply_year1 = v.get("esc_from_year1", False)
+
+        min_price = v.get("min_price", 1)
+        max_years = v.get("max_years") or 10
+
+        rows = []
+        prev_cost = base_cost
+
+        for yr in range(1, min(6, max_years + 1) if max_years else 6):
+            if yr == 1:
+                if apply_year1:
+                    cost = base_cost * esc_mult + esc_flat
+                else:
+                    cost = base_cost
+            else:
+                cost = prev_cost * esc_mult + esc_flat
+
+            cost = max(min_price, round(cost))
+            change = f"+${cost - prev_cost:.0f}" if yr > 1 and cost > prev_cost else "-"
+            rows.append({"Year": yr, "Cost": f"${cost}", "Change": change})
+            prev_cost = cost
+
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    def _build_config(self, v: dict) -> dict:
+        """Build configuration dict from form values."""
+        base_cost_rules = {
+            "auction": {"source": "draft_price", "multiplier": v["draft_mult"], "flat": v["draft_flat"]},
+            "faab_only": {"source": "faab_bid", "multiplier": v["faab_mult"], "flat": v["faab_flat"]},
+            "free_agent": {"source": "fixed", "value": v["min_price"]}
+        }
+
+        formulas = {}
+        if v["esc_from_year1"]:
+            formulas["1"] = {
+                "expression": f"base_cost * {v['esc_mult']} + {v['esc_flat']}",
+                "multiplier": v["esc_mult"],
+                "flat_add": v["esc_flat"],
+                "apply_year1": True
+            }
+        else:
+            formulas["1"] = {"expression": "base_cost"}
+
+        formulas["2+"] = {
+            "expression": f"prev_cost * {v['esc_mult']} + {v['esc_flat']}",
+            "multiplier": v["esc_mult"],
+            "flat_add": v["esc_flat"],
+            "recursive": True
+        }
+
+        return {
+            "enabled": True,
+            "draft_type": v["draft_type"],
+            "max_keepers": v["max_keepers"],
+            "max_years": v["max_years"],
+            "budget": v["budget"],
+            "min_price": v["min_price"],
+            "max_price": None,
+            "round_to_integer": True,
+            "base_cost_rules": base_cost_rules,
+            "formulas_by_keeper_year": formulas
+        }
 
     def _load_rules_from_db(self) -> Optional[dict]:
         """Load keeper rules from MotherDuck league_context table."""
@@ -57,395 +523,24 @@ class KeeperSettingsViewer:
                 if rules_json and pd.notna(rules_json):
                     return json.loads(rules_json)
             return None
-        except Exception as e:
-            # Table might not exist yet
+        except Exception:
             return None
 
     def _save_rules_to_db(self, rules: dict) -> bool:
         """Save keeper rules to MotherDuck league_context table."""
         try:
-            from md.core import run_query, T, get_connection
+            from md.core import get_connection, T
 
             rules_json = json.dumps(rules)
-
-            # Update the league_context table
             conn = get_connection()
             conn.execute(f"""
                 UPDATE {T.get('league_context', 'league_context')}
                 SET keeper_rules_json = ?
             """, [rules_json])
-            conn.close()
             return True
         except Exception as e:
             st.error(f"Failed to save rules: {e}")
             return False
-
-    def _display_configuration_form(self, existing_rules: Optional[dict]):
-        """Display the keeper configuration form."""
-
-        st.markdown("### Configure Keeper Rules")
-
-        # Use form to batch inputs
-        with st.form("keeper_settings_form"):
-
-            # Draft Type
-            st.markdown("#### Draft Type")
-            current_draft_type = existing_rules.get("draft_type", "auction") if existing_rules else "auction"
-
-            draft_type = st.radio(
-                "What type of draft?",
-                ["Auction (bid $ on players)", "Snake (pick by round)"],
-                index=0 if current_draft_type == "auction" else 1,
-                horizontal=True,
-                key="ks_draft_type"
-            )
-            is_auction = draft_type.startswith("Auction")
-
-            st.markdown("---")
-
-            # Basic Settings
-            st.markdown("#### Basic Settings")
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                max_keepers = st.number_input(
-                    "Max keepers/team",
-                    min_value=1, max_value=15,
-                    value=existing_rules.get("max_keepers", 3) if existing_rules else 3,
-                    key="ks_max_keepers"
-                )
-
-            with col2:
-                budget = st.number_input(
-                    "Auction budget ($)",
-                    min_value=50, max_value=1000,
-                    value=existing_rules.get("budget", 200) if existing_rules else 200,
-                    key="ks_budget"
-                )
-
-            with col3:
-                max_years = st.number_input(
-                    "Max years kept",
-                    min_value=0, max_value=20,
-                    value=existing_rules.get("max_years") or 3 if existing_rules else 3,
-                    key="ks_max_years",
-                    help="0 = unlimited"
-                )
-
-            with col4:
-                min_price = st.number_input(
-                    "Min price ($)",
-                    min_value=0, max_value=50,
-                    value=existing_rules.get("min_price", 1) if existing_rules else 1,
-                    key="ks_min_price"
-                )
-
-            st.markdown("---")
-
-            if is_auction:
-                # First Year Cost
-                st.markdown("#### First Year Keeper Cost")
-                st.caption("Formula for the first time a player is kept")
-
-                col1, col2 = st.columns(2)
-
-                # Get existing values
-                existing_base = existing_rules.get("base_cost_rules", {}) if existing_rules else {}
-                existing_auction = existing_base.get("auction", {})
-                existing_faab = existing_base.get("faab_only", {})
-
-                with col1:
-                    st.markdown("**Drafted Players**")
-                    draft_mult = st.number_input(
-                        "× draft price",
-                        min_value=0.1, max_value=5.0,
-                        value=float(existing_auction.get("multiplier", 1.0)),
-                        step=0.1,
-                        key="ks_draft_mult"
-                    )
-                    draft_flat = st.number_input(
-                        "+ flat amount ($)",
-                        min_value=-50.0, max_value=100.0,
-                        value=float(existing_auction.get("flat", 0.0)),
-                        step=1.0,
-                        key="ks_draft_flat"
-                    )
-
-                with col2:
-                    st.markdown("**FAAB/Waiver Pickups**")
-                    faab_mult = st.number_input(
-                        "× FAAB bid",
-                        min_value=0.1, max_value=5.0,
-                        value=float(existing_faab.get("multiplier", 1.0)),
-                        step=0.1,
-                        key="ks_faab_mult"
-                    )
-                    faab_flat = st.number_input(
-                        "+ flat amount ($)",
-                        min_value=-50.0, max_value=100.0,
-                        value=float(existing_faab.get("flat", 10.0)),
-                        step=1.0,
-                        key="ks_faab_flat"
-                    )
-
-                st.markdown("---")
-
-                # Escalation
-                st.markdown("#### Year-Over-Year Escalation")
-                st.caption("How cost changes each additional year kept")
-
-                existing_esc = existing_rules.get("formulas_by_keeper_year", {}).get("2+", {}) if existing_rules else {}
-
-                col1, col2, col3 = st.columns(3)
-
-                with col1:
-                    esc_mult = st.number_input(
-                        "× previous cost",
-                        min_value=0.5, max_value=5.0,
-                        value=float(existing_esc.get("multiplier", 1.0)),
-                        step=0.1,
-                        key="ks_esc_mult",
-                        help="1.0 = no multiplication"
-                    )
-
-                with col2:
-                    esc_flat = st.number_input(
-                        "+ flat amount ($)",
-                        min_value=0.0, max_value=100.0,
-                        value=float(existing_esc.get("flat_add", 5.0)),
-                        step=1.0,
-                        key="ks_esc_flat"
-                    )
-
-                with col3:
-                    existing_year1 = existing_rules.get("formulas_by_keeper_year", {}).get("1", {}) if existing_rules else {}
-                    esc_from_year1 = st.checkbox(
-                        "Apply from Year 1",
-                        value=existing_year1.get("apply_year1", False),
-                        key="ks_esc_year1",
-                        help="Check to apply escalation starting year 1"
-                    )
-
-            else:
-                # Snake draft settings
-                st.markdown("#### Snake Draft Settings")
-                rounds_lost = st.number_input(
-                    "Rounds lost per year",
-                    min_value=0, max_value=5, value=1,
-                    key="ks_rounds_lost"
-                )
-                draft_mult = 1.0
-                draft_flat = 0.0
-                faab_mult = 1.0
-                faab_flat = 0.0
-                esc_mult = 1.0
-                esc_flat = 0.0
-                esc_from_year1 = False
-
-            st.markdown("---")
-
-            # Submit
-            col1, col2 = st.columns(2)
-            with col1:
-                save_to_session = st.form_submit_button("Save to Session", use_container_width=True)
-            with col2:
-                save_to_db = st.form_submit_button("Save to Database", type="primary", use_container_width=True)
-
-        # Handle form submission
-        if save_to_session or save_to_db:
-            # Build config
-            base_cost_rules = {
-                "auction": {"source": "draft_price", "multiplier": draft_mult, "flat": draft_flat},
-                "faab_only": {"source": "faab_bid", "multiplier": faab_mult, "flat": faab_flat},
-                "free_agent": {"source": "fixed", "value": min_price}
-            }
-
-            formulas = {}
-            if esc_from_year1:
-                formulas["1"] = {
-                    "expression": f"base_cost * {esc_mult} + {esc_flat}",
-                    "multiplier": esc_mult,
-                    "flat_add": esc_flat,
-                    "apply_year1": True
-                }
-            else:
-                formulas["1"] = {"expression": "base_cost"}
-
-            formulas["2+"] = {
-                "expression": f"prev_cost * {esc_mult} + {esc_flat}",
-                "multiplier": esc_mult,
-                "flat_add": esc_flat,
-                "recursive": True
-            }
-
-            config = {
-                "enabled": True,
-                "draft_type": "auction" if is_auction else "snake",
-                "max_keepers": max_keepers,
-                "max_years": max_years if max_years > 0 else None,
-                "budget": budget,
-                "min_price": min_price,
-                "max_price": None,
-                "round_to_integer": True,
-                "base_cost_rules": base_cost_rules,
-                "formulas_by_keeper_year": formulas
-            }
-
-            # Save to session
-            st.session_state.configured_keeper_rules = config
-
-            if save_to_db:
-                if self._save_rules_to_db(config):
-                    st.success("Keeper rules saved to database!")
-                    st.info("Run 'Recalculate' to update keeper prices with new rules.")
-            else:
-                st.success("Keeper rules saved to session!")
-
-    def _display_current_rules(self, existing_rules: Optional[dict]):
-        """Display currently configured rules."""
-
-        st.markdown("### Current Keeper Rules")
-
-        if not existing_rules:
-            st.warning("No keeper rules configured yet.")
-            st.info("Use the Configuration tab to set up your league's keeper rules.")
-            return
-
-        # Display summary
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("**Basic Settings**")
-            st.write(f"- Draft Type: {existing_rules.get('draft_type', 'unknown').title()}")
-            st.write(f"- Max Keepers: {existing_rules.get('max_keepers', 'N/A')}")
-            st.write(f"- Max Years: {existing_rules.get('max_years') or 'Unlimited'}")
-            st.write(f"- Budget: ${existing_rules.get('budget', 200)}")
-            st.write(f"- Min Price: ${existing_rules.get('min_price', 1)}")
-
-        with col2:
-            st.markdown("**Cost Formulas**")
-            base_rules = existing_rules.get("base_cost_rules", {})
-
-            auction = base_rules.get("auction", {})
-            faab = base_rules.get("faab_only", {})
-
-            draft_formula = self._format_formula(auction)
-            faab_formula = self._format_formula(faab)
-
-            st.write(f"- Drafted: {draft_formula}")
-            st.write(f"- FAAB: {faab_formula}")
-
-            esc = existing_rules.get("formulas_by_keeper_year", {}).get("2+", {})
-            esc_formula = self._format_escalation(esc)
-            st.write(f"- Escalation: {esc_formula}")
-
-        # Show example calculations
-        st.markdown("---")
-        st.markdown("**Example: $20 Drafted Player**")
-
-        self._show_example_table(existing_rules, 20, "draft")
-
-        st.markdown("**Example: $15 FAAB Pickup**")
-        self._show_example_table(existing_rules, 15, "faab")
-
-    def _format_formula(self, rule: dict) -> str:
-        """Format a cost rule as text."""
-        mult = rule.get("multiplier", 1.0)
-        flat = rule.get("flat", 0.0)
-
-        if mult == 1.0 and flat == 0.0:
-            return "= acquisition cost"
-        elif mult == 1.0:
-            sign = "+" if flat >= 0 else ""
-            return f"= acquisition {sign} ${flat:.0f}"
-        elif flat == 0.0:
-            return f"= {mult}× acquisition"
-        else:
-            sign = "+" if flat >= 0 else ""
-            return f"= {mult}× acquisition {sign} ${flat:.0f}"
-
-    def _format_escalation(self, rule: dict) -> str:
-        """Format escalation rule."""
-        mult = rule.get("multiplier", 1.0)
-        flat = rule.get("flat_add", 0.0)
-
-        if mult == 1.0 and flat == 0.0:
-            return "None"
-        elif mult == 1.0:
-            return f"+${flat:.0f}/year"
-        elif flat == 0.0:
-            return f"×{mult}/year"
-        else:
-            return f"×{mult} + ${flat:.0f}/year"
-
-    def _show_example_table(self, rules: dict, base_value: float, acq_type: str):
-        """Show example keeper cost progression."""
-
-        base_rules = rules.get("base_cost_rules", {})
-        if acq_type == "draft":
-            rule = base_rules.get("auction", {})
-        else:
-            rule = base_rules.get("faab_only", {})
-
-        mult = rule.get("multiplier", 1.0)
-        flat = rule.get("flat", 0.0)
-        base_cost = base_value * mult + flat
-
-        esc = rules.get("formulas_by_keeper_year", {}).get("2+", {})
-        esc_mult = esc.get("multiplier", 1.0)
-        esc_flat = esc.get("flat_add", 0.0)
-
-        year1_rule = rules.get("formulas_by_keeper_year", {}).get("1", {})
-        apply_year1 = year1_rule.get("apply_year1", False)
-
-        min_price = rules.get("min_price", 1)
-        max_years = rules.get("max_years") or 10
-
-        rows = []
-        prev_cost = base_cost
-
-        for yr in range(1, min(6, max_years + 1)):
-            if yr == 1:
-                if apply_year1:
-                    cost = base_cost * esc_mult + esc_flat
-                else:
-                    cost = base_cost
-            else:
-                cost = prev_cost * esc_mult + esc_flat
-
-            cost = max(min_price, round(cost))
-            rows.append({"Year": yr, "Cost": f"${cost}"})
-            prev_cost = cost
-
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-    def _display_recalculate_section(self, existing_rules: Optional[dict]):
-        """Display recalculation options."""
-
-        st.markdown("### Recalculate Keeper Prices")
-        st.caption("Re-run the keeper economics transformation with current rules.")
-
-        if not existing_rules:
-            st.warning("Configure keeper rules first before recalculating.")
-            return
-
-        st.info("""
-        **What this does:**
-        1. Loads your draft data from MotherDuck
-        2. Calculates `keeper_year` for each player (consecutive years kept by same manager)
-        3. Applies your cost formulas to calculate `keeper_price`
-        4. Updates the draft table in MotherDuck
-        """)
-
-        if st.button("Recalculate Keeper Prices", type="primary"):
-            with st.spinner("Recalculating keeper economics..."):
-                success = self._run_recalculation(existing_rules)
-                if success:
-                    st.success("Keeper prices recalculated!")
-                    st.cache_data.clear()
-                    st.info("Refresh the page to see updated data.")
-                else:
-                    st.error("Recalculation failed. Check the error above.")
 
     def _run_recalculation(self, rules: dict) -> bool:
         """Run keeper economics recalculation."""
@@ -454,12 +549,10 @@ class KeeperSettingsViewer:
             import sys
             from pathlib import Path
 
-            # Add transformations path
             scripts_path = Path(__file__).resolve().parents[4] / "fantasy_football_data_scripts"
             if str(scripts_path) not in sys.path:
                 sys.path.insert(0, str(scripts_path))
 
-            # Import the keeper economics calculator
             from multi_league.transformations.draft.modules.consecutive_keeper_calculator import (
                 calculate_consecutive_keeper_years
             )
@@ -468,8 +561,6 @@ class KeeperSettingsViewer:
             )
 
             st.write("Loading draft data...")
-
-            # Load draft data from MotherDuck
             draft_table = T.get('draft', 'draft')
             draft = run_query(f"SELECT * FROM {draft_table}")
 
@@ -477,13 +568,11 @@ class KeeperSettingsViewer:
                 st.error("No draft data found.")
                 return False
 
-            st.write(f"Loaded {len(draft):,} draft records")
+            st.write(f"Loaded {len(draft):,} records")
 
-            # Initialize price calculator with rules
             calculator = KeeperPriceCalculator(rules)
 
-            # Calculate consecutive keeper years
-            st.write("Calculating consecutive keeper years...")
+            st.write("Calculating keeper years...")
             draft = calculate_consecutive_keeper_years(
                 draft,
                 player_id_col='yahoo_player_id',
@@ -493,7 +582,7 @@ class KeeperSettingsViewer:
             )
             draft['keeper_year'] = draft['consecutive_years_kept']
 
-            # Detect draft types per year
+            # Detect draft types
             years = sorted(draft['year'].dropna().unique())
             draft_types = {}
             for year in years:
@@ -508,20 +597,17 @@ class KeeperSettingsViewer:
                 else:
                     draft_types[year] = 'snake'
 
-            # Calculate keeper prices
-            st.write("Calculating keeper prices...")
+            st.write("Calculating prices...")
             draft['keeper_price'] = pd.NA
             draft['previous_keeper_price'] = pd.NA
 
-            # Sort for sequential processing
             sort_cols = ['yahoo_player_id', 'year']
             if 'manager' in draft.columns:
                 sort_cols = ['yahoo_player_id', 'manager', 'year']
             draft = draft.sort_values(sort_cols).copy()
 
-            # Track keeper prices: {(player_id, manager): {year: price}}
             keeper_price_history = {}
-            keeper_prices_calculated = 0
+            count = 0
 
             for idx, row in draft.iterrows():
                 player_id = str(row.get('yahoo_player_id', ''))
@@ -548,7 +634,6 @@ class KeeperSettingsViewer:
                 faab_bid = float(row.get('max_faab_bid', 0)) if not pd.isna(row.get('max_faab_bid')) else 0.0
 
                 is_drafted = pd.notna(row.get('pick')) or (cost > 0)
-                is_keeper = keeper_year > 0
 
                 if is_drafted:
                     keeper_price = calculator.calculate_keeper_price(
@@ -557,7 +642,7 @@ class KeeperSettingsViewer:
                         pick=int(pick) if pd.notna(pick) else 0,
                         round_num=int(round_num) if pd.notna(round_num) else 0,
                         faab_bid=faab_bid,
-                        is_keeper=is_keeper,
+                        is_keeper=keeper_year > 0,
                         previous_keeper_price=previous_keeper_price,
                         keeper_year=keeper_year if keeper_year > 0 else 1,
                     )
@@ -565,28 +650,16 @@ class KeeperSettingsViewer:
                     keeper_price_history[key][year] = keeper_price
                     draft.at[idx, 'keeper_price'] = keeper_price
                     draft.at[idx, 'previous_keeper_price'] = previous_keeper_price if previous_keeper_price > 0 else pd.NA
-                    keeper_prices_calculated += 1
+                    count += 1
 
-            st.write(f"Calculated keeper prices for {keeper_prices_calculated:,} players")
+            st.write(f"Calculated {count:,} prices")
 
-            # Update MotherDuck with new keeper prices
-            st.write("Updating MotherDuck...")
-
-            # Columns to update
             update_cols = ['yahoo_player_id', 'year', 'keeper_year', 'keeper_price', 'previous_keeper_price']
-            if 'consecutive_years_kept' in draft.columns:
-                update_cols.append('consecutive_years_kept')
-
-            # Get only rows with calculated prices
             update_df = draft[draft['keeper_price'].notna()][update_cols].copy()
 
             if len(update_df) > 0:
                 conn = get_connection()
-
-                # Create temp table with updated values
                 conn.execute("CREATE OR REPLACE TEMP TABLE keeper_updates AS SELECT * FROM update_df")
-
-                # Update draft table
                 conn.execute(f"""
                     UPDATE {draft_table} AS d
                     SET
@@ -597,12 +670,11 @@ class KeeperSettingsViewer:
                     WHERE d.yahoo_player_id = u.yahoo_player_id
                       AND d.year = u.year
                 """)
-
-                st.success(f"Updated {len(update_df):,} records in MotherDuck")
+                st.success(f"Updated {len(update_df):,} records")
                 return True
-            else:
-                st.warning("No keeper prices calculated - nothing to update")
-                return False
+
+            st.warning("No prices to update")
+            return False
 
         except Exception as e:
             import traceback
