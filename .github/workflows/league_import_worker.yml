@@ -204,6 +204,33 @@ jobs:
               print(f"⚠️ Could not check for collision: {e}")
               # If we can't check, use the base name
 
+          # Set privacy flag if requested (using final_db_name after collision resolution)
+          is_private = league_data.get("is_private", False)
+          if is_private:
+              try:
+                  md_token = os.environ.get('MOTHERDUCK_TOKEN')
+                  if md_token:
+                      con = duckdb.connect(f"md:?motherduck_token={md_token}")
+                      con.execute("""
+                          CREATE TABLE IF NOT EXISTS ops.league_settings (
+                              db_name TEXT PRIMARY KEY,
+                              is_private BOOLEAN DEFAULT false,
+                              created_at TIMESTAMP DEFAULT now(),
+                              updated_at TIMESTAMP DEFAULT now()
+                          )
+                      """)
+                      con.execute("""
+                          INSERT INTO ops.league_settings (db_name, is_private, updated_at)
+                          VALUES (?, true, now())
+                          ON CONFLICT (db_name) DO UPDATE SET
+                              is_private = true,
+                              updated_at = now()
+                      """, [final_db_name])
+                      con.close()
+                      print(f"✓ League marked as private: {final_db_name}")
+              except Exception as e:
+                  print(f"⚠️ Could not set privacy flag: {e}")
+
           # Set outputs for next steps
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write(f"user_id={user_id}\n")

@@ -58,26 +58,26 @@ def format_league_display_name(db_name: str) -> str:
 def sanitize_league_name_for_db(league_name: str) -> str:
     """
     Convert a league name to a valid database name.
+    Must match the _slug() function in league_import_worker.yml exactly.
 
     Examples:
         'Family League' -> 'family_league'
         'KMFFL' -> 'kmffl'
         '5 Towns Football' -> 'l_5_towns_football'
+        'The  League' -> 'the_league' (double space becomes single underscore)
     """
     if not league_name:
         return league_name
 
-    # Lowercase, replace spaces and dashes with underscores
-    db_name = league_name.lower().replace(' ', '_').replace('-', '_')
-
-    # Remove any characters that aren't alphanumeric or underscore
-    db_name = re.sub(r'[^a-z0-9_]', '', db_name)
+    # Replace any sequence of non-alphanumeric chars with single underscore, strip edges
+    db_name = re.sub(r'[^a-zA-Z0-9]+', '_', league_name.strip().lower()).strip('_')
 
     # If starts with a digit, prefix with 'l_'
     if db_name and db_name[0].isdigit():
         db_name = f"l_{db_name}"
 
-    return db_name
+    # Truncate to 63 chars (SQL identifier limit)
+    return db_name[:63]
 
 
 def get_private_leagues() -> set[str]:

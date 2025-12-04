@@ -72,7 +72,6 @@ from streamlit_helpers.database import (
     sanitize_league_name_for_db,
     get_existing_league_databases,
     get_private_leagues,
-    set_league_private,
     validate_league_database,
     create_import_job_in_motherduck,
     get_job_status,
@@ -1219,8 +1218,6 @@ def perform_import_flow(league_info: dict):
                     st.warning(f"⚠️ Could not upload external data: {e}")
                     st.caption("External data will be skipped. Yahoo data will still import.")
 
-        # Get the database name for privacy setting
-        db_name = sanitize_league_name_for_db(league_name)
         is_private = league_info.get("is_private", False)
 
         league_data = {
@@ -1235,6 +1232,7 @@ def perform_import_flow(league_info: dict):
             "keeper_rules": league_info.get("keeper_rules"),  # Pass keeper rules if configured
             "has_external_data": has_external_data,  # Flag only - data is in MotherDuck staging
             "manager_name_overrides": league_info.get("manager_name_overrides", {}),  # Pass hidden manager mappings
+            "is_private": is_private,  # Privacy setting - workflow will apply after determining final db_name
         }
 
         st.info(f"🚀 Starting import via GitHub Actions for {start_year}-{end_year}...")
@@ -1258,10 +1256,6 @@ def perform_import_flow(league_info: dict):
                 st.session_state.import_in_progress = False  # Reset since workflow is now queued
                 st.session_state.import_league_name = league_data['league_name']
                 st.session_state.workflow_run_url = result['workflow_run_url']
-
-                # Save privacy setting
-                if is_private:
-                    set_league_private(db_name, is_private=True)
 
                 # Try to get the actual run ID (poll for a few seconds)
                 # Pass user_id to enable MotherDuck-based lookup (more reliable than timestamp)
