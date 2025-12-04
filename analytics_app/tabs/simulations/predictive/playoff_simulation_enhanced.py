@@ -21,7 +21,6 @@ from ..shared.simulation_styles import (
     render_manager_filter,
 )
 from ..shared.unified_header import (
-    render_kpi_hero_card,
     render_summary_strip,
     render_delta_pill,
 )
@@ -264,139 +263,156 @@ def _display_championship_path(data, year, week, prefix):
 
     all_managers = list(final_data.index)
 
-    # KPI Hero Card with integrated title and manager dropdown
-    selected_manager = render_kpi_hero_card(
-        title=f"Championship Path - {year} Week {week}",
-        kpis=[
-            {
-                "label": "Highest Playoff Odds",
-                "value": f"{top_playoff['p_playoffs']:.0f}%",
-                "owner": top_playoff.name,
-            },
-            {
-                "label": "Championship Favorite",
-                "value": f"{top_champ['p_champ']:.1f}%",
-                "owner": top_champ.name,
-            },
-            {
-                "label": "Most Likely #1 Seed",
-                "value": f"{top_seed['avg_seed']:.2f}",
-                "owner": top_seed.name,
-            },
-            {
-                "label": "Projected Most Wins",
-                "value": f"{top_power['exp_final_wins']:.1f}",
-                "owner": top_power.name,
-            },
-        ],
-        manager_dropdown_options=all_managers,
-        manager_dropdown_key=f"{prefix}_champ_manager_filter",
-    )
+    # Title row with manager dropdown bound to it
+    with st.container(border=True):
+        title_cols = st.columns([3, 1])
+        with title_cols[0]:
+            st.markdown(f"### Championship Path — {year} Week {week}")
+        with title_cols[1]:
+            all_option = ["All Managers"] + list(all_managers)
+            selected_manager = st.selectbox(
+                "Manager",
+                all_option,
+                index=0,
+                key=f"{prefix}_champ_manager_filter",
+                label_visibility="collapsed",
+            )
+            if selected_manager == "All Managers":
+                selected_manager = None
+
+        # KPI Grid - 4 cards in a row
+        kpi_html = (
+            '<div class="sim-kpi-grid">'
+            '<div class="sim-kpi-item">'
+            f'<div class="sim-kpi-value">{top_playoff["p_playoffs"]:.0f}%</div>'
+            '<div class="sim-kpi-label">HIGHEST PLAYOFF ODDS</div>'
+            f'<div class="sim-kpi-owner">{top_playoff.name}</div>'
+            '</div>'
+            '<div class="sim-kpi-item">'
+            f'<div class="sim-kpi-value">{top_champ["p_champ"]:.1f}%</div>'
+            '<div class="sim-kpi-label">CHAMPIONSHIP FAVORITE</div>'
+            f'<div class="sim-kpi-owner">{top_champ.name}</div>'
+            '</div>'
+            '<div class="sim-kpi-item">'
+            f'<div class="sim-kpi-value">{top_seed["avg_seed"]:.2f}</div>'
+            '<div class="sim-kpi-label">MOST LIKELY #1 SEED</div>'
+            f'<div class="sim-kpi-owner">{top_seed.name}</div>'
+            '</div>'
+            '<div class="sim-kpi-item">'
+            f'<div class="sim-kpi-value">{top_power["exp_final_wins"]:.1f}</div>'
+            '<div class="sim-kpi-label">PROJECTED MOST WINS</div>'
+            f'<div class="sim-kpi-owner">{top_power.name}</div>'
+            '</div>'
+            '</div>'
+        )
+        st.markdown(kpi_html, unsafe_allow_html=True)
 
     # Reset index for table display
     final_data = final_data.reset_index()
 
-    # Championship odds table - compact header
-    st.markdown("**Championship Odds & Projections**")
+    # Championship odds table in card
+    with st.container(border=True):
+        st.markdown("**Championship Odds & Projections**")
 
-    # Prepare data for render_modern_table
-    table_df = final_data.copy()
-    table_df = table_df.set_index("manager")
+        # Prepare data for render_modern_table
+        table_df = final_data.copy()
+        table_df = table_df.set_index("manager")
 
-    # Define which columns get gradient coloring (probability columns)
-    color_columns = ["p_playoffs", "p_bye", "p_semis", "p_final", "p_champ"]
+        # Define which columns get gradient coloring (probability columns)
+        color_columns = ["p_playoffs", "p_bye", "p_semis", "p_final", "p_champ"]
 
-    # Define column display names
-    column_names = {
-        "avg_seed": "Avg Seed",
-        "p_playoffs": "Playoff %",
-        "p_bye": "Bye %",
-        "exp_final_wins": "Exp Wins",
-        "exp_final_pf": "Exp PF",
-        "p_semis": "Semis %",
-        "p_final": "Final %",
-        "p_champ": "Champ %",
-    }
+        # Define column display names
+        column_names = {
+            "avg_seed": "Avg Seed",
+            "p_playoffs": "Playoff %",
+            "p_bye": "Bye %",
+            "exp_final_wins": "Exp Wins",
+            "exp_final_pf": "Exp PF",
+            "p_semis": "Semis %",
+            "p_final": "Final %",
+            "p_champ": "Champ %",
+        }
 
-    # Define format specs
-    format_specs = {
-        "avg_seed": "{:.2f}",
-        "p_playoffs": "{:.1f}",
-        "p_bye": "{:.1f}",
-        "exp_final_wins": "{:.2f}",
-        "exp_final_pf": "{:.1f}",
-        "p_semis": "{:.1f}",
-        "p_final": "{:.1f}",
-        "p_champ": "{:.1f}",
-    }
+        # Define format specs
+        format_specs = {
+            "avg_seed": "{:.2f}",
+            "p_playoffs": "{:.1f}",
+            "p_bye": "{:.1f}",
+            "exp_final_wins": "{:.2f}",
+            "exp_final_pf": "{:.1f}",
+            "p_semis": "{:.1f}",
+            "p_final": "{:.1f}",
+            "p_champ": "{:.1f}",
+        }
 
-    # Display the modern table with column-based gradients
-    render_modern_table(
-        table_df,
-        title="",
-        color_columns=color_columns,
-        reverse_columns=[],
-        format_specs=format_specs,
-        column_names=column_names,
-        gradient_mode="column",
-    )
-
-    # Visualization section - compact
-    st.markdown("**Visual Analysis**")
-
-    # Get theme-aware colors
-    colors = get_chart_colors()
-    get_chart_theme()
-
-    # Show top 6 managers for cleaner mobile display
-    managers = final_data.head(6)["manager"].tolist()
-
-    # Create a simpler, more mobile-friendly chart
-    fig = go.Figure()
-
-    # Championship funnel - horizontal bar chart (better for mobile)
-    for i, manager in enumerate(managers):
-        mgr_row = final_data[final_data["manager"] == manager].iloc[0]
-        stages = ["Win Title", "Reach Final", "Reach Semis", "Make Playoffs"]
-        values = [
-            mgr_row["p_champ"],
-            mgr_row["p_final"],
-            mgr_row["p_semis"],
-            mgr_row["p_playoffs"],
-        ]
-
-        fig.add_trace(
-            go.Bar(
-                name=manager,
-                y=stages,
-                x=values,
-                orientation="h",
-                text=[f"{v:.0f}%" for v in values],
-                textposition="outside",
-                hovertemplate="%{y}<br>%{x:.1f}%<extra></extra>",
-                marker_color=colors["categorical"][i % len(colors["categorical"])],
-            )
+        # Display the modern table with column-based gradients
+        render_modern_table(
+            table_df,
+            title="",
+            color_columns=color_columns,
+            reverse_columns=[],
+            format_specs=format_specs,
+            column_names=column_names,
+            gradient_mode="column",
         )
 
-    # Apply theme and update layout
-    fig.update_layout(
-        height=350,  # Compact height for mobile
-        barmode="group",
-        hovermode="closest",
-        margin=dict(l=10, r=60, t=30, b=10),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5,
-            font=dict(size=10),
-        ),
-        xaxis=dict(title="Probability (%)", range=[0, 105]),
-    )
-    apply_chart_theme(fig)
+    # Visualization section in bordered container
+    with st.container(border=True):
+        st.markdown("### Visual Analysis")
 
-    st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_champ_funnel_{year}")
+        # Get theme-aware colors
+        colors = get_chart_colors()
+        get_chart_theme()
+
+        # Show top 6 managers for cleaner mobile display
+        managers = final_data.head(6)["manager"].tolist()
+
+        # Create a simpler, more mobile-friendly chart
+        fig = go.Figure()
+
+        # Championship funnel - horizontal bar chart (better for mobile)
+        for i, manager in enumerate(managers):
+            mgr_row = final_data[final_data["manager"] == manager].iloc[0]
+            stages = ["Win Title", "Reach Final", "Reach Semis", "Make Playoffs"]
+            values = [
+                mgr_row["p_champ"],
+                mgr_row["p_final"],
+                mgr_row["p_semis"],
+                mgr_row["p_playoffs"],
+            ]
+
+            fig.add_trace(
+                go.Bar(
+                    name=manager,
+                    y=stages,
+                    x=values,
+                    orientation="h",
+                    text=[f"{v:.0f}%" for v in values],
+                    textposition="outside",
+                    hovertemplate="%{y}<br>%{x:.1f}%<extra></extra>",
+                    marker_color=colors["categorical"][i % len(colors["categorical"])],
+                )
+            )
+
+        # Apply theme and update layout
+        fig.update_layout(
+            height=350,  # Compact height for mobile
+            barmode="group",
+            hovermode="closest",
+            margin=dict(l=10, r=60, t=30, b=10),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5,
+                font=dict(size=10),
+            ),
+            xaxis=dict(title="Probability (%)", range=[0, 105]),
+        )
+        apply_chart_theme(fig)
+
+        st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_champ_funnel_{year}")
 
 
 @st.fragment

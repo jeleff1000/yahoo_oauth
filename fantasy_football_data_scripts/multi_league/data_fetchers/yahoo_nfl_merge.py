@@ -1613,7 +1613,7 @@ def main():
     # use the same Yahoo name instead of varying NFL spellings
     try:
         # Import the name resolver module
-        sys.path.insert(0, str(SCRIPT_DIR.parent / "transformations" / "player_enrichment" / "modules"))
+        sys.path.insert(0, str(SCRIPT_DIR.parent / "transformations" / "player" / "modules"))
         from name_resolver import canonicalize_names_by_id
 
         if "NFL_player_id" in final_df.columns and "yahoo_player_id" in final_df.columns:

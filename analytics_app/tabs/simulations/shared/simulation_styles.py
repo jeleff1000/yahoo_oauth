@@ -569,6 +569,43 @@ def apply_simulation_styles():
     }
 
     /* ===========================================
+       COMPACT UNIFIED HEADER
+       Single-line header with reduced padding
+       =========================================== */
+    .sim-compact-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.25rem 0;
+        margin-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border, #E5E7EB);
+    }
+
+    .sim-compact-header .stButton > button {
+        padding: 0.25rem 0.75rem !important;
+        font-size: 0.8rem !important;
+        min-height: unset !important;
+    }
+
+    .sim-compact-header .stSelectbox > div {
+        min-height: unset !important;
+    }
+
+    .sim-compact-header .stSelectbox [data-baseweb="select"] {
+        min-height: 32px !important;
+    }
+
+    /* Reduce overall tab and button padding */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.25rem !important;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.4rem 0.75rem !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* ===========================================
        CONTEXT CARD (NEW)
        =========================================== */
     .sim-context-card {
@@ -640,23 +677,26 @@ def apply_simulation_styles():
 
     .sim-kpi-item {
         text-align: center;
-        padding: 0.75rem 0.5rem;
+        padding: 0.6rem 0.4rem;
         background: linear-gradient(135deg, var(--gradient-start, rgba(102, 126, 234, 0.08)) 0%, var(--gradient-end, rgba(118, 75, 162, 0.05)) 100%);
         border-radius: 6px;
         border: 1px solid var(--border, #E5E7EB);
     }
 
     .sim-kpi-value {
-        font-size: 1.5rem;
+        font-size: 1.75rem;
         font-weight: 700;
         color: var(--text-primary, #1F2937);
-        line-height: 1.2;
+        line-height: 1.1;
+        margin-bottom: 0.1rem;
     }
 
     .sim-kpi-label {
-        font-size: 0.7rem;
+        font-size: 0.6rem;
         color: var(--text-muted, #9CA3AF);
         text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 0.25rem;
         letter-spacing: 0.03em;
         margin-top: 0.25rem;
     }

@@ -10,10 +10,7 @@ from .shared.simulation_styles import (
     start_simulation_container,
     end_simulation_container,
 )
-from .shared.unified_header import (
-    render_context_card,
-    get_today_display,
-)
+from .shared.unified_header import get_today_display
 
 # ---- WHAT-IF viewers ----
 from .what_if.shuffle_schedules.shuffled_win_total_viewer import GaviStatViewer
@@ -68,7 +65,7 @@ class SimulationDataViewer:
 
         start_simulation_container()
 
-        # ==================== LAYER 1: UNIFIED HEADER ====================
+        # ==================== UNIFIED COMPACT HEADER ====================
         # Get available years and weeks from data
         years = sorted(
             self.matchup_data_df["year"].astype(int).unique(), reverse=True
@@ -93,72 +90,78 @@ class SimulationDataViewer:
             .unique()
         )
         selected_week = st.session_state["sim_selected_week"]
+        current_main_idx = st.session_state.get("subtab_Simulations", 0)
 
-        # Header row: Title | Mode Toggle | Year/Week/Date
-        header_cols = st.columns([2, 3, 3])
+        # Compact single-line header: Title · [Predictive] [What-If] | Season | Week | Today
+        st.markdown(
+            '<div class="sim-compact-header">',
+            unsafe_allow_html=True,
+        )
+        header_cols = st.columns([1.5, 1, 1, 1, 1, 1.2])
 
         with header_cols[0]:
             st.markdown("**Playoff Simulation**")
 
         with header_cols[1]:
-            # Segmented control for Predictive/What-If
-            main_tab_names = ["Predictive", "What-If"]
-            current_main_idx = st.session_state.get("subtab_Simulations", 0)
-
-            seg_cols = st.columns(2)
-            for idx, (col, name) in enumerate(zip(seg_cols, main_tab_names)):
-                with col:
-                    is_active = idx == current_main_idx
-                    if st.button(
-                        name,
-                        key=f"sim_main_{idx}",
-                        use_container_width=True,
-                        type="primary" if is_active else "secondary",
-                    ):
-                        if not is_active:
-                            st.session_state["subtab_Simulations"] = idx
-                            st.rerun()
+            if st.button(
+                "Predictive",
+                key="sim_main_pred",
+                use_container_width=True,
+                type="primary" if current_main_idx == 0 else "secondary",
+            ):
+                if current_main_idx != 0:
+                    st.session_state["subtab_Simulations"] = 0
+                    st.rerun()
 
         with header_cols[2]:
-            # Year, Week, Today's Date
-            meta_cols = st.columns([1.2, 1, 1.5])
-            with meta_cols[0]:
-                new_year = st.selectbox(
-                    "Season",
-                    years,
-                    index=years.index(selected_year) if selected_year in years else 0,
-                    key="sim_year_select",
-                    label_visibility="collapsed",
-                )
-                if new_year != selected_year:
-                    st.session_state["sim_selected_year"] = new_year
-                    # Reset week to max for new year
-                    year_data = self.matchup_data_df[
-                        self.matchup_data_df["year"] == new_year
-                    ]
-                    st.session_state["sim_selected_week"] = int(year_data["week"].max())
+            if st.button(
+                "What-If",
+                key="sim_main_whatif",
+                use_container_width=True,
+                type="primary" if current_main_idx == 1 else "secondary",
+            ):
+                if current_main_idx != 1:
+                    st.session_state["subtab_Simulations"] = 1
                     st.rerun()
 
-            with meta_cols[1]:
-                new_week = st.selectbox(
-                    "Week",
-                    weeks_for_year,
-                    index=(
-                        weeks_for_year.index(selected_week)
-                        if selected_week in weeks_for_year
-                        else len(weeks_for_year) - 1
-                    ),
-                    key="sim_week_select",
-                    label_visibility="collapsed",
-                )
-                if new_week != selected_week:
-                    st.session_state["sim_selected_week"] = new_week
-                    st.rerun()
+        with header_cols[3]:
+            new_year = st.selectbox(
+                "Season",
+                years,
+                index=years.index(selected_year) if selected_year in years else 0,
+                key="sim_year_select",
+                label_visibility="collapsed",
+            )
+            if new_year != selected_year:
+                st.session_state["sim_selected_year"] = new_year
+                year_data = self.matchup_data_df[
+                    self.matchup_data_df["year"] == new_year
+                ]
+                st.session_state["sim_selected_week"] = int(year_data["week"].max())
+                st.rerun()
 
-            with meta_cols[2]:
-                st.caption(f"Today: {get_today_display()}")
+        with header_cols[4]:
+            new_week = st.selectbox(
+                "Week",
+                weeks_for_year,
+                index=(
+                    weeks_for_year.index(selected_week)
+                    if selected_week in weeks_for_year
+                    else len(weeks_for_year) - 1
+                ),
+                key="sim_week_select",
+                label_visibility="collapsed",
+            )
+            if new_week != selected_week:
+                st.session_state["sim_selected_week"] = new_week
+                st.rerun()
 
-        # ==================== LAYER 2: SUB-NAVIGATION ====================
+        with header_cols[5]:
+            st.caption(f"Today: {get_today_display()}")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ==================== SUB-NAVIGATION TABS ====================
         # ==================== PREDICTIVE ANALYTICS ====================
         if current_main_idx == 0:
             pred_tabs = st.tabs(
@@ -170,14 +173,6 @@ class SimulationDataViewer:
                     "Weekly Odds",
                     "Multi-Year Trends",
                 ]
-            )
-
-            # Context card pinned under tabs
-            render_context_card(
-                season=selected_year,
-                week=selected_week,
-                num_simulations=10000,
-                help_text="Based on current standings and power ratings",
             )
 
             with pred_tabs[0]:
@@ -244,19 +239,8 @@ class SimulationDataViewer:
                 ["Schedule Shuffles", "Strength of Schedule", "Score Sensitivity"]
             )
 
-            # Context card pinned under tabs (shared year/week)
-            render_context_card(
-                season=selected_year,
-                week=selected_week,
-                num_simulations=10000,
-                help_text="What-if analysis based on historical data",
-            )
-
             # ---- Schedule Shuffles (4 sub-tabs) ----
             with whatif_tabs[0]:
-                st.caption(
-                    "What if you kept your scores but faced randomized opponents?"
-                )
                 schedule_subtabs = st.tabs(
                     [
                         "Win Distribution",
@@ -292,9 +276,6 @@ class SimulationDataViewer:
 
             # ---- Strength of Schedule (4 sub-tabs) ----
             with whatif_tabs[1]:
-                st.caption(
-                    "What if everyone faced your opponents? Measures schedule difficulty."
-                )
                 opponent_subtabs = st.tabs(
                     [
                         "Win Distribution",

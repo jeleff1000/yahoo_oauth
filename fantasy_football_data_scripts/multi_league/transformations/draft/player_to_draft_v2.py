@@ -47,9 +47,9 @@ sys.path.insert(0, str(_multi_league_dir))  # Allows: from core.XXX
 
 from core.data_normalization import normalize_numeric_columns, ensure_league_id
 from core.league_context import LeagueContext
-# Add transformations/modules to path for shared utilities
-_modules_dir = _multi_league_dir / "transformations" / "modules"
-sys.path.insert(0, str(_modules_dir))
+# Add transformations/common to path for shared utilities
+_common_dir = _multi_league_dir / "transformations" / "common"
+sys.path.insert(0, str(_common_dir))
 
 from type_utils import safe_merge, ensure_canonical_types
 
