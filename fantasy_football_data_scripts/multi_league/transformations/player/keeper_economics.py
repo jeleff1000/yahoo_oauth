@@ -191,6 +191,9 @@ def calculate_consecutive_keeper_years(df: pd.DataFrame) -> pd.DataFrame:
                 # Fallback to max week if no rostered players found
                 season_end_weeks[year] = int(year_data['week'].max())
 
+        # Log detected championship weeks for debugging
+        print(f"  Championship weeks detected: {dict(sorted(season_end_weeks.items()))}")
+
         # Filter to only rows at the season end week for each year
         filtered_rows = []
         for year, end_week in season_end_weeks.items():
