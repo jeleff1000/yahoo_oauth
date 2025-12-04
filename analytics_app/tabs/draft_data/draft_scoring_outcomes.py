@@ -13,123 +13,108 @@ import numpy as np
 def display_scoring_outcomes(draft_data):
     """Enhanced scoring outcomes with charts and advanced filtering"""
 
-    st.header("🎯 Player Performance Analysis")
-
-    # Info banner
-    st.markdown(
-        """
-    <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                padding: 1.5rem; border-radius: 12px; color: white; margin-bottom: 1.5rem;">
-        <h3 style="margin: 0 0 0.5rem 0;">📊 How Did Players Perform?</h3>
-        <p style="margin: 0; opacity: 0.95;">
-        Compare draft position (cost rank) vs actual performance. Using Manager SPAR: actual value captured while rostered.
-        </p>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("### Player Performance Analysis")
+    st.caption("Compare draft cost vs actual performance using Manager SPAR")
 
     # Prepare data
     draft_data = draft_data.copy()
     draft_data["year"] = draft_data["year"].astype(str)
     draft_data["manager"] = draft_data["manager"].astype(str)
 
-    # Filter out undrafted players (manager is None, empty, or 'nan')
+    # Filter out undrafted players
     draft_data = draft_data[draft_data["manager"].notna()]
     draft_data = draft_data[draft_data["manager"] != ""]
     draft_data = draft_data[draft_data["manager"].str.lower() != "nan"]
     draft_data = draft_data[draft_data["manager"].str.lower() != "none"]
 
-    # Also filter by cost > 0 to ensure only drafted players
     if "cost" in draft_data.columns:
         draft_data = draft_data[
             pd.to_numeric(draft_data["cost"], errors="coerce").fillna(0) > 0
         ]
 
     # Get filter options
-    years = sorted(draft_data["year"].unique().tolist())
+    years = sorted(draft_data["year"].unique().tolist(), reverse=True)
     managers = sorted(draft_data["manager"].unique().tolist())
     allowed_positions = ["QB", "RB", "WR", "TE", "DEF", "K"]
-    positions = [
-        p
-        for p in sorted(draft_data["yahoo_position"].dropna().unique())
-        if p in allowed_positions
-    ]
+    positions = [p for p in allowed_positions if p in draft_data["yahoo_position"].dropna().unique()]
 
-    # === SMART FILTERS ===
-    st.markdown("### 🔍 Filters")
+    # Summary metrics - standardized 6-column layout
+    total_picks = len(draft_data)
+    avg_cost = draft_data["cost"].mean() if "cost" in draft_data.columns else 0
+    avg_pts = draft_data["points"].mean() if "points" in draft_data.columns else 0
+    avg_ppg = draft_data["season_ppg"].mean() if "season_ppg" in draft_data.columns else 0
 
-    col1, col2, col3 = st.columns(3)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1:
+        st.metric("Picks", f"{total_picks:,}")
+    with c2:
+        st.metric("Avg Cost", f"${avg_cost:.0f}" if avg_cost > 0 else "—")
+    with c3:
+        st.metric("Avg Points", f"{avg_pts:.0f}" if avg_pts > 0 else "—")
+    with c4:
+        st.metric("Avg PPG", f"{avg_ppg:.1f}" if avg_ppg > 0 else "—")
+    with c5:
+        st.metric("Seasons", draft_data["year"].nunique())
+    with c6:
+        st.metric("Managers", draft_data["manager"].nunique())
 
-    with col1:
-        selected_years = st.multiselect(
-            "📅 Year",
-            years,
-            default=[],
-            placeholder="All years",
-            help="Select one or more years (empty = all)",
-        )
+    st.markdown("---")
 
-    with col2:
-        selected_positions = st.multiselect(
-            "🏈 Position",
-            positions,
-            default=[],
-            placeholder="All positions",
-            help="Filter by position",
-        )
+    # Count active filters
+    def count_active():
+        count = 0
+        if st.session_state.get("perf_year"):
+            count += 1
+        if st.session_state.get("perf_mgr"):
+            count += 1
+        if st.session_state.get("perf_pos"):
+            count += 1
+        if st.session_state.get("perf_player"):
+            count += 1
+        if not st.session_state.get("perf_inc_drafted", True):
+            count += 1
+        if not st.session_state.get("perf_inc_keepers", True):
+            count += 1
+        return count
 
-    with col3:
-        selected_managers = st.multiselect(
-            "👤 Manager",
-            managers,
-            default=[],
-            placeholder="All managers",
-            help="Filter by manager",
-        )
+    num_filters = count_active()
+    filter_label = "Filters" + (f" ({num_filters} active)" if num_filters > 0 else "")
 
-    col4, col5, col6 = st.columns(3)
+    with st.expander(filter_label, expanded=num_filters > 0):
+        # Row 1: Year → Manager → Position → Player (consistent order)
+        f1, f2, f3, f4 = st.columns(4)
 
-    with col4:
-        search_players = st.multiselect(
-            "🔎 Search Player",
-            options=sorted(draft_data["player"].unique().tolist()),
-            default=[],
-            help="Search specific players",
-        )
+        with f1:
+            selected_years = st.multiselect("Year", years, default=[], key="perf_year")
 
-    with col5:
-        include_drafted = st.checkbox(
-            "Include Drafted", value=True, help="Include non-keeper picks"
-        )
+        with f2:
+            selected_managers = st.multiselect("Manager", managers, default=[], key="perf_mgr")
 
-    with col6:
-        include_keepers = st.checkbox(
-            "Include Keepers", value=True, help="Include keeper picks"
-        )
+        with f3:
+            selected_positions = st.multiselect("Position", positions, default=[], key="perf_pos")
+
+        with f4:
+            search_players = st.multiselect("Player", sorted(draft_data["player"].unique().tolist()), default=[], key="perf_player")
+
+        # Row 2: Include toggles
+        st.markdown("**Include**")
+        inc1, inc2, inc3 = st.columns([1, 1, 2])
+        with inc1:
+            include_drafted = st.checkbox("Drafted", value=True, key="perf_inc_drafted")
+        with inc2:
+            include_keepers = st.checkbox("Keepers", value=True, key="perf_inc_keepers")
 
     # Apply filters
     filtered_data = apply_scoring_filters(
-        draft_data,
-        selected_years,
-        selected_managers,
-        selected_positions,
-        search_players,
-        include_drafted,
-        include_keepers,
-        allowed_positions,
+        draft_data, selected_years, selected_managers, selected_positions,
+        search_players, include_drafted, include_keepers, allowed_positions,
     )
 
     if filtered_data.empty:
-        st.warning("⚠️ No data matches your filters. Try adjusting them.")
+        st.warning("No data matches your filters. Try adjusting them.")
         return
 
-    # Show filter summary
-    st.info(
-        f"📊 Showing **{len(filtered_data):,}** picks from **{len(draft_data):,}** total"
-    )
-
-    st.markdown("---")
+    st.caption(f"Showing {len(filtered_data):,} of {len(draft_data):,} picks")
 
     # === VISUALIZATION TABS ===
     viz_tab, table_tab, insights_tab = st.tabs(
@@ -291,14 +276,12 @@ def calculate_rankings(df):
 def display_performance_charts(filtered_data):
     """Create interactive visualizations"""
 
-    st.subheader("📊 Performance Visualizations")
-
     # Calculate rankings
     plot_data = calculate_rankings(filtered_data)
 
     # Chart 1: Cost Rank vs Performance Rank
-    st.markdown("#### Draft Position vs. Actual Performance")
-    st.caption("Points below the diagonal line outperformed their draft position")
+    st.markdown("#### Draft Position vs Actual Performance")
+    st.caption("Points below the diagonal = outperformed draft cost")
 
     fig1 = px.scatter(
         plot_data,
@@ -505,8 +488,6 @@ def display_performance_table(filtered_data, allowed_positions):
 def display_performance_insights(filtered_data):
     """Generate insights from the data"""
 
-    st.subheader("💡 Performance Insights")
-
     # Calculate metrics
     analysis_data = calculate_rankings(filtered_data)
     analysis_data = analysis_data[analysis_data["cost"] > 0]
@@ -515,63 +496,34 @@ def display_performance_insights(filtered_data):
         st.info("Not enough data for insights.")
         return
 
-    # Top performers
-    st.markdown("### 🏆 Best Performances")
+    # Top performers - card style
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**Top 5 Value Picks (by SPAR/$)**")
-        # Use value_score which is draft_roi (SPAR per dollar)
+        st.markdown("#### Best Performances")
+        st.caption("Top 5 value picks by SPAR/$")
         top_value = analysis_data.nlargest(5, "value_score")[
-            [
-                "player",
-                "year",
-                "yahoo_position",
-                "cost",
-                "points",
-                "rank_diff",
-                "value_score",
-            ]
+            ["player", "year", "yahoo_position", "cost", "points", "rank_diff", "value_score"]
         ]
         for idx, row in top_value.iterrows():
-            st.write(f"**{row['player']}** ({row['year']}, {row['yahoo_position']})")
-            spar_text = (
-                f"SPAR/$: {row['value_score']:.2f}"
-                if "value_score" in row and pd.notna(row["value_score"])
-                else ""
-            )
-            st.caption(
-                f"${row['cost']:.0f} → {row['points']:.1f} pts  +{row['rank_diff']} spots  {spar_text}"
-            )
+            st.markdown(f"**{row['player']}** ({row['year']}, {row['yahoo_position']})")
+            st.caption(f"${row['cost']:.0f} → {row['points']:.0f} pts | +{row['rank_diff']:.0f} spots | SPAR/$: {row['value_score']:.2f}")
+            st.markdown("---")
 
     with col2:
-        st.markdown("**Biggest Busts (by rank diff)**")
+        st.markdown("#### Biggest Busts")
+        st.caption("Worst value picks by rank difference")
         top_busts = analysis_data.nsmallest(5, "rank_diff")[
-            [
-                "player",
-                "year",
-                "yahoo_position",
-                "cost",
-                "points",
-                "rank_diff",
-                "value_score",
-            ]
+            ["player", "year", "yahoo_position", "cost", "points", "rank_diff", "value_score"]
         ]
         for idx, row in top_busts.iterrows():
-            st.write(f"**{row['player']}** ({row['year']}, {row['yahoo_position']})")
-            spar_text = (
-                f"SPAR/$: {row['value_score']:.2f}"
-                if "value_score" in row and pd.notna(row["value_score"])
-                else ""
-            )
-            st.caption(
-                f"${row['cost']:.0f} → {row['points']:.1f} pts  {row['rank_diff']} spots  {spar_text}"
-            )
-
-    st.markdown("---")
+            st.markdown(f"**{row['player']}** ({row['year']}, {row['yahoo_position']})")
+            st.caption(f"${row['cost']:.0f} → {row['points']:.0f} pts | {row['rank_diff']:.0f} spots | SPAR/$: {row['value_score']:.2f}")
+            st.markdown("---")
 
     # Position analysis
-    st.markdown("### 📊 Position Analysis")
+    st.markdown("#### Position Analysis")
+    st.caption("How each position performed relative to draft expectations")
 
     pos_stats = (
         analysis_data.groupby("yahoo_position")

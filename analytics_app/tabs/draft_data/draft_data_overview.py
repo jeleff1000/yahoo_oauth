@@ -120,9 +120,9 @@ def validate_and_prep_data(draft_data: pd.DataFrame) -> pd.DataFrame:
 @st.fragment
 def display_value_analysis(df: pd.DataFrame) -> None:
     """Inline value analysis using Manager SPAR (actual value captured while rostered)."""
-    st.markdown(
-        "**Using Manager SPAR**: actual value captured while players were on your roster. Manager SPAR / Cost = draft ROI. Higher is better."
-    )
+
+    st.markdown("### Value Efficiency")
+    st.caption("Manager SPAR / Cost = draft ROI while the player was on your roster. Higher is better.")
 
     if df is None or df.empty:
         st.warning("No data available for value analysis")
@@ -142,12 +142,11 @@ def display_value_analysis(df: pd.DataFrame) -> None:
         df["spar"] = pd.to_numeric(df["spar"], errors="coerce")
         spar_col = "spar"
     else:
-        st.warning("⚠️ No SPAR data available for value analysis")
+        st.warning("No SPAR data available for value analysis")
         return
 
-    # Check if we have SPAR data
     if df[spar_col].isna().all() or (df[spar_col] == 0).all():
-        st.warning("⚠️ No SPAR data available for value analysis")
+        st.warning("No SPAR data available for value analysis")
         return
 
     # Calculate draft_roi (SPAR/$) on the fly if not present
@@ -159,87 +158,71 @@ def display_value_analysis(df: pd.DataFrame) -> None:
     # Filter to valid data (cost > 0 and SPAR exists)
     value_df = df[(df["cost"] > 0) & (df[spar_col].notna())].copy()
     if value_df.empty:
-        st.warning("⚠️ No rows with valid cost and SPAR for value analysis")
+        st.warning("No rows with valid cost and SPAR for value analysis")
         return
 
     value_df["value"] = value_df["draft_roi"]
-    value_df["points_per_dollar"] = value_df[spar_col] / value_df["cost"].clip(
-        lower=0.1
-    )
+    value_df["points_per_dollar"] = value_df[spar_col] / value_df["cost"].clip(lower=0.1)
     value_df["spar_display"] = value_df[spar_col]
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Avg SPAR/$", f"{value_df['value'].mean():.3f}")
-    with col2:
-        st.metric("Best SPAR/$", f"{value_df['value'].max():.3f}")
-    with col3:
+    # Standardized 6-column metrics row
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1:
+        st.metric("Avg SPAR/$", f"{value_df['value'].mean():.2f}")
+    with c2:
+        st.metric("Best SPAR/$", f"{value_df['value'].max():.2f}")
+    with c3:
         st.metric("Median SPAR/$", f"{value_df['points_per_dollar'].median():.2f}")
-    with col4:
+    with c4:
         st.metric("Median Cost", f"${value_df['cost'].median():.0f}")
+    with c5:
+        st.metric("Picks", f"{len(value_df):,}")
+    with c6:
+        st.metric("Avg PPG", f"{value_df['season_ppg'].mean():.1f}" if value_df['season_ppg'].notna().any() else "—")
+
+    st.markdown("---")
 
     # Value by position
     try:
+        st.markdown("#### SPAR/$ Efficiency by Position")
         pos = (
             value_df.groupby("yahoo_position")
-            .agg(
-                {
-                    "value": ["mean", "median", "max"],
-                    "cost": "mean",
-                    "season_ppg": "mean",
-                    "player": "count",
-                }
-            )
-            .round(3)
+            .agg({
+                "value": ["mean", "median", "max"],
+                "cost": "mean",
+                "season_ppg": "mean",
+                "player": "count",
+            })
+            .round(2)
         )
-        pos.columns = [
-            "Avg SPAR/$",
-            "Median SPAR/$",
-            "Max SPAR/$",
-            "Avg Cost",
-            "Avg PPG",
-            "Count",
-        ]
+        pos.columns = ["Avg SPAR/$", "Median SPAR/$", "Max SPAR/$", "Avg Cost", "Avg PPG", "Count"]
         pos = pos.sort_values("Avg SPAR/$", ascending=False)
-        st.subheader("📊 SPAR/$ Efficiency by Position")
         st.dataframe(pos, use_container_width=True)
     except Exception as e:
         st.warning(f"Could not compute value by position: {e}")
 
+    st.markdown("---")
+
     # Top value picks
     try:
-        cols = [
-            "year",
-            "player",
-            "yahoo_position",
-            "manager",
-            "cost",
-            "season_ppg",
-            "spar_display",
-            "value",
-        ]
+        st.markdown("#### Best Value Picks")
+        st.caption("Top 20 draft steals, adjusted for cost")
+
+        cols = ["year", "player", "yahoo_position", "manager", "cost", "season_ppg", "spar_display", "value"]
         available_cols = [c for c in cols if c in value_df.columns]
         top = value_df.nlargest(20, "value")[available_cols].copy()
+
         if "cost" in top.columns:
             top["cost"] = top["cost"].apply(lambda x: f"${x:.0f}" if pd.notna(x) else x)
         if "spar_display" in top.columns:
             top["spar_display"] = top["spar_display"].round(1)
-        top["value"] = top["value"].round(3)
+        top["value"] = top["value"].round(2)
         if "season_ppg" in top.columns:
-            top["season_ppg"] = top["season_ppg"].round(2)
-        col_names = [
-            "Year",
-            "Player",
-            "Pos",
-            "Manager",
-            "Cost",
-            "PPG",
-            "Manager SPAR",
-            "SPAR/$",
-        ]
-        top.columns = col_names[: len(top.columns)]
+            top["season_ppg"] = top["season_ppg"].round(1)
 
-        st.subheader("🏆 Best Value Picks (Top 20 by Manager SPAR/$)")
+        col_names = ["Year", "Player", "Pos", "Manager", "Cost", "PPG", "Manager SPAR", "SPAR/$"]
+        top.columns = col_names[:len(top.columns)]
+
         st.dataframe(top, hide_index=True, use_container_width=True)
     except Exception as e:
         st.warning(f"Could not render top value picks: {e}")

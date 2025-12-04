@@ -24,10 +24,8 @@ VALUE_TIER_COLORS = {
 def display_draft_summary(draft_data: pd.DataFrame) -> None:
     """Enhanced draft summary with draft grades, value tiers, and dual SPAR metrics."""
 
-    st.markdown("### 📊 Draft Pick Summary")
-    st.markdown(
-        "*Complete draft history with grades, value tiers, and performance stats*"
-    )
+    st.markdown("### Draft Pick Summary")
+    st.caption("Complete draft history with grades, value tiers, and performance stats")
 
     # Prepare data
     df = draft_data.copy()
@@ -35,7 +33,6 @@ def display_draft_summary(draft_data: pd.DataFrame) -> None:
     # Normalize manager/year columns
     if "manager" in df.columns:
         df["manager"] = df["manager"].fillna("").astype(str).str.strip()
-        # Remove invalid managers
         df = df[
             (df["manager"] != "") & (df["manager"] != "None") & (df["manager"].notna())
         ]
@@ -45,184 +42,124 @@ def display_draft_summary(draft_data: pd.DataFrame) -> None:
 
     # Ensure numeric columns
     numeric_cols = [
-        "cost",
-        "pick",
-        "round",
-        "total_fantasy_points",
-        "season_ppg",
-        "games_played",
-        "weeks_rostered",
-        "weeks_started",
-        "manager_spar",
-        "season_overall_rank",
-        "season_position_rank",
+        "cost", "pick", "round", "total_fantasy_points", "season_ppg",
+        "games_played", "weeks_rostered", "weeks_started", "manager_spar",
+        "season_overall_rank", "season_position_rank",
     ]
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Summary Metrics
+    # Summary Metrics - standardized 6-column layout
     total_picks = len(df)
     total_years = df["year"].nunique() if "year" in df.columns else 0
     avg_cost = df[df["cost"] > 0]["cost"].mean() if "cost" in df.columns else 0
     avg_ppg = df["season_ppg"].mean() if "season_ppg" in df.columns else 0
     keeper_count = (
         (pd.to_numeric(df["is_keeper_status"], errors="coerce") == 1).sum()
-        if "is_keeper_status" in df.columns
-        else 0
+        if "is_keeper_status" in df.columns else 0
     )
     breakout_count = (
         (pd.to_numeric(df["is_breakout"], errors="coerce") == 1).sum()
-        if "is_breakout" in df.columns
-        else 0
-    )
-    bust_count = (
-        (pd.to_numeric(df["is_bust"], errors="coerce") == 1).sum()
-        if "is_bust" in df.columns
-        else 0
+        if "is_breakout" in df.columns else 0
     )
 
-    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
-    with col1:
-        st.metric("Total Picks", f"{total_picks:,}")
-    with col2:
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1:
+        st.metric("Picks", f"{total_picks:,}")
+    with c2:
         st.metric("Seasons", total_years)
-    with col3:
-        st.metric("Avg Cost", f"${avg_cost:.1f}" if avg_cost > 0 else "N/A")
-    with col4:
-        st.metric("Avg PPG", f"{avg_ppg:.2f}" if avg_ppg > 0 else "N/A")
-    with col5:
+    with c3:
+        st.metric("Avg Cost", f"${avg_cost:.0f}" if avg_cost > 0 else "—")
+    with c4:
+        st.metric("Avg PPG", f"{avg_ppg:.1f}" if avg_ppg > 0 else "—")
+    with c5:
         st.metric("Keepers", f"{keeper_count:,}")
-    with col6:
-        st.metric(
-            "Breakouts",
-            f"{breakout_count:,}",
-            help="Late-round picks with top finishes",
-        )
-    with col7:
-        st.metric(
-            "Busts", f"{bust_count:,}", help="Early-round picks with bottom finishes"
-        )
+    with c6:
+        st.metric("Breakouts", f"{breakout_count:,}")
 
-    st.divider()
+    st.markdown("---")
+
+    # Count active filters for label
+    def count_active_filters():
+        count = 0
+        if st.session_state.get("draft_summary_year"):
+            count += 1
+        if st.session_state.get("draft_summary_mgr"):
+            count += 1
+        if st.session_state.get("draft_summary_pos"):
+            count += 1
+        if st.session_state.get("draft_summary_player"):
+            count += 1
+        if st.session_state.get("draft_summary_grade"):
+            count += 1
+        if st.session_state.get("draft_summary_tier"):
+            count += 1
+        if st.session_state.get("draft_summary_breakouts"):
+            count += 1
+        if st.session_state.get("draft_summary_busts"):
+            count += 1
+        if not st.session_state.get("draft_summary_keepers", True):
+            count += 1
+        if st.session_state.get("draft_summary_min_cost", 0) > 0:
+            count += 1
+        return count
+
+    num_filters = count_active_filters()
+    filter_label = "Filters" + (f" ({num_filters} active)" if num_filters > 0 else "")
 
     # Filters
-    with st.expander("🔍 Filters", expanded=True):
-        col1, col2, col3, col4 = st.columns(4)
+    with st.expander(filter_label, expanded=num_filters > 0):
+        # Row 1: Year → Manager → Position → Player (consistent order)
+        f1, f2, f3, f4 = st.columns(4)
 
-        with col1:
-            years = (
-                sorted(df["year"].unique().tolist(), reverse=True)
-                if "year" in df.columns
-                else []
-            )
-            selected_years = st.multiselect(
-                "Year", years, default=[], key="draft_summary_year"
-            )
+        with f1:
+            years = sorted(df["year"].unique().tolist(), reverse=True) if "year" in df.columns else []
+            selected_years = st.multiselect("Year", years, default=[], key="draft_summary_year")
 
-        with col2:
-            managers = (
-                sorted(df["manager"].unique().tolist())
-                if "manager" in df.columns
-                else []
-            )
-            selected_managers = st.multiselect(
-                "Manager", managers, default=[], key="draft_summary_mgr"
-            )
+        with f2:
+            managers = sorted(df["manager"].unique().tolist()) if "manager" in df.columns else []
+            selected_managers = st.multiselect("Manager", managers, default=[], key="draft_summary_mgr")
 
-        with col3:
+        with f3:
             desired_order = ["QB", "RB", "WR", "TE", "DEF", "K"]
-            all_positions = (
-                df["yahoo_position"].dropna().unique().tolist()
-                if "yahoo_position" in df.columns
-                else []
-            )
+            all_positions = df["yahoo_position"].dropna().unique().tolist() if "yahoo_position" in df.columns else []
             positions = [pos for pos in desired_order if pos in all_positions] + sorted(
                 [pos for pos in all_positions if pos not in desired_order]
             )
-            selected_positions = st.multiselect(
-                "Position", positions, default=[], key="draft_summary_pos"
-            )
+            selected_positions = st.multiselect("Position", positions, default=[], key="draft_summary_pos")
 
-        with col4:
-            players = (
-                sorted(df["player"].unique().tolist()) if "player" in df.columns else []
-            )
-            selected_players = st.multiselect(
-                "Player", players, default=[], key="draft_summary_player"
-            )
+        with f4:
+            players = sorted(df["player"].unique().tolist()) if "player" in df.columns else []
+            selected_players = st.multiselect("Player", players, default=[], key="draft_summary_player")
 
-        # Second row of filters: Grade, Value Tier, and quick filters
-        col1, col2, col3, col4 = st.columns(4)
+        # Row 2: Grade, Value Tier, Sort
+        f5, f6, f7 = st.columns(3)
 
-        with col1:
+        with f5:
             grades = ["A", "B", "C", "D", "F"]
-            available_grades = [
-                g
-                for g in grades
-                if "draft_grade" in df.columns
-                and g in df["draft_grade"].dropna().unique()
-            ]
-            selected_grades = st.multiselect(
-                "Draft Grade",
-                available_grades if available_grades else grades,
-                default=[],
-                key="draft_summary_grade",
-            )
+            available_grades = [g for g in grades if "draft_grade" in df.columns and g in df["draft_grade"].dropna().unique()]
+            selected_grades = st.multiselect("Grade", available_grades if available_grades else grades, default=[], key="draft_summary_grade")
 
-        with col2:
+        with f6:
             tiers = ["Steal", "Good Value", "Fair", "Overpay", "Bust"]
-            available_tiers = [
-                t
-                for t in tiers
-                if "value_tier" in df.columns
-                and t in df["value_tier"].dropna().unique()
-            ]
-            selected_tiers = st.multiselect(
-                "Value Tier",
-                available_tiers if available_tiers else tiers,
-                default=[],
-                key="draft_summary_tier",
-            )
+            available_tiers = [t for t in tiers if "value_tier" in df.columns and t in df["value_tier"].dropna().unique()]
+            selected_tiers = st.multiselect("Value Tier", available_tiers if available_tiers else tiers, default=[], key="draft_summary_tier")
 
-        with col3:
-            show_breakouts = st.checkbox(
-                "Breakouts Only",
-                value=False,
-                key="draft_summary_breakouts",
-                help="Late-round picks with top finishes",
-            )
-        with col4:
-            show_busts = st.checkbox(
-                "Busts Only",
-                value=False,
-                key="draft_summary_busts",
-                help="Early-round picks with bottom finishes",
-            )
+        with f7:
+            sort_by = st.selectbox("Sort by", ["Recent", "Points ↓", "PPG ↓", "Cost ↓", "Overall Rank", "Grade ↓", "SPAR ↓"], key="draft_summary_sort")
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            include_keepers = st.checkbox(
-                "Include Keepers", value=True, key="draft_summary_keepers"
-            )
-        with col2:
-            min_cost = st.number_input(
-                "Min Cost", min_value=0, value=0, key="draft_summary_min_cost"
-            )
-        with col3:
-            sort_by = st.selectbox(
-                "Sort by",
-                [
-                    "Recent",
-                    "Points ↓",
-                    "PPG ↓",
-                    "Cost ↓",
-                    "Overall Rank",
-                    "Grade ↓",
-                    "SPAR ↓",
-                ],
-                key="draft_summary_sort",
-            )
+        # Row 3: Include toggles and min cost
+        st.markdown("**Include**")
+        inc1, inc2, inc3, inc4, inc5 = st.columns(5)
+        with inc1:
+            include_keepers = st.checkbox("Keepers", value=True, key="draft_summary_keepers")
+        with inc2:
+            show_breakouts = st.checkbox("Breakouts Only", value=False, key="draft_summary_breakouts")
+        with inc3:
+            show_busts = st.checkbox("Busts Only", value=False, key="draft_summary_busts")
+        with inc4:
+            min_cost = st.number_input("Min Cost", min_value=0, value=0, key="draft_summary_min_cost")
 
     # Apply filters
     filtered = df.copy()
@@ -283,7 +220,13 @@ def display_draft_summary(draft_data: pd.DataFrame) -> None:
                 sort_order.append(True)
             filtered = filtered.sort_values(sort_cols, ascending=sort_order)
 
-    st.markdown(f"**Showing {len(filtered)} of {len(df)} picks**")
+    # Table header row
+    header_left, header_right = st.columns([3, 1])
+    with header_left:
+        st.caption(f"Showing {len(filtered):,} of {len(df):,} picks")
+    with header_right:
+        csv = filtered[[c for c in ["year", "round", "pick", "manager", "player", "yahoo_position", "cost", "draft_grade", "value_tier", "total_fantasy_points", "season_ppg", "manager_spar"] if c in filtered.columns]].to_csv(index=False)
+        st.download_button("Download CSV", csv, "draft_summary.csv", "text/csv", key="draft_summary_export_top", use_container_width=True)
 
     # Build display columns - include new grade and tier columns
     display_cols = [
@@ -381,9 +324,3 @@ def display_draft_summary(draft_data: pd.DataFrame) -> None:
                     f"<div style='text-align:center;'><span style='font-size:2em;color:{color};font-weight:bold;'>{grade}</span><br/>{int(count)} picks</div>",
                     unsafe_allow_html=True,
                 )
-
-    # Export
-    csv = filtered[display_cols].to_csv(index=False)
-    st.download_button(
-        "📥 Export", csv, "draft_summary.csv", "text/csv", key="draft_summary_export"
-    )
