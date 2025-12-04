@@ -625,9 +625,9 @@ def display_playoff_machine(
     if "pm_active_mode" not in st.session_state:
         st.session_state.pm_active_mode = None
 
-    # Prominent action buttons row
+    # Compact action buttons row (full width)
     active_mode = st.session_state.pm_active_mode
-    btn_cols = st.columns([1.5, 1, 1, 1, 3])
+    btn_cols = st.columns([1, 1, 1, 1, 4])
 
     with btn_cols[0]:
         if st.button(
@@ -666,19 +666,17 @@ def display_playoff_machine(
             st.session_state.pm_active_mode = None
             st.rerun(scope="fragment")
 
-    # 2-Panel Layout: Left (picker) | Right (results)
-    left_panel, right_panel = st.columns([2, 1])
+    # FULL-WIDTH LAYOUT: Pickems first, then Results below
+    # --- PICK WINNERS SECTION (FULL WIDTH) ---
+    with st.container(border=True):
+        _render_remaining_games(remaining_games)
 
-    with left_panel:
-        with st.container(border=True):
-            _render_remaining_games(remaining_games)
-
-    with right_panel:
-        with st.container(border=True):
-            st.markdown("**Results**")
-            _render_standings(
-                current_standings, remaining_games, st.session_state.playoff_picks
-            )
+    # --- RESULTS SECTION BELOW (FULL WIDTH) ---
+    with st.container(border=True):
+        st.markdown("### Results")
+        _render_standings(
+            current_standings, remaining_games, st.session_state.playoff_picks
+        )
 
 
 def _render_remaining_games(remaining_games: pd.DataFrame):
@@ -690,79 +688,109 @@ def _render_remaining_games(remaining_games: pd.DataFrame):
         st.info("No remaining games - regular season complete!")
         return
 
-    # Inject CSS for compact matchup styling
+    # Inject CSS for proper matchup card styling
     st.markdown(
         """
     <style>
+    /* Week labels */
     .week-label {
-        font-size: 0.9em;
+        font-size: 0.95em;
         font-weight: 600;
         color: #6c5ce7;
-        margin: 0.5rem 0 0.375rem 0;
-    }
-    .vs-text {
-        text-align: center;
-        font-size: 0.7em;
-        font-weight: 700;
-        color: #888;
-        padding: 4px 0;
+        margin: 0.75rem 0 0.5rem 0;
     }
 
-    /* Compact buttons inside matchup-picks */
-    .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] {
-        margin-bottom: 0.375rem !important;
+    /* VS separator - centered and subtle */
+    .vs-text {
+        text-align: center;
+        font-size: 0.75em;
+        font-weight: 600;
+        color: rgba(128, 128, 128, 0.6);
+        line-height: 48px;
     }
-    .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"] > button {
+
+    /* Matchup card container - fixed height, proper spacing */
+    .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] {
+        margin-bottom: 0.5rem !important;
+    }
+
+    .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] > div {
+        padding: 0.5rem !important;
+    }
+
+    /* Team buttons - FIXED HEIGHT with text wrapping */
+    .matchup-picks [data-testid="stButton"] > button {
+        min-width: 100px !important;
+        min-height: 48px !important;
+        height: 48px !important;
+        padding: 6px 10px !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+        font-size: 0.8em !important;
+        white-space: normal !important;
+        line-height: 1.2 !important;
+        text-align: center !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.15s ease !important;
+        /* Default unpicked - yellow */
         background-color: #f1c40f !important;
         color: #000 !important;
-        border: 1px solid #d4ac0d !important;
-        font-weight: 600 !important;
-        min-height: 32px !important;
-        height: 32px !important;
-        border-radius: 4px !important;
-        width: 100% !important;
-        min-width: 0 !important;
-        max-width: 100% !important;
-        padding: 0 6px !important;
-        font-size: 0.75em !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
+        border: 2px solid #d4ac0d !important;
     }
-    .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"] > button:hover {
+
+    .matchup-picks [data-testid="stButton"] > button:hover {
         background-color: #f4d03f !important;
         border-color: #b7950b !important;
+        transform: translateY(-1px);
     }
 
     /* Winner button - green */
-    .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"] > button[kind="primary"] {
+    .matchup-picks [data-testid="stButton"] > button[kind="primary"] {
         background-color: #27ae60 !important;
         color: #fff !important;
         border-color: #1e8449 !important;
     }
-    .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"] > button[kind="primary"]:hover {
+
+    .matchup-picks [data-testid="stButton"] > button[kind="primary"]:hover {
         background-color: #2ecc71 !important;
     }
 
-    /* Make button columns equal width */
+    /* Consistent column widths in matchup row */
     .matchup-picks [data-testid="stHorizontalBlock"] > div {
         flex: 1 1 0 !important;
         min-width: 0 !important;
     }
 
-    /* More compact bordered containers */
-    .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] > div {
-        padding: 0.375rem !important;
+    /* 2-column matchup grid spacing */
+    .matchup-picks [data-testid="stHorizontalBlock"] {
+        gap: 0.75rem !important;
+    }
+
+    /* Results table - right-align numeric columns */
+    .results-table [data-testid="stDataFrame"] td,
+    .results-table [data-testid="stDataFrame"] th {
+        text-align: right !important;
+    }
+
+    /* Keep manager name left-aligned */
+    .results-table [data-testid="stDataFrame"] td:first-child,
+    .results-table [data-testid="stDataFrame"] th:first-child {
+        text-align: left !important;
     }
 
     @media (prefers-color-scheme: dark) {
         .week-label { color: #a55eea; }
+        .vs-text { color: rgba(200, 200, 200, 0.5); }
     }
+
     @media (max-width: 600px) {
-        .matchup-picks [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"] > button {
-            min-height: 28px !important;
-            height: 28px !important;
-            font-size: 0.7em !important;
+        .matchup-picks [data-testid="stButton"] > button {
+            min-height: 42px !important;
+            height: 42px !important;
+            font-size: 0.75em !important;
+            min-width: 80px !important;
         }
     }
     </style>
@@ -799,15 +827,15 @@ def _render_remaining_games(remaining_games: pd.DataFrame):
 
 
 def _render_week_matchups(week: int, games_list: list):
-    """Render matchups for a single week."""
+    """Render matchups for a single week in a 2-column grid."""
     num_games = len(games_list)
-    matchups_per_row = 3
+    matchups_per_row = 2  # 2-column grid for consistent spacing
 
     for row_start in range(0, num_games, matchups_per_row):
         row_games = games_list[row_start : row_start + matchups_per_row]
 
-        # Always create 3 columns for consistent widths (some may be empty)
-        matchup_cols = st.columns(3)
+        # Always create 2 columns for consistent widths (some may be empty)
+        matchup_cols = st.columns(2)
 
         for game_idx, game in enumerate(row_games):
             team_a = game["manager"]
@@ -1001,7 +1029,10 @@ def _render_standings(
         "Δ Champ": "{:+.1f}",
     })
 
+    # Wrap in results-table class for right-align styling
+    st.markdown('<div class="results-table">', unsafe_allow_html=True)
     st.dataframe(styled_df, use_container_width=True, height=350)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Expander for detailed odds tables
     with st.expander("Show detailed odds tables", expanded=False):
