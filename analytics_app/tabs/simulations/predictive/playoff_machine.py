@@ -552,7 +552,11 @@ def _simulate_all_games(
 
 
 @st.fragment
-def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
+def display_playoff_machine(
+    matchup_data_df: pd.DataFrame = None,
+    year: int = None,
+    week: int = None,
+):
     """
     Display the interactive Playoff Machine.
 
@@ -560,8 +564,12 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
     - Pick winners for remaining games
     - See instant standings updates
     - Simulate unpicked games
+
+    Args:
+        matchup_data_df: Optional pre-loaded matchup data
+        year: Selected year (from unified header)
+        week: Selected week (from unified header)
     """
-    render_section_header("Playoff Machine", "")
     st.caption("Pick winners to see playoff picture changes.")
 
     # Load data if not provided
@@ -587,62 +595,19 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
         matchup_data_df["week"], errors="coerce"
     ).astype(int)
 
-    # Selection mode with session state buttons
+    # Use provided year/week or default to latest
     years = sorted(matchup_data_df["year"].unique(), reverse=True)
-    max_year = years[0] if years else None
-
-    mode_key = "pm_mode"
-    if mode_key not in st.session_state:
-        st.session_state[mode_key] = 0
-
-    modes = ["Today's Date", "Specific Week"]
-    mode_cols = st.columns(2)
-    for idx, (col, name) in enumerate(zip(mode_cols, modes)):
-        with col:
-            is_active = st.session_state[mode_key] == idx
-            if st.button(
-                name,
-                key=f"pm_mode_btn_{idx}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-            ):
-                if not is_active:
-                    st.session_state[mode_key] = idx
-                    st.rerun()
-
-    mode = modes[st.session_state[mode_key]]
-
-    show_machine = False
-
-    if mode == "Today's Date":
-        selected_year = max_year
-        year_data = matchup_data_df[matchup_data_df["year"] == selected_year]
-        current_week = int(year_data["week"].max())
-        st.caption(f"📅 Auto-selected Year {selected_year}, Week {current_week}")
-        show_machine = True
+    if year is None:
+        selected_year = years[0] if years else None
     else:
-        col1, col2, col3 = st.columns([2, 2, 1])
+        selected_year = year
 
-        with col1:
-            selected_year = st.selectbox("Season", years, index=0, key="pm_year")
+    year_data = matchup_data_df[matchup_data_df["year"] == selected_year]
 
-        year_data = matchup_data_df[matchup_data_df["year"] == selected_year]
-        all_weeks = sorted(year_data["week"].unique())
-
-        with col2:
-            current_week = st.selectbox(
-                "Week",
-                all_weeks,
-                index=len(all_weeks) - 1 if all_weeks else 0,
-                key="pm_week",
-            )
-
-        with col3:
-            st.markdown("<br>", unsafe_allow_html=True)
-            show_machine = st.button("Go", key="pm_go")
-
-    if not show_machine:
-        return
+    if week is None:
+        current_week = int(year_data["week"].max())
+    else:
+        current_week = week
 
     # Get data
     current_standings = _get_current_standings(year_data, selected_year, current_week)
@@ -654,23 +619,23 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
         st.warning("No standings data available for this week.")
         return
 
-    st.markdown("---")
-
     # Initialize session state for picks and active mode
     if "playoff_picks" not in st.session_state:
         st.session_state.playoff_picks = {}
     if "pm_active_mode" not in st.session_state:
         st.session_state.pm_active_mode = None
 
-    # Control buttons - compact layout with active state styling
+    # Prominent action buttons row
     active_mode = st.session_state.pm_active_mode
-
-    # Buttons in a tight row
-    btn_cols = st.columns([1, 1, 1, 1, 4])  # 4 buttons + spacer
+    btn_cols = st.columns([1.5, 1, 1, 1, 3])
 
     with btn_cols[0]:
-        sim_type = "primary" if active_mode == "simulate" else "secondary"
-        if st.button("🎲 Simulate", key="pm_simulate", type=sim_type):
+        if st.button(
+            "Simulate",
+            key="pm_simulate",
+            type="primary",
+            use_container_width=True,
+        ):
             st.session_state.playoff_picks = _simulate_all_games(
                 remaining_games, current_standings, "simulate"
             )
@@ -679,7 +644,7 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
 
     with btn_cols[1]:
         fav_type = "primary" if active_mode == "favorites" else "secondary"
-        if st.button("⭐ Favorites", key="pm_favorites", type=fav_type):
+        if st.button("Favorites", key="pm_favorites", type=fav_type, use_container_width=True):
             st.session_state.playoff_picks = _simulate_all_games(
                 remaining_games, current_standings, "favorites"
             )
@@ -688,7 +653,7 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
 
     with btn_cols[2]:
         und_type = "primary" if active_mode == "underdogs" else "secondary"
-        if st.button("🐕 Underdogs", key="pm_underdogs", type=und_type):
+        if st.button("Underdogs", key="pm_underdogs", type=und_type, use_container_width=True):
             st.session_state.playoff_picks = _simulate_all_games(
                 remaining_games, current_standings, "underdogs"
             )
@@ -696,19 +661,24 @@ def display_playoff_machine(matchup_data_df: pd.DataFrame = None):
             st.rerun(scope="fragment")
 
     with btn_cols[3]:
-        if st.button("🔄 Reset", key="pm_reset"):
+        if st.button("Reset", key="pm_reset", use_container_width=True):
             st.session_state.playoff_picks = {}
             st.session_state.pm_active_mode = None
             st.rerun(scope="fragment")
 
-    # Stacked layout: Picks on top, full-width table below
-    _render_remaining_games(remaining_games)
+    # 2-Panel Layout: Left (picker) | Right (results)
+    left_panel, right_panel = st.columns([2, 1])
 
-    st.markdown("---")
+    with left_panel:
+        with st.container(border=True):
+            _render_remaining_games(remaining_games)
 
-    _render_standings(
-        current_standings, remaining_games, st.session_state.playoff_picks
-    )
+    with right_panel:
+        with st.container(border=True):
+            st.markdown("**Results**")
+            _render_standings(
+                current_standings, remaining_games, st.session_state.playoff_picks
+            )
 
 
 def _render_remaining_games(remaining_games: pd.DataFrame):

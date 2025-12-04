@@ -3,11 +3,16 @@ from __future__ import annotations
 import streamlit as st
 import duckdb
 import pandas as pd
+from datetime import datetime
 from ..shared.modern_styles import apply_modern_styles
 from .shared.simulation_styles import (
     apply_simulation_styles,
     start_simulation_container,
     end_simulation_container,
+)
+from .shared.unified_header import (
+    render_context_card,
+    get_today_display,
 )
 
 # ---- WHAT-IF viewers ----
@@ -63,24 +68,97 @@ class SimulationDataViewer:
 
         start_simulation_container()
 
-        # Top-level navigation - unified pill style matching Weekly/Season/Career
-        main_tab_names = ["Predictive", "What-If"]
-        current_main_idx = st.session_state.get("subtab_Simulations", 0)
+        # ==================== LAYER 1: UNIFIED HEADER ====================
+        # Get available years and weeks from data
+        years = sorted(
+            self.matchup_data_df["year"].astype(int).unique(), reverse=True
+        )
+        max_year = years[0] if years else datetime.now().year
 
-        cols = st.columns(len(main_tab_names))
-        for idx, (col, name) in enumerate(zip(cols, main_tab_names)):
-            with col:
-                is_active = idx == current_main_idx
-                btn_type = "primary" if is_active else "secondary"
-                if st.button(
-                    name, key=f"sim_main_{idx}", use_container_width=True, type=btn_type
-                ):
-                    if not is_active:
-                        st.session_state["subtab_Simulations"] = idx
-                        st.rerun()
+        # Session state for year/week selection
+        if "sim_selected_year" not in st.session_state:
+            st.session_state["sim_selected_year"] = max_year
+        if "sim_selected_week" not in st.session_state:
+            year_data = self.matchup_data_df[
+                self.matchup_data_df["year"] == max_year
+            ]
+            st.session_state["sim_selected_week"] = int(year_data["week"].max())
 
-        st.markdown('<div style="height: 0.5rem;"></div>', unsafe_allow_html=True)
+        selected_year = st.session_state["sim_selected_year"]
+        weeks_for_year = sorted(
+            self.matchup_data_df[self.matchup_data_df["year"] == selected_year][
+                "week"
+            ]
+            .astype(int)
+            .unique()
+        )
+        selected_week = st.session_state["sim_selected_week"]
 
+        # Header row: Title | Mode Toggle | Year/Week/Date
+        header_cols = st.columns([2, 3, 3])
+
+        with header_cols[0]:
+            st.markdown("**Playoff Simulation**")
+
+        with header_cols[1]:
+            # Segmented control for Predictive/What-If
+            main_tab_names = ["Predictive", "What-If"]
+            current_main_idx = st.session_state.get("subtab_Simulations", 0)
+
+            seg_cols = st.columns(2)
+            for idx, (col, name) in enumerate(zip(seg_cols, main_tab_names)):
+                with col:
+                    is_active = idx == current_main_idx
+                    if st.button(
+                        name,
+                        key=f"sim_main_{idx}",
+                        use_container_width=True,
+                        type="primary" if is_active else "secondary",
+                    ):
+                        if not is_active:
+                            st.session_state["subtab_Simulations"] = idx
+                            st.rerun()
+
+        with header_cols[2]:
+            # Year, Week, Today's Date
+            meta_cols = st.columns([1.2, 1, 1.5])
+            with meta_cols[0]:
+                new_year = st.selectbox(
+                    "Season",
+                    years,
+                    index=years.index(selected_year) if selected_year in years else 0,
+                    key="sim_year_select",
+                    label_visibility="collapsed",
+                )
+                if new_year != selected_year:
+                    st.session_state["sim_selected_year"] = new_year
+                    # Reset week to max for new year
+                    year_data = self.matchup_data_df[
+                        self.matchup_data_df["year"] == new_year
+                    ]
+                    st.session_state["sim_selected_week"] = int(year_data["week"].max())
+                    st.rerun()
+
+            with meta_cols[1]:
+                new_week = st.selectbox(
+                    "Week",
+                    weeks_for_year,
+                    index=(
+                        weeks_for_year.index(selected_week)
+                        if selected_week in weeks_for_year
+                        else len(weeks_for_year) - 1
+                    ),
+                    key="sim_week_select",
+                    label_visibility="collapsed",
+                )
+                if new_week != selected_week:
+                    st.session_state["sim_selected_week"] = new_week
+                    st.rerun()
+
+            with meta_cols[2]:
+                st.caption(f"Today: {get_today_display()}")
+
+        # ==================== LAYER 2: SUB-NAVIGATION ====================
         # ==================== PREDICTIVE ANALYTICS ====================
         if current_main_idx == 0:
             pred_tabs = st.tabs(
@@ -94,39 +172,69 @@ class SimulationDataViewer:
                 ]
             )
 
+            # Context card pinned under tabs
+            render_context_card(
+                season=selected_year,
+                week=selected_week,
+                num_simulations=10000,
+                help_text="Based on current standings and power ratings",
+            )
+
             with pred_tabs[0]:
                 try:
-                    display_playoff_simulation_dashboard(prefix="playoff_sim")
+                    display_playoff_simulation_dashboard(
+                        prefix="playoff_sim",
+                        year=selected_year,
+                        week=selected_week,
+                    )
                 except Exception as e:
                     st.warning(f"Playoff dashboard unavailable: {e}")
 
             with pred_tabs[1]:
                 try:
-                    display_playoff_machine(self.matchup_data_df)
+                    display_playoff_machine(
+                        self.matchup_data_df,
+                        year=selected_year,
+                        week=selected_week,
+                    )
                 except Exception as e:
                     st.warning(f"Playoff machine unavailable: {e}")
 
             with pred_tabs[2]:
                 try:
-                    display_predicted_record(self.matchup_data_df)
+                    display_predicted_record(
+                        self.matchup_data_df,
+                        year=selected_year,
+                        week=selected_week,
+                    )
                 except Exception as e:
                     st.warning(f"Predicted records unavailable: {e}")
 
             with pred_tabs[3]:
                 try:
-                    display_predicted_seed(self.matchup_data_df)
+                    display_predicted_seed(
+                        self.matchup_data_df,
+                        year=selected_year,
+                        week=selected_week,
+                    )
                 except Exception as e:
                     st.warning(f"Predicted seeds unavailable: {e}")
 
             with pred_tabs[4]:
                 try:
-                    PlayoffOddsGraph(self.matchup_data_df).display()
+                    PlayoffOddsGraph(self.matchup_data_df).display(
+                        year=selected_year,
+                        week=selected_week,
+                    )
                 except Exception as e:
                     st.warning(f"Weekly odds unavailable: {e}")
 
             with pred_tabs[5]:
                 try:
-                    PlayoffOddsCumulativeViewer(self.matchup_data_df).display()
+                    PlayoffOddsCumulativeViewer(self.matchup_data_df).display(
+                        year=selected_year,
+                        week=selected_week,
+                    )
                 except Exception as e:
                     st.warning(f"Multi-year trends unavailable: {e}")
 
@@ -134,6 +242,14 @@ class SimulationDataViewer:
         elif current_main_idx == 1:
             whatif_tabs = st.tabs(
                 ["Schedule Shuffles", "Strength of Schedule", "Score Sensitivity"]
+            )
+
+            # Context card pinned under tabs (shared year/week)
+            render_context_card(
+                season=selected_year,
+                week=selected_week,
+                num_simulations=10000,
+                help_text="What-if analysis based on historical data",
             )
 
             # ---- Schedule Shuffles (4 sub-tabs) ----
@@ -152,25 +268,37 @@ class SimulationDataViewer:
 
                 with schedule_subtabs[0]:
                     try:
-                        GaviStatViewer(self.matchup_data_df).display()
+                        GaviStatViewer(self.matchup_data_df).display(
+                            year=selected_year, week=selected_week
+                        )
                     except Exception as e:
                         st.warning(f"Win distribution unavailable: {e}")
 
                 with schedule_subtabs[1]:
                     try:
-                        VsOneOpponentViewer(self.matchup_data_df).display()
+                        VsOneOpponentViewer(self.matchup_data_df).display(
+                            year=selected_year, week=selected_week
+                        )
                     except Exception as e:
                         st.warning(f"Head-to-head analysis unavailable: {e}")
 
                 with schedule_subtabs[2]:
                     try:
-                        display_expected_record(self.matchup_data_df)
+                        display_expected_record(
+                            self.matchup_data_df,
+                            year=selected_year,
+                            week=selected_week,
+                        )
                     except Exception as e:
                         st.warning(f"Expected records unavailable: {e}")
 
                 with schedule_subtabs[3]:
                     try:
-                        display_expected_seed(self.matchup_data_df)
+                        display_expected_seed(
+                            self.matchup_data_df,
+                            year=selected_year,
+                            week=selected_week,
+                        )
                     except Exception as e:
                         st.warning(f"Expected seeding unavailable: {e}")
 
@@ -190,32 +318,46 @@ class SimulationDataViewer:
 
                 with opponent_subtabs[0]:
                     try:
-                        OpponentGaviStatViewer(self.matchup_data_df).display()
+                        OpponentGaviStatViewer(self.matchup_data_df).display(
+                            year=selected_year, week=selected_week
+                        )
                     except Exception as e:
                         st.warning(f"Opponent analysis unavailable: {e}")
 
                 with opponent_subtabs[1]:
                     try:
-                        EveryonesScheduleViewer(self.matchup_data_df).display()
+                        EveryonesScheduleViewer(self.matchup_data_df).display(
+                            year=selected_year, week=selected_week
+                        )
                     except Exception as e:
                         st.warning(f"Schedule comparison unavailable: {e}")
 
                 with opponent_subtabs[2]:
                     try:
-                        display_opp_expected_record(self.matchup_data_df)
+                        display_opp_expected_record(
+                            self.matchup_data_df,
+                            year=selected_year,
+                            week=selected_week,
+                        )
                     except Exception as e:
                         st.warning(f"Record vs difficulty unavailable: {e}")
 
                 with opponent_subtabs[3]:
                     try:
-                        display_opp_expected_seed(self.matchup_data_df)
+                        display_opp_expected_seed(
+                            self.matchup_data_df,
+                            year=selected_year,
+                            week=selected_week,
+                        )
                     except Exception as e:
                         st.warning(f"Seeding vs difficulty unavailable: {e}")
 
             # ---- Score Sensitivity (direct view) ----
             with whatif_tabs[2]:
                 try:
-                    TweakScoringViewer(self.matchup_data_df).display()
+                    TweakScoringViewer(self.matchup_data_df).display(
+                        year=selected_year, week=selected_week
+                    )
                 except Exception as e:
                     st.warning(f"Score sensitivity analysis unavailable: {e}")
 

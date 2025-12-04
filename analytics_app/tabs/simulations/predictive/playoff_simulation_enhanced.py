@@ -9,6 +9,7 @@ from __future__ import annotations
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from typing import Optional
 from md.core import T, run_query
 from .table_styles import render_modern_table
 from ..shared.simulation_styles import (
@@ -18,6 +19,11 @@ from ..shared.simulation_styles import (
     close_card,
     render_summary_panel,
     render_manager_filter,
+)
+from ..shared.unified_header import (
+    render_kpi_hero_card,
+    render_summary_strip,
+    render_delta_pill,
 )
 
 # Import chart theming for light/dark mode support
@@ -139,14 +145,18 @@ def _render_playoff_dashboard(
 
 
 @st.fragment
-def display_playoff_simulation_dashboard(prefix=""):
-    """Enhanced playoff simulation analysis with modern visualizations."""
-    render_section_header("Playoff Simulation Dashboard", "")
+def display_playoff_simulation_dashboard(
+    prefix: str = "",
+    year: Optional[int] = None,
+    week: Optional[int] = None,
+):
+    """Enhanced playoff simulation analysis with modern visualizations.
 
-    st.caption(
-        "Championship funnels, critical turning points, and season trajectories."
-    )
-
+    Args:
+        prefix: Unique key prefix for session state
+        year: Selected year (from unified header)
+        week: Selected week (from unified header)
+    """
     # Load data
     with st.spinner("Loading..."):
         playoff_data = run_query(
@@ -174,18 +184,14 @@ def display_playoff_simulation_dashboard(prefix=""):
     playoff_data["year"] = playoff_data["year"].astype(int)
     playoff_data["week"] = playoff_data["week"].astype(int)
 
-    # Week selection
-    year, week, auto_display = _select_week_for_playoff(playoff_data, prefix)
+    # Use provided year/week or default to latest
+    if year is None:
+        year = int(playoff_data["year"].max())
+    if week is None:
+        week = int(playoff_data[playoff_data["year"] == year]["week"].max())
 
-    if year is None or week is None:
-        return
-
-    # Auto-display or show button
-    if auto_display:
-        _render_playoff_dashboard(playoff_data, year, week, prefix)
-    else:
-        if st.button("Go", key=f"{prefix}_playoff_go"):
-            _render_playoff_dashboard(playoff_data, year, week, prefix)
+    # Render dashboard directly (year/week comes from unified header)
+    _render_playoff_dashboard(playoff_data, year, week, prefix)
 
 
 def _render_metric_cards(final_data: pd.DataFrame):
@@ -230,8 +236,6 @@ def _render_metric_cards(final_data: pd.DataFrame):
 @st.fragment
 def _display_championship_path(data, year, week, prefix):
     """Show path to championship with responsive design."""
-    render_section_header(f"Championship Path - {year} Week {week}", "")
-
     # Use selected week data
     final_week = week
     final_data = (
@@ -252,18 +256,42 @@ def _display_championship_path(data, year, week, prefix):
         .sort_values("avg_seed", ascending=True)
     )
 
-    # Manager filter - optional highlight
-    all_managers = list(final_data.index)
-    col_filter, col_spacer = st.columns([1, 3])
-    with col_filter:
-        render_manager_filter(
-            all_managers,
-            key=f"{prefix}_champ_manager_filter",
-            label="Highlight Manager",
-        )
+    # Get key stats for KPI hero
+    top_playoff = final_data.nlargest(1, "p_playoffs").iloc[0]
+    top_champ = final_data.nlargest(1, "p_champ").iloc[0]
+    top_power = final_data.nlargest(1, "exp_final_wins").iloc[0]
+    top_seed = final_data.nsmallest(1, "avg_seed").iloc[0]
 
-    # Render metric tiles first
-    _render_metric_cards(final_data)
+    all_managers = list(final_data.index)
+
+    # KPI Hero Card with integrated title and manager dropdown
+    selected_manager = render_kpi_hero_card(
+        title=f"Championship Path - {year} Week {week}",
+        kpis=[
+            {
+                "label": "Highest Playoff Odds",
+                "value": f"{top_playoff['p_playoffs']:.0f}%",
+                "owner": top_playoff.name,
+            },
+            {
+                "label": "Championship Favorite",
+                "value": f"{top_champ['p_champ']:.1f}%",
+                "owner": top_champ.name,
+            },
+            {
+                "label": "Most Likely #1 Seed",
+                "value": f"{top_seed['avg_seed']:.2f}",
+                "owner": top_seed.name,
+            },
+            {
+                "label": "Projected Most Wins",
+                "value": f"{top_power['exp_final_wins']:.1f}",
+                "owner": top_power.name,
+            },
+        ],
+        manager_dropdown_options=all_managers,
+        manager_dropdown_key=f"{prefix}_champ_manager_filter",
+    )
 
     # Reset index for table display
     final_data = final_data.reset_index()
@@ -374,9 +402,8 @@ def _display_championship_path(data, year, week, prefix):
 @st.fragment
 def _display_critical_moments(data, year, week, prefix):
     """Critical turning points with theme-aware charts."""
-    render_section_header(f"Critical Moments - {year} Week {week}", "")
-
-    st.caption("Biggest swings in playoff odds - which weeks had the most drama?")
+    # Summary strip at top
+    render_summary_strip("Biggest weekly swings in playoff odds - who rode the roller coaster?")
 
     # Get theme colors
     colors = get_chart_colors()
@@ -394,104 +421,92 @@ def _display_critical_moments(data, year, week, prefix):
     all_changes = pd.concat(changes_list)
 
     # Biggest swings
-    biggest_gains = all_changes.nlargest(10, "p_change")[
+    biggest_gains = all_changes.nlargest(5, "p_change")[
         ["week", "manager", "p_change", "p_playoffs"]
     ].copy()
-    biggest_losses = all_changes.nsmallest(10, "p_change")[
+    biggest_losses = all_changes.nsmallest(5, "p_change")[
         ["week", "manager", "p_change", "p_playoffs"]
     ].copy()
 
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        render_group_card("Biggest Weekly Gains", "")
-        biggest_gains_display = biggest_gains.copy()
-        biggest_gains_display.columns = ["Week", "Manager", "Change", "New Odds"]
-
-        # Format the data
-        biggest_gains_display["Change"] = biggest_gains_display["Change"].apply(
-            lambda x: f"+{x:.1f}%"
-        )
-        biggest_gains_display["New Odds"] = biggest_gains_display["New Odds"].apply(
-            lambda x: f"{x:.1f}%"
-        )
-
-        # Style the dataframe - theme adaptive
-        def highlight_gains(s):
-            if s.name == "Change":
-                return ["color: #28a745; font-weight: bold" for _ in s]
-            elif s.name == "Manager":
-                return ["font-weight: bold" for _ in s]
-            return ["" for _ in s]
-
-        styled_gains = biggest_gains_display.style.apply(highlight_gains)
-        st.dataframe(
-            styled_gains, hide_index=True, use_container_width=True, height=320
-        )
-        close_card()
-
-    with col2:
-        render_group_card("Biggest Weekly Drops", "")
-        biggest_losses_display = biggest_losses.copy()
-        biggest_losses_display.columns = ["Week", "Manager", "Change", "New Odds"]
-
-        # Format the data
-        biggest_losses_display["Change"] = biggest_losses_display["Change"].apply(
-            lambda x: f"{x:.1f}%"
-        )
-        biggest_losses_display["New Odds"] = biggest_losses_display["New Odds"].apply(
-            lambda x: f"{x:.1f}%"
-        )
-
-        # Style the dataframe - theme adaptive
-        def highlight_losses(s):
-            if s.name == "Change":
-                return ["color: #dc3545; font-weight: bold" for _ in s]
-            elif s.name == "Manager":
-                return ["font-weight: bold" for _ in s]
-            return ["" for _ in s]
-
-        styled_losses = biggest_losses_display.style.apply(highlight_losses)
-        st.dataframe(
-            styled_losses, hide_index=True, use_container_width=True, height=320
-        )
-        close_card()
-
-    # Volatility chart - compact
-    st.markdown("**Season Volatility** (higher = more roller coaster season)")
-
+    # Calculate volatility for third column
     volatility = (
         data.groupby("manager")["p_playoffs"].std().sort_values(ascending=False)
     )
 
-    # Use theme-aware colors for volatility levels
-    bar_colors = []
-    for x in volatility.values:
-        if x > 15:
-            bar_colors.append(colors["negative"])
-        elif x > 10:
-            bar_colors.append("#ff9800")  # Orange
-        else:
-            bar_colors.append(colors["positive"])
+    # 3-column layout
+    col1, col2, col3 = st.columns([1, 1, 1.5])
 
-    fig = go.Figure(
-        go.Bar(
-            x=volatility.index,
-            y=volatility.values,
-            marker_color=bar_colors,
-            text=[f"{v:.0f}" for v in volatility.values],
-            textposition="outside",
-            hovertemplate="%{x}<br>Volatility: %{y:.1f}%<extra></extra>",
-        )
-    )
+    with col1:
+        with st.container(border=True):
+            st.markdown("**Biggest Gains**")
+            for _, row in biggest_gains.iterrows():
+                delta_html = render_delta_pill(f"+{row['p_change']:.1f}%", is_positive=True)
+                st.markdown(
+                    f"Wk {int(row['week'])} - **{row['manager']}** {delta_html}",
+                    unsafe_allow_html=True,
+                )
 
-    fig.update_layout(
-        height=300,  # Compact for mobile
-        xaxis=dict(tickangle=-45, title=None),
-        yaxis=dict(title="Std Dev (%)"),
-        margin=dict(l=10, r=10, t=10, b=60),
-        showlegend=False,
-    )
-    apply_chart_theme(fig)
+            # Show all toggle
+            show_all_key = f"{prefix}_show_all_gains"
+            if st.button("Show all", key=show_all_key, use_container_width=True):
+                all_gains = all_changes.nlargest(10, "p_change")[
+                    ["week", "manager", "p_change"]
+                ]
+                for _, row in all_gains.iterrows():
+                    st.caption(f"Wk {int(row['week'])}: {row['manager']} +{row['p_change']:.1f}%")
 
-    st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_volatility_{year}")
+    with col2:
+        with st.container(border=True):
+            st.markdown("**Biggest Drops**")
+            for _, row in biggest_losses.iterrows():
+                delta_html = render_delta_pill(f"{row['p_change']:.1f}%", is_positive=False)
+                st.markdown(
+                    f"Wk {int(row['week'])} - **{row['manager']}** {delta_html}",
+                    unsafe_allow_html=True,
+                )
+
+            # Show all toggle
+            show_all_key = f"{prefix}_show_all_drops"
+            if st.button("Show all", key=show_all_key, use_container_width=True):
+                all_losses = all_changes.nsmallest(10, "p_change")[
+                    ["week", "manager", "p_change"]
+                ]
+                for _, row in all_losses.iterrows():
+                    st.caption(f"Wk {int(row['week'])}: {row['manager']} {row['p_change']:.1f}%")
+
+    with col3:
+        with st.container(border=True):
+            st.markdown("**Season Volatility**")
+            st.caption("Higher = more roller coaster season")
+
+            # Use theme-aware colors for volatility levels
+            bar_colors = []
+            for x in volatility.values:
+                if x > 15:
+                    bar_colors.append(colors["negative"])
+                elif x > 10:
+                    bar_colors.append("#ff9800")  # Orange
+                else:
+                    bar_colors.append(colors["positive"])
+
+            fig = go.Figure(
+                go.Bar(
+                    x=volatility.index,
+                    y=volatility.values,
+                    marker_color=bar_colors,
+                    text=[f"{v:.0f}" for v in volatility.values],
+                    textposition="outside",
+                    hovertemplate="%{x}<br>Volatility: %{y:.1f}%<extra></extra>",
+                )
+            )
+
+            fig.update_layout(
+                height=250,  # Compact for side panel
+                xaxis=dict(tickangle=-45, title=None),
+                yaxis=dict(title="Std Dev (%)", title_font=dict(size=10)),
+                margin=dict(l=10, r=10, t=10, b=60),
+                showlegend=False,
+            )
+            apply_chart_theme(fig)
+
+            st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_volatility_{year}")

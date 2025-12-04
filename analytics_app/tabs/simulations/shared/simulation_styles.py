@@ -490,6 +490,452 @@ def apply_simulation_styles():
     }
 
     /* ===========================================
+       UNIFIED HEADER BAR (NEW)
+       =========================================== */
+    .sim-unified-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 1rem;
+        background: var(--bg-secondary, #F8F9FA);
+        border-bottom: 1px solid var(--border, #E5E7EB);
+        border-radius: 8px 8px 0 0;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .sim-header-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-primary, #1F2937);
+        white-space: nowrap;
+    }
+
+    .sim-header-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .sim-header-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        color: var(--text-secondary, #6B7280);
+    }
+
+    .sim-header-meta-item {
+        padding: 0.25rem 0.5rem;
+        background: var(--bg-tertiary, #F3F4F6);
+        border-radius: 4px;
+        border: 1px solid var(--border, #E5E7EB);
+    }
+
+    /* ===========================================
+       SEGMENTED CONTROL (NEW)
+       =========================================== */
+    .sim-segmented-control {
+        display: inline-flex;
+        border: 1px solid var(--border, #E5E7EB);
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--bg-primary, #FFFFFF);
+    }
+
+    .sim-segment {
+        padding: 0.4rem 1rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary, #6B7280);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        border-right: 1px solid var(--border, #E5E7EB);
+    }
+
+    .sim-segment:last-child {
+        border-right: none;
+    }
+
+    .sim-segment:hover:not(.active) {
+        background: var(--accent-subtle, rgba(102, 126, 234, 0.1));
+    }
+
+    .sim-segment.active {
+        background: var(--accent, #667eea);
+        color: white;
+    }
+
+    /* ===========================================
+       CONTEXT CARD (NEW)
+       =========================================== */
+    .sim-context-card {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        background: var(--bg-secondary, #F8F9FA);
+        border: 1px solid var(--border, #E5E7EB);
+        border-radius: 6px;
+        margin-bottom: 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    .sim-context-item {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .sim-context-label {
+        color: var(--text-muted, #9CA3AF);
+    }
+
+    .sim-context-value {
+        font-weight: 600;
+        color: var(--text-primary, #1F2937);
+    }
+
+    .sim-context-help {
+        font-size: 0.75rem;
+        color: var(--text-muted, #9CA3AF);
+        font-style: italic;
+    }
+
+    /* ===========================================
+       KPI HERO CARD (NEW)
+       =========================================== */
+    .sim-kpi-hero {
+        background: var(--bg-secondary, #F8F9FA);
+        border: 1px solid var(--border, #E5E7EB);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .sim-kpi-hero-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border, #E5E7EB);
+    }
+
+    .sim-kpi-hero-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary, #1F2937);
+    }
+
+    .sim-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
+    }
+
+    .sim-kpi-item {
+        text-align: center;
+        padding: 0.75rem 0.5rem;
+        background: linear-gradient(135deg, var(--gradient-start, rgba(102, 126, 234, 0.08)) 0%, var(--gradient-end, rgba(118, 75, 162, 0.05)) 100%);
+        border-radius: 6px;
+        border: 1px solid var(--border, #E5E7EB);
+    }
+
+    .sim-kpi-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary, #1F2937);
+        line-height: 1.2;
+    }
+
+    .sim-kpi-label {
+        font-size: 0.7rem;
+        color: var(--text-muted, #9CA3AF);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-top: 0.25rem;
+    }
+
+    .sim-kpi-owner {
+        display: inline-block;
+        margin-top: 0.375rem;
+        padding: 0.125rem 0.5rem;
+        background: var(--accent, #667eea);
+        color: white;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 500;
+    }
+
+    .sim-kpi-delta {
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-top: 0.25rem;
+    }
+
+    .sim-kpi-delta.positive {
+        color: var(--success, #10B981);
+    }
+
+    .sim-kpi-delta.negative {
+        color: var(--error, #EF4444);
+    }
+
+    /* ===========================================
+       DELTA PILLS (NEW)
+       =========================================== */
+    .sim-delta-pill {
+        display: inline-block;
+        padding: 0.125rem 0.375rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .sim-delta-pill.positive {
+        background: var(--success-bg, rgba(16, 185, 129, 0.1));
+        color: var(--success, #10B981);
+    }
+
+    .sim-delta-pill.negative {
+        background: var(--error-bg, rgba(239, 68, 68, 0.1));
+        color: var(--error, #EF4444);
+    }
+
+    /* ===========================================
+       SUMMARY STRIP (NEW)
+       =========================================== */
+    .sim-summary-strip {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 0.75rem;
+        background: linear-gradient(135deg, var(--gradient-start, rgba(102, 126, 234, 0.08)) 0%, var(--gradient-end, rgba(118, 75, 162, 0.05)) 100%);
+        border-radius: 6px;
+        border: 1px solid var(--border, #E5E7EB);
+        margin-bottom: 0.75rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text-primary, #1F2937);
+    }
+
+    /* ===========================================
+       ENHANCED MATCHUP PICKER (NEW)
+       =========================================== */
+    .sim-matchup-picker {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0.75rem;
+        background: var(--bg-primary, #FFFFFF);
+        border: 2px solid var(--border, #E5E7EB);
+        border-radius: 6px;
+        margin-bottom: 0.5rem;
+        transition: border-color 0.15s ease;
+    }
+
+    .sim-matchup-picker:hover {
+        border-color: var(--accent, #667eea);
+    }
+
+    .sim-matchup-picker-team {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        min-width: 100px;
+        text-align: center;
+        position: relative;
+    }
+
+    .sim-matchup-picker-team:hover {
+        background: var(--accent-subtle, rgba(102, 126, 234, 0.1));
+    }
+
+    .sim-matchup-picker-team.selected {
+        background: var(--success, #10B981);
+        color: white;
+    }
+
+    .sim-matchup-picker-team.loser {
+        background: var(--error-bg, rgba(239, 68, 68, 0.1));
+        opacity: 0.7;
+    }
+
+    .sim-team-name {
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    .sim-team-record {
+        font-size: 0.7rem;
+        color: var(--text-muted, #9CA3AF);
+    }
+
+    .sim-team-projected {
+        font-size: 0.7rem;
+        color: var(--accent, #667eea);
+        font-weight: 500;
+    }
+
+    .sim-matchup-picker-team.selected .sim-team-record,
+    .sim-matchup-picker-team.selected .sim-team-projected {
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .sim-matchup-picker-vs {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--text-muted, #9CA3AF);
+        padding: 0 0.5rem;
+    }
+
+    /* Selection check indicator */
+    .sim-matchup-picker-team.selected::after {
+        content: "";
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 18px;
+        height: 18px;
+        background: var(--success, #10B981);
+        border: 2px solid white;
+        border-radius: 50%;
+        font-size: 0.6rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Ghost button style */
+    .sim-btn-ghost {
+        background: transparent !important;
+        border: 1px dashed var(--border, #E5E7EB) !important;
+        color: var(--text-secondary, #6B7280) !important;
+    }
+
+    .sim-btn-ghost:hover {
+        border-color: var(--accent, #667eea) !important;
+        color: var(--accent, #667eea) !important;
+    }
+
+    /* ===========================================
+       ADDITIONAL MOBILE RESPONSIVE (NEW)
+       =========================================== */
+    @media (max-width: 768px) {
+        .sim-unified-header {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 0.375rem 0.5rem;
+        }
+
+        .sim-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .sim-segmented-control {
+            width: 100%;
+        }
+
+        .sim-segment {
+            flex: 1;
+            text-align: center;
+            padding: 0.3rem 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .sim-kpi-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        /* Horizontal scrolling tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            padding-bottom: 0.25rem;
+        }
+
+        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
+            display: none;
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            flex-shrink: 0 !important;
+            white-space: nowrap !important;
+        }
+    }
+
+    @media (max-width: 600px) {
+        .sim-header-meta {
+            flex-wrap: wrap;
+        }
+
+        .sim-context-card {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .sim-matchup-picker {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .sim-matchup-picker-vs {
+            padding: 0.25rem 0;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .sim-kpi-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .sim-kpi-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            text-align: left;
+            padding: 0.5rem 0.75rem;
+        }
+
+        .sim-kpi-value {
+            font-size: 1.25rem;
+        }
+
+        /* Mobile filters in expander */
+        .sim-mobile-filters {
+            display: block;
+        }
+
+        .sim-desktop-filters {
+            display: none;
+        }
+    }
+
+    @media (min-width: 481px) {
+        .sim-mobile-filters {
+            display: none;
+        }
+
+        .sim-desktop-filters {
+            display: block;
+        }
+    }
+
+    /* ===========================================
        REDUCE STREAMLIT DEFAULT SPACING
        =========================================== */
     /* Tighter spacing for simulation sections */
