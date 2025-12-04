@@ -2,7 +2,7 @@
 Keeper/Dynasty League Configuration Wizard
 
 A 3-step wizard for configuring keeper league rules during initial import.
-Uses session state to track progress and shows a live summary sidebar.
+Supports multiple escalation types including "from base" and "compounding" formulas.
 """
 
 import streamlit as st
@@ -67,13 +67,16 @@ def _get_defaults() -> dict:
         "max_years": 3,
         "min_price": 1,
         "budget": 200,
+        # First-year cost
         "draft_mult": 1.0,
         "draft_flat": 0.0,
         "faab_mult": 1.0,
         "faab_flat": 10.0,
-        "esc_mult": 1.0,
-        "esc_flat": 5.0,
-        "esc_from_year1": False,
+        # Escalation
+        "esc_type": "from_base",  # "from_base" or "compounding"
+        "esc_flat_per_year": 5.0,  # For from_base: adds this × years_kept
+        "esc_mult": 1.0,  # For compounding: prev_cost × this
+        "esc_flat": 0.0,  # For compounding: + this each year
         "_loaded": False,
     }
 
@@ -95,12 +98,12 @@ def _load_from_config(v: dict, config: dict):
     v["faab_mult"] = faab.get("multiplier", 1.0)
     v["faab_flat"] = faab.get("flat", 10.0)
 
+    # Load escalation config
     esc = config.get("formulas_by_keeper_year", {}).get("2+", {})
-    year1 = config.get("formulas_by_keeper_year", {}).get("1", {})
-
+    v["esc_type"] = esc.get("type", "from_base")
+    v["esc_flat_per_year"] = esc.get("flat_per_year", 5.0)
     v["esc_mult"] = esc.get("multiplier", 1.0)
-    v["esc_flat"] = esc.get("flat_add", 5.0)
-    v["esc_from_year1"] = year1.get("apply_year1", False)
+    v["esc_flat"] = esc.get("flat_add", 0.0)
 
 
 def _render_wizard(v: dict):
@@ -205,8 +208,8 @@ def _render_step_first_year(v: dict):
     if v["draft_type"] == "auction":
         # Drafted players
         st.markdown("**Drafted Players**")
-        draft_cost = _calc_example(25, v["draft_mult"], v["draft_flat"], v["min_price"])
-        st.success(f"A $25 drafted player costs **${draft_cost}** to keep")
+        draft_cost = _calc_first_year(25, v["draft_mult"], v["draft_flat"], v["min_price"])
+        st.success(f"A $25 drafted player costs **${draft_cost}** to keep (Year 1)")
 
         with st.expander("Edit formula"):
             col1, col2 = st.columns(2)
@@ -231,8 +234,8 @@ def _render_step_first_year(v: dict):
 
         # FAAB pickups
         st.markdown("**FAAB/Waiver Pickups**")
-        faab_cost = _calc_example(15, v["faab_mult"], v["faab_flat"], v["min_price"])
-        st.success(f"A $15 FAAB pickup costs **${faab_cost}** to keep")
+        faab_cost = _calc_first_year(15, v["faab_mult"], v["faab_flat"], v["min_price"])
+        st.success(f"A $15 FAAB pickup costs **${faab_cost}** to keep (Year 1)")
 
         with st.expander("Edit formula"):
             col1, col2 = st.columns(2)
@@ -275,39 +278,93 @@ def _render_step_escalation(v: dict):
     st.caption("How does the keeper cost change each additional year?")
 
     if v["draft_type"] == "auction":
-        esc_desc = _format_escalation(v["esc_mult"], v["esc_flat"], v["esc_from_year1"])
-        st.success(f"Escalation: **{esc_desc}**")
+        # Escalation type selector
+        st.markdown("**How does escalation work?**")
 
-        with st.expander("Edit escalation formula"):
-            col1, col2 = st.columns(2)
-            with col1:
-                v["esc_mult"] = st.number_input(
-                    "Multiply previous cost by",
-                    min_value=0.5, max_value=5.0,
-                    value=float(v["esc_mult"]),
-                    step=0.1,
-                    key="step3_esc_mult"
-                )
-            with col2:
-                v["esc_flat"] = st.number_input(
-                    "Then add ($)",
-                    min_value=0.0, max_value=100.0,
-                    value=float(v["esc_flat"]),
+        esc_options = [
+            "Add flat amount per year (from original cost)",
+            "Compound from previous year's price",
+            "No escalation (same price every year)"
+        ]
+
+        # Map current value to index
+        if v["esc_type"] == "none":
+            esc_idx = 2
+        elif v["esc_type"] == "compounding":
+            esc_idx = 1
+        else:
+            esc_idx = 0
+
+        esc_choice = st.radio(
+            "Escalation type",
+            esc_options,
+            index=esc_idx,
+            label_visibility="collapsed",
+            key="step3_esc_type"
+        )
+
+        # Update type based on selection
+        if "flat amount per year" in esc_choice:
+            v["esc_type"] = "from_base"
+        elif "Compound" in esc_choice:
+            v["esc_type"] = "compounding"
+        else:
+            v["esc_type"] = "none"
+
+        st.markdown("")
+
+        # Show appropriate controls based on type
+        if v["esc_type"] == "from_base":
+            # Example: draft_price + (5 × years_kept)
+            example_yr2 = _calc_from_base(25, v["draft_mult"], v["draft_flat"], v["esc_flat_per_year"], 2, v["min_price"])
+            example_yr3 = _calc_from_base(25, v["draft_mult"], v["draft_flat"], v["esc_flat_per_year"], 3, v["min_price"])
+
+            st.info(f"Year 2: ${example_yr2} | Year 3: ${example_yr3} | (+${v['esc_flat_per_year']:.0f} each year)")
+
+            with st.expander("Edit escalation"):
+                v["esc_flat_per_year"] = st.number_input(
+                    "Add this amount per year kept ($)",
+                    min_value=0.0, max_value=50.0,
+                    value=float(v["esc_flat_per_year"]),
                     step=1.0,
-                    key="step3_esc_flat"
+                    key="step3_flat_per_year",
+                    help="e.g., $5 means Year 1 = base, Year 2 = base + $5, Year 3 = base + $10"
                 )
 
-            v["esc_from_year1"] = st.checkbox(
-                "Apply escalation starting Year 1 (instead of Year 2)",
-                value=v["esc_from_year1"],
-                key="step3_year1"
-            )
+        elif v["esc_type"] == "compounding":
+            # Example: prev_cost × mult + flat
+            example_yr2 = _calc_compounding(25, v["draft_mult"], v["draft_flat"], v["esc_mult"], v["esc_flat"], 2, v["min_price"])
+            example_yr3 = _calc_compounding(25, v["draft_mult"], v["draft_flat"], v["esc_mult"], v["esc_flat"], 3, v["min_price"])
 
-    # Preview tables
-    st.markdown("---")
-    st.markdown("### Preview: Cost Progression")
+            esc_desc = _format_compounding(v["esc_mult"], v["esc_flat"])
+            st.info(f"Year 2: ${example_yr2} | Year 3: ${example_yr3} | ({esc_desc})")
 
-    if v["draft_type"] == "auction":
+            with st.expander("Edit escalation"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    v["esc_mult"] = st.number_input(
+                        "Multiply previous year by",
+                        min_value=0.5, max_value=3.0,
+                        value=float(v["esc_mult"]),
+                        step=0.1,
+                        key="step3_esc_mult"
+                    )
+                with col2:
+                    v["esc_flat"] = st.number_input(
+                        "Then add ($)",
+                        min_value=0.0, max_value=100.0,
+                        value=float(v["esc_flat"]),
+                        step=1.0,
+                        key="step3_esc_flat"
+                    )
+
+        else:
+            st.info("Keeper cost stays the same every year.")
+
+        # Preview tables
+        st.markdown("---")
+        st.markdown("### Preview: Cost Progression")
+
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**$25 Drafted Player**")
@@ -316,7 +373,7 @@ def _render_step_escalation(v: dict):
             st.markdown("**$15 FAAB Pickup**")
             _show_preview_table(v, 15, "faab")
     else:
-        st.info("Snake draft preview coming soon.")
+        st.info("Snake draft escalation coming soon.")
 
     # Navigation + Save
     st.markdown("---")
@@ -352,32 +409,36 @@ def _render_live_summary(v: dict):
         st.markdown("---")
         st.markdown("**First-Year Cost**")
 
-        draft_formula = _format_formula(v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), "draft price")
-        faab_formula = _format_formula(v.get("faab_mult", 1.0), v.get("faab_flat", 10.0), "FAAB bid")
+        draft_formula = _format_first_year(v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), "draft price")
+        faab_formula = _format_first_year(v.get("faab_mult", 1.0), v.get("faab_flat", 10.0), "FAAB bid")
 
-        st.markdown(f"Drafted: {draft_formula}")
-        st.markdown(f"FAAB: {faab_formula}")
+        st.caption(f"Drafted: {draft_formula}")
+        st.caption(f"FAAB: {faab_formula}")
 
         st.markdown("---")
         st.markdown("**Escalation**")
 
-        esc_desc = _format_escalation(
-            v.get("esc_mult", 1.0),
-            v.get("esc_flat", 5.0),
-            v.get("esc_from_year1", False)
-        )
-        st.markdown(esc_desc)
+        esc_type = v.get("esc_type", "from_base")
+        if esc_type == "from_base":
+            flat_per = v.get("esc_flat_per_year", 5.0)
+            st.caption(f"+${flat_per:.0f} per year kept")
+            st.caption("(from original cost)")
+        elif esc_type == "compounding":
+            st.caption(_format_compounding(v.get("esc_mult", 1.0), v.get("esc_flat", 0.0)))
+            st.caption("(compounds each year)")
+        else:
+            st.caption("None")
 
     # Status indicator
     st.markdown("---")
     if st.session_state.get("configured_keeper_rules"):
-        st.success("Configuration saved")
+        st.success("Saved")
     else:
-        st.warning("Not yet saved")
+        st.warning("Not saved")
 
 
-def _format_formula(mult: float, flat: float, source: str) -> str:
-    """Format formula as friendly text."""
+def _format_first_year(mult: float, flat: float, source: str) -> str:
+    """Format first-year formula as friendly text."""
     if mult == 1.0 and flat == 0.0:
         return f"= {source}"
     elif mult == 1.0 and flat > 0:
@@ -392,30 +453,40 @@ def _format_formula(mult: float, flat: float, source: str) -> str:
         return f"= {mult}x {source} - ${abs(flat):.0f}"
 
 
-def _format_escalation(mult: float, flat: float, from_year1: bool) -> str:
-    """Format escalation as friendly text."""
+def _format_compounding(mult: float, flat: float) -> str:
+    """Format compounding escalation."""
     parts = []
-
     if mult != 1.0:
-        parts.append(f"{mult}x previous cost")
-
+        parts.append(f"{mult}x prev")
     if flat > 0:
-        if parts:
-            parts.append(f"+ ${flat:.0f}")
-        else:
-            parts.append(f"+${flat:.0f}/year")
-
+        parts.append(f"+ ${flat:.0f}")
     if not parts:
-        return "None (cost stays the same)"
-
-    result = " ".join(parts)
-    start = "Year 1" if from_year1 else "Year 2"
-    return f"{result} (starting {start})"
+        return "no change"
+    return " ".join(parts)
 
 
-def _calc_example(base: float, mult: float, flat: float, min_price: int) -> int:
-    """Calculate example keeper cost."""
+def _calc_first_year(base: float, mult: float, flat: float, min_price: int) -> int:
+    """Calculate first-year keeper cost."""
     cost = base * mult + flat
+    return max(min_price, round(cost))
+
+
+def _calc_from_base(base: float, mult: float, flat: float, flat_per_year: float, year: int, min_price: int) -> int:
+    """Calculate keeper cost using from-base escalation."""
+    # Year 1: base_cost
+    # Year 2: base_cost + flat_per_year
+    # Year 3: base_cost + 2 * flat_per_year
+    base_cost = base * mult + flat
+    cost = base_cost + flat_per_year * (year - 1)
+    return max(min_price, round(cost))
+
+
+def _calc_compounding(base: float, mult: float, flat: float, esc_mult: float, esc_flat: float, year: int, min_price: int) -> int:
+    """Calculate keeper cost using compounding escalation."""
+    base_cost = base * mult + flat
+    cost = base_cost
+    for _ in range(1, year):
+        cost = cost * esc_mult + esc_flat
     return max(min_price, round(cost))
 
 
@@ -428,26 +499,26 @@ def _show_preview_table(v: dict, base_value: float, acq_type: str):
         mult = v.get("faab_mult", 1.0)
         flat = v.get("faab_flat", 10.0)
 
-    base_cost = base_value * mult + flat
-
-    esc_mult = v.get("esc_mult", 1.0)
-    esc_flat = v.get("esc_flat", 5.0)
-    apply_year1 = v.get("esc_from_year1", False)
-
     min_price = v.get("min_price", 1)
     max_years = v.get("max_years") or 10
+    esc_type = v.get("esc_type", "from_base")
 
     rows = []
-    prev_cost = base_cost
+    prev_cost = None
 
     for yr in range(1, min(6, max_years + 1) if max_years else 6):
-        if yr == 1:
-            cost = base_cost * esc_mult + esc_flat if apply_year1 else base_cost
+        if esc_type == "from_base":
+            cost = _calc_from_base(base_value, mult, flat, v.get("esc_flat_per_year", 5.0), yr, min_price)
+        elif esc_type == "compounding":
+            cost = _calc_compounding(base_value, mult, flat, v.get("esc_mult", 1.0), v.get("esc_flat", 0.0), yr, min_price)
         else:
-            cost = prev_cost * esc_mult + esc_flat
+            cost = _calc_first_year(base_value, mult, flat, min_price)
 
-        cost = max(min_price, round(cost))
-        change = f"+${cost - prev_cost:.0f}" if yr > 1 and cost > prev_cost else "-"
+        if prev_cost is not None and cost > prev_cost:
+            change = f"+${cost - prev_cost:.0f}"
+        else:
+            change = "-"
+
         rows.append({"Year": yr, "Cost": f"${cost}", "Change": change})
         prev_cost = cost
 
@@ -462,23 +533,37 @@ def _build_config(v: dict) -> dict:
         "free_agent": {"source": "fixed", "value": v["min_price"]}
     }
 
+    esc_type = v.get("esc_type", "from_base")
+
     formulas = {}
-    if v["esc_from_year1"]:
-        formulas["1"] = {
-            "expression": f"base_cost * {v['esc_mult']} + {v['esc_flat']}",
+
+    if esc_type == "from_base":
+        # Year 1: base_cost
+        # Year 2+: base_cost + flat_per_year * (keeper_year - 1)
+        formulas["1"] = {"expression": "base_cost"}
+        formulas["2+"] = {
+            "type": "from_base",
+            "expression": f"base_cost + {v['esc_flat_per_year']} * (keeper_year - 1)",
+            "flat_per_year": v["esc_flat_per_year"],
+        }
+    elif esc_type == "compounding":
+        # Year 1: base_cost
+        # Year 2+: prev_cost * mult + flat
+        formulas["1"] = {"expression": "base_cost"}
+        formulas["2+"] = {
+            "type": "compounding",
+            "expression": f"prev_cost * {v['esc_mult']} + {v['esc_flat']}",
             "multiplier": v["esc_mult"],
             "flat_add": v["esc_flat"],
-            "apply_year1": True
+            "recursive": True
         }
     else:
+        # No escalation
         formulas["1"] = {"expression": "base_cost"}
-
-    formulas["2+"] = {
-        "expression": f"prev_cost * {v['esc_mult']} + {v['esc_flat']}",
-        "multiplier": v["esc_mult"],
-        "flat_add": v["esc_flat"],
-        "recursive": True
-    }
+        formulas["2+"] = {
+            "type": "none",
+            "expression": "base_cost",
+        }
 
     return {
         "enabled": True,

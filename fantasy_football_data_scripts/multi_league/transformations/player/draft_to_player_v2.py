@@ -64,21 +64,21 @@ from type_utils import safe_merge, ensure_canonical_types
 
 # Columns to import from draft to player (focused set for analytics)
 # These are season-level stats that get broadcast to all weeks for that player-year
+#
+# NOTE: keeper_price and keeper_year are now calculated directly on player table
+# by player/keeper_economics.py - no longer copied from draft table
 DRAFT_COLS_TO_IMPORT = [
     "round",
     "pick",
     "cost",  # Auction cost or draft value
     "is_keeper_status",
     "kept_next_year",  # Whether player was kept in following season (from draft_value_metrics_v3)
-    "keeper_price",  # Calculated keeper price for next year (from keeper_economics_v2)
-    "keeper_year",  # Consecutive years player has been kept (from keeper_economics_v2)
     "spar",  # Season Points Above Replacement (from draft_value_metrics_v3)
     "pgvor",  # Per-Game Value Over Replacement (from draft_value_metrics_v3)
     "draft_roi",  # Return on Investment (from draft_value_metrics_v3)
     "cost_bucket",  # Position-based value tier (from draft_value_metrics_v3)
     "replacement_ppg",  # Position replacement baseline (from draft_value_metrics_v3)
     "cost_norm",  # Normalized draft cost (from draft_value_metrics_v3)
-    # Note: overall_pick and draft_type don't exist in draft table, removed
 ]
 
 

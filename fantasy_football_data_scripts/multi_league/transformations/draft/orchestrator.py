@@ -7,8 +7,10 @@ Called by initial_import_v2.py or can be run standalone for debugging.
 
 Transformation Order:
 1. player_to_draft_v2.py - Add player stats TO draft (needed for SPAR calculations)
-2. draft_value_metrics_v3.py - Calculate SPAR + keeper economics (creates kept_next_year, spar, pgvor, etc.)
-3. keeper_economics_v2.py - Calculate keeper_price for next year planning (needs draft cost + FAAB)
+2. draft_value_metrics_v3.py - Calculate SPAR metrics (creates kept_next_year, spar, pgvor, etc.)
+
+Note: keeper_economics is now calculated on the player table (player/keeper_economics.py)
+      since it needs FAAB data which lives in the player table.
 
 Usage:
     python orchestrator.py --context /path/to/league_context.json
@@ -31,10 +33,8 @@ EARLY_SCRIPTS = [
     ("multi_league/transformations/draft/draft_value_metrics_v3.py", "Draft SPAR Metrics", 600),
 ]
 
-# Late Pass 3: After transactions -> player (needs FAAB data)
-LATE_SCRIPTS = [
-    ("multi_league/transformations/draft/keeper_economics_v2.py", "Keeper Economics", 600),
-]
+# Late Pass 3: No longer used - keeper economics moved to player orchestrator
+LATE_SCRIPTS = []
 
 
 def run_draft_early(ctx: LeagueContext, context_path: str) -> bool:

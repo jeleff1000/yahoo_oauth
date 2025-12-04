@@ -198,13 +198,29 @@ class KeeperFormulaEvaluator:
 
 class KeeperPriceCalculator:
     """
-    Calculates keeper prices using rules from league context.
+    Calculates keeper prices using rules from league context or raw rules dict.
     """
 
-    def __init__(self, ctx: LeagueContext):
-        self.ctx = ctx
-        self.rules = ctx.keeper_rules or {}
-        self.evaluator = KeeperFormulaEvaluator(ctx.keeper_budget)
+    def __init__(self, ctx_or_rules):
+        """
+        Initialize calculator.
+
+        Args:
+            ctx_or_rules: Either a LeagueContext or a raw keeper_rules dict
+        """
+        # Accept either LeagueContext or raw rules dict
+        if hasattr(ctx_or_rules, 'keeper_rules'):
+            # It's a LeagueContext
+            self.ctx = ctx_or_rules
+            self.rules = ctx_or_rules.keeper_rules or {}
+            budget = ctx_or_rules.keeper_budget
+        else:
+            # It's a raw rules dict
+            self.ctx = None
+            self.rules = ctx_or_rules or {}
+            budget = self.rules.get('budget', 200)
+
+        self.evaluator = KeeperFormulaEvaluator(budget)
 
         # Extract settings
         self.enabled = self.rules.get('enabled', False)

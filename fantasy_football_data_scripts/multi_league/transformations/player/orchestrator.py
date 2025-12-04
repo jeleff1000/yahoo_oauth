@@ -39,6 +39,7 @@ PASS_2_SCRIPTS = [
 PASS_3_LATE_SCRIPTS = [
     ("multi_league/transformations/player/draft_to_player_v2.py", "Draft -> Player", 600),
     ("multi_league/transformations/player/transactions_to_player_v2.py", "Transactions -> Player", 600),
+    ("multi_league/transformations/player/keeper_economics.py", "Keeper Economics", 600),
 ]
 
 

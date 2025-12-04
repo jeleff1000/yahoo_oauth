@@ -543,7 +543,7 @@ class KeeperSettingsViewer:
             return False
 
     def _run_recalculation(self, rules: dict) -> bool:
-        """Run keeper economics recalculation."""
+        """Run keeper economics recalculation on player table."""
         try:
             from md.core import run_query, T, get_connection
             import sys
@@ -553,122 +553,64 @@ class KeeperSettingsViewer:
             if str(scripts_path) not in sys.path:
                 sys.path.insert(0, str(scripts_path))
 
-            from multi_league.transformations.draft.modules.consecutive_keeper_calculator import (
+            from multi_league.transformations.player.keeper_economics import (
+                KeeperPriceCalculator,
                 calculate_consecutive_keeper_years
             )
-            from multi_league.transformations.draft.keeper_economics_v2 import (
-                KeeperPriceCalculator
-            )
 
-            st.write("Loading draft data...")
-            draft_table = T.get('draft', 'draft')
-            draft = run_query(f"SELECT * FROM {draft_table}")
+            st.write("Loading player data...")
+            player_table = T.get('player', 'player')
+            player = run_query(f"SELECT * FROM {player_table}")
 
-            if draft is None or draft.empty:
-                st.error("No draft data found.")
+            if player is None or player.empty:
+                st.error("No player data found.")
                 return False
 
-            st.write(f"Loaded {len(draft):,} records")
+            st.write(f"Loaded {len(player):,} records")
 
+            # Calculate consecutive keeper years
+            st.write("Calculating keeper years...")
+            player = calculate_consecutive_keeper_years(player)
+            keepers = player[player['keeper_year'] > 0]
+            st.write(f"Found {len(keepers):,} keeper records")
+
+            # Calculate keeper prices
+            st.write("Calculating prices...")
             calculator = KeeperPriceCalculator(rules)
 
-            st.write("Calculating keeper years...")
-            draft = calculate_consecutive_keeper_years(
-                draft,
-                player_id_col='yahoo_player_id',
-                keeper_col='is_keeper_status',
-                year_col='year',
-                manager_col='manager' if 'manager' in draft.columns else None
-            )
-            draft['keeper_year'] = draft['consecutive_years_kept']
+            for idx in keepers.index:
+                row = player.loc[idx]
+                base_cost = row.get('base_keeper_cost', 0)
+                keeper_year = int(row['keeper_year'])
 
-            # Detect draft types
-            years = sorted(draft['year'].dropna().unique())
-            draft_types = {}
-            for year in years:
-                year_df = draft[draft['year'] == year]
-                if 'draft_type' in year_df.columns:
-                    dtype = year_df['draft_type'].dropna().str.lower().iloc[0] if len(year_df['draft_type'].dropna()) > 0 else 'snake'
-                    draft_types[year] = 'auction' if dtype in ['live', 'auction', 'offline'] else 'snake'
-                elif 'cost' in year_df.columns:
-                    cost = pd.to_numeric(year_df['cost'], errors='coerce')
-                    has_cost = (cost.notna() & (cost > 0)).sum() >= max(1, len(year_df) * 0.25)
-                    draft_types[year] = 'auction' if has_cost else 'snake'
-                else:
-                    draft_types[year] = 'snake'
+                if base_cost <= 0:
+                    cost = float(row.get('cost', 0) or 0)
+                    faab = float(row.get('max_faab_bid_to_date', 0) or 0)
+                    base_cost = calculator.calculate_base_cost(cost, faab, cost > 0)
 
-            st.write("Calculating prices...")
-            draft['keeper_price'] = pd.NA
-            draft['previous_keeper_price'] = pd.NA
+                price = calculator.calculate_keeper_price(base_cost, keeper_year)
+                player.loc[idx, 'keeper_price'] = price
 
-            sort_cols = ['yahoo_player_id', 'year']
-            if 'manager' in draft.columns:
-                sort_cols = ['yahoo_player_id', 'manager', 'year']
-            draft = draft.sort_values(sort_cols).copy()
+            prices_set = (player['keeper_price'] > 0).sum()
+            st.write(f"Calculated {prices_set:,} prices")
 
-            keeper_price_history = {}
-            count = 0
-
-            for idx, row in draft.iterrows():
-                player_id = str(row.get('yahoo_player_id', ''))
-                year = row.get('year')
-                manager = str(row.get('manager', '')) if 'manager' in draft.columns else ''
-                keeper_year = int(row.get('keeper_year', 0))
-
-                if pd.isna(year) or not player_id:
-                    continue
-
-                year = int(year)
-                draft_type = draft_types.get(year, 'snake')
-                key = (player_id, manager)
-
-                if key not in keeper_price_history:
-                    keeper_price_history[key] = {}
-
-                prev_year = year - 1
-                previous_keeper_price = keeper_price_history[key].get(prev_year, 0.0)
-
-                cost = float(row.get('cost', 0)) if not pd.isna(row.get('cost')) else 0.0
-                pick = row.get('pick')
-                round_num = row.get('round')
-                faab_bid = float(row.get('max_faab_bid', 0)) if not pd.isna(row.get('max_faab_bid')) else 0.0
-
-                is_drafted = pd.notna(row.get('pick')) or (cost > 0)
-
-                if is_drafted:
-                    keeper_price = calculator.calculate_keeper_price(
-                        draft_type=draft_type,
-                        cost=cost,
-                        pick=int(pick) if pd.notna(pick) else 0,
-                        round_num=int(round_num) if pd.notna(round_num) else 0,
-                        faab_bid=faab_bid,
-                        is_keeper=keeper_year > 0,
-                        previous_keeper_price=previous_keeper_price,
-                        keeper_year=keeper_year if keeper_year > 0 else 1,
-                    )
-
-                    keeper_price_history[key][year] = keeper_price
-                    draft.at[idx, 'keeper_price'] = keeper_price
-                    draft.at[idx, 'previous_keeper_price'] = previous_keeper_price if previous_keeper_price > 0 else pd.NA
-                    count += 1
-
-            st.write(f"Calculated {count:,} prices")
-
-            update_cols = ['yahoo_player_id', 'year', 'keeper_year', 'keeper_price', 'previous_keeper_price']
-            update_df = draft[draft['keeper_price'].notna()][update_cols].copy()
+            # Update MotherDuck
+            st.write("Updating MotherDuck...")
+            update_cols = ['yahoo_player_id', 'year', 'week', 'keeper_year', 'keeper_price']
+            update_df = player[player['keeper_price'] > 0][update_cols].copy()
 
             if len(update_df) > 0:
                 conn = get_connection()
                 conn.execute("CREATE OR REPLACE TEMP TABLE keeper_updates AS SELECT * FROM update_df")
                 conn.execute(f"""
-                    UPDATE {draft_table} AS d
+                    UPDATE {player_table} AS p
                     SET
                         keeper_year = u.keeper_year,
-                        keeper_price = u.keeper_price,
-                        previous_keeper_price = u.previous_keeper_price
+                        keeper_price = u.keeper_price
                     FROM keeper_updates AS u
-                    WHERE d.yahoo_player_id = u.yahoo_player_id
-                      AND d.year = u.year
+                    WHERE p.yahoo_player_id = u.yahoo_player_id
+                      AND p.year = u.year
+                      AND p.week = u.week
                 """)
                 st.success(f"Updated {len(update_df):,} records")
                 return True
