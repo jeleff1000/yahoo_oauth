@@ -953,125 +953,115 @@ def run_register_flow():
             return
 
         # League selection
-        col1, col2 = st.columns([2, 1])
+        st.markdown("### Select Your League")
 
-        with col1:
-            st.markdown("### 📋 Select Your League")
+        season_options = {f"{g['season']} NFL Season": g['game_key'] for g in football_games}
+        selected_season = st.selectbox("Season:", list(season_options.keys()), label_visibility="collapsed")
 
-            season_options = {f"{g['season']} NFL Season": g['game_key'] for g in football_games}
-            selected_season = st.selectbox("Season:", list(season_options.keys()), label_visibility="collapsed")
+        if selected_season:
+            game_key = season_options[selected_season]
 
-            if selected_season:
-                game_key = season_options[selected_season]
-
-                if "current_game_key" not in st.session_state or st.session_state.current_game_key != game_key:
-                    with st.spinner("Loading leagues..."):
-                        try:
-                            leagues_data = get_user_football_leagues(st.session_state.access_token, game_key)
-                            st.session_state.current_leagues = leagues_data
-                            st.session_state.current_game_key = game_key
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-
-                if "current_leagues" in st.session_state:
+            if "current_game_key" not in st.session_state or st.session_state.current_game_key != game_key:
+                with st.spinner("Loading leagues..."):
                     try:
-                        leagues = (
-                            st.session_state.current_leagues.get("fantasy_content", {})
-                            .get("users", {}).get("0", {}).get("user", [])[1]
-                            .get("games", {}).get("0", {}).get("game", [])[1]
-                            .get("leagues", {})
-                        )
-                        league_list = []
-                        for key in leagues:
-                            if key == "count":
-                                continue
-                            league = leagues[key].get("league", [])[0]
-                            league_list.append({
-                                "league_key": league.get("league_key"),
-                                "name": league.get("name"),
-                                "num_teams": league.get("num_teams"),
-                                "season": league.get("season"),
-                            })
-
-                        if league_list:
-                            league_names = [f"{l['name']} ({l['num_teams']} teams)" for l in league_list]
-                            selected_name = st.radio("", league_names, label_visibility="collapsed")
-                            selected_league = league_list[league_names.index(selected_name)]
-
-                            # Store selected league in session for import
-                            st.session_state.selected_league = selected_league
-
-                            # Check if import can be started (pass league name for server-side check)
-                            can_import, block_reason = can_start_import(league_name=selected_league.get('name'))
-
-                            if not can_import:
-                                # Show status instead of buttons
-                                st.warning(f"⏳ {block_reason}")
-                                if st.session_state.get("import_job_id"):
-                                    st.info(f"Job ID: `{st.session_state.import_job_id}`")
-                            else:
-                                # Optional Settings (collapsed by default)
-                                st.markdown("##### Optional Settings")
-
-                                # Keeper Rules Tab (first - most common setting)
-                                with st.expander("Keeper Rules", expanded=False):
-                                    keeper_rules = render_keeper_rules_ui()
-                                    st.session_state.configured_keeper_rules = keeper_rules
-
-                                # External Data Files Tab
-                                with st.expander("Import Historical Data (ESPN, other years, etc.)", expanded=False):
-                                    external_data = render_external_data_ui()
-                                    st.session_state.configured_external_data = external_data
-
-                                # Hidden Manager Detection - LAST so it loads in background while you configure above
-                                with st.expander("Identify Hidden Managers", expanded=False):
-                                    # Fetch teams across ALL years if not already done
-                                    cache_key = f"teams_all_years_{selected_league.get('name')}"
-                                    if cache_key not in st.session_state:
-                                        with st.spinner("Checking for hidden managers across all years..."):
-                                            teams = get_league_teams_all_years(
-                                                st.session_state.access_token,
-                                                selected_league.get("name"),
-                                                st.session_state.get("games_data", {})
-                                            )
-                                            st.session_state[cache_key] = teams
-
-                                    teams = st.session_state.get(cache_key, [])
-                                    hidden_teams = find_hidden_managers(teams)
-
-                                    if hidden_teams:
-                                        manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
-                                        st.session_state.configured_manager_overrides = manager_overrides
-                                    else:
-                                        st.success("No hidden managers found!")
-                                        st.session_state.configured_manager_overrides = {}
-
-                                st.markdown("---")
-
-                                # Import button with league name
-                                if st.button(f"Import {selected_league['name']}", key="start_import_btn", type="primary", use_container_width=True):
-                                    mark_import_started()
-                                    league_info = {
-                                        "league_key": selected_league.get("league_key"),
-                                        "name": selected_league.get("name"),
-                                        "season": selected_league.get("season"),
-                                        "num_teams": selected_league.get("num_teams"),
-                                        "keeper_rules": st.session_state.get("configured_keeper_rules"),
-                                        "external_data": st.session_state.get("configured_external_data"),
-                                        "manager_name_overrides": st.session_state.get("configured_manager_overrides", {}),
-                                    }
-                                    perform_import_flow(league_info)
-                                    return  # Don't continue rendering - import flow handles display
-
+                        leagues_data = get_user_football_leagues(st.session_state.access_token, game_key)
+                        st.session_state.current_leagues = leagues_data
+                        st.session_state.current_game_key = game_key
                     except Exception as e:
                         st.error(f"Error: {e}")
 
-        with col2:
-            st.markdown("### 💡 What You'll Get")
-            render_feature_card("📅", "Schedules", "All-time matchups and records")
-            render_feature_card("👥", "Players", "Complete stat history")
-            render_feature_card("💰", "Transactions", "Trades and pickups")
-            render_feature_card("🏆", "Playoffs", "Championship data")
+            if "current_leagues" in st.session_state:
+                try:
+                    leagues = (
+                        st.session_state.current_leagues.get("fantasy_content", {})
+                        .get("users", {}).get("0", {}).get("user", [])[1]
+                        .get("games", {}).get("0", {}).get("game", [])[1]
+                        .get("leagues", {})
+                    )
+                    league_list = []
+                    for key in leagues:
+                        if key == "count":
+                            continue
+                        league = leagues[key].get("league", [])[0]
+                        league_list.append({
+                            "league_key": league.get("league_key"),
+                            "name": league.get("name"),
+                            "num_teams": league.get("num_teams"),
+                            "season": league.get("season"),
+                        })
+
+                    if league_list:
+                        league_names = [f"{l['name']} ({l['num_teams']} teams)" for l in league_list]
+                        selected_name = st.radio("", league_names, label_visibility="collapsed")
+                        selected_league = league_list[league_names.index(selected_name)]
+
+                        # Store selected league in session for import
+                        st.session_state.selected_league = selected_league
+
+                        # Check if import can be started (pass league name for server-side check)
+                        can_import, block_reason = can_start_import(league_name=selected_league.get('name'))
+
+                        if not can_import:
+                            # Show status instead of buttons
+                            st.warning(f"⏳ {block_reason}")
+                            if st.session_state.get("import_job_id"):
+                                st.info(f"Job ID: `{st.session_state.import_job_id}`")
+                        else:
+                            # Optional Settings (collapsed by default)
+                            st.markdown("##### Optional Settings")
+
+                            # Keeper Rules Tab (first - most common setting)
+                            with st.expander("Keeper Rules", expanded=False):
+                                keeper_rules = render_keeper_rules_ui()
+                                st.session_state.configured_keeper_rules = keeper_rules
+
+                            # External Data Files Tab
+                            with st.expander("Import Historical Data (ESPN, other years, etc.)", expanded=False):
+                                external_data = render_external_data_ui()
+                                st.session_state.configured_external_data = external_data
+
+                            # Hidden Manager Detection - LAST so it loads in background while you configure above
+                            with st.expander("Identify Hidden Managers", expanded=False):
+                                # Fetch teams across ALL years if not already done
+                                cache_key = f"teams_all_years_{selected_league.get('name')}"
+                                if cache_key not in st.session_state:
+                                    with st.spinner("Checking for hidden managers across all years..."):
+                                        teams = get_league_teams_all_years(
+                                            st.session_state.access_token,
+                                            selected_league.get("name"),
+                                            st.session_state.get("games_data", {})
+                                        )
+                                        st.session_state[cache_key] = teams
+
+                                teams = st.session_state.get(cache_key, [])
+                                hidden_teams = find_hidden_managers(teams)
+
+                                if hidden_teams:
+                                    manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
+                                    st.session_state.configured_manager_overrides = manager_overrides
+                                else:
+                                    st.success("No hidden managers found!")
+                                    st.session_state.configured_manager_overrides = {}
+
+                            st.markdown("---")
+
+                            # Import button with league name
+                            if st.button(f"Import {selected_league['name']}", key="start_import_btn", type="primary", use_container_width=True):
+                                mark_import_started()
+                                league_info = {
+                                    "league_key": selected_league.get("league_key"),
+                                    "name": selected_league.get("name"),
+                                    "season": selected_league.get("season"),
+                                    "num_teams": selected_league.get("num_teams"),
+                                    "keeper_rules": st.session_state.get("configured_keeper_rules"),
+                                    "external_data": st.session_state.get("configured_external_data"),
+                                    "manager_name_overrides": st.session_state.get("configured_manager_overrides", {}),
+                                }
+                                perform_import_flow(league_info)
+                                return  # Don't continue rendering - import flow handles display
+
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
         # Job status section - show if we have an active import
         if st.session_state.get("import_job_id") or st.session_state.get("workflow_run_id"):
