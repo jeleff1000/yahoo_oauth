@@ -7,6 +7,7 @@ Supports multiple escalation types including "from base" and "compounding" formu
 
 import streamlit as st
 import pandas as pd
+import math
 from typing import Optional
 
 
@@ -69,6 +70,7 @@ def _get_defaults() -> dict:
         "max_years": 3,
         "min_price": 1,
         "budget": 200,
+        "round_up": False,  # If True, use ceiling; if False, use standard rounding
         # First-year cost
         "draft_mult": 1.0,
         "draft_flat": 0.0,
@@ -99,6 +101,8 @@ def _load_from_config(v: dict, config: dict):
     v["max_years"] = config.get("max_years") or 3
     v["min_price"] = config.get("min_price", 1)
     v["budget"] = config.get("budget", 200)
+    # Check for round_up - also check legacy "round_to_integer" which meant standard rounding
+    v["round_up"] = config.get("round_up", False)
 
     base = config.get("base_cost_rules", {})
     auction = base.get("auction", {})
@@ -202,6 +206,15 @@ def _render_step_basic(v: dict):
                 key="step1_min_price"
             )
 
+        # Rounding method
+        st.markdown("")
+        v["round_up"] = st.checkbox(
+            "Round UP to nearest dollar (ceiling)",
+            value=v.get("round_up", False),
+            key="step1_round_up",
+            help="If checked, $37.50 becomes $38. If unchecked, $37.50 becomes $38 (standard rounding)."
+        )
+
     # Navigation
     st.markdown("---")
     col1, col2 = st.columns([3, 1])
@@ -219,7 +232,7 @@ def _render_step_first_year(v: dict):
     if v["draft_type"] == "auction":
         # Drafted players
         st.markdown("**Drafted Players**")
-        draft_cost = _calc_first_year(25, v["draft_mult"], v["draft_flat"], v["min_price"])
+        draft_cost = _calc_first_year(25, v["draft_mult"], v["draft_flat"], v["min_price"], v.get("round_up", False))
         st.success(f"A $25 drafted player costs **${draft_cost}** to keep (Year 1)")
 
         with st.expander("Edit formula"):
@@ -230,6 +243,7 @@ def _render_step_first_year(v: dict):
                     min_value=0.1, max_value=5.0,
                     value=float(v["draft_mult"]),
                     step=0.1,
+                    format="%.2f",
                     key="step2_draft_mult"
                 )
             with col2:
@@ -237,7 +251,8 @@ def _render_step_first_year(v: dict):
                     "Then add ($)",
                     min_value=-50.0, max_value=100.0,
                     value=float(v["draft_flat"]),
-                    step=1.0,
+                    step=0.5,
+                    format="%.1f",
                     key="step2_draft_flat"
                 )
 
@@ -245,7 +260,7 @@ def _render_step_first_year(v: dict):
 
         # FAAB pickups
         st.markdown("**FAAB/Waiver Pickups**")
-        faab_cost = _calc_first_year(15, v["faab_mult"], v["faab_flat"], v["min_price"])
+        faab_cost = _calc_first_year(15, v["faab_mult"], v["faab_flat"], v["min_price"], v.get("round_up", False))
         st.success(f"A $15 FAAB pickup costs **${faab_cost}** to keep (Year 1)")
 
         with st.expander("Edit formula"):
@@ -256,6 +271,7 @@ def _render_step_first_year(v: dict):
                     min_value=0.1, max_value=5.0,
                     value=float(v["faab_mult"]),
                     step=0.1,
+                    format="%.2f",
                     key="step2_faab_mult"
                 )
             with col2:
@@ -263,7 +279,8 @@ def _render_step_first_year(v: dict):
                     "Then add ($)",
                     min_value=-50.0, max_value=100.0,
                     value=float(v["faab_flat"]),
-                    step=1.0,
+                    step=0.5,
+                    format="%.1f",
                     key="step2_faab_flat"
                 )
     else:
@@ -322,10 +339,11 @@ def _render_step_escalation(v: dict):
                 v["esc_type"] = "none"
 
             # Show appropriate controls based on type
+            round_up = v.get("round_up", False)
             if v.get("esc_type", "from_base") == "from_base":
                 st.markdown("")
-                example_yr2 = _calc_from_base(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_flat_per_year", 5.0), 2, v.get("min_price", 1))
-                example_yr3 = _calc_from_base(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_flat_per_year", 5.0), 3, v.get("min_price", 1))
+                example_yr2 = _calc_from_base(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_flat_per_year", 5.0), 2, v.get("min_price", 1), round_up)
+                example_yr3 = _calc_from_base(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_flat_per_year", 5.0), 3, v.get("min_price", 1), round_up)
 
                 flat_per = v.get('esc_flat_per_year', 5.0)
                 st.info(f"Year 2: ${example_yr2} | Year 3: ${example_yr3} | (+${flat_per:.0f} each year)")
@@ -341,8 +359,8 @@ def _render_step_escalation(v: dict):
 
             elif v.get("esc_type", "from_base") == "compounding":
                 st.markdown("")
-                example_yr2 = _calc_compounding(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_mult", 1.0), v.get("esc_flat", 0.0), 2, v.get("min_price", 1))
-                example_yr3 = _calc_compounding(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_mult", 1.0), v.get("esc_flat", 0.0), 3, v.get("min_price", 1))
+                example_yr2 = _calc_compounding(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_mult", 1.0), v.get("esc_flat", 0.0), 2, v.get("min_price", 1), round_up)
+                example_yr3 = _calc_compounding(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_mult", 1.0), v.get("esc_flat", 0.0), 3, v.get("min_price", 1), round_up)
 
                 esc_desc = _format_compounding(v.get("esc_mult", 1.0), v.get("esc_flat", 0.0))
                 st.info(f"Year 2: ${example_yr2} | Year 3: ${example_yr3} | ({esc_desc})")
@@ -418,6 +436,8 @@ def _render_live_summary(v: dict):
         if v.get("draft_type") == "auction":
             st.caption(f"Budget: ${v.get('budget', 200)}")
             st.caption(f"Min price: ${v.get('min_price', 1)}")
+            if v.get("round_up", False):
+                st.caption("Rounding: UP (ceiling)")
 
             st.markdown("---")
 
@@ -460,15 +480,15 @@ def _format_first_year(mult: float, flat: float, source: str) -> str:
     if mult == 1.0 and flat == 0.0:
         return f"= {source}"
     elif mult == 1.0 and flat > 0:
-        return f"= {source} + ${flat:.0f}"
+        return f"= {source} + ${_fmt_flat(flat)}"
     elif mult == 1.0 and flat < 0:
-        return f"= {source} - ${abs(flat):.0f}"
+        return f"= {source} - ${_fmt_flat(abs(flat))}"
     elif flat == 0.0:
         return f"= {_fmt_mult(mult)} {source}"
     elif flat > 0:
-        return f"= {_fmt_mult(mult)} {source} + ${flat:.0f}"
+        return f"= {_fmt_mult(mult)} {source} + ${_fmt_flat(flat)}"
     else:
-        return f"= {_fmt_mult(mult)} {source} - ${abs(flat):.0f}"
+        return f"= {_fmt_mult(mult)} {source} - ${_fmt_flat(abs(flat))}"
 
 
 def _format_compounding(mult: float, flat: float) -> str:
@@ -481,7 +501,7 @@ def _format_compounding(mult: float, flat: float) -> str:
     if mult != 1.0:
         parts.append(f"{_fmt_mult(mult)} previous")
     if flat > 0:
-        parts.append(f"+ ${flat:.0f}")
+        parts.append(f"+ ${_fmt_flat(flat)}")
     if not parts:
         return "no change"
     return " ".join(parts)
@@ -496,26 +516,45 @@ def _fmt_mult(mult: float) -> str:
         return f"{mult:.2f}x"
 
 
-def _calc_first_year(base: float, mult: float, flat: float, min_price: int) -> int:
+def _fmt_flat(flat: float) -> str:
+    """Format flat amount cleanly (e.g., 7.5 not 7.50, 8 not 8.0)."""
+    flat = round(flat, 2)
+    if flat == int(flat):
+        return f"{int(flat)}"
+    else:
+        # Remove trailing zeros: 7.50 -> 7.5
+        return f"{flat:.2f}".rstrip('0').rstrip('.')
+
+
+def _apply_rounding(cost: float, min_price: int, round_up: bool) -> int:
+    """Apply rounding to cost. Uses ceiling if round_up, otherwise standard rounding."""
+    if round_up:
+        result = math.ceil(cost)
+    else:
+        result = round(cost)
+    return max(min_price, result)
+
+
+def _calc_first_year(base: float, mult: float, flat: float, min_price: int, round_up: bool = False) -> int:
     """Calculate first-year keeper cost."""
     cost = base * mult + flat
-    return max(min_price, round(cost))
+    return _apply_rounding(cost, min_price, round_up)
 
 
-def _calc_from_base(base: float, mult: float, flat: float, flat_per_year: float, year: int, min_price: int) -> int:
+def _calc_from_base(base: float, mult: float, flat: float, flat_per_year: float, year: int, min_price: int, round_up: bool = False) -> int:
     """Calculate keeper cost using from-base escalation."""
     base_cost = base * mult + flat
     cost = base_cost + flat_per_year * (year - 1)
-    return max(min_price, round(cost))
+    return _apply_rounding(cost, min_price, round_up)
 
 
-def _calc_compounding(base: float, mult: float, flat: float, esc_mult: float, esc_flat: float, year: int, min_price: int) -> int:
+def _calc_compounding(base: float, mult: float, flat: float, esc_mult: float, esc_flat: float, year: int, min_price: int, round_up: bool = False) -> int:
     """Calculate keeper cost using compounding escalation."""
     base_cost = base * mult + flat
     cost = base_cost
     for _ in range(1, year):
         cost = cost * esc_mult + esc_flat
-    return max(min_price, round(cost))
+    return _apply_rounding(cost, min_price, round_up)
 
 
 def _show_preview_table(v: dict, base_value: float, acq_type: str):
@@ -530,17 +569,18 @@ def _show_preview_table(v: dict, base_value: float, acq_type: str):
     min_price = v.get("min_price", 1)
     max_years = v.get("max_years") or 10
     esc_type = v.get("esc_type", "from_base")
+    round_up = v.get("round_up", False)
 
     rows = []
     prev_cost = None
 
     for yr in range(1, min(6, max_years + 1) if max_years else 6):
         if esc_type == "from_base":
-            cost = _calc_from_base(base_value, mult, flat, v.get("esc_flat_per_year", 5.0), yr, min_price)
+            cost = _calc_from_base(base_value, mult, flat, v.get("esc_flat_per_year", 5.0), yr, min_price, round_up)
         elif esc_type == "compounding":
-            cost = _calc_compounding(base_value, mult, flat, v.get("esc_mult", 1.0), v.get("esc_flat", 0.0), yr, min_price)
+            cost = _calc_compounding(base_value, mult, flat, v.get("esc_mult", 1.0), v.get("esc_flat", 0.0), yr, min_price, round_up)
         else:
-            cost = _calc_first_year(base_value, mult, flat, min_price)
+            cost = _calc_first_year(base_value, mult, flat, min_price, round_up)
 
         if prev_cost is not None and cost > prev_cost:
             change = f"+${cost - prev_cost:.0f}"
@@ -605,7 +645,7 @@ def _build_config(v: dict) -> dict:
         "budget": v["budget"],
         "min_price": v["min_price"],
         "max_price": None,
-        "round_to_integer": True,
+        "round_up": v.get("round_up", False),
         "base_cost_rules": base_cost_rules,
         "formulas_by_keeper_year": formulas
     }

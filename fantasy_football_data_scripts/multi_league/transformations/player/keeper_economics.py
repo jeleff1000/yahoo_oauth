@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import math
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -51,6 +52,7 @@ class KeeperPriceCalculator:
         self.min_price = self.rules.get('min_price', 1)
         self.max_price = self.rules.get('max_price')
         self.budget = self.rules.get('budget', 200)
+        self.round_up = self.rules.get('round_up', False)
         self.base_cost_rules = self.rules.get('base_cost_rules', {})
         self.formulas = self.rules.get('formulas_by_keeper_year', {})
 
@@ -113,12 +115,18 @@ class KeeperPriceCalculator:
                 # No escalation or unknown type
                 price = base_cost
 
+        # Apply rounding
+        if self.round_up:
+            price = math.ceil(price)
+        else:
+            price = round(price)
+
         # Apply constraints
         price = max(price, self.min_price)
         if self.max_price is not None:
             price = min(price, self.max_price)
 
-        return round(price)
+        return int(price)
 
     def _get_formula(self, keeper_year: int) -> Optional[dict]:
         """Get formula for specific keeper year."""

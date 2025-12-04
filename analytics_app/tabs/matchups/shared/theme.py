@@ -5,7 +5,8 @@ This module re-exports all styling utilities from the centralized modern_styles 
 Import from here for backwards compatibility, but all styles are now centralized.
 """
 
-# Re-export everything from the centralized styles module
+# Re-export from the centralized styles module
+from ...shared.modern_styles import render_info_box  # noqa: F401
 
 
 def apply_theme_styles():
