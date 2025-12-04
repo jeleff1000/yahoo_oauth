@@ -780,24 +780,27 @@ def render_open_league_card(existing_dbs: list[str]):
         key="league_search"
     )
 
+    # Sort by display name (what users see) for alphabetical order
+    existing_dbs_sorted = sorted(existing_dbs, key=lambda db: format_league_display_name(db).lower())
+
     # For small lists, show all; for large lists, require search
     show_all_threshold = 20
 
-    if len(existing_dbs) <= show_all_threshold:
+    if len(existing_dbs_sorted) <= show_all_threshold:
         # Small list - show all as buttons
-        results = existing_dbs
+        results = existing_dbs_sorted
         if search.strip():
             # Filter if search provided
             search_lower = search.strip().lower()
-            results = [db for db in existing_dbs if search_lower in format_league_display_name(db).lower()]
+            results = [db for db in existing_dbs_sorted if search_lower in format_league_display_name(db).lower()]
     else:
         # Large list - require search
         if len(search.strip()) < 2:
-            st.caption(f"Start typing at least 2 characters to search ({len(existing_dbs)} leagues available).")
+            st.caption(f"Start typing at least 2 characters to search ({len(existing_dbs_sorted)} leagues available).")
             return
 
         search_lower = search.strip().lower()
-        results = [db for db in existing_dbs if search_lower in format_league_display_name(db).lower()]
+        results = [db for db in existing_dbs_sorted if search_lower in format_league_display_name(db).lower()]
 
     if not results:
         st.caption("No leagues found. Try a different name or check your spelling.")

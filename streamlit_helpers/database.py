@@ -33,16 +33,26 @@ except (ImportError, AttributeError):
 def format_league_display_name(db_name: str) -> str:
     """
     Format league database name for display.
-    Strips 'l_' prefix that was added for digit-starting names.
+    Strips 'l_' prefix, replaces underscores with spaces, and title-cases.
 
-    Example: 'l_5townsfootball' -> '5townsfootball'
+    Examples:
+        'family_league' -> 'Family League'
+        'l_5_towns_football' -> '5 Towns Football'
+        'kmffl' -> 'Kmffl'
     """
     if not db_name:
         return db_name
+
+    name = db_name
+
     # Strip the 'l_' prefix if it was added because name started with a digit
-    if db_name.startswith("l_") and len(db_name) > 2 and db_name[2].isdigit():
-        return db_name[2:]
-    return db_name
+    if name.startswith("l_") and len(name) > 2 and name[2].isdigit():
+        name = name[2:]
+
+    # Replace underscores with spaces and title-case
+    name = name.replace("_", " ").title()
+
+    return name
 
 
 def _get_motherduck_connection(token: str = None):
