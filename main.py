@@ -1022,25 +1022,26 @@ def run_register_flow():
                             if st.session_state.get("import_job_id"):
                                 st.info(f"Job ID: `{st.session_state.import_job_id}`")
                         else:
-                            # Show URL preview and privacy setting first
+                            # Show URL preview
                             db_name = sanitize_league_name_for_db(selected_league['name'])
                             league_url = f"https://leaguehistory.streamlit.app/?league={db_name}"
 
                             st.caption("Your league URL:")
                             st.code(league_url, language=None)
 
-                            is_private = st.checkbox(
-                                "Link only (not searchable)",
-                                value=False,
-                                key="league_private",
-                                help="If checked, your league won't appear in the public search. Only people with the direct link can access it."
-                            )
-                            st.session_state.configured_is_private = is_private
-
                             # Optional Settings (collapsed by default)
                             st.markdown("##### Optional Settings")
 
-                            # Keeper Rules Tab (first - most common setting)
+                            # Privacy setting first
+                            is_private = st.checkbox(
+                                "Make my league private (direct link only)",
+                                value=False,
+                                key="league_private",
+                            )
+                            st.caption("If checked, your league will only be accessible via the direct link above and won't appear in the public league search on the landing page.")
+                            st.session_state.configured_is_private = is_private
+
+                            # Keeper Rules Tab
                             with st.expander("Keeper Rules", expanded=False):
                                 keeper_rules = render_keeper_rules_ui()
                                 st.session_state.configured_keeper_rules = keeper_rules
