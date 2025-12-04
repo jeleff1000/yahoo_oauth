@@ -24,6 +24,8 @@ def render_keeper_rules_ui() -> Optional[dict]:
         st.session_state.keeper_values = _get_defaults()
 
     v = st.session_state.keeper_values
+    # Ensure backwards compatibility with older session state
+    v = _ensure_defaults(v)
     existing_config = st.session_state.get("configured_keeper_rules")
 
     # Load existing config into values if first time
@@ -73,12 +75,21 @@ def _get_defaults() -> dict:
         "faab_mult": 1.0,
         "faab_flat": 10.0,
         # Escalation
-        "esc_type": "from_base",  # "from_base" or "compounding"
-        "esc_flat_per_year": 5.0,  # For from_base: adds this × years_kept
-        "esc_mult": 1.0,  # For compounding: prev_cost × this
+        "esc_type": "from_base",  # "from_base", "compounding", or "none"
+        "esc_flat_per_year": 5.0,  # For from_base: adds this * years_kept
+        "esc_mult": 1.0,  # For compounding: prev_cost * this
         "esc_flat": 0.0,  # For compounding: + this each year
         "_loaded": False,
     }
+
+
+def _ensure_defaults(v: dict) -> dict:
+    """Ensure all default keys exist in values dict (for backwards compatibility)."""
+    defaults = _get_defaults()
+    for key, value in defaults.items():
+        if key not in v:
+            v[key] = value
+    return v
 
 
 def _load_from_config(v: dict, config: dict):
@@ -259,13 +270,12 @@ def _render_step_first_year(v: dict):
         st.info("Snake draft keeper costs are based on draft round.")
         st.markdown("Players are kept at the round they were drafted.")
 
-    # Navigation
+    # Navigation with hierarchy
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col1:
-        if st.button("Back", use_container_width=True, key="step2_back"):
-            st.session_state.keeper_wizard_step = 0
-            st.rerun()
+        st.button("Back", use_container_width=True, key="step2_back", type="secondary",
+                  on_click=lambda: setattr(st.session_state, 'keeper_wizard_step', 0))
     with col3:
         if st.button("Next", type="primary", use_container_width=True, key="step2_next"):
             st.session_state.keeper_wizard_step = 2
@@ -278,74 +288,71 @@ def _render_step_escalation(v: dict):
     st.caption("How does the keeper cost change each additional year?")
 
     if v["draft_type"] == "auction":
-        # Escalation type selector
-        st.markdown("**How does escalation work?**")
+        # Escalation type selector - de-emphasized in expander
+        with st.expander("Escalation Method", expanded=True):
+            esc_options = [
+                "Add flat amount per year (from original cost)",
+                "Compound from previous year's price",
+                "No escalation (same price every year)"
+            ]
 
-        esc_options = [
-            "Add flat amount per year (from original cost)",
-            "Compound from previous year's price",
-            "No escalation (same price every year)"
-        ]
+            # Map current value to index
+            current_esc = v.get("esc_type", "from_base")
+            if current_esc == "none":
+                esc_idx = 2
+            elif current_esc == "compounding":
+                esc_idx = 1
+            else:
+                esc_idx = 0
 
-        # Map current value to index
-        if v["esc_type"] == "none":
-            esc_idx = 2
-        elif v["esc_type"] == "compounding":
-            esc_idx = 1
-        else:
-            esc_idx = 0
+            esc_choice = st.radio(
+                "How does escalation work?",
+                esc_options,
+                index=esc_idx,
+                label_visibility="collapsed",
+                key="step3_esc_type"
+            )
 
-        esc_choice = st.radio(
-            "Escalation type",
-            esc_options,
-            index=esc_idx,
-            label_visibility="collapsed",
-            key="step3_esc_type"
-        )
+            # Update type based on selection
+            if "flat amount per year" in esc_choice:
+                v["esc_type"] = "from_base"
+            elif "Compound" in esc_choice:
+                v["esc_type"] = "compounding"
+            else:
+                v["esc_type"] = "none"
 
-        # Update type based on selection
-        if "flat amount per year" in esc_choice:
-            v["esc_type"] = "from_base"
-        elif "Compound" in esc_choice:
-            v["esc_type"] = "compounding"
-        else:
-            v["esc_type"] = "none"
+            # Show appropriate controls based on type
+            if v.get("esc_type", "from_base") == "from_base":
+                st.markdown("")
+                example_yr2 = _calc_from_base(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_flat_per_year", 5.0), 2, v.get("min_price", 1))
+                example_yr3 = _calc_from_base(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_flat_per_year", 5.0), 3, v.get("min_price", 1))
 
-        st.markdown("")
+                flat_per = v.get('esc_flat_per_year', 5.0)
+                st.info(f"Year 2: ${example_yr2} | Year 3: ${example_yr3} | (+${flat_per:.0f} each year)")
 
-        # Show appropriate controls based on type
-        if v["esc_type"] == "from_base":
-            # Example: draft_price + (5 × years_kept)
-            example_yr2 = _calc_from_base(25, v["draft_mult"], v["draft_flat"], v["esc_flat_per_year"], 2, v["min_price"])
-            example_yr3 = _calc_from_base(25, v["draft_mult"], v["draft_flat"], v["esc_flat_per_year"], 3, v["min_price"])
-
-            st.info(f"Year 2: ${example_yr2} | Year 3: ${example_yr3} | (+${v['esc_flat_per_year']:.0f} each year)")
-
-            with st.expander("Edit escalation"):
                 v["esc_flat_per_year"] = st.number_input(
                     "Add this amount per year kept ($)",
                     min_value=0.0, max_value=50.0,
-                    value=float(v["esc_flat_per_year"]),
+                    value=float(v.get("esc_flat_per_year", 5.0)),
                     step=1.0,
                     key="step3_flat_per_year",
                     help="e.g., $5 means Year 1 = base, Year 2 = base + $5, Year 3 = base + $10"
                 )
 
-        elif v["esc_type"] == "compounding":
-            # Example: prev_cost × mult + flat
-            example_yr2 = _calc_compounding(25, v["draft_mult"], v["draft_flat"], v["esc_mult"], v["esc_flat"], 2, v["min_price"])
-            example_yr3 = _calc_compounding(25, v["draft_mult"], v["draft_flat"], v["esc_mult"], v["esc_flat"], 3, v["min_price"])
+            elif v.get("esc_type", "from_base") == "compounding":
+                st.markdown("")
+                example_yr2 = _calc_compounding(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_mult", 1.0), v.get("esc_flat", 0.0), 2, v.get("min_price", 1))
+                example_yr3 = _calc_compounding(25, v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), v.get("esc_mult", 1.0), v.get("esc_flat", 0.0), 3, v.get("min_price", 1))
 
-            esc_desc = _format_compounding(v["esc_mult"], v["esc_flat"])
-            st.info(f"Year 2: ${example_yr2} | Year 3: ${example_yr3} | ({esc_desc})")
+                esc_desc = _format_compounding(v.get("esc_mult", 1.0), v.get("esc_flat", 0.0))
+                st.info(f"Year 2: ${example_yr2} | Year 3: ${example_yr3} | ({esc_desc})")
 
-            with st.expander("Edit escalation"):
                 col1, col2 = st.columns(2)
                 with col1:
                     v["esc_mult"] = st.number_input(
                         "Multiply previous year by",
                         min_value=0.5, max_value=3.0,
-                        value=float(v["esc_mult"]),
+                        value=float(v.get("esc_mult", 1.0)),
                         step=0.1,
                         key="step3_esc_mult"
                     )
@@ -353,92 +360,103 @@ def _render_step_escalation(v: dict):
                     v["esc_flat"] = st.number_input(
                         "Then add ($)",
                         min_value=0.0, max_value=100.0,
-                        value=float(v["esc_flat"]),
+                        value=float(v.get("esc_flat", 0.0)),
                         step=1.0,
                         key="step3_esc_flat"
                     )
+            else:
+                st.info("Keeper cost stays the same every year.")
 
-        else:
-            st.info("Keeper cost stays the same every year.")
-
-        # Preview tables
-        st.markdown("---")
-        st.markdown("### Preview: Cost Progression")
+        # Preview tables with card-style containers
+        st.markdown("")
+        st.markdown("#### Cost Progression Preview")
 
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("**$25 Drafted Player**")
-            _show_preview_table(v, 25, "draft")
+            with st.container(border=True):
+                st.markdown("**$25 Drafted Player**")
+                _show_preview_table(v, 25, "draft")
         with col2:
-            st.markdown("**$15 FAAB Pickup**")
-            _show_preview_table(v, 15, "faab")
+            with st.container(border=True):
+                st.markdown("**$15 FAAB Pickup**")
+                _show_preview_table(v, 15, "faab")
     else:
         st.info("Snake draft escalation coming soon.")
 
-    # Navigation + Save
+    # Navigation + Save with clear hierarchy
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
-        if st.button("Back", use_container_width=True, key="step3_back"):
-            st.session_state.keeper_wizard_step = 1
-            st.rerun()
+        st.button("Back", use_container_width=True, key="step3_back", type="secondary",
+                  on_click=lambda: setattr(st.session_state, 'keeper_wizard_step', 1))
 
     with col3:
         if st.button("Save Configuration", type="primary", use_container_width=True, key="step3_save"):
             config = _build_config(v)
             st.session_state.configured_keeper_rules = config
-            st.success("Keeper rules saved! Ready for import.")
+
+    # Success message - well-separated
+    if st.session_state.get("configured_keeper_rules"):
+        st.markdown("")
+        st.success("Keeper rules saved! Ready for import.")
 
 
 def _render_live_summary(v: dict):
-    """Right sidebar: live summary."""
-    st.markdown("### Your Rules")
-    st.markdown("---")
+    """Right sidebar: live summary with section headers."""
+    # Make summary sticky with container
+    with st.container(border=True):
+        st.markdown("#### Your Rules")
 
-    st.markdown(f"**Draft Type:** {v.get('draft_type', 'auction').title()}")
-    st.markdown(f"**Max Keepers:** {v.get('max_keepers', 3)}")
+        # Basic Rules section
+        st.markdown("**Basic Rules**")
+        st.caption(f"Draft: {v.get('draft_type', 'auction').title()}")
+        st.caption(f"Max keepers: {v.get('max_keepers', 3)}")
+        max_years = v.get('max_years')
+        st.caption(f"Max years: {max_years if max_years else 'Unlimited'}")
 
-    max_years = v.get('max_years')
-    st.markdown(f"**Max Years:** {max_years if max_years else 'Unlimited'}")
+        if v.get("draft_type") == "auction":
+            st.caption(f"Budget: ${v.get('budget', 200)}")
+            st.caption(f"Min price: ${v.get('min_price', 1)}")
 
-    if v.get("draft_type") == "auction":
-        st.markdown(f"**Budget:** ${v.get('budget', 200)}")
-        st.markdown(f"**Min Price:** ${v.get('min_price', 1)}")
+            st.markdown("---")
 
+            # First-Year Cost section
+            st.markdown("**First-Year Cost**")
+            draft_formula = _format_first_year(v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), "draft")
+            faab_formula = _format_first_year(v.get("faab_mult", 1.0), v.get("faab_flat", 10.0), "FAAB")
+            st.caption(f"Drafted: {draft_formula}")
+            st.caption(f"FAAB: {faab_formula}")
+
+            st.markdown("---")
+
+            # Escalation section
+            st.markdown("**Escalation**")
+            esc_type = v.get("esc_type", "from_base")
+            if esc_type == "from_base":
+                flat_per = v.get("esc_flat_per_year", 5.0)
+                st.caption(f"+${flat_per:.0f}/year from base")
+            elif esc_type == "compounding":
+                esc_desc = _format_compounding(v.get("esc_mult", 1.0), v.get("esc_flat", 0.0))
+                st.caption(f"{esc_desc}")
+                st.caption("(compounds yearly)")
+            else:
+                st.caption("None")
+
+        # Status indicator
         st.markdown("---")
-        st.markdown("**First-Year Cost**")
-
-        draft_formula = _format_first_year(v.get("draft_mult", 1.0), v.get("draft_flat", 0.0), "draft price")
-        faab_formula = _format_first_year(v.get("faab_mult", 1.0), v.get("faab_flat", 10.0), "FAAB bid")
-
-        st.caption(f"Drafted: {draft_formula}")
-        st.caption(f"FAAB: {faab_formula}")
-
-        st.markdown("---")
-        st.markdown("**Escalation**")
-
-        esc_type = v.get("esc_type", "from_base")
-        if esc_type == "from_base":
-            flat_per = v.get("esc_flat_per_year", 5.0)
-            st.caption(f"+${flat_per:.0f} per year kept")
-            st.caption("(from original cost)")
-        elif esc_type == "compounding":
-            st.caption(_format_compounding(v.get("esc_mult", 1.0), v.get("esc_flat", 0.0)))
-            st.caption("(compounds each year)")
+        if st.session_state.get("configured_keeper_rules"):
+            st.success("Saved")
         else:
-            st.caption("None")
-
-    # Status indicator
-    st.markdown("---")
-    if st.session_state.get("configured_keeper_rules"):
-        st.success("Saved")
-    else:
-        st.warning("Not saved")
+            st.warning("Not saved")
 
 
 def _format_first_year(mult: float, flat: float, source: str) -> str:
-    """Format first-year formula as friendly text."""
+    """Format first-year formula as friendly text. Uses 2 decimal places."""
+    # Clean up floating point noise
+    mult = round(mult, 2)
+    flat = round(flat, 2)
+
     if mult == 1.0 and flat == 0.0:
         return f"= {source}"
     elif mult == 1.0 and flat > 0:
@@ -446,23 +464,36 @@ def _format_first_year(mult: float, flat: float, source: str) -> str:
     elif mult == 1.0 and flat < 0:
         return f"= {source} - ${abs(flat):.0f}"
     elif flat == 0.0:
-        return f"= {mult}x {source}"
+        return f"= {_fmt_mult(mult)} {source}"
     elif flat > 0:
-        return f"= {mult}x {source} + ${flat:.0f}"
+        return f"= {_fmt_mult(mult)} {source} + ${flat:.0f}"
     else:
-        return f"= {mult}x {source} - ${abs(flat):.0f}"
+        return f"= {_fmt_mult(mult)} {source} - ${abs(flat):.0f}"
 
 
 def _format_compounding(mult: float, flat: float) -> str:
-    """Format compounding escalation."""
+    """Format compounding escalation. Uses 2 decimal places to avoid floating-point noise."""
+    # Clean up floating point noise
+    mult = round(mult, 2)
+    flat = round(flat, 2)
+
     parts = []
     if mult != 1.0:
-        parts.append(f"{mult}x prev")
+        parts.append(f"{_fmt_mult(mult)} previous")
     if flat > 0:
         parts.append(f"+ ${flat:.0f}")
     if not parts:
         return "no change"
     return " ".join(parts)
+
+
+def _fmt_mult(mult: float) -> str:
+    """Format multiplier cleanly (e.g., 1.5x not 1.500000x)."""
+    mult = round(mult, 2)
+    if mult == int(mult):
+        return f"{int(mult)}x"
+    else:
+        return f"{mult:.2f}x"
 
 
 def _calc_first_year(base: float, mult: float, flat: float, min_price: int) -> int:
@@ -473,9 +504,6 @@ def _calc_first_year(base: float, mult: float, flat: float, min_price: int) -> i
 
 def _calc_from_base(base: float, mult: float, flat: float, flat_per_year: float, year: int, min_price: int) -> int:
     """Calculate keeper cost using from-base escalation."""
-    # Year 1: base_cost
-    # Year 2: base_cost + flat_per_year
-    # Year 3: base_cost + 2 * flat_per_year
     base_cost = base * mult + flat
     cost = base_cost + flat_per_year * (year - 1)
     return max(min_price, round(cost))
@@ -527,9 +555,18 @@ def _show_preview_table(v: dict, base_value: float, acq_type: str):
 
 def _build_config(v: dict) -> dict:
     """Build configuration dict from wizard values."""
+    # Round values to avoid floating-point noise in saved config
+    draft_mult = round(v.get("draft_mult", 1.0), 2)
+    draft_flat = round(v.get("draft_flat", 0.0), 2)
+    faab_mult = round(v.get("faab_mult", 1.0), 2)
+    faab_flat = round(v.get("faab_flat", 10.0), 2)
+    esc_mult = round(v.get("esc_mult", 1.0), 2)
+    esc_flat = round(v.get("esc_flat", 0.0), 2)
+    esc_flat_per_year = round(v.get("esc_flat_per_year", 5.0), 2)
+
     base_cost_rules = {
-        "auction": {"source": "draft_price", "multiplier": v["draft_mult"], "flat": v["draft_flat"]},
-        "faab_only": {"source": "faab_bid", "multiplier": v["faab_mult"], "flat": v["faab_flat"]},
+        "auction": {"source": "draft_price", "multiplier": draft_mult, "flat": draft_flat},
+        "faab_only": {"source": "faab_bid", "multiplier": faab_mult, "flat": faab_flat},
         "free_agent": {"source": "fixed", "value": v["min_price"]}
     }
 
@@ -538,27 +575,22 @@ def _build_config(v: dict) -> dict:
     formulas = {}
 
     if esc_type == "from_base":
-        # Year 1: base_cost
-        # Year 2+: base_cost + flat_per_year * (keeper_year - 1)
         formulas["1"] = {"expression": "base_cost"}
         formulas["2+"] = {
             "type": "from_base",
-            "expression": f"base_cost + {v['esc_flat_per_year']} * (keeper_year - 1)",
-            "flat_per_year": v["esc_flat_per_year"],
+            "expression": f"base_cost + {esc_flat_per_year} * (keeper_year - 1)",
+            "flat_per_year": esc_flat_per_year,
         }
     elif esc_type == "compounding":
-        # Year 1: base_cost
-        # Year 2+: prev_cost * mult + flat
         formulas["1"] = {"expression": "base_cost"}
         formulas["2+"] = {
             "type": "compounding",
-            "expression": f"prev_cost * {v['esc_mult']} + {v['esc_flat']}",
-            "multiplier": v["esc_mult"],
-            "flat_add": v["esc_flat"],
+            "expression": f"prev_cost * {esc_mult} + {esc_flat}",
+            "multiplier": esc_mult,
+            "flat_add": esc_flat,
             "recursive": True
         }
     else:
-        # No escalation
         formulas["1"] = {"expression": "base_cost"}
         formulas["2+"] = {
             "type": "none",
