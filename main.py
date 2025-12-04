@@ -1022,6 +1022,21 @@ def run_register_flow():
                             if st.session_state.get("import_job_id"):
                                 st.info(f"Job ID: `{st.session_state.import_job_id}`")
                         else:
+                            # Show URL preview and privacy setting first
+                            db_name = sanitize_league_name_for_db(selected_league['name'])
+                            league_url = f"https://leaguehistory.streamlit.app/?league={db_name}"
+
+                            st.caption("Your league URL:")
+                            st.code(league_url, language=None)
+
+                            is_private = st.checkbox(
+                                "Link only (not searchable)",
+                                value=False,
+                                key="league_private",
+                                help="If checked, your league won't appear in the public search. Only people with the direct link can access it."
+                            )
+                            st.session_state.configured_is_private = is_private
+
                             # Optional Settings (collapsed by default)
                             st.markdown("##### Optional Settings")
 
@@ -1058,22 +1073,7 @@ def run_register_flow():
                                     st.success("No hidden managers found!")
                                     st.session_state.configured_manager_overrides = {}
 
-                            # Privacy Settings
-                            with st.expander("Privacy", expanded=False):
-                                is_private = st.checkbox(
-                                    "Link only (not searchable)",
-                                    value=False,
-                                    key="league_private",
-                                    help="If checked, your league won't appear in the public search. Only people with the direct link can access it."
-                                )
-                                st.session_state.configured_is_private = is_private
-
                             st.markdown("---")
-
-                            # Show URL preview
-                            db_name = sanitize_league_name_for_db(selected_league['name'])
-                            st.caption("Your league URL:")
-                            st.code(f"?league={db_name}", language=None)
 
                             # Import button with league name
                             if st.button(f"Import {selected_league['name']}", key="start_import_btn", type="primary", use_container_width=True):
