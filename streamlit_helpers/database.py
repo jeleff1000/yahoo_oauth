@@ -467,11 +467,38 @@ def upload_external_data_to_staging(
             if not files:
                 continue
 
-            # Combine all files of this type into one DataFrame
+            # Handle settings (JSON files) specially - preserve full JSON structure
+            if data_type == "settings":
+                settings_records = []
+                for file_info in files:
+                    year = file_info.get("year")
+                    json_data = file_info.get("data", {})
+                    if year and json_data:
+                        # Store as year + JSON string (preserves full structure)
+                        import json as json_module
+                        settings_records.append({
+                            "year": int(year),
+                            "settings_json": json_module.dumps(json_data),
+                            "filename": file_info.get("filename", ""),
+                        })
+
+                if settings_records:
+                    df = pd.DataFrame(settings_records)
+                    staging_table = "staging_settings"
+                    con.register("temp_df", df)
+                    con.execute(f"CREATE OR REPLACE TABLE staging.{staging_table} AS SELECT * FROM temp_df")
+                    con.unregister("temp_df")
+                    cnt = len(settings_records)
+                    results.append((staging_table, cnt))
+                    print(f"Uploaded {cnt} settings records to {db}.staging.{staging_table}")
+                continue
+
+            # For tabular data types, combine all files into one DataFrame
             all_records = []
             for file_info in files:
                 records = file_info.get("data", [])
-                all_records.extend(records)
+                if isinstance(records, list):
+                    all_records.extend(records)
 
             if not all_records:
                 continue
@@ -535,3 +562,126 @@ def check_staging_tables(db_name: str, token: str = None) -> list[str]:
 
     except Exception:
         return []
+
+
+def read_staging_data(db_name: str, token: str = None) -> dict:
+    """
+    Read all staging data from MotherDuck.
+
+    Returns dict with:
+    - settings: list of {year, settings_json, filename}
+    - matchup: DataFrame or None
+    - player: DataFrame or None
+    - draft: DataFrame or None
+    - transactions: DataFrame or None
+    - schedule: DataFrame or None
+    """
+    import json as json_module
+
+    token = token or MOTHERDUCK_TOKEN
+    if not token:
+        return {}
+
+    try:
+        db = _slug(db_name, "l")
+        con = _get_motherduck_connection(token)
+
+        result = {}
+
+        # Check what staging tables exist
+        tables = con.execute(f"""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_catalog = '{db}'
+            AND table_schema = 'staging'
+        """).fetchall()
+        table_names = [row[0] for row in tables]
+
+        # Read settings specially (JSON stored as string)
+        if "staging_settings" in table_names:
+            settings_df = con.execute(f"SELECT * FROM {db}.staging.staging_settings").fetchdf()
+            result["settings"] = []
+            for _, row in settings_df.iterrows():
+                result["settings"].append({
+                    "year": int(row["year"]),
+                    "settings_json": json_module.loads(row["settings_json"]) if row["settings_json"] else {},
+                    "filename": row.get("filename", ""),
+                })
+
+        # Read tabular data types
+        type_map = {
+            "staging_matchup": "matchup",
+            "staging_player": "player",
+            "staging_draft": "draft",
+            "staging_transactions": "transactions",
+            "staging_schedule": "schedule",
+        }
+
+        for staging_name, data_type in type_map.items():
+            if staging_name in table_names:
+                df = con.execute(f"SELECT * FROM {db}.staging.{staging_name}").fetchdf()
+                result[data_type] = df
+
+        con.close()
+        return result
+
+    except Exception as e:
+        print(f"Error reading staging data: {e}")
+        return {}
+
+
+def write_staging_settings_to_files(db_name: str, settings_dir: str, token: str = None) -> list[str]:
+    """
+    Read settings from staging and write to JSON files.
+
+    Args:
+        db_name: Database name
+        settings_dir: Directory to write settings files to
+        token: MotherDuck token
+
+    Returns:
+        List of years that were written
+    """
+    import json as json_module
+    from pathlib import Path
+
+    staging_data = read_staging_data(db_name, token)
+    settings_list = staging_data.get("settings", [])
+
+    if not settings_list:
+        return []
+
+    settings_path = Path(settings_dir)
+    settings_path.mkdir(parents=True, exist_ok=True)
+
+    written_years = []
+
+    for settings_entry in settings_list:
+        year = settings_entry.get("year")
+        settings_json = settings_entry.get("settings_json", {})
+
+        if not year or not settings_json:
+            continue
+
+        # Generate filename similar to Yahoo format
+        league_key = settings_json.get("league_key", "external")
+        safe_league_key = league_key.replace(".", "_")
+        filename = f"league_settings_{year}_{safe_league_key}.json"
+
+        filepath = settings_path / filename
+
+        # Add fetched_at if not present
+        if "fetched_at" not in settings_json:
+            from datetime import datetime
+            settings_json["fetched_at"] = datetime.now().isoformat()
+
+        # Ensure year is in the JSON
+        settings_json["year"] = year
+
+        with open(filepath, "w") as f:
+            json_module.dump(settings_json, f, indent=2)
+
+        written_years.append(year)
+        print(f"Wrote external settings for {year} to {filepath}")
+
+    return written_years

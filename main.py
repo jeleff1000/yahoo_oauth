@@ -87,6 +87,10 @@ from streamlit_helpers.import_flow import (
     detect_data_type_from_filename,
     extract_year_from_filename,
     normalize_columns,
+    clean_dataframe,
+    validate_dataframe,
+    check_year_conflicts,
+    check_duplicate_uploads,
 )
 from streamlit_helpers.ui_components import (
     load_custom_css,
@@ -125,25 +129,45 @@ INITIAL_IMPORT_SCRIPT = SCRIPTS_DIR / "initial_import_v2.py"
 # =========================
 # External Data Files Configuration UI
 # =========================
-def render_external_data_ui() -> Optional[dict]:
+def render_external_data_ui(yahoo_years: list[int] = None) -> Optional[dict]:
     """
     Render the external data files configuration UI.
     Returns a dict with uploaded file data if any files uploaded.
+
+    Args:
+        yahoo_years: List of years that Yahoo API will fetch data for.
+                     External uploads for these years will be blocked.
 
     Supports:
     - CSV, Excel (.xlsx), Parquet files for tabular data
     - JSON files for league settings
     - Auto-detection of data type from filename
     - Comprehensive column name aliases (owner->manager, season->year, etc.)
+    - Data validation and cleaning
+    - Duplicate detection
+    - Year conflict blocking (can't upload years Yahoo covers)
     """
     import pandas as pd
     import io
 
+    yahoo_years = yahoo_years or []
+
     st.markdown("### Import Historical Data Files")
-    st.caption("Upload data from previous years, ESPN leagues, or other sources. Files are merged with Yahoo data.")
+    st.caption("Upload data from years BEFORE your Yahoo league history. Files are merged with Yahoo data.")
+
+    # Show what years are blocked
+    if yahoo_years:
+        st.info(f"Yahoo will fetch data for: **{min(yahoo_years)}-{max(yahoo_years)}**. "
+                f"You can only upload data for years before {min(yahoo_years)}.")
 
     templates = get_data_templates()
     column_aliases = get_column_aliases()
+
+    # Initialize session state for uploaded files
+    if "external_uploaded_files" not in st.session_state:
+        st.session_state.external_uploaded_files = {}
+
+    uploaded_files = st.session_state.external_uploaded_files
 
     # Template download section
     with st.expander("Download Templates", expanded=False):
@@ -182,29 +206,30 @@ def render_external_data_ui() -> Optional[dict]:
         st.markdown("""
         | Canonical Name | Accepted Aliases |
         |---------------|------------------|
-        | `manager` | owner, Owner, manager_name, team_owner, fantasy_owner |
-        | `player` | player_name, Player, Player Name, athlete |
+        | `manager` | owner, Owner, manager_name, team_owner, user, username |
+        | `player` | player_name, Player, Player Name, athlete, name |
         | `year` | season, Season, Year, fantasy_year, league_year |
-        | `week` | Week, week_num, week_number, wk, gameweek |
-        | `points` | Points, fantasy_points, fpts, pts, score, total_points |
-        | `team_name` | team, Team, Team Name, fantasy_team |
-        | `team_points` | team_score, my_points, points_for, PF |
-        | `opponent` | Opponent, opp, opponent_name, vs |
+        | `week` | Week, week_num, week_number, wk, gameweek, scoring_period |
+        | `points` | Points, fantasy_points, fpts, pts, score, actual |
+        | `team_name` | team, Team, Team Name, fantasy_team, franchise |
+        | `team_points` | team_score, my_points, points_for, PF, your_score |
+        | `opponent` | Opponent, opp, opponent_name, vs, against |
         | `opponent_points` | opp_points, opponent_score, points_against, PA |
-        | `cost` | price, auction_price, salary, bid |
-        | `nfl_position` | position, pos, Pos, player_position |
+        | `win` | Win, W, won, victory |
+        | `loss` | Loss, L, lost, defeat |
+        | `round` | Round, draft_round, rd, rnd |
+        | `pick` | Pick, draft_pick, overall_pick, selection, slot |
+        | `cost` | price, auction_price, salary, bid, amount, value |
+        | `transaction_type` | type, action, move, activity |
         """)
 
     st.markdown("---")
 
-    # File upload section
-    uploaded_files = {}
-
     st.markdown("#### Upload Your Data Files")
-    st.caption("Supports CSV, Excel (.xlsx), Parquet, and JSON files. Files are auto-categorized by name pattern.")
+    st.caption("Supports CSV, Excel (.xlsx/.xls), Parquet, and JSON files. Files are auto-categorized by name pattern.")
 
     # Smart upload - auto-detect file type
-    with st.expander("Smart Upload (Auto-Detect)", expanded=True):
+    with st.expander("Upload Files", expanded=True):
         st.markdown("Upload any files and we'll auto-detect the data type from the filename.")
         st.caption("Examples: `league_settings_2014.json`, `matchup_2013.csv`, `draft_results.xlsx`")
 
@@ -222,6 +247,16 @@ def render_external_data_ui() -> Optional[dict]:
 
         if smart_files:
             for file in smart_files:
+                # Skip if already processed
+                file_key = f"{file.name}_{file.size}"
+                already_processed = any(
+                    f.get("_file_key") == file_key
+                    for files in uploaded_files.values()
+                    for f in files
+                )
+                if already_processed:
+                    continue
+
                 try:
                     # Auto-detect data type from filename
                     detected_type = detect_data_type_from_filename(file.name)
@@ -241,6 +276,13 @@ def render_external_data_ui() -> Optional[dict]:
                         # Extract year from JSON or filename
                         year = json_data.get("year") or json_data.get("season") or filename_year
 
+                        if year:
+                            year = int(year)
+                            # Check if year conflicts with Yahoo data
+                            if year in yahoo_years:
+                                st.error(f"{file.name}: Year {year} is already covered by Yahoo data. Cannot upload.")
+                                continue
+
                         if not year:
                             # Store file for user input
                             files_needing_year.append({
@@ -248,7 +290,8 @@ def render_external_data_ui() -> Optional[dict]:
                                 "filename": file.name,
                                 "data": json_data,
                                 "data_type": data_type,
-                                "file_type": "json"
+                                "file_type": "json",
+                                "_file_key": file_key
                             })
                             continue
 
@@ -260,20 +303,11 @@ def render_external_data_ui() -> Optional[dict]:
                             "data": json_data,
                             "file_type": "json",
                             "year": year,
-                            "row_count": 1  # JSON files are single records
+                            "row_count": 1,
+                            "_file_key": file_key
                         })
 
                         st.success(f"{file.name}: League settings for {year} loaded")
-
-                        # Show preview
-                        with st.expander(f"Preview: {file.name}"):
-                            # Show key info from settings
-                            if "metadata" in json_data:
-                                st.json(json_data["metadata"])
-                            else:
-                                # Show first few keys
-                                preview_keys = list(json_data.keys())[:5]
-                                st.json({k: json_data[k] for k in preview_keys if k in json_data})
 
                     else:
                         # Handle tabular files (CSV, Excel, Parquet)
@@ -287,7 +321,8 @@ def render_external_data_ui() -> Optional[dict]:
                             st.error(f"Unsupported file type: {file.name}")
                             continue
 
-                        # Normalize column names using comprehensive aliases
+                        # Clean and normalize
+                        df = clean_dataframe(df)
                         df = normalize_columns(df, column_aliases)
 
                         # Determine data type
@@ -314,7 +349,8 @@ def render_external_data_ui() -> Optional[dict]:
                                 "filename": file.name,
                                 "df": df,
                                 "file_type": "tabular",
-                                "filename_year": filename_year
+                                "filename_year": filename_year,
+                                "_file_key": file_key
                             })
                             continue
 
@@ -329,38 +365,65 @@ def render_external_data_ui() -> Optional[dict]:
                                 "filename": file.name,
                                 "df": df,
                                 "data_type": data_type,
-                                "file_type": "tabular"
+                                "file_type": "tabular",
+                                "_file_key": file_key
                             })
                             continue
-
-                        if data_type not in uploaded_files:
-                            uploaded_files[data_type] = []
 
                         # Add year column if missing but extracted from filename
                         if not has_year_column and year:
                             df["year"] = year
 
-                        # Validate required columns
-                        template = templates.get(data_type, {})
-                        required = set(template.get("required_columns", []))
-                        missing_cols = required - set(df.columns)
+                        # Check for year conflicts with Yahoo data
+                        if "year" in df.columns and yahoo_years:
+                            df_years = df["year"].dropna().unique().tolist()
+                            try:
+                                df_years = [int(y) for y in df_years]
+                            except (ValueError, TypeError):
+                                pass
 
-                        if missing_cols:
-                            st.warning(f"{file.name} ({data_type}): Missing columns: {missing_cols}")
-                        else:
-                            st.success(f"{file.name}: {len(df):,} rows loaded as **{data_type}** data")
+                            conflict_check = check_year_conflicts(df_years, yahoo_years)
+                            if conflict_check["has_conflicts"]:
+                                blocked = conflict_check["blocked"]
+                                st.error(f"{file.name}: Contains data for years {blocked} which are already covered by Yahoo. "
+                                        f"Please remove those years from your file.")
+                                continue
 
-                        # Show preview
-                        with st.expander(f"Preview: {file.name} ({data_type})"):
-                            st.dataframe(df.head(10), use_container_width=True)
+                        # Validate the data
+                        validation = validate_dataframe(df, data_type, templates)
+
+                        if not validation["valid"]:
+                            for err in validation["errors"]:
+                                st.error(f"{file.name}: {err}")
+                            continue
+
+                        # Show warnings
+                        for warn in validation["warnings"]:
+                            st.warning(f"{file.name}: {warn}")
+
+                        if data_type not in uploaded_files:
+                            uploaded_files[data_type] = []
 
                         uploaded_files[data_type].append({
                             "filename": file.name,
                             "data": df.to_dict(orient="records"),
                             "columns": list(df.columns),
                             "file_type": "tabular",
-                            "row_count": len(df)
+                            "row_count": len(df),
+                            "stats": validation["stats"],
+                            "_file_key": file_key
                         })
+
+                        st.success(f"{file.name}: {len(df):,} rows loaded as **{data_type}** data")
+
+                        # Show preview with stats
+                        with st.expander(f"Preview: {file.name} ({data_type})"):
+                            stats = validation["stats"]
+                            if "years" in stats:
+                                st.caption(f"Years: {stats['years']}")
+                            if "managers" in stats:
+                                st.caption(f"Managers: {', '.join(str(m) for m in stats['managers'][:5])}{'...' if len(stats['managers']) > 5 else ''}")
+                            st.dataframe(df.head(10), use_container_width=True)
 
                 except Exception as e:
                     st.error(f"Error reading {file.name}: {e}")
@@ -393,13 +456,14 @@ def render_external_data_ui() -> Optional[dict]:
                         # Check if year is needed
                         has_year = "year" in df.columns or file_info.get('filename_year')
                         if not has_year:
+                            st.warning(f"Please also specify the year for {file_info['filename']} below")
                             files_needing_year.append({
                                 "filename": file_info['filename'],
                                 "df": df,
                                 "data_type": data_type,
-                                "file_type": "tabular"
+                                "file_type": "tabular",
+                                "_file_key": file_info["_file_key"]
                             })
-                            st.info(f"Please also specify the year for {file_info['filename']}")
                         else:
                             if "year" not in df.columns and file_info.get('filename_year'):
                                 df["year"] = file_info['filename_year']
@@ -411,7 +475,8 @@ def render_external_data_ui() -> Optional[dict]:
                                 "data": df.to_dict(orient="records"),
                                 "columns": list(df.columns),
                                 "file_type": "tabular",
-                                "row_count": len(df)
+                                "row_count": len(df),
+                                "_file_key": file_info["_file_key"]
                             })
                             st.success(f"Added {file_info['filename']} as {data_type}")
                             st.rerun()
@@ -422,9 +487,15 @@ def render_external_data_ui() -> Optional[dict]:
             st.markdown("#### Specify Year")
             st.caption("We couldn't find the year for these files. Please specify:")
 
-            # Generate year options (2000-current year + 1)
+            # Generate year options - only years NOT covered by Yahoo
             current_year = datetime.now().year
-            year_options = list(range(current_year + 1, 1999, -1))
+            all_years = list(range(current_year + 1, 1999, -1))
+            if yahoo_years:
+                min_yahoo = min(yahoo_years)
+                year_options = [y for y in all_years if y < min_yahoo]
+                st.caption(f"Only years before {min_yahoo} are available (Yahoo covers {min_yahoo}+)")
+            else:
+                year_options = all_years
 
             for i, file_info in enumerate(files_needing_year):
                 col1, col2, col3 = st.columns([2, 2, 1])
@@ -451,7 +522,8 @@ def render_external_data_ui() -> Optional[dict]:
                                 "data": file_info['data'],
                                 "file_type": "json",
                                 "year": selected_year,
-                                "row_count": 1
+                                "row_count": 1,
+                                "_file_key": file_info.get("_file_key")
                             })
                         else:
                             df = file_info['df']
@@ -461,104 +533,94 @@ def render_external_data_ui() -> Optional[dict]:
                                 "data": df.to_dict(orient="records"),
                                 "columns": list(df.columns),
                                 "file_type": "tabular",
-                                "row_count": len(df)
+                                "row_count": len(df),
+                                "_file_key": file_info.get("_file_key")
                             })
 
                         st.success(f"Added {file_info['filename']} for year {selected_year}")
                         st.rerun()
 
-    # Manual upload by category (for files that couldn't be auto-detected)
-    with st.expander("Manual Upload (By Category)", expanded=False):
-        st.caption("Use this if auto-detection didn't work for your files.")
-
-        for data_type, template in templates.items():
-            st.markdown(f"**{data_type.title()}** - {template['description']}")
-
-            # Determine accepted file types
-            file_types = template.get("file_types", ["csv", "xlsx", "parquet"])
-            st.caption(f"Required: `{', '.join(template['required_columns'])}` | Files: {', '.join(file_types)}")
-
-            files = st.file_uploader(
-                f"Upload {data_type} files",
-                type=file_types,
-                accept_multiple_files=True,
-                key=f"manual_upload_{data_type}",
-                label_visibility="collapsed"
-            )
-
-            if files:
-                if data_type not in uploaded_files:
-                    uploaded_files[data_type] = []
-
-                for file in files:
-                    try:
-                        if file.name.endswith('.json'):
-                            # Handle JSON
-                            file_content = file.read()
-                            file.seek(0)
-                            json_data = json.loads(file_content)
-
-                            year = json_data.get("year") or json_data.get("season")
-                            if not year:
-                                import re
-                                year_match = re.search(r'_(\d{4})_', file.name)
-                                if year_match:
-                                    year = int(year_match.group(1))
-
-                            uploaded_files[data_type].append({
-                                "filename": file.name,
-                                "data": json_data,
-                                "file_type": "json",
-                                "year": year,
-                                "row_count": 1
-                            })
-                            st.success(f"{file.name}: Settings for {year or 'unknown year'} loaded")
-
-                        else:
-                            # Handle tabular
-                            if file.name.endswith('.csv'):
-                                df = pd.read_csv(file)
-                            elif file.name.endswith('.xlsx'):
-                                df = pd.read_excel(file)
-                            elif file.name.endswith('.parquet'):
-                                df = pd.read_parquet(file)
-                            else:
-                                continue
-
-                            df = normalize_columns(df, column_aliases)
-
-                            missing_cols = set(template["required_columns"]) - set(df.columns)
-                            if missing_cols:
-                                st.warning(f"{file.name}: Missing columns: {missing_cols}")
-                            else:
-                                st.success(f"{file.name}: {len(df):,} rows loaded")
-
-                            uploaded_files[data_type].append({
-                                "filename": file.name,
-                                "data": df.to_dict(orient="records"),
-                                "columns": list(df.columns),
-                                "file_type": "tabular",
-                                "row_count": len(df)
-                            })
-
-                    except Exception as e:
-                        st.error(f"Error reading {file.name}: {e}")
-
-            st.markdown("---")
-
-    # Summary
+    # Show currently uploaded files with remove buttons
     if uploaded_files:
         st.markdown("---")
-        st.markdown("#### Upload Summary")
+        st.markdown("#### Uploaded Files")
+
+        # Check for duplicates
+        dup_check = check_duplicate_uploads(uploaded_files)
+        if dup_check["has_duplicates"]:
+            for warn in dup_check["warnings"]:
+                st.warning(f"Duplicate: {warn}")
+
+        for data_type, files in uploaded_files.items():
+            if not files:
+                continue
+
+            st.markdown(f"**{data_type.title()}**")
+
+            for idx, file_info in enumerate(files):
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    if data_type == "settings":
+                        st.caption(f"{file_info['filename']} - Year {file_info.get('year', '?')}")
+                    else:
+                        stats = file_info.get("stats", {})
+                        years_str = ""
+                        if "years" in stats:
+                            years_str = f" (Years: {min(stats['years'])}-{max(stats['years'])})"
+                        elif "year" in file_info:
+                            years_str = f" (Year: {file_info['year']})"
+                        st.caption(f"{file_info['filename']} - {file_info.get('row_count', 0):,} rows{years_str}")
+                with col2:
+                    # Preview button
+                    if st.button("Preview", key=f"preview_{data_type}_{idx}"):
+                        st.session_state[f"show_preview_{data_type}_{idx}"] = True
+                with col3:
+                    # Remove button
+                    if st.button("Remove", key=f"remove_{data_type}_{idx}"):
+                        uploaded_files[data_type].pop(idx)
+                        if not uploaded_files[data_type]:
+                            del uploaded_files[data_type]
+                        st.rerun()
+
+                # Show preview if requested
+                if st.session_state.get(f"show_preview_{data_type}_{idx}"):
+                    if file_info["file_type"] == "json":
+                        st.json(file_info["data"].get("metadata", file_info["data"]))
+                    else:
+                        preview_df = pd.DataFrame(file_info["data"][:10])
+                        st.dataframe(preview_df, use_container_width=True)
+                    if st.button("Hide", key=f"hide_preview_{data_type}_{idx}"):
+                        st.session_state[f"show_preview_{data_type}_{idx}"] = False
+                        st.rerun()
+
+        # Summary
+        st.markdown("---")
+        st.markdown("#### Summary")
+        total_files = sum(len(files) for files in uploaded_files.values())
+        total_rows = sum(
+            f.get("row_count", 0)
+            for files in uploaded_files.values()
+            for f in files
+        )
+        st.markdown(f"**{total_files} file(s)** uploaded, **{total_rows:,} total rows**")
+
         for data_type, files in uploaded_files.items():
             if data_type == "settings":
-                years = [f.get("year", "?") for f in files]
-                st.markdown(f"- **{data_type.title()}**: {len(files)} file(s) for years: {', '.join(str(y) for y in years)}")
+                years = sorted([f.get("year", "?") for f in files])
+                st.caption(f"- {data_type.title()}: {len(files)} file(s) for years {years}")
             else:
-                total_rows = sum(f.get("row_count", 0) for f in files)
-                st.markdown(f"- **{data_type.title()}**: {len(files)} file(s), {total_rows:,} total rows")
+                type_rows = sum(f.get("row_count", 0) for f in files)
+                st.caption(f"- {data_type.title()}: {len(files)} file(s), {type_rows:,} rows")
 
-        return {"external_data": uploaded_files}
+        # Return data (clean up internal keys)
+        clean_files = {}
+        for data_type, files in uploaded_files.items():
+            clean_files[data_type] = []
+            for f in files:
+                clean_f = {k: v for k, v in f.items() if not k.startswith("_")}
+                clean_files[data_type].append(clean_f)
+
+        return {"external_data": clean_files}
 
     return None
 
@@ -1366,7 +1428,31 @@ def run_register_flow():
 
                             # External Data Files Tab
                             with st.expander("Import Historical Data (ESPN, other years, etc.)", expanded=False):
-                                external_data = render_external_data_ui()
+                                # Clear uploaded files if league changed
+                                current_league_for_uploads = st.session_state.get("_external_uploads_league")
+                                if current_league_for_uploads != selected_league.get("name"):
+                                    st.session_state.external_uploaded_files = {}
+                                    st.session_state._external_uploads_league = selected_league.get("name")
+
+                                # Discover Yahoo years for this league to block overlapping uploads
+                                yahoo_years = []
+                                yahoo_years_cache_key = f"yahoo_years_{selected_league.get('name')}"
+                                if yahoo_years_cache_key in st.session_state:
+                                    yahoo_years = st.session_state[yahoo_years_cache_key]
+                                elif "games_data" in st.session_state:
+                                    try:
+                                        all_games = extract_football_games(st.session_state.games_data)
+                                        seasons = seasons_for_league_name(
+                                            st.session_state.access_token,
+                                            all_games,
+                                            selected_league.get("name")
+                                        )
+                                        yahoo_years = [int(s) for s in seasons] if seasons else []
+                                        st.session_state[yahoo_years_cache_key] = yahoo_years
+                                    except Exception:
+                                        pass  # If discovery fails, don't block any years
+
+                                external_data = render_external_data_ui(yahoo_years=yahoo_years)
                                 st.session_state.configured_external_data = external_data
 
                             # Hidden Manager Detection - LAST so it loads in background while you configure above

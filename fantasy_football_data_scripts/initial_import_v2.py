@@ -57,6 +57,20 @@ from multi_league.core.import_progress import ProgressTracker
 # canonical script dir
 SCRIPT_DIR = Path(__file__).parent
 
+# Add path for streamlit_helpers so we can import database functions
+_streamlit_helpers_path = SCRIPT_DIR.parent / "streamlit_helpers"
+if str(_streamlit_helpers_path) not in sys.path:
+    sys.path.insert(0, str(_streamlit_helpers_path))
+
+# External data staging functions (only needed if has_external_data is True)
+def _get_staging_functions():
+    """Lazy import of staging functions to avoid import errors when not needed."""
+    try:
+        from database import read_staging_data, write_staging_settings_to_files
+        return read_staging_data, write_staging_settings_to_files
+    except ImportError:
+        return None, None
+
 TERMINAL_ERROR_PATTERNS = [
     r"no (league|data) found",
     r"no data returned",
@@ -438,6 +452,33 @@ def main():
         results["settings"].append(("League Settings (all years)", all_settings_ok))
         tracker.end_phase()
         log("\n[SETTINGS] Settings fetch complete. All data fetchers will use these saved settings.")
+
+        # -------------------------------------------------------------------------
+        # PHASE 0.5: EXTERNAL DATA - Write settings from MotherDuck staging
+        # -------------------------------------------------------------------------
+        if ctx.has_external_data:
+            log("\n" + "-" * 48)
+            log("[EXTERNAL DATA] Checking for external data in MotherDuck staging...")
+            read_staging_data, write_staging_settings_to_files = _get_staging_functions()
+
+            if read_staging_data and write_staging_settings_to_files:
+                try:
+                    # Write external settings to JSON files
+                    written_years = write_staging_settings_to_files(
+                        db_name=ctx.league_name,
+                        settings_dir=str(settings_dir),
+                        token=os.environ.get("MOTHERDUCK_TOKEN")
+                    )
+                    if written_years:
+                        log(f"[EXTERNAL DATA] Wrote settings for {len(written_years)} external years: {sorted(written_years)}")
+                    else:
+                        log("[EXTERNAL DATA] No external settings found in staging")
+                except Exception as e:
+                    log(f"[EXTERNAL DATA] Warning: Failed to write external settings: {e}")
+            else:
+                log("[EXTERNAL DATA] Warning: Staging functions not available (database module not found)")
+            log("-" * 48)
+
         log("=" * 96)
 
     # -------------------------------------------------------------------------
@@ -1728,6 +1769,83 @@ def main():
         log(f"[PRE] schedule.parquet ready: {path}")
     except Exception as e:
         log(f"[PRE][WARN] schedule normalize failed: {e}")
+
+    # -------------------------------------------------------------------------
+    # EXTERNAL DATA: Merge staging tabular data into parquet files
+    # -------------------------------------------------------------------------
+    if ctx.has_external_data:
+        log("\n" + "-" * 48)
+        log("[EXTERNAL DATA] Merging external tabular data from staging...")
+        read_staging_data, _ = _get_staging_functions()
+
+        if read_staging_data:
+            try:
+                staging_data = read_staging_data(
+                    db_name=ctx.league_name,
+                    token=os.environ.get("MOTHERDUCK_TOKEN")
+                )
+
+                # Map staging data types to their target parquet files
+                data_type_to_file = {
+                    "matchup": ("matchup_data_directory", "matchup.parquet"),
+                    "player": ("player_data_directory", "player.parquet"),
+                    "draft": ("player_data_directory", "draft.parquet"),
+                    "transactions": ("player_data_directory", "transactions.parquet"),
+                    "schedule": ("data_directory", "schedule.parquet"),
+                }
+
+                for data_type, (dir_attr, filename) in data_type_to_file.items():
+                    if data_type in staging_data and staging_data[data_type] is not None:
+                        external_df = staging_data[data_type]
+                        if len(external_df) > 0:
+                            # Get target directory
+                            target_dir = Path(getattr(ctx, dir_attr, ctx.data_directory))
+                            target_file = target_dir / filename
+
+                            log(f"[EXTERNAL DATA] Processing {data_type}: {len(external_df)} rows from staging")
+
+                            # Load existing parquet if it exists
+                            if target_file.exists():
+                                existing_df = pd.read_parquet(target_file)
+                                log(f"[EXTERNAL DATA] Existing {filename}: {len(existing_df)} rows")
+
+                                # Add source column to distinguish data origin
+                                if "data_source" not in external_df.columns:
+                                    external_df["data_source"] = "external"
+                                if "data_source" not in existing_df.columns:
+                                    existing_df["data_source"] = "yahoo"
+
+                                # Concatenate (external data should have different years)
+                                combined_df = pd.concat([existing_df, external_df], ignore_index=True)
+
+                                # Remove duplicates if any (prefer yahoo data)
+                                if "year" in combined_df.columns and "week" in combined_df.columns:
+                                    key_cols = ["year", "week"]
+                                    if "manager_id" in combined_df.columns:
+                                        key_cols.append("manager_id")
+                                    if "player_key" in combined_df.columns:
+                                        key_cols.append("player_key")
+
+                                    before_len = len(combined_df)
+                                    combined_df = combined_df.drop_duplicates(subset=key_cols, keep="first")
+                                    if len(combined_df) < before_len:
+                                        log(f"[EXTERNAL DATA] Removed {before_len - len(combined_df)} duplicate rows")
+
+                                write_parquet_robust(combined_df, target_file)
+                                log(f"[EXTERNAL DATA] Merged {filename}: {len(combined_df)} total rows")
+                            else:
+                                # No existing file, just write external data
+                                if "data_source" not in external_df.columns:
+                                    external_df["data_source"] = "external"
+                                write_parquet_robust(external_df, target_file)
+                                log(f"[EXTERNAL DATA] Wrote new {filename}: {len(external_df)} rows")
+
+                log("[EXTERNAL DATA] External tabular data merge complete")
+            except Exception as e:
+                log(f"[EXTERNAL DATA] Warning: Failed to merge external tabular data: {e}")
+        else:
+            log("[EXTERNAL DATA] Warning: Staging functions not available")
+        log("-" * 48)
 
     # -------------------------------------------------------------------------
     # PHASE 3: Transformations / Cross-Imports / Aggregations

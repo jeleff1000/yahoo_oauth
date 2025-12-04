@@ -99,6 +99,290 @@ def mark_import_started(session_state):
     session_state.last_import_triggered_at = time.time()
 
 
+# =========================
+# Data Validation & Cleaning
+# =========================
+
+def clean_dataframe(df):
+    """
+    Clean a DataFrame by:
+    - Stripping whitespace from string columns
+    - Converting empty strings to None
+    - Parsing numeric strings with commas (1,234 -> 1234)
+    - Normalizing boolean values
+
+    Returns cleaned DataFrame.
+    """
+    import pandas as pd
+
+    df = df.copy()
+
+    for col in df.columns:
+        # Strip whitespace from string columns
+        if df[col].dtype == 'object':
+            df[col] = df[col].apply(lambda x: x.strip() if isinstance(x, str) else x)
+            # Convert empty strings to None
+            df[col] = df[col].replace('', None)
+            df[col] = df[col].replace('N/A', None)
+            df[col] = df[col].replace('n/a', None)
+            df[col] = df[col].replace('NA', None)
+            df[col] = df[col].replace('null', None)
+            df[col] = df[col].replace('NULL', None)
+
+    return df
+
+
+def parse_numeric_column(series):
+    """
+    Parse a column that should be numeric but may have formatting issues.
+    Handles: commas (1,234), dollar signs ($50), percentages (50%).
+
+    Returns parsed series and list of unparseable values.
+    """
+    import pandas as pd
+    import re
+
+    errors = []
+
+    def parse_value(x):
+        if pd.isna(x) or x is None:
+            return None
+        if isinstance(x, (int, float)):
+            return x
+        if isinstance(x, str):
+            # Remove common formatting
+            cleaned = x.strip()
+            cleaned = cleaned.replace(',', '')  # 1,234 -> 1234
+            cleaned = cleaned.replace('$', '')  # $50 -> 50
+            cleaned = cleaned.replace('%', '')  # 50% -> 50
+            cleaned = cleaned.strip()
+
+            if cleaned == '' or cleaned.lower() in ('n/a', 'na', 'null', '-', '--'):
+                return None
+
+            try:
+                # Try int first, then float
+                if '.' in cleaned:
+                    return float(cleaned)
+                else:
+                    return int(cleaned)
+            except ValueError:
+                errors.append(x)
+                return None
+        return x
+
+    result = series.apply(parse_value)
+    return result, errors
+
+
+def validate_dataframe(df, data_type: str, templates: dict) -> dict:
+    """
+    Validate a DataFrame against the template requirements.
+
+    Returns dict with:
+    - valid: bool
+    - errors: list of error messages
+    - warnings: list of warning messages
+    - stats: dict of column statistics
+    """
+    import pandas as pd
+
+    result = {
+        "valid": True,
+        "errors": [],
+        "warnings": [],
+        "stats": {}
+    }
+
+    template = templates.get(data_type, {})
+    required_cols = set(template.get("required_columns", []))
+
+    # Check required columns exist
+    missing_cols = required_cols - set(df.columns)
+    if missing_cols:
+        result["valid"] = False
+        result["errors"].append(f"Missing required columns: {missing_cols}")
+
+    # Validate data types for key columns
+    type_checks = {
+        "year": ("numeric", 2000, 2100),
+        "week": ("numeric", 0, 25),
+        "points": ("numeric", -100, 500),
+        "team_points": ("numeric", 0, 300),
+        "opponent_points": ("numeric", 0, 300),
+        "win": ("boolean_int", 0, 1),
+        "loss": ("boolean_int", 0, 1),
+        "round": ("numeric", 1, 30),
+        "pick": ("numeric", 1, 500),
+        "cost": ("numeric", 0, 1000),
+    }
+
+    for col, (check_type, min_val, max_val) in type_checks.items():
+        if col not in df.columns:
+            continue
+
+        col_data = df[col].dropna()
+        if len(col_data) == 0:
+            continue
+
+        if check_type == "numeric":
+            # Check if values are numeric
+            non_numeric = []
+            for val in col_data:
+                if not isinstance(val, (int, float)):
+                    try:
+                        float(str(val).replace(',', '').replace('$', ''))
+                    except (ValueError, TypeError):
+                        non_numeric.append(val)
+
+            if non_numeric:
+                result["warnings"].append(
+                    f"Column '{col}' has non-numeric values: {non_numeric[:3]}{'...' if len(non_numeric) > 3 else ''}"
+                )
+
+            # Check range
+            try:
+                numeric_vals = pd.to_numeric(col_data, errors='coerce').dropna()
+                if len(numeric_vals) > 0:
+                    if numeric_vals.min() < min_val or numeric_vals.max() > max_val:
+                        result["warnings"].append(
+                            f"Column '{col}' has values outside expected range ({min_val}-{max_val}): "
+                            f"min={numeric_vals.min()}, max={numeric_vals.max()}"
+                        )
+            except Exception:
+                pass
+
+        elif check_type == "boolean_int":
+            unique_vals = set(col_data.unique())
+            valid_vals = {0, 1, '0', '1', True, False, 'true', 'false', 'True', 'False', 'TRUE', 'FALSE'}
+            invalid = unique_vals - valid_vals
+            if invalid:
+                result["warnings"].append(
+                    f"Column '{col}' should be 0/1 but has: {invalid}"
+                )
+
+    # Check for required string columns not being empty
+    string_required = {"manager", "player", "opponent", "team_name", "transaction_type"}
+    for col in string_required:
+        if col in df.columns and col in required_cols:
+            null_count = df[col].isna().sum()
+            empty_count = (df[col] == '').sum() if df[col].dtype == 'object' else 0
+            total_bad = null_count + empty_count
+            if total_bad > 0:
+                result["warnings"].append(
+                    f"Column '{col}' has {total_bad} empty/null values out of {len(df)} rows"
+                )
+
+    # Generate stats
+    result["stats"] = {
+        "row_count": len(df),
+        "columns": list(df.columns),
+    }
+
+    if "year" in df.columns:
+        try:
+            years = pd.to_numeric(df["year"], errors='coerce').dropna()
+            if len(years) > 0:
+                result["stats"]["years"] = sorted(years.unique().astype(int).tolist())
+                result["stats"]["year_min"] = int(years.min())
+                result["stats"]["year_max"] = int(years.max())
+        except Exception:
+            pass
+
+    if "week" in df.columns:
+        try:
+            weeks = pd.to_numeric(df["week"], errors='coerce').dropna()
+            if len(weeks) > 0:
+                result["stats"]["week_min"] = int(weeks.min())
+                result["stats"]["week_max"] = int(weeks.max())
+        except Exception:
+            pass
+
+    if "manager" in df.columns:
+        result["stats"]["managers"] = df["manager"].dropna().unique().tolist()
+
+    return result
+
+
+def check_year_conflicts(uploaded_years: list[int], yahoo_years: list[int]) -> dict:
+    """
+    Check if uploaded data years conflict with Yahoo-covered years.
+
+    Args:
+        uploaded_years: Years in the uploaded data
+        yahoo_years: Years that Yahoo API will fetch
+
+    Returns dict with:
+    - conflicts: list of years that conflict
+    - allowed: list of years that are OK to upload
+    - blocked: list of years that should be blocked
+    """
+    uploaded_set = set(uploaded_years)
+    yahoo_set = set(yahoo_years)
+
+    conflicts = uploaded_set & yahoo_set
+    allowed = uploaded_set - yahoo_set
+    blocked = conflicts
+
+    return {
+        "conflicts": sorted(list(conflicts)),
+        "allowed": sorted(list(allowed)),
+        "blocked": sorted(list(blocked)),
+        "has_conflicts": len(conflicts) > 0
+    }
+
+
+def check_duplicate_uploads(uploaded_files: dict) -> dict:
+    """
+    Check for duplicate data within uploaded files.
+
+    Returns dict with:
+    - duplicates: list of (data_type, year) tuples that appear multiple times
+    - warnings: list of warning messages
+    """
+    from collections import defaultdict
+
+    year_counts = defaultdict(lambda: defaultdict(list))  # data_type -> year -> [filenames]
+
+    for data_type, files in uploaded_files.items():
+        for file_info in files:
+            filename = file_info.get("filename", "unknown")
+
+            if file_info.get("file_type") == "json":
+                year = file_info.get("year")
+                if year:
+                    year_counts[data_type][year].append(filename)
+            else:
+                # Check years in tabular data
+                data = file_info.get("data", [])
+                years_in_file = set()
+                for row in data:
+                    if "year" in row and row["year"]:
+                        try:
+                            years_in_file.add(int(row["year"]))
+                        except (ValueError, TypeError):
+                            pass
+                for year in years_in_file:
+                    year_counts[data_type][year].append(filename)
+
+    duplicates = []
+    warnings = []
+
+    for data_type, years in year_counts.items():
+        for year, filenames in years.items():
+            if len(filenames) > 1:
+                duplicates.append((data_type, year))
+                warnings.append(
+                    f"Year {year} appears in multiple {data_type} files: {', '.join(filenames)}"
+                )
+
+    return {
+        "duplicates": duplicates,
+        "warnings": warnings,
+        "has_duplicates": len(duplicates) > 0
+    }
+
+
 def get_column_aliases() -> dict:
     """
     Return a comprehensive mapping of column name aliases to canonical names.
