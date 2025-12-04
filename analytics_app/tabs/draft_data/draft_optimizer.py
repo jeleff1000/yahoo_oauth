@@ -16,30 +16,6 @@ from pulp import LpMaximize, LpProblem, LpVariable, lpSum, value, PULP_CBC_CMD
 from md.core import T, detect_roster_structure, run_query
 from typing import Dict, Optional
 
-# League Intelligence imports
-try:
-    from analytics_app.tabs.draft_data.optimizer_ui_enhancements import (
-        render_league_insights_panel,
-    )
-
-    LEAGUE_INTELLIGENCE_AVAILABLE = True
-except ImportError:
-    try:
-        from .optimizer_ui_enhancements import (
-            render_league_insights_panel,
-        )
-
-        LEAGUE_INTELLIGENCE_AVAILABLE = True
-    except ImportError:
-        try:
-            from optimizer_ui_enhancements import (
-                render_league_insights_panel,
-            )
-
-            LEAGUE_INTELLIGENCE_AVAILABLE = True
-        except ImportError:
-            LEAGUE_INTELLIGENCE_AVAILABLE = False
-
 
 def detect_roster_config() -> dict:
     """
