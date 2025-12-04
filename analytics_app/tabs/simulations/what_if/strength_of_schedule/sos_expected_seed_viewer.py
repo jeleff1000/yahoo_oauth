@@ -5,66 +5,18 @@ from ...shared.simulation_styles import render_section_header
 
 
 def _select_week(base_df):
-    """Standardized week selection with session state buttons."""
+    """Auto-select latest year/week (unified header handles selection)."""
     if base_df.empty or base_df["year"].dropna().empty:
         st.info("No valid year data available.")
         return None, None
 
-    # Session state buttons instead of radio
-    mode_key = "opp_exp_seed_mode"
-    if mode_key not in st.session_state:
-        st.session_state[mode_key] = 0
-
-    modes = ["Today's Date", "Specific Week"]
-    cols = st.columns(2)
-    for idx, (col, name) in enumerate(zip(cols, modes)):
-        with col:
-            is_active = st.session_state[mode_key] == idx
-            if st.button(
-                name,
-                key=f"opp_exp_seed_btn_{idx}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-            ):
-                if not is_active:
-                    st.session_state[mode_key] = idx
-                    st.rerun()
-
-    mode = modes[st.session_state[mode_key]]
-
-    if mode == "Today's Date":
-        max_year = base_df["year"].max()
-        if pd.isna(max_year):
-            st.info("No valid year data available.")
-            return None, None
-        year = int(max_year)
-        week = int(base_df[base_df["year"] == year]["week"].max())
-        st.caption(f"Auto-selected Year {year}, Week {week}")
-    else:
-        years = sorted(base_df["year"].unique())
-        if not years:
-            st.info("No valid year data available.")
-            return None, None
-
-        c_year, c_week = st.columns(2)
-        year_choice = c_year.selectbox(
-            "Year", ["Select Year"] + [str(y) for y in years], key="opp_exp_seed_year"
-        )
-        if year_choice == "Select Year":
-            return None, None
-        year = int(year_choice)
-
-        weeks = sorted(base_df[base_df["year"] == year]["week"].unique())
-        if not weeks:
-            st.info("No valid week data available.")
-            return None, None
-
-        week_choice = c_week.selectbox(
-            "Week", ["Select Week"] + [str(w) for w in weeks], key="opp_exp_seed_week"
-        )
-        if week_choice == "Select Week":
-            return None, None
-        week = int(week_choice)
+    # Auto-select latest year/week
+    max_year = base_df["year"].max()
+    if pd.isna(max_year):
+        st.info("No valid year data available.")
+        return None, None
+    year = int(max_year)
+    week = int(base_df[base_df["year"] == year]["week"].max())
 
     return year, week
 
