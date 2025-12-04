@@ -1586,11 +1586,21 @@ def perform_import_flow(league_info: dict):
 
         # Check if external data extends the year range
         external_data = league_info.get("external_data")
-        if external_data and "external_data" in external_data:
+        if external_data and isinstance(external_data, dict) and "external_data" in external_data:
             # Find min/max years from external data
             for data_type, files in external_data["external_data"].items():
+                if not isinstance(files, list):
+                    continue
                 for file_info in files:
-                    for row in file_info.get("data", []):
+                    if not isinstance(file_info, dict):
+                        continue
+                    data_rows = file_info.get("data", [])
+                    if not isinstance(data_rows, list):
+                        continue
+                    for row in data_rows:
+                        # Skip non-dict rows (could be strings from malformed data)
+                        if not isinstance(row, dict):
+                            continue
                         if "year" in row and row["year"]:
                             try:
                                 year = int(row["year"])
@@ -1602,7 +1612,7 @@ def perform_import_flow(league_info: dict):
 
         # Upload external data directly to MotherDuck (bypasses GitHub Actions size limits)
         has_external_data = False
-        if external_data and "external_data" in external_data:
+        if external_data and isinstance(external_data, dict) and "external_data" in external_data:
             with st.spinner("Uploading external data to MotherDuck..."):
                 try:
                     from streamlit_helpers.database import upload_external_data_to_staging
