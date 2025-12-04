@@ -152,7 +152,11 @@ def calculate_consecutive_keeper_years(df: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate consecutive years each player has been kept by the same manager.
 
-    Uses end-of-season roster (max week per year) to determine keeper streaks.
+    Uses end-of-season roster (last week with rostered players) to determine keeper streaks.
+    This dynamically finds the championship week for any playoff format.
+
+    Args:
+        df: Player DataFrame with weekly data
 
     Returns DataFrame with:
         - keeper_year: consecutive years kept (1 = first time kept)
@@ -162,14 +166,46 @@ def calculate_consecutive_keeper_years(df: pd.DataFrame) -> pd.DataFrame:
     result['keeper_year'] = 0
     result['base_keeper_cost'] = 0.0
 
-    # Get end-of-season rows (max week per player/manager/year)
+    # Get end-of-season rows using championship week
+    # (not max week which includes post-season roster clearing)
     if 'week' not in result.columns:
         # Already season-level data
         season_df = result
     else:
-        # Get max week per player/manager/year
-        idx = result.groupby(['yahoo_player_id', 'manager', 'year'])['week'].idxmax()
-        season_df = result.loc[idx].copy()
+        # Determine championship week dynamically per year
+        # Method: Find the last week where ANY players have real managers
+        # This works for any playoff format (2-week, 3-week, 4-week, etc.)
+        season_end_weeks = {}
+
+        for year in result['year'].unique():
+            year_data = result[result['year'] == year]
+
+            # Find max week where any player has a real manager (not Unrostered/blank/null)
+            rostered = year_data[
+                ~year_data['manager'].isin(['Unrostered', 'No Manager', ''])
+                & year_data['manager'].notna()
+            ]
+            if len(rostered) > 0:
+                season_end_weeks[year] = int(rostered['week'].max())
+            else:
+                # Fallback to max week if no rostered players found
+                season_end_weeks[year] = int(year_data['week'].max())
+
+        # Filter to only rows at the season end week for each year
+        filtered_rows = []
+        for year, end_week in season_end_weeks.items():
+            year_end_data = result[(result['year'] == year) & (result['week'] == end_week)]
+            filtered_rows.append(year_end_data)
+
+        if filtered_rows:
+            season_end_df = pd.concat(filtered_rows, ignore_index=False)
+            # Get one row per player/manager/year (in case of duplicates)
+            idx = season_end_df.groupby(['yahoo_player_id', 'manager', 'year'])['week'].idxmax()
+            season_df = season_end_df.loc[idx].copy()
+        else:
+            # Fallback to old behavior if something went wrong
+            idx = result.groupby(['yahoo_player_id', 'manager', 'year'])['week'].idxmax()
+            season_df = result.loc[idx].copy()
 
     # Sort by player, manager, year
     season_df = season_df.sort_values(['yahoo_player_id', 'manager', 'year'])
@@ -268,6 +304,7 @@ def calculate_keeper_economics(
         return {'status': 'error', 'reason': f'missing_columns: {missing}'}
 
     # Calculate consecutive keeper years
+    # (dynamically finds championship week as last week with rostered players)
     print("\nCalculating consecutive keeper years...")
     player = calculate_consecutive_keeper_years(player)
 
@@ -326,7 +363,7 @@ def main():
     args = parser.parse_args()
 
     ctx = LeagueContext.load(Path(args.context))
-    player_path = ctx.data_dir / "player.parquet"
+    player_path = ctx.data_directory / "player.parquet"
 
     result = calculate_keeper_economics(ctx, player_path, dry_run=args.dry_run)
     print(f"\nResult: {result}")
