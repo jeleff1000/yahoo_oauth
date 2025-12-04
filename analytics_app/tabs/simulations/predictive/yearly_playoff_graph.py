@@ -21,8 +21,14 @@ class PlayoffOddsCumulativeViewer:
         self.df = matchup_data_df.copy()
 
     @st.fragment
-    def display(self):
-        st.subheader("📈 Multi-Season Playoff Trends")
+    def display(self, year: int = None, week: int = None):
+        """Display multi-season playoff trends.
+
+        Args:
+            year: Pre-selected year (from unified header)
+            week: Pre-selected week (from unified header)
+        """
+        st.subheader("Multi-Season Playoff Trends")
 
         st.caption("Track how managers' playoff fortunes changed year-over-year")
 

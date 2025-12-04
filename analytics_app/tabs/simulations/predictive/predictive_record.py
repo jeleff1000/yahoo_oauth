@@ -3,71 +3,11 @@
 predictive_record.py - Predicted final records visualization
 """
 import re
+from typing import Optional
 import pandas as pd
 import streamlit as st
 from .table_styles import render_modern_table
 from ..shared.simulation_styles import render_section_header
-
-
-def _select_week_for_record(base_df: pd.DataFrame):
-    """Week selection with auto-load option."""
-    # Session state buttons instead of radio
-    mode_key = "pred_mode_record"
-    if mode_key not in st.session_state:
-        st.session_state[mode_key] = 0
-
-    modes = ["Today's Date", "Specific Week"]
-    cols = st.columns(2)
-    for idx, (col, name) in enumerate(zip(cols, modes)):
-        with col:
-            is_active = st.session_state[mode_key] == idx
-            if st.button(
-                name,
-                key=f"pred_record_btn_{idx}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-            ):
-                if not is_active:
-                    st.session_state[mode_key] = idx
-                    st.rerun()
-
-    mode = modes[st.session_state[mode_key]]
-
-    if mode == "Today's Date":
-        year = int(base_df["year"].max())
-        week = int(base_df[base_df["year"] == year]["week"].max())
-        st.caption(f"📅 Auto-selected Year {year}, Week {week}")
-        return year, week, True
-    else:
-        years = sorted(base_df["year"].astype(int).unique())
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            year_choice = st.selectbox(
-                "Year",
-                ["Select Year"] + [str(y) for y in years],
-                key="pred_year_record",
-            )
-
-        if year_choice == "Select Year":
-            return None, None, False
-
-        year = int(year_choice)
-        weeks = sorted(base_df[base_df["year"] == year]["week"].astype(int).unique())
-
-        with col2:
-            week_choice = st.selectbox(
-                "Week",
-                ["Select Week"] + [str(w) for w in weeks],
-                key="pred_week_record",
-            )
-
-        if week_choice == "Select Week":
-            return None, None, False
-
-        week = int(week_choice)
-        return year, week, False
 
 
 @st.fragment
@@ -143,8 +83,18 @@ def _render_expected_record(base_df: pd.DataFrame, year: int, week: int):
 
 
 @st.fragment
-def display_predicted_record(matchup_data_df: pd.DataFrame):
-    """Main entry point for predicted records."""
+def display_predicted_record(
+    matchup_data_df: pd.DataFrame,
+    year: Optional[int] = None,
+    week: Optional[int] = None,
+):
+    """Main entry point for predicted records.
+
+    Args:
+        matchup_data_df: Matchup data
+        year: Selected year (from unified header)
+        week: Selected week (from unified header)
+    """
     if matchup_data_df is None or matchup_data_df.empty:
         st.info("No data available")
         return
@@ -162,14 +112,12 @@ def display_predicted_record(matchup_data_df: pd.DataFrame):
     base_df["year"] = base_df["year"].astype(int)
     base_df["week"] = base_df["week"].astype(int)
 
-    year, week, auto_display = _select_week_for_record(base_df)
+    # Use provided year/week or default to latest
+    if year is None:
+        year = int(base_df["year"].max())
+    if week is None:
+        week = int(base_df[base_df["year"] == year]["week"].max())
 
-    if year is None or week is None:
-        return
-
-    # Auto-display or show button
-    if auto_display:
+    # Render directly (year/week comes from unified header)
+    with st.container(border=True):
         _render_expected_record(base_df, year, week)
-    else:
-        if st.button("Go", key="pred_record_go"):
-            _render_expected_record(base_df, year, week)
