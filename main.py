@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import json
+import hashlib
 from pathlib import Path
 from datetime import datetime, timezone
 import uuid
@@ -853,9 +854,10 @@ def render_landing_page():
     st.markdown("---")
     st.markdown("### Get Started")
 
-    # Load existing databases once
+    # Load existing databases once and cache for collision detection in register flow
     with st.spinner("Loading available leagues..."):
         existing_dbs = get_existing_league_databases()
+        st.session_state.existing_dbs_cache = set(existing_dbs)
 
     # Two-column layout (stacks on mobile)
     left, right = st.columns([1, 1])
@@ -1021,8 +1023,16 @@ def run_register_flow():
                             if st.session_state.get("import_job_id"):
                                 st.info(f"Job ID: `{st.session_state.import_job_id}`")
                         else:
-                            # Show URL preview inline
+                            # Show URL preview (check for collision using cached db list)
                             db_name = sanitize_league_name_for_db(selected_league['name'])
+                            existing_dbs_cache = st.session_state.get("existing_dbs_cache", set())
+
+                            if db_name in existing_dbs_cache:
+                                # Collision - use hashed name
+                                league_id = selected_league.get("league_key", "")
+                                league_id_hash = hashlib.md5(league_id.encode()).hexdigest()[:6]
+                                db_name = f"{db_name}_{league_id_hash}"
+
                             league_url = f"https://leaguehistory.streamlit.app/?league={db_name}"
                             st.markdown(f"**Your league URL:** `{league_url}`")
 
