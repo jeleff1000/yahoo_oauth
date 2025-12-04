@@ -83,6 +83,10 @@ from streamlit_helpers.import_flow import (
     can_start_import as _can_start_import,
     mark_import_started as _mark_import_started,
     get_data_templates,
+    get_column_aliases,
+    detect_data_type_from_filename,
+    extract_year_from_filename,
+    normalize_columns,
 )
 from streamlit_helpers.ui_components import (
     load_custom_css,
@@ -125,6 +129,12 @@ def render_external_data_ui() -> Optional[dict]:
     """
     Render the external data files configuration UI.
     Returns a dict with uploaded file data if any files uploaded.
+
+    Supports:
+    - CSV, Excel (.xlsx), Parquet files for tabular data
+    - JSON files for league settings
+    - Auto-detection of data type from filename
+    - Comprehensive column name aliases (owner->manager, season->year, etc.)
     """
     import pandas as pd
     import io
@@ -133,13 +143,16 @@ def render_external_data_ui() -> Optional[dict]:
     st.caption("Upload data from previous years, ESPN leagues, or other sources. Files are merged with Yahoo data.")
 
     templates = get_data_templates()
+    column_aliases = get_column_aliases()
 
     # Template download section
     with st.expander("Download Templates", expanded=False):
         st.markdown("Download CSV templates for each data type:")
 
-        cols = st.columns(len(templates))
-        for i, (data_type, template) in enumerate(templates.items()):
+        # Filter out settings (JSON-only) from CSV templates
+        csv_templates = {k: v for k, v in templates.items() if k != "settings"}
+        cols = st.columns(len(csv_templates))
+        for i, (data_type, template) in enumerate(csv_templates.items()):
             with cols[i]:
                 # Create template CSV
                 all_cols = template["required_columns"] + template["optional_columns"]
@@ -163,35 +176,110 @@ def render_external_data_ui() -> Optional[dict]:
                 )
                 st.caption(template["description"])
 
+    # Show accepted column aliases
+    with st.expander("Column Name Aliases", expanded=False):
+        st.markdown("Your files can use any of these column names (they'll be auto-converted):")
+        st.markdown("""
+        | Canonical Name | Accepted Aliases |
+        |---------------|------------------|
+        | `manager` | owner, Owner, manager_name, team_owner, fantasy_owner |
+        | `player` | player_name, Player, Player Name, athlete |
+        | `year` | season, Season, Year, fantasy_year, league_year |
+        | `week` | Week, week_num, week_number, wk, gameweek |
+        | `points` | Points, fantasy_points, fpts, pts, score, total_points |
+        | `team_name` | team, Team, Team Name, fantasy_team |
+        | `team_points` | team_score, my_points, points_for, PF |
+        | `opponent` | Opponent, opp, opponent_name, vs |
+        | `opponent_points` | opp_points, opponent_score, points_against, PA |
+        | `cost` | price, auction_price, salary, bid |
+        | `nfl_position` | position, pos, Pos, player_position |
+        """)
+
     st.markdown("---")
 
     # File upload section
     uploaded_files = {}
 
     st.markdown("#### Upload Your Data Files")
-    st.caption("Supports CSV, Excel (.xlsx), and Parquet files. You can upload multiple files per category.")
+    st.caption("Supports CSV, Excel (.xlsx), Parquet, and JSON files. Files are auto-categorized by name pattern.")
 
-    for data_type, template in templates.items():
-        with st.expander(f"{data_type.title()} Data", expanded=False):
-            st.markdown(f"**{template['description']}**")
-            st.markdown(f"Required columns: `{', '.join(template['required_columns'])}`")
+    # Smart upload - auto-detect file type
+    with st.expander("Smart Upload (Auto-Detect)", expanded=True):
+        st.markdown("Upload any files and we'll auto-detect the data type from the filename.")
+        st.caption("Examples: `league_settings_2014.json`, `matchup_2013.csv`, `draft_results.xlsx`")
 
-            files = st.file_uploader(
-                f"Upload {data_type} files",
-                type=["csv", "xlsx", "parquet"],
-                accept_multiple_files=True,
-                key=f"upload_{data_type}",
-                label_visibility="collapsed"
-            )
+        smart_files = st.file_uploader(
+            "Upload files",
+            type=["csv", "xlsx", "xls", "parquet", "json"],
+            accept_multiple_files=True,
+            key="smart_upload",
+            label_visibility="collapsed"
+        )
 
-            if files:
-                uploaded_files[data_type] = []
-                for file in files:
-                    try:
-                        # Read file based on extension
+        # Track files that need user input
+        files_needing_type = []
+        files_needing_year = []
+
+        if smart_files:
+            for file in smart_files:
+                try:
+                    # Auto-detect data type from filename
+                    detected_type = detect_data_type_from_filename(file.name)
+
+                    # Try to extract year from filename
+                    filename_year = extract_year_from_filename(file.name)
+
+                    if file.name.endswith('.json'):
+                        # Handle JSON files (league settings)
+                        file_content = file.read()
+                        file.seek(0)  # Reset for potential re-read
+                        json_data = json.loads(file_content)
+
+                        # Default to settings for JSON files
+                        data_type = detected_type or "settings"
+
+                        # Extract year from JSON or filename
+                        year = json_data.get("year") or json_data.get("season") or filename_year
+
+                        if not year:
+                            # Store file for user input
+                            files_needing_year.append({
+                                "file": file,
+                                "filename": file.name,
+                                "data": json_data,
+                                "data_type": data_type,
+                                "file_type": "json"
+                            })
+                            continue
+
+                        if data_type not in uploaded_files:
+                            uploaded_files[data_type] = []
+
+                        uploaded_files[data_type].append({
+                            "filename": file.name,
+                            "data": json_data,
+                            "file_type": "json",
+                            "year": year,
+                            "row_count": 1  # JSON files are single records
+                        })
+
+                        st.success(f"{file.name}: League settings for {year} loaded")
+
+                        # Show preview
+                        with st.expander(f"Preview: {file.name}"):
+                            # Show key info from settings
+                            if "metadata" in json_data:
+                                st.json(json_data["metadata"])
+                            else:
+                                # Show first few keys
+                                preview_keys = list(json_data.keys())[:5]
+                                st.json({k: json_data[k] for k in preview_keys if k in json_data})
+
+                    else:
+                        # Handle tabular files (CSV, Excel, Parquet)
                         if file.name.endswith('.csv'):
                             df = pd.read_csv(file)
-                        elif file.name.endswith('.xlsx'):
+                        elif file.name.endswith(('.xlsx', '.xls')):
                             df = pd.read_excel(file)
                         elif file.name.endswith('.parquet'):
                             df = pd.read_parquet(file)
@@ -199,52 +287,276 @@ def render_external_data_ui() -> Optional[dict]:
                             st.error(f"Unsupported file type: {file.name}")
                             continue
 
-                        # Normalize column names - accept common aliases
-                        column_aliases = {
-                            "player_name": "player",
-                            "Player": "player",
-                            "Player Name": "player",
-                            "Manager": "manager",
-                            "manager_name": "manager",
-                            "Team": "team_name",
-                            "team": "team_name",
-                            "Week": "week",
-                            "Year": "year",
-                            "Season": "year",
-                            "Points": "points",
-                            "fantasy_points": "points",
-                        }
-                        df.columns = [column_aliases.get(col, col) for col in df.columns]
+                        # Normalize column names using comprehensive aliases
+                        df = normalize_columns(df, column_aliases)
+
+                        # Determine data type
+                        data_type = detected_type
+
+                        if not data_type:
+                            # Try to infer from columns
+                            cols_set = set(df.columns)
+                            if "transaction_type" in cols_set:
+                                data_type = "transactions"
+                            elif "round" in cols_set and "pick" in cols_set:
+                                data_type = "draft"
+                            elif "team_points" in cols_set and "opponent_points" in cols_set:
+                                data_type = "matchup"
+                            elif "player" in cols_set and "points" in cols_set:
+                                data_type = "player"
+                            elif "opponent" in cols_set:
+                                data_type = "schedule"
+
+                        if not data_type:
+                            # Store file for user input
+                            files_needing_type.append({
+                                "file": file,
+                                "filename": file.name,
+                                "df": df,
+                                "file_type": "tabular",
+                                "filename_year": filename_year
+                            })
+                            continue
+
+                        # Check if year is in data or filename
+                        has_year_column = "year" in df.columns
+                        year = filename_year
+
+                        if not has_year_column and not year:
+                            # Store file for user input
+                            files_needing_year.append({
+                                "file": file,
+                                "filename": file.name,
+                                "df": df,
+                                "data_type": data_type,
+                                "file_type": "tabular"
+                            })
+                            continue
+
+                        if data_type not in uploaded_files:
+                            uploaded_files[data_type] = []
+
+                        # Add year column if missing but extracted from filename
+                        if not has_year_column and year:
+                            df["year"] = year
 
                         # Validate required columns
-                        missing_cols = set(template["required_columns"]) - set(df.columns)
+                        template = templates.get(data_type, {})
+                        required = set(template.get("required_columns", []))
+                        missing_cols = required - set(df.columns)
+
                         if missing_cols:
-                            st.warning(f"{file.name}: Missing columns: {missing_cols}")
+                            st.warning(f"{file.name} ({data_type}): Missing columns: {missing_cols}")
                         else:
-                            st.success(f"{file.name}: {len(df):,} rows loaded")
+                            st.success(f"{file.name}: {len(df):,} rows loaded as **{data_type}** data")
 
-                            # Show preview
-                            with st.expander(f"Preview: {file.name}"):
-                                st.dataframe(df.head(10), use_container_width=True)
+                        # Show preview
+                        with st.expander(f"Preview: {file.name} ({data_type})"):
+                            st.dataframe(df.head(10), use_container_width=True)
 
-                            # Store as dict for JSON serialization
+                        uploaded_files[data_type].append({
+                            "filename": file.name,
+                            "data": df.to_dict(orient="records"),
+                            "columns": list(df.columns),
+                            "file_type": "tabular",
+                            "row_count": len(df)
+                        })
+
+                except Exception as e:
+                    st.error(f"Error reading {file.name}: {e}")
+
+        # Handle files that need data type selection
+        if files_needing_type:
+            st.markdown("---")
+            st.markdown("#### Specify Data Type")
+            st.caption("We couldn't auto-detect the data type for these files. Please select:")
+
+            data_type_options = list(templates.keys())
+
+            for i, file_info in enumerate(files_needing_type):
+                col1, col2, col3 = st.columns([2, 2, 1])
+                with col1:
+                    st.markdown(f"**{file_info['filename']}**")
+                    st.caption(f"Columns: {', '.join(list(file_info['df'].columns)[:5])}...")
+                with col2:
+                    selected_type = st.selectbox(
+                        "Data type",
+                        options=data_type_options,
+                        key=f"type_select_{i}_{file_info['filename']}",
+                        label_visibility="collapsed"
+                    )
+                with col3:
+                    if st.button("Add", key=f"add_type_{i}_{file_info['filename']}"):
+                        df = file_info['df']
+                        data_type = selected_type
+
+                        # Check if year is needed
+                        has_year = "year" in df.columns or file_info.get('filename_year')
+                        if not has_year:
+                            files_needing_year.append({
+                                "filename": file_info['filename'],
+                                "df": df,
+                                "data_type": data_type,
+                                "file_type": "tabular"
+                            })
+                            st.info(f"Please also specify the year for {file_info['filename']}")
+                        else:
+                            if "year" not in df.columns and file_info.get('filename_year'):
+                                df["year"] = file_info['filename_year']
+
+                            if data_type not in uploaded_files:
+                                uploaded_files[data_type] = []
+                            uploaded_files[data_type].append({
+                                "filename": file_info['filename'],
+                                "data": df.to_dict(orient="records"),
+                                "columns": list(df.columns),
+                                "file_type": "tabular",
+                                "row_count": len(df)
+                            })
+                            st.success(f"Added {file_info['filename']} as {data_type}")
+                            st.rerun()
+
+        # Handle files that need year specification
+        if files_needing_year:
+            st.markdown("---")
+            st.markdown("#### Specify Year")
+            st.caption("We couldn't find the year for these files. Please specify:")
+
+            # Generate year options (2000-current year + 1)
+            current_year = datetime.now().year
+            year_options = list(range(current_year + 1, 1999, -1))
+
+            for i, file_info in enumerate(files_needing_year):
+                col1, col2, col3 = st.columns([2, 2, 1])
+                with col1:
+                    st.markdown(f"**{file_info['filename']}**")
+                    st.caption(f"Type: {file_info['data_type']}")
+                with col2:
+                    selected_year = st.selectbox(
+                        "Year",
+                        options=year_options,
+                        key=f"year_select_{i}_{file_info['filename']}",
+                        label_visibility="collapsed"
+                    )
+                with col3:
+                    if st.button("Add", key=f"add_year_{i}_{file_info['filename']}"):
+                        data_type = file_info['data_type']
+
+                        if data_type not in uploaded_files:
+                            uploaded_files[data_type] = []
+
+                        if file_info['file_type'] == 'json':
+                            uploaded_files[data_type].append({
+                                "filename": file_info['filename'],
+                                "data": file_info['data'],
+                                "file_type": "json",
+                                "year": selected_year,
+                                "row_count": 1
+                            })
+                        else:
+                            df = file_info['df']
+                            df["year"] = selected_year
+                            uploaded_files[data_type].append({
+                                "filename": file_info['filename'],
+                                "data": df.to_dict(orient="records"),
+                                "columns": list(df.columns),
+                                "file_type": "tabular",
+                                "row_count": len(df)
+                            })
+
+                        st.success(f"Added {file_info['filename']} for year {selected_year}")
+                        st.rerun()
+
+    # Manual upload by category (for files that couldn't be auto-detected)
+    with st.expander("Manual Upload (By Category)", expanded=False):
+        st.caption("Use this if auto-detection didn't work for your files.")
+
+        for data_type, template in templates.items():
+            st.markdown(f"**{data_type.title()}** - {template['description']}")
+
+            # Determine accepted file types
+            file_types = template.get("file_types", ["csv", "xlsx", "parquet"])
+            st.caption(f"Required: `{', '.join(template['required_columns'])}` | Files: {', '.join(file_types)}")
+
+            files = st.file_uploader(
+                f"Upload {data_type} files",
+                type=file_types,
+                accept_multiple_files=True,
+                key=f"manual_upload_{data_type}",
+                label_visibility="collapsed"
+            )
+
+            if files:
+                if data_type not in uploaded_files:
+                    uploaded_files[data_type] = []
+
+                for file in files:
+                    try:
+                        if file.name.endswith('.json'):
+                            # Handle JSON
+                            file_content = file.read()
+                            file.seek(0)
+                            json_data = json.loads(file_content)
+
+                            year = json_data.get("year") or json_data.get("season")
+                            if not year:
+                                import re
+                                year_match = re.search(r'_(\d{4})_', file.name)
+                                if year_match:
+                                    year = int(year_match.group(1))
+
+                            uploaded_files[data_type].append({
+                                "filename": file.name,
+                                "data": json_data,
+                                "file_type": "json",
+                                "year": year,
+                                "row_count": 1
+                            })
+                            st.success(f"{file.name}: Settings for {year or 'unknown year'} loaded")
+
+                        else:
+                            # Handle tabular
+                            if file.name.endswith('.csv'):
+                                df = pd.read_csv(file)
+                            elif file.name.endswith('.xlsx'):
+                                df = pd.read_excel(file)
+                            elif file.name.endswith('.parquet'):
+                                df = pd.read_parquet(file)
+                            else:
+                                continue
+
+                            df = normalize_columns(df, column_aliases)
+
+                            missing_cols = set(template["required_columns"]) - set(df.columns)
+                            if missing_cols:
+                                st.warning(f"{file.name}: Missing columns: {missing_cols}")
+                            else:
+                                st.success(f"{file.name}: {len(df):,} rows loaded")
+
                             uploaded_files[data_type].append({
                                 "filename": file.name,
                                 "data": df.to_dict(orient="records"),
                                 "columns": list(df.columns),
+                                "file_type": "tabular",
                                 "row_count": len(df)
                             })
 
                     except Exception as e:
                         st.error(f"Error reading {file.name}: {e}")
 
+            st.markdown("---")
+
     # Summary
     if uploaded_files:
         st.markdown("---")
         st.markdown("#### Upload Summary")
         for data_type, files in uploaded_files.items():
-            total_rows = sum(f["row_count"] for f in files)
-            st.markdown(f"- **{data_type.title()}**: {len(files)} file(s), {total_rows:,} total rows")
+            if data_type == "settings":
+                years = [f.get("year", "?") for f in files]
+                st.markdown(f"- **{data_type.title()}**: {len(files)} file(s) for years: {', '.join(str(y) for y in years)}")
+            else:
+                total_rows = sum(f.get("row_count", 0) for f in files)
+                st.markdown(f"- **{data_type.title()}**: {len(files)} file(s), {total_rows:,} total rows")
 
         return {"external_data": uploaded_files}
 
