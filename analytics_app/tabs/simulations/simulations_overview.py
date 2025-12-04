@@ -268,37 +268,25 @@ class SimulationDataViewer:
 
                 with schedule_subtabs[0]:
                     try:
-                        GaviStatViewer(self.matchup_data_df).display(
-                            year=selected_year, week=selected_week
-                        )
+                        GaviStatViewer(self.matchup_data_df).display()
                     except Exception as e:
                         st.warning(f"Win distribution unavailable: {e}")
 
                 with schedule_subtabs[1]:
                     try:
-                        VsOneOpponentViewer(self.matchup_data_df).display(
-                            year=selected_year, week=selected_week
-                        )
+                        VsOneOpponentViewer(self.matchup_data_df).display()
                     except Exception as e:
                         st.warning(f"Head-to-head analysis unavailable: {e}")
 
                 with schedule_subtabs[2]:
                     try:
-                        display_expected_record(
-                            self.matchup_data_df,
-                            year=selected_year,
-                            week=selected_week,
-                        )
+                        display_expected_record(self.matchup_data_df)
                     except Exception as e:
                         st.warning(f"Expected records unavailable: {e}")
 
                 with schedule_subtabs[3]:
                     try:
-                        display_expected_seed(
-                            self.matchup_data_df,
-                            year=selected_year,
-                            week=selected_week,
-                        )
+                        display_expected_seed(self.matchup_data_df)
                     except Exception as e:
                         st.warning(f"Expected seeding unavailable: {e}")
 
@@ -318,46 +306,32 @@ class SimulationDataViewer:
 
                 with opponent_subtabs[0]:
                     try:
-                        OpponentGaviStatViewer(self.matchup_data_df).display(
-                            year=selected_year, week=selected_week
-                        )
+                        OpponentGaviStatViewer(self.matchup_data_df).display()
                     except Exception as e:
                         st.warning(f"Opponent analysis unavailable: {e}")
 
                 with opponent_subtabs[1]:
                     try:
-                        EveryonesScheduleViewer(self.matchup_data_df).display(
-                            year=selected_year, week=selected_week
-                        )
+                        EveryonesScheduleViewer(self.matchup_data_df).display()
                     except Exception as e:
                         st.warning(f"Schedule comparison unavailable: {e}")
 
                 with opponent_subtabs[2]:
                     try:
-                        display_opp_expected_record(
-                            self.matchup_data_df,
-                            year=selected_year,
-                            week=selected_week,
-                        )
+                        display_opp_expected_record(self.matchup_data_df)
                     except Exception as e:
                         st.warning(f"Record vs difficulty unavailable: {e}")
 
                 with opponent_subtabs[3]:
                     try:
-                        display_opp_expected_seed(
-                            self.matchup_data_df,
-                            year=selected_year,
-                            week=selected_week,
-                        )
+                        display_opp_expected_seed(self.matchup_data_df)
                     except Exception as e:
                         st.warning(f"Seeding vs difficulty unavailable: {e}")
 
             # ---- Score Sensitivity (direct view) ----
             with whatif_tabs[2]:
                 try:
-                    TweakScoringViewer(self.matchup_data_df).display(
-                        year=selected_year, week=selected_week
-                    )
+                    TweakScoringViewer(self.matchup_data_df).display()
                 except Exception as e:
                     st.warning(f"Score sensitivity analysis unavailable: {e}")
 
