@@ -519,7 +519,7 @@ jobs:
                           if staging_name == "staging_matchup":
                               filename = f"matchup_data_week_all_year_{year_int}.parquet"
                           elif staging_name == "staging_player":
-                              filename = f"yahoo_player_stats_{year_int}_all_weeks.parquet"
+                              filename = f"player_stats_{year_int}_all_weeks.parquet"
                           elif staging_name == "staging_draft":
                               filename = f"draft_data_{year_int}.parquet"
                           elif staging_name == "staging_transactions":
