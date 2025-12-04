@@ -138,7 +138,7 @@ TRANSFORMATIONS_PASS_3 = [
     ("multi_league/transformations/transaction/player_to_transactions_v2.py", "Player <-> Transactions", 600),  # Add ROS performance TO transactions - MUST run before transaction_value_metrics
     ("multi_league/transformations/transaction/transaction_value_metrics_v3.py", "Transaction SPAR Metrics", 600),  # SPAR-based transaction value (replaces old VOR metrics in player_to_transactions)
     ("multi_league/transformations/player/transactions_to_player_v2.py", "Transactions -> Player", 600),  # Add FAAB data TO player (preserves draft columns added above)
-    ("multi_league/transformations/draft/keeper_economics_v2.py", "Keeper Economics", 600),  # Calculate keeper_price for next year planning (needs draft cost + FAAB from transactions)
+    ("multi_league/transformations/player/keeper_economics.py", "Keeper Economics", 600),  # Calculate keeper_price on PLAYER table (needs draft cost + FAAB, must run after transactions_to_player)
     ("multi_league/transformations/matchup/expected_record_v2.py", "Expected Record (V2)", 900),  # Needs wins_to_date and playoff_seed_to_date from cumulative_stats
     ("multi_league/transformations/matchup/playoff_odds_import.py", "Playoff Odds", 1800),  # 30 min timeout - Monte Carlo sims are slow but shouldn't take 2+ hours
     ("multi_league/transformations/aggregation/aggregate_player_season_v2.py", "Aggregate Player Season", 600),  # Create players_by_year
