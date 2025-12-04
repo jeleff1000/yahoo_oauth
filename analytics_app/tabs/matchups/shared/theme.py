@@ -6,7 +6,7 @@ Import from here for backwards compatibility, but all styles are now centralized
 """
 
 # Re-export from the centralized styles module
-from ...shared.modern_styles import render_info_box  # noqa: F401
+from ...shared.modern_styles import render_info_box, render_legend_box  # noqa: F401
 
 
 def apply_theme_styles():
