@@ -149,8 +149,8 @@ def render_kpi_hero_card(
             with header_cols[0]:
                 st.markdown(f"**{title}**")
 
-        # KPI Grid
-        kpi_html = '<div class="sim-kpi-grid">'
+        # KPI Grid - build items cleanly without extra whitespace
+        kpi_items = []
         for kpi in kpis:
             owner_html = ""
             if kpi.get("owner"):
@@ -162,17 +162,18 @@ def render_kpi_hero_card(
                 delta_class = "positive" if not str(delta_val).startswith("-") else "negative"
                 delta_html = f'<div class="sim-kpi-delta {delta_class}">{delta_val}</div>'
 
-            kpi_html += f"""
-            <div class="sim-kpi-item">
-                <div class="sim-kpi-value">{kpi["value"]}</div>
-                <div class="sim-kpi-label">{kpi["label"]}</div>
-                {owner_html}
-                {delta_html}
-            </div>
-            """
-        kpi_html += "</div>"
+            item_html = (
+                '<div class="sim-kpi-item">'
+                f'<div class="sim-kpi-value">{kpi["value"]}</div>'
+                f'<div class="sim-kpi-label">{kpi["label"]}</div>'
+                f'{owner_html}'
+                f'{delta_html}'
+                '</div>'
+            )
+            kpi_items.append(item_html)
 
-        st.markdown(kpi_html, unsafe_allow_html=True)
+        kpi_grid_html = '<div class="sim-kpi-grid">' + ''.join(kpi_items) + '</div>'
+        st.markdown(kpi_grid_html, unsafe_allow_html=True)
 
     return selected
 
