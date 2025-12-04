@@ -748,58 +748,97 @@ def main():
         return
 
 
+def render_open_league_card(existing_dbs: list[str]):
+    """
+    Render the Open Existing League card with search + results list.
+    Handles 1000+ leagues efficiently with search filtering.
+    """
+    st.subheader("Open Existing League")
+    st.caption("Browse any league that's already been imported.")
+
+    if not existing_dbs:
+        st.info("No existing leagues found. Register a new league to get started!")
+        return
+
+    # Search box
+    search = st.text_input(
+        "Search leagues",
+        placeholder="Type a league name (e.g. kmffl, pirates)...",
+        label_visibility="collapsed",
+        key="league_search"
+    )
+
+    # For small lists, show all; for large lists, require search
+    show_all_threshold = 20
+
+    if len(existing_dbs) <= show_all_threshold:
+        # Small list - show all as buttons
+        results = existing_dbs
+        if search.strip():
+            # Filter if search provided
+            search_lower = search.strip().lower()
+            results = [db for db in existing_dbs if search_lower in format_league_display_name(db).lower()]
+    else:
+        # Large list - require search
+        if len(search.strip()) < 2:
+            st.caption(f"Start typing at least 2 characters to search ({len(existing_dbs)} leagues available).")
+            return
+
+        search_lower = search.strip().lower()
+        results = [db for db in existing_dbs if search_lower in format_league_display_name(db).lower()]
+
+    if not results:
+        st.caption("No leagues found. Try a different name or check your spelling.")
+        return
+
+    # Limit results to prevent UI overload
+    max_results = 15
+    displayed = results[:max_results]
+    if len(results) > max_results:
+        st.caption(f"Showing {max_results} of {len(results)} matches. Refine your search for more specific results.")
+
+    # Show results as buttons
+    for db_name in displayed:
+        display_name = format_league_display_name(db_name)
+        if st.button(display_name, key=f"league_btn_{db_name}", use_container_width=True):
+            # Clear cached data when switching leagues to free memory
+            st.cache_data.clear()
+            # Store selected database and set query param for shareable URL
+            st.session_state.selected_league_db = db_name
+            st.session_state.app_mode = "analytics"
+            st.query_params["league"] = db_name
+            st.rerun()
+
+
+def render_register_card():
+    """Render the Register New League card."""
+    st.subheader("Register New League")
+    st.caption("Connect your Yahoo account and import a league into the app.")
+
+    # Direct OAuth redirect
+    auth_url = build_authorize_url()
+    st.link_button("Register New League", auth_url, type="primary", use_container_width=True)
+
+
 def render_landing_page():
-    """Render the landing page with existing leagues dropdown and register button."""
+    """Render the landing page with search-based league selection and register option."""
     render_hero()
 
-    st.markdown("### Choose Your Path")
+    st.markdown("---")
+    st.markdown("### Get Started")
 
-    col1, col2 = st.columns(2)
+    # Load existing databases once
+    with st.spinner("Loading available leagues..."):
+        existing_dbs = get_existing_league_databases()
 
-    with col1:
-        st.markdown("""
-        <div class="feature-card">
-            <div class="feature-icon">📊</div>
-            <div class="feature-title">View Existing League</div>
-            <div class="feature-desc">Select a league that's already been imported to view analytics</div>
-        </div>
-        """, unsafe_allow_html=True)
+    # Two-column layout (stacks on mobile)
+    left, right = st.columns([1, 1])
 
-        # Get existing databases
-        with st.spinner("Loading available leagues..."):
-            existing_dbs = get_existing_league_databases()
+    with left:
+        render_open_league_card(existing_dbs)
 
-        if existing_dbs:
-            selected_db = st.selectbox(
-                "Select League:",
-                options=[""] + existing_dbs,
-                format_func=lambda x: "-- Choose a league --" if x == "" else format_league_display_name(x),
-                key="league_selector"
-            )
-
-            if selected_db:
-                if st.button("View Analytics", type="primary", use_container_width=True, key="view_analytics_btn"):
-                    # Clear cached data when switching leagues to free memory
-                    st.cache_data.clear()
-                    # Store selected database in session state
-                    st.session_state.selected_league_db = selected_db
-                    st.session_state.app_mode = "analytics"
-                    st.rerun()
-        else:
-            st.info("No existing leagues found. Register a new league to get started!")
-
-    with col2:
-        st.markdown("""
-        <div class="feature-card">
-            <div class="feature-icon">➕</div>
-            <div class="feature-title">Register New League</div>
-            <div class="feature-desc">Connect your Yahoo account and import a new fantasy football league</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Direct OAuth redirect - skip the middle page
-        auth_url = build_authorize_url()
-        st.link_button("Register New League", auth_url, type="secondary", use_container_width=True)
+    with right:
+        render_register_card()
 
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
