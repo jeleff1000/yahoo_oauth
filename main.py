@@ -1180,7 +1180,7 @@ def render_open_league_card(existing_dbs: list[str]):
             st.query_params["league"] = db_name
             st.rerun()
     else:
-        st.caption("Select a league to view your dashboard.")
+        st.caption("Choose from imported leagues above.")
 
 
 def render_register_card():
@@ -1188,12 +1188,24 @@ def render_register_card():
     st.markdown("**New User**")
     st.caption("Connect once — we sync your league's full history automatically.")
 
-    # Direct OAuth redirect
+    # Yahoo purple button with custom styling
     auth_url = build_authorize_url()
-    st.link_button("Import From Yahoo", auth_url, type="primary", use_container_width=True)
+    st.markdown(f'''
+        <a href="{auth_url}" target="_self" style="
+            display: block;
+            background: linear-gradient(135deg, #6001D2 0%, #7B1FA2 100%);
+            color: white;
+            padding: 0.6rem 1rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            text-align: center;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        ">Import From Yahoo</a>
+    ''', unsafe_allow_html=True)
 
     st.markdown("")
-    st.caption("No Yahoo access? Try the demo first:")
+    st.caption("Interested in the final product? Try the demo:")
 
     # Demo league button
     if st.button("👀 Preview Demo League", key="demo_league_btn", use_container_width=True):
@@ -1202,7 +1214,6 @@ def render_register_card():
         st.session_state.app_mode = "analytics"
         st.query_params["league"] = "kmffl"
         st.rerun()
-    st.caption("Explore the dashboard with sample data.")
 
 
 def render_landing_page():
