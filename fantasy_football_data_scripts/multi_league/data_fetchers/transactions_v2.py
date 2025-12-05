@@ -250,6 +250,7 @@ class Transaction:
     transaction_type: str
     manager: str
     manager_guid: Optional[str]
+    team_name: Optional[str]  # Team name for franchise tracking
     player_name: str
     yahoo_player_id: Optional[str]
     player_key: str
@@ -446,7 +447,7 @@ def fetch_team_mappings(
     oauth,
     league_key: str,
     manager_name_overrides: Optional[Dict[str, str]] = None
-) -> Tuple[Dict[str, str], Dict[str, str]]:
+) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str]]:
     """
     Fetch team ID to manager name mappings with proper normalization.
 
@@ -456,7 +457,7 @@ def fetch_team_mappings(
         manager_name_overrides: Dict mapping team names/nicknames to real manager names
 
     Returns:
-        Tuple of (team_key_to_manager, team_key_to_guid)
+        Tuple of (team_key_to_manager, team_key_to_guid, team_key_to_team_name)
     """
     print(f"  Fetching team mappings for {league_key}")
 
@@ -467,6 +468,7 @@ def fetch_team_mappings(
 
         team_id_to_manager = {}
         team_id_to_guid = {}
+        team_id_to_team_name = {}
         for team_elem in root.findall(".//team"):
             # Extract team_key
             team_key_elem = team_elem.find("team_key")
@@ -483,9 +485,10 @@ def fetch_team_mappings(
             manager_guid = guid_elem.text if guid_elem is not None else None
             team_id_to_guid[team_key] = manager_guid
 
-            # Get team name as fallback for --hidden-- managers
+            # Get team name for franchise tracking and --hidden-- fallback
             team_name_elem = team_elem.find("name")
             team_name = team_name_elem.text if team_name_elem is not None else None
+            team_id_to_team_name[team_key] = team_name
 
             # Normalize manager name (handles --hidden-- with team_name fallback)
             manager_name = normalize_manager_name(
@@ -497,10 +500,10 @@ def fetch_team_mappings(
             team_id_to_manager[team_key] = manager_name
 
         print(f"  Loaded {len(team_id_to_manager)} team mappings")
-        return team_id_to_manager, team_id_to_guid
+        return team_id_to_manager, team_id_to_guid, team_id_to_team_name
     except Exception as e:
         print(f"  ERROR: Failed to fetch team mappings: {e}")
-        return {}, {}
+        return {}, {}, {}
 
 
 def fetch_transactions_for_year(
@@ -509,6 +512,7 @@ def fetch_transactions_for_year(
     year: int,
     team_mappings: Dict[str, str],
     guid_mappings: Dict[str, str],
+    team_name_mappings: Dict[str, str],
     matchup_windows: pd.DataFrame
 ) -> List[Transaction]:
     """
@@ -520,6 +524,7 @@ def fetch_transactions_for_year(
         year: Season year
         team_mappings: Team key to manager name mapping
         guid_mappings: Team key to manager GUID mapping
+        team_name_mappings: Team key to team name mapping (for franchise tracking)
         matchup_windows: DataFrame with week windows for cumulative_week calculation
 
     Returns:
@@ -592,6 +597,7 @@ def fetch_transactions_for_year(
 
                     nickname = team_mappings.get(tkey, "Unknown") if tkey else "Unknown"
                     manager_guid = guid_mappings.get(tkey) if tkey else None
+                    team_name = team_name_mappings.get(tkey) if tkey else None
 
                     # Derive cumulative_week.  Prefer to look up from
                     # matchup_windows (which contains week-start/end
@@ -629,6 +635,7 @@ def fetch_transactions_for_year(
                         transaction_type=ptype,
                         manager=nickname,
                         manager_guid=manager_guid,
+                        team_name=team_name,
                         player_name=name,
                         yahoo_player_id=yahoo_player_id,
                         player_key=player_key,
@@ -684,6 +691,7 @@ def transactions_to_dataframe(transactions: List[Transaction]) -> pd.DataFrame:
             "yahoo_player_id": tx.yahoo_player_id,
             "manager": tx.manager,
             "manager_guid": tx.manager_guid,
+            "team_name": tx.team_name,  # For franchise tracking
 
             # Time columns
             "year": tx.year,
@@ -742,7 +750,7 @@ def transactions_to_dataframe(transactions: List[Transaction]) -> pd.DataFrame:
         "transaction_id",
 
         # Foreign keys
-        "manager", "manager_guid", "yahoo_player_id", "player_name",
+        "manager", "manager_guid", "team_name", "yahoo_player_id", "player_name",
 
         # Time columns
         "year", "week", "cumulative_week", "week_start", "week_end",

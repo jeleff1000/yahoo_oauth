@@ -692,7 +692,7 @@ def fetch_draft_data(
         # Get manager_name_overrides from context (for --hidden-- fallback)
         manager_overrides = ctx.manager_name_overrides if ctx else {}
 
-        team_key_to_manager, team_key_to_guid, player_id_to_name, player_id_to_team = \
+        team_key_to_manager, team_key_to_guid, team_key_to_team_name, player_id_to_name, player_id_to_team = \
             fetch_team_and_player_mappings(
                 oauth,
                 year_league_id,
@@ -742,6 +742,11 @@ def fetch_draft_data(
             player_id_to_name,
             manager_overrides,
         )
+
+        # Add team_name for franchise tracking (maps team_key -> team_name)
+        if 'team_key' in final_df.columns:
+            final_df['team_name'] = final_df['team_key'].map(team_key_to_team_name)
+            print(f"[draft] Added team_name column ({final_df['team_name'].notna().sum()} mapped)")
 
         # Store draft_type in DataFrame for downstream transformation layer
         # (draft_enrichment_v2.py needs this to calculate appropriate value metrics)
