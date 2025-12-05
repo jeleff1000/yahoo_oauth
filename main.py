@@ -1390,28 +1390,34 @@ def run_register_flow():
                 )
                 st.session_state.configured_is_private = is_private
 
-                # Hidden Manager Detection
-                cache_key = f"teams_all_years_{selected_league.get('name')}"
-                if cache_key not in st.session_state:
-                    with st.spinner("Checking for hidden managers..."):
-                        teams = get_league_teams_all_years(
-                            st.session_state.access_token,
-                            selected_league.get("name"),
-                            st.session_state.get("games_data", {})
-                        )
-                        st.session_state[cache_key] = teams
+                # Hidden Manager Detection - lazy load on expand
+                with st.expander("👤 Hidden Managers — Check", expanded=False):
+                    st.caption("Some managers hide their profiles. Click to scan and identify them.")
+                    if st.button("Scan for Hidden Managers", key="scan_hidden_btn"):
+                        cache_key = f"teams_all_years_{selected_league.get('name')}"
+                        with st.spinner("Scanning all seasons..."):
+                            teams = get_league_teams_all_years(
+                                st.session_state.access_token,
+                                selected_league.get("name"),
+                                st.session_state.get("games_data", {})
+                            )
+                            st.session_state[cache_key] = teams
+                        st.rerun()
 
-                teams = st.session_state.get(cache_key, [])
-                hidden_teams = find_hidden_managers(teams)
-
-                if hidden_teams:
-                    unique_hidden = set(t.get("team_name") for t in hidden_teams)
-                    with st.expander(f"👤 Hidden Managers ({len(unique_hidden)}) — Review", expanded=False):
-                        st.caption("Some managers have hidden profiles. Match them to team names.")
-                        manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
-                        st.session_state.configured_manager_overrides = manager_overrides
-                else:
-                    st.session_state.configured_manager_overrides = {}
+                    cache_key = f"teams_all_years_{selected_league.get('name')}"
+                    if cache_key in st.session_state:
+                        teams = st.session_state[cache_key]
+                        hidden_teams = find_hidden_managers(teams)
+                        if hidden_teams:
+                            unique_hidden = set(t.get("team_name") for t in hidden_teams)
+                            st.warning(f"Found {len(unique_hidden)} hidden manager(s)")
+                            manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
+                            st.session_state.configured_manager_overrides = manager_overrides
+                        else:
+                            st.success("No hidden managers found!")
+                            st.session_state.configured_manager_overrides = {}
+                    else:
+                        st.session_state.configured_manager_overrides = {}
 
                 # Keeper Rules Tab
                 with st.expander("🏆 Keeper Rules", expanded=False):
