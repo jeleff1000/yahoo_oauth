@@ -1,15 +1,17 @@
 """
 Keeper Economics - Player Table Transformation
 
-Calculates keeper prices directly on the player table.
+Calculates PROJECTED NEXT YEAR keeper prices for ALL rostered players.
 
-This is the simplified keeper economics that:
+This transformation:
 1. Uses player table as source of truth (has FAAB data, draft cost, keeper status)
 2. Calculates consecutive keeper years per (player, manager)
-3. Applies keeper cost formulas based on league rules
-4. Writes keeper_price, keeper_year directly to player table
+3. Calculates base_cost for ALL players (not just keepers)
+4. Projects what keeper_price would be NEXT YEAR if kept
+5. Writes keeper_price, keeper_year, base_keeper_cost to player table
 
-No need for draft → player copy step anymore.
+The keeper_price shows what it would cost to keep each player NEXT YEAR,
+helping managers make keeper decisions.
 
 Usage:
     python keeper_economics.py --context path/to/league_context.json
@@ -159,7 +161,7 @@ def calculate_consecutive_keeper_years(df: pd.DataFrame) -> pd.DataFrame:
         df: Player DataFrame with weekly data
 
     Returns DataFrame with:
-        - keeper_year: consecutive years kept (1 = first time kept)
+        - keeper_year: consecutive years kept (1 = first time kept, 0 = never kept)
         - base_keeper_cost: original acquisition cost for price calculation
     """
     result = df.copy()
@@ -274,7 +276,11 @@ def calculate_keeper_economics(
     dry_run: bool = False,
 ) -> Dict[str, int]:
     """
-    Calculate keeper economics on player table.
+    Calculate PROJECTED NEXT YEAR keeper prices for ALL rostered players.
+
+    This calculates what each player would cost if kept NEXT year, helping
+    managers make keeper decisions. The keeper_price reflects the projected
+    cost, not the current year's cost.
 
     Args:
         ctx: LeagueContext with keeper_rules
@@ -285,7 +291,7 @@ def calculate_keeper_economics(
         Dict with statistics
     """
     print("=" * 60)
-    print("KEEPER ECONOMICS (Player Table)")
+    print("KEEPER ECONOMICS (Projected Next Year Prices)")
     print("=" * 60)
 
     if not ctx.keepers_enabled:
@@ -308,38 +314,75 @@ def calculate_keeper_economics(
         print(f"[ERROR] Missing columns: {missing}")
         return {'status': 'error', 'reason': f'missing_columns: {missing}'}
 
-    # Calculate consecutive keeper years
-    # (dynamically finds championship week as last week with rostered players)
+    # Calculate consecutive keeper years for historical tracking
     print("\nCalculating consecutive keeper years...")
     player = calculate_consecutive_keeper_years(player)
 
     keepers = player[player['keeper_year'] > 0]
-    print(f"  Found {len(keepers):,} keeper records")
+    print(f"  Found {len(keepers):,} historical keeper records")
 
     # Initialize calculator
     calculator = KeeperPriceCalculator(ctx.keeper_rules)
 
-    # Calculate keeper prices
-    print("\nCalculating keeper prices...")
+    # Calculate PROJECTED NEXT YEAR keeper prices for ALL rostered players
+    print("\nCalculating projected next year keeper prices for ALL players...")
     player['keeper_price'] = 0
 
-    for idx in keepers.index:
-        row = player.loc[idx]
-        base_cost = row['base_keeper_cost']
-        keeper_year = int(row['keeper_year'])
+    # Get end-of-season rows for each player/manager/year
+    # Filter to rostered players only
+    rostered_mask = (
+        player['manager'].notna() &
+        ~player['manager'].isin(['Unrostered', 'No Manager', ''])
+    )
 
+    # Get the last week for each player/manager/year combo
+    rostered = player[rostered_mask].copy()
+    if len(rostered) == 0:
+        print("  [WARNING] No rostered players found")
+        return {'status': 'error', 'reason': 'no_rostered_players'}
+
+    # Group by player/manager/year and get max week
+    end_of_season_idx = rostered.groupby(['yahoo_player_id', 'manager', 'year'])['week'].idxmax()
+
+    prices_calculated = 0
+
+    for idx in end_of_season_idx:
+        row = player.loc[idx]
+
+        # Get current keeper history
+        current_keeper_year = int(row.get('keeper_year', 0) or 0)
+        base_cost = float(row.get('base_keeper_cost', 0) or 0)
+        cost = float(row.get('cost', 0) or 0)
+        faab = float(row.get('max_faab_bid_to_date', 0) or 0)
+
+        # Calculate base cost if not already set
         if base_cost <= 0:
-            # Use draft cost or FAAB
-            cost = float(row.get('cost', 0) or 0)
-            faab = float(row.get('max_faab_bid_to_date', 0) or 0)
             base_cost = calculator.calculate_base_cost(cost, faab, cost > 0)
 
-        price = calculator.calculate_keeper_price(base_cost, keeper_year)
-        player.loc[idx, 'keeper_price'] = price
+        # Project NEXT YEAR's keeper price
+        # If never kept (keeper_year=0), next year would be year 1
+        # If kept 1 year, next year would be year 2
+        # etc.
+        projected_keeper_year = current_keeper_year + 1
+
+        projected_price = calculator.calculate_keeper_price(base_cost, projected_keeper_year)
+
+        # Set the projected price for ALL weeks of this player/manager/year
+        player_mask = (
+            (player['yahoo_player_id'] == row['yahoo_player_id']) &
+            (player['manager'] == row['manager']) &
+            (player['year'] == row['year'])
+        )
+        player.loc[player_mask, 'keeper_price'] = projected_price
+        player.loc[player_mask, 'base_keeper_cost'] = base_cost
+
+        prices_calculated += 1
+
+    print(f"  Calculated projected prices for {prices_calculated:,} player/manager/year combinations")
 
     # Stats
     prices_set = (player['keeper_price'] > 0).sum()
-    print(f"  Calculated prices for {prices_set:,} records")
+    print(f"  Total rows with keeper_price: {prices_set:,}")
 
     # Write results
     if dry_run:
