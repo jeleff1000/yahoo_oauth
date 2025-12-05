@@ -445,7 +445,11 @@ def calculate_manager_bench_patterns(
         rostered['is_bench_week'] = 0
         rostered['is_started_week'] = 1
 
-    # Group by manager-year
+    # Use franchise_id for career grouping if available (handles multi-team managers correctly)
+    # Falls back to manager_column for backwards compatibility
+    career_group_col = 'franchise_id' if 'franchise_id' in rostered.columns and rostered['franchise_id'].notna().any() else manager_column
+
+    # Group by manager-year (still use manager_column for per-season stats)
     manager_stats = rostered.groupby([manager_column, year_column], dropna=False).agg(
         total_player_weeks=('is_started_week', 'count'),
         bench_weeks=('is_bench_week', 'sum'),
@@ -453,14 +457,19 @@ def calculate_manager_bench_patterns(
         unique_players=('yahoo_player_id', 'nunique')
     ).reset_index()
 
+    # Add franchise_id to manager_stats if available (for career grouping)
+    if career_group_col == 'franchise_id':
+        franchise_lookup = rostered[[manager_column, 'franchise_id']].drop_duplicates()
+        manager_stats = manager_stats.merge(franchise_lookup, on=manager_column, how='left')
+
     # Calculate bench utilization
     manager_stats['bench_utilization_rate'] = (
         manager_stats['started_weeks'] /
         manager_stats['total_player_weeks'].clip(lower=1)
     ).round(3)
 
-    # Aggregate to manager career level
-    career_stats = manager_stats.groupby(manager_column, dropna=False).agg(
+    # Aggregate to franchise/manager career level
+    career_stats = manager_stats.groupby(career_group_col, dropna=False).agg(
         seasons=(year_column, 'nunique'),
         avg_bench_utilization=('bench_utilization_rate', 'mean'),
         avg_unique_players=('unique_players', 'mean'),

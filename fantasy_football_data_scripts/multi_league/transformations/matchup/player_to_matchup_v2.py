@@ -287,13 +287,15 @@ def aggregate_player_to_matchup(
         print(f"  Added total_optimal_points")
 
     # Optimal points all-time (career total)
+    # Use franchise_id for grouping if available (handles multi-team managers correctly)
     if "optimal_points" in matchup.columns and "manager" in matchup.columns:
+        career_group_col = 'franchise_id' if 'franchise_id' in matchup.columns and matchup['franchise_id'].notna().any() else 'manager'
         matchup["optimal_points_all_time"] = (
-            matchup.groupby("manager", dropna=False)["optimal_points"]
+            matchup.groupby(career_group_col, dropna=False)["optimal_points"]
             .transform("sum")
             .fillna(0)
         )
-        print(f"  Added optimal_points_all_time")
+        print(f"  Added optimal_points_all_time (grouped by {career_group_col})")
 
     # Optimal win/loss (if both managers played optimal lineups)
     if "optimal_points" in matchup.columns and "opponent_week" in matchup.columns:

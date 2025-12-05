@@ -259,9 +259,14 @@ def transform_cumulative_stats(
                 else:
                     df[c] = 0
 
-            # Aggregate historical totals per manager
+            # Use franchise_id for grouping if available (handles multi-team managers correctly)
+            # Falls back to manager name for backwards compatibility
+            group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else 'manager'
+            _safe_print(f"  [INFO] Grouping by '{group_col}' for all-time stats")
+
+            # Aggregate historical totals per franchise/manager
             all_time = (
-                df.groupby('manager', dropna=False)
+                df.groupby(group_col, dropna=False)
                   .agg(
                       manager_all_time_gp=('win', 'size'),
                       manager_all_time_wins=('win', 'sum'),
@@ -279,9 +284,9 @@ def transform_cumulative_stats(
             df = df.drop(columns=[c for c in all_time_cols_needed if c in df.columns], errors='ignore')
 
             # Merge aggregates back onto main df
-            df = df.merge(all_time, on='manager', how='left')
+            df = df.merge(all_time, on=group_col, how='left')
 
-            _safe_print(f"  [OK] Calculated all-time stats for {len(all_time)} managers")
+            _safe_print(f"  [OK] Calculated all-time stats for {len(all_time)} franchises/managers")
         else:
             _safe_print("  [OK] All-time stats already present and valid")
     except Exception as e:

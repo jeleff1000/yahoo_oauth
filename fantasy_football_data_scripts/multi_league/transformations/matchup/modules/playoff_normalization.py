@@ -283,6 +283,17 @@ def _calculate_season_summaries(df: pd.DataFrame) -> pd.DataFrame:
     pts_col = next((c for c in ['team_points', 'points_for', 'pf'] if c in df.columns), None)
     pts_series = pd.to_numeric(df[pts_col], errors='coerce').fillna(0.0) if pts_col else pd.Series(0.0, index=df.index)
 
+    # Use franchise_id for grouping if available (handles multi-team managers correctly)
+    # Falls back to manager name for backwards compatibility
+    group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else 'manager'
+
+    # Build groupby columns dynamically
+    base_group_cols = ['year', 'manager_year', group_col]
+    # Filter to only existing columns
+    group_cols = [c for c in base_group_cols if c in df.columns]
+    if not group_cols or 'year' not in group_cols:
+        group_cols = ['year', group_col]
+
     # Regular-season totals (exclude consolation)
     reg = (
         df.assign(
@@ -290,7 +301,7 @@ def _calculate_season_summaries(df: pd.DataFrame) -> pd.DataFrame:
             loss_nc=(df['loss'] * non_consol.astype(int)) if 'loss' in df.columns else 0,
             pts_nc=(pts_series * non_consol.astype(int))
         )
-        .groupby(['year', 'manager_year', 'manager'], dropna=False)
+        .groupby(group_cols, dropna=False)
         .agg(final_regular_wins=('win_nc', 'sum'),
              final_regular_losses=('loss_nc', 'sum'),
              season_mean=('pts_nc', 'mean'),
@@ -301,13 +312,13 @@ def _calculate_season_summaries(df: pd.DataFrame) -> pd.DataFrame:
     # Full season totals
     if 'win' in df.columns and 'loss' in df.columns:
         full = (
-            df.groupby(['year', 'manager_year', 'manager'], dropna=False)
+            df.groupby(group_cols, dropna=False)
             .agg(final_wins=('win', 'sum'),
                  final_losses=('loss', 'sum'))
             .reset_index()
         )
     else:
-        full = df[['year', 'manager_year', 'manager']].drop_duplicates()
+        full = df[group_cols].drop_duplicates()
         full['final_wins'] = 0
         full['final_losses'] = 0
 
@@ -317,13 +328,13 @@ def _calculate_season_summaries(df: pd.DataFrame) -> pd.DataFrame:
     df = df.drop(columns=[c for c in reg_cols + full_cols if c in df.columns])
 
     # Merge aggregates back
-    df = df.merge(reg, on=['year', 'manager_year', 'manager'], how='left')
-    df = df.merge(full, on=['year', 'manager_year', 'manager'], how='left')
+    df = df.merge(reg, on=group_cols, how='left')
+    df = df.merge(full, on=group_cols, how='left')
 
     # Rank manager's weekly performance within their season
     if pts_col is not None:
         df['manager_season_ranking'] = (
-            df.groupby(['manager', 'year'])[pts_col]
+            df.groupby([group_col, 'year'])[pts_col]
             .rank(method='dense', ascending=False)
             .astype(int)
         )
@@ -354,9 +365,13 @@ def _calculate_all_time_aggregates(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df[c] = 0
 
-    # Aggregate historical totals per manager
+    # Use franchise_id for grouping if available (handles multi-team managers correctly)
+    # Falls back to manager name for backwards compatibility
+    group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else 'manager'
+
+    # Aggregate historical totals per franchise/manager
     all_time = (
-        df.groupby('manager', dropna=False)
+        df.groupby(group_col, dropna=False)
         .agg(
             manager_all_time_gp=('win', 'size'),
             manager_all_time_wins=('win', 'sum'),
@@ -376,7 +391,7 @@ def _calculate_all_time_aggregates(df: pd.DataFrame) -> pd.DataFrame:
     df = df.drop(columns=[c for c in all_time_cols if c in df.columns])
 
     # Merge aggregates back
-    df = df.merge(all_time, on='manager', how='left')
+    df = df.merge(all_time, on=group_col, how='left')
 
     return df
 

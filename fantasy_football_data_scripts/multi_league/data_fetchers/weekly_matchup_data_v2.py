@@ -355,6 +355,7 @@ def extract_team(team_node: ET.Element, matchup_node: ET.Element = None, manager
     return {
         'manager': manager,
         'manager_guid': manager_guid,
+        'team_key': team_key,
         'team_name': team_name,
         'team_points': points,
         'team_projected_points': projected,

@@ -98,8 +98,12 @@ def calculate_weekly_metrics(df: pd.DataFrame) -> pd.DataFrame:
     # Calculate opponent's season median for comparison
     # Join opponent's median scores to compare manager vs their opponent's typical performance
     if 'opponent_week' in df.columns:
-        # Calculate each manager's season median up to current week
-        manager_medians = df.groupby(['manager', 'year'], group_keys=False).apply(
+        # Use franchise_id for grouping if available (handles multi-team managers correctly)
+        # Falls back to manager name for backwards compatibility
+        group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else 'manager'
+
+        # Calculate each franchise/manager's season median up to current week
+        manager_medians = df.groupby([group_col, 'year'], group_keys=False).apply(
             lambda g: g.sort_values('week').assign(
                 manager_cumulative_median=lambda x: x['team_points'].expanding().median()
             ),

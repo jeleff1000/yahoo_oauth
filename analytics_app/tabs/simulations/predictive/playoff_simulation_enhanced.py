@@ -234,8 +234,15 @@ def _display_championship_path(data, year, week, prefix):
     """Show path to championship with responsive design."""
     # Use selected week data
     final_week = week
+    week_data = data[data["week"] == final_week]
+
+    # Check if we have data for this week
+    if week_data.empty:
+        st.info(f"No playoff simulation data available for Week {week}")
+        return
+
     final_data = (
-        data[data["week"] == final_week]
+        week_data
         .groupby("manager")
         .agg(
             {
@@ -251,6 +258,11 @@ def _display_championship_path(data, year, week, prefix):
         )
         .sort_values("avg_seed", ascending=True)
     )
+
+    # Check if aggregation produced any data
+    if final_data.empty:
+        st.info(f"No playoff simulation data available for Week {week}")
+        return
 
     # Get key stats for KPI hero
     top_playoff = final_data.nlargest(1, "p_playoffs").iloc[0]

@@ -118,9 +118,14 @@ def calculate_cumulative_records(df: pd.DataFrame, data_directory: str = None) -
         df['manager_year'] = df['manager'].astype(str) + '_' + df['year'].astype(str)
     # Exclude consolation games from season totals
     non_consol = (df['is_consolation'].fillna(0).astype(int) != 1)
+
+    # Use franchise_id for grouping if available (handles multi-team managers correctly)
+    # Falls back to manager name for backwards compatibility
+    group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else 'manager'
+
     # CUMULATIVE ALL-TIME TOTALS (includes everything)
-    df['cumulative_wins'] = df.groupby('manager')['win'].cumsum().astype("Int64")
-    df['cumulative_losses'] = df.groupby('manager')['loss'].cumsum().astype("Int64")
+    df['cumulative_wins'] = df.groupby(group_col)['win'].cumsum().astype("Int64")
+    df['cumulative_losses'] = df.groupby(group_col)['loss'].cumsum().astype("Int64")
     # SEASON TOTALS (excludes consolation)
     df['wins_to_date'] = (
         (df['win'] * non_consol.astype(int))
@@ -137,15 +142,15 @@ def calculate_cumulative_records(df: pd.DataFrame, data_directory: str = None) -
     # WIN/LOSS STREAKS (current active streaks)
     df['win_streak'] = 0
     df['loss_streak'] = 0
-    for manager in df['manager'].unique():
-        mask = df['manager'] == manager
-        manager_df = df[mask].copy()
+    for entity in df[group_col].unique():
+        mask = df[group_col] == entity
+        entity_df = df[mask].copy()
         # Calculate streaks
         streaks_win = []
         streaks_loss = []
         current_win_streak = 0
         current_loss_streak = 0
-        for _, row in manager_df.iterrows():
+        for _, row in entity_df.iterrows():
             if row['win'] == 1:
                 current_win_streak += 1
                 current_loss_streak = 0

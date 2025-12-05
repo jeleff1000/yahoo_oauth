@@ -91,24 +91,28 @@ def calculate_manager_ppg(df: pd.DataFrame) -> pd.DataFrame:
     # Convert team_points to float
     df['team_points'] = pd.to_numeric(df['team_points'], errors='coerce')
 
-    # Calculate weekly mean/median per manager for each week in the season
-    # This is the manager's season-to-date average up to and including current week
-    weekly_stats = df.groupby(['manager', 'year', 'week'])['team_points'].first()
+    # Use franchise_id for grouping if available (handles multi-team managers correctly)
+    # Falls back to manager name for backwards compatibility
+    group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else 'manager'
+
+    # Calculate weekly mean/median per franchise for each week in the season
+    # This is the franchise's season-to-date average up to and including current week
+    weekly_stats = df.groupby([group_col, 'year', 'week'])['team_points'].first()
 
     # For each row, calculate the mean/median of all weeks up to current week
     df['weekly_mean'] = df.apply(
-        lambda r: weekly_stats.loc[(r['manager'], r['year'], slice(None))].loc[:r['week']].mean()
-        if (r['manager'], r['year'], r['week']) in weekly_stats.index else np.nan,
+        lambda r: weekly_stats.loc[(r[group_col], r['year'], slice(None))].loc[:r['week']].mean()
+        if (r[group_col], r['year'], r['week']) in weekly_stats.index else np.nan,
         axis=1
     )
 
     df['weekly_median'] = df.apply(
-        lambda r: weekly_stats.loc[(r['manager'], r['year'], slice(None))].loc[:r['week']].median()
-        if (r['manager'], r['year'], r['week']) in weekly_stats.index else np.nan,
+        lambda r: weekly_stats.loc[(r[group_col], r['year'], slice(None))].loc[:r['week']].median()
+        if (r[group_col], r['year'], r['week']) in weekly_stats.index else np.nan,
         axis=1
     )
 
-    print(f"  Calculated manager PPG metrics (weekly_mean, weekly_median)")
+    print(f"  Calculated franchise PPG metrics (weekly_mean, weekly_median)")
     print(f"  Mean range: {df['weekly_mean'].min():.1f} - {df['weekly_mean'].max():.1f}")
 
     return df

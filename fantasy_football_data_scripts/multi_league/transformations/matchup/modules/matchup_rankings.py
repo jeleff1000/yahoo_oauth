@@ -85,18 +85,22 @@ def calculate_manager_all_time_ranking(df: pd.DataFrame) -> pd.DataFrame:
     # Ensure points are numeric
     df[pts_col] = pd.to_numeric(df[pts_col], errors='coerce')
 
-    # Rank within each manager's entire history (1 = best ever performance)
+    # Use franchise_id for grouping if available (handles multi-team managers correctly)
+    # Falls back to manager name for backwards compatibility
+    group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else 'manager'
+
+    # Rank within each franchise's entire history (1 = best ever performance)
     # Use method='min' so ties get the same best rank
     ranks = (
-        df.groupby('manager')[pts_col]
+        df.groupby(group_col)[pts_col]
         .rank(method='min', ascending=False)
         .astype('Int64')
     )
     df['manager_all_time_ranking'] = ranks
 
     # Calculate percentile
-    # Number of non-null historical records per manager
-    counts = df.groupby('manager')[pts_col].transform('count').astype(float)
+    # Number of non-null historical records per franchise
+    counts = df.groupby(group_col)[pts_col].transform('count').astype(float)
 
     # Percentile: higher is better
     # Formula: (count - rank) / (count - 1) * 100
@@ -139,11 +143,15 @@ def calculate_manager_season_ranking(df: pd.DataFrame) -> pd.DataFrame:
     # Ensure points are numeric
     df[pts_col] = pd.to_numeric(df[pts_col], errors='coerce')
 
-    # Rank within each manager's season (1 = best week this season)
+    # Use franchise_id for grouping if available (handles multi-team managers correctly)
+    # Falls back to manager name for backwards compatibility
+    group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else 'manager'
+
+    # Rank within each franchise's season (1 = best week this season)
     # Use method='dense' for consistent ranking even with ties
     # FULL SEASON: Ranks all weeks in the season against each other
     df['manager_season_ranking'] = (
-        df.groupby(['manager', 'year'])[pts_col]
+        df.groupby([group_col, 'year'])[pts_col]
         .rank(method='dense', ascending=False)
         .astype('Int64')
     )

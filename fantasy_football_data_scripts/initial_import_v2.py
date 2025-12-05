@@ -113,6 +113,7 @@ YAHOO_FETCHER = "multi_league/data_fetchers/yahoo_fantasy_data.py"
 # Pass 1: Base calculations (no dependencies)
 TRANSFORMATIONS_PASS_1 = [
     ("multi_league/transformations/matchup/resolve_hidden_managers.py", "Resolve Hidden Managers", 120),  # Unify --hidden-- manager names by GUID FIRST (before any other transformations)
+    ("multi_league/transformations/matchup/discover_franchises.py", "Discover Franchises", 120),  # Establish franchise_id for multi-team managers BEFORE cumulative stats
     ("multi_league/transformations/matchup/cumulative_stats.py", "Cumulative Stats", 600),  # FIX matchup playoff flags FIRST using seed-based detection
     ("multi_league/transformations/schedule/enrich_schedule_with_playoff_flags.py", "Enrich Schedule w/ Playoff Flags", 120),  # Merge playoff flags from matchup into schedule (needed by playoff_odds_import)
 ]
@@ -376,13 +377,132 @@ def main():
         settings_dir = Path(ctx.data_directory) / "league_settings"
         settings_dir.mkdir(parents=True, exist_ok=True)
 
+        # -------------------------------------------------------------------------
+        # PHASE 0.1: LOCAL SETTINGS DISCOVERY - Check for local settings files
+        # -------------------------------------------------------------------------
+        # Look for league_settings_*.json files in multiple locations:
+        # 1. Import directory (matchup_data_directory) - primary location for uploaded files
+        # 2. Data directory - for manually placed files
+        # This allows users to add historical settings files without the web upload
+        local_settings_years = set()
+
+        # Collect all candidate directories to search
+        search_dirs = []
+        if hasattr(ctx, 'matchup_data_directory') and ctx.matchup_data_directory:
+            search_dirs.append(Path(ctx.matchup_data_directory))
+        if hasattr(ctx, 'data_directory') and ctx.data_directory:
+            search_dirs.append(Path(ctx.data_directory))
+
+        # Deduplicate and filter to existing directories
+        search_dirs = list({d.resolve() for d in search_dirs if d.exists()})
+        # Exclude the settings_dir itself to avoid finding files we're about to create
+        search_dirs = [d for d in search_dirs if d.resolve() != settings_dir.resolve()]
+
+        # Find all local settings files
+        local_settings_files = []
+        for search_dir in search_dirs:
+            found_files = list(search_dir.glob("league_settings_*.json"))
+            if found_files:
+                log(f"[LOCAL SETTINGS] Searching {search_dir}: found {len(found_files)} settings file(s)")
+                local_settings_files.extend(found_files)
+
+        if local_settings_files:
+            log(f"[LOCAL SETTINGS] Processing {len(local_settings_files)} local settings file(s)...")
+            for local_file in local_settings_files:
+                try:
+                    with open(local_file, 'r', encoding='utf-8') as f:
+                        local_data = json.load(f)
+
+                    # Extract year from file or data
+                    local_year = local_data.get('year')
+                    if not local_year:
+                        # Try to extract from filename (league_settings_YYYY_*.json)
+                        import re
+                        match = re.search(r'league_settings_(\d{4})_', local_file.name)
+                        if match:
+                            local_year = int(match.group(1))
+
+                    if local_year:
+                        local_year = int(local_year)
+                        # Copy to settings directory if not already there
+                        dest_file = settings_dir / local_file.name
+                        if not dest_file.exists():
+                            import shutil
+                            shutil.copy2(local_file, dest_file)
+                            log(f"[LOCAL SETTINGS] Copied {local_file.name} -> {dest_file}")
+                        else:
+                            log(f"[LOCAL SETTINGS] {local_file.name} already exists in settings directory")
+
+                        local_settings_years.add(local_year)
+
+                        # Log key info from the settings
+                        metadata = local_data.get('metadata', local_data)
+                        playoff_start = metadata.get('playoff_start_week', '?')
+                        playoff_teams = metadata.get('num_playoff_teams', metadata.get('playoff_teams', '?'))
+                        log(f"[LOCAL SETTINGS] {local_year}: playoff_start_week={playoff_start}, playoff_teams={playoff_teams}")
+                except Exception as e:
+                    log(f"[LOCAL SETTINGS] Warning: Failed to process {local_file.name}: {e}")
+
+            if local_settings_years:
+                log(f"[LOCAL SETTINGS] Years with local settings: {sorted(local_settings_years)}")
+
+        # -------------------------------------------------------------------------
+        # PHASE 0.2: STAGING SETTINGS - Check MotherDuck staging for external settings
+        # -------------------------------------------------------------------------
+        # This ensures GitHub Actions compatibility - external data uploaded via web UI
+        # is stored in MotherDuck staging and needs to be downloaded before Yahoo fetch
+        staging_settings_years = set()
+        if ctx.has_external_data:
+            log("\n[STAGING SETTINGS] Checking MotherDuck staging for external settings...")
+            try:
+                read_staging_data, write_staging_settings_to_files = _get_staging_functions()
+                if read_staging_data and write_staging_settings_to_files:
+                    # Write settings from staging to files BEFORE Yahoo fetch
+                    written_years = write_staging_settings_to_files(
+                        db_name=ctx.league_name,
+                        settings_dir=str(settings_dir),
+                        token=os.environ.get("MOTHERDUCK_TOKEN")
+                    )
+                    if written_years:
+                        staging_settings_years = set(written_years)
+                        log(f"[STAGING SETTINGS] Wrote settings for {len(written_years)} year(s) from staging: {sorted(written_years)}")
+                        # Log key info for each staging settings file
+                        for year in sorted(written_years):
+                            settings_files = list(settings_dir.glob(f"league_settings_{year}_*.json"))
+                            if settings_files:
+                                try:
+                                    with open(settings_files[0], 'r', encoding='utf-8') as f:
+                                        staging_data = json.load(f)
+                                    metadata = staging_data.get('metadata', staging_data)
+                                    playoff_start = metadata.get('playoff_start_week', '?')
+                                    playoff_teams = metadata.get('num_playoff_teams', metadata.get('playoff_teams', '?'))
+                                    log(f"[STAGING SETTINGS] {year}: playoff_start_week={playoff_start}, playoff_teams={playoff_teams}")
+                                except Exception:
+                                    pass
+                    else:
+                        log("[STAGING SETTINGS] No settings found in staging")
+                else:
+                    log("[STAGING SETTINGS] Staging functions not available")
+            except Exception as e:
+                log(f"[STAGING SETTINGS] Warning: Failed to read staging settings: {e}")
+
+        # Combine all external settings years (local + staging)
+        external_settings_years = local_settings_years | staging_settings_years
+
         # Fetch settings for each year IN PARALLEL (10-12x faster than sequential)
+        # Skip years that already have external settings (local or staging)
         years = list(range(ctx.start_year, (ctx.end_year or datetime.now().year) + 1))
-        log(f"[SETTINGS] Fetching settings for {len(years)} years in parallel (max 5 concurrent requests)...")
+        years_to_fetch_from_yahoo = [y for y in years if y not in external_settings_years]
 
         all_settings_ok = True
-        successful_years = []
+        successful_years = list(external_settings_years)  # Start with external settings years as successful
         failed_years = []
+
+        if external_settings_years:
+            log(f"[SETTINGS] Skipping {len(external_settings_years)} year(s) with external settings: {sorted(external_settings_years)}")
+
+        if years_to_fetch_from_yahoo:
+            log(f"[SETTINGS] Fetching settings for {len(years_to_fetch_from_yahoo)} years from Yahoo API in parallel...")
 
         # Create a SHARED OAuth session BEFORE parallel fetching
         # This avoids race conditions when multiple threads try to read/write the OAuth file
@@ -421,31 +541,34 @@ def main():
                 return (year, False, str(e))
 
         # Use ThreadPoolExecutor for parallel fetching (max 5 workers to avoid API rate limits)
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            # Submit all years for parallel processing
-            future_to_year = {executor.submit(fetch_year_settings, year): year for year in years}
+        # Only fetch years that don't have local settings
+        if years_to_fetch_from_yahoo:
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                # Submit years that need Yahoo API fetch
+                future_to_year = {executor.submit(fetch_year_settings, year): year for year in years_to_fetch_from_yahoo}
 
-            # Process results as they complete
-            settings_step = 0
-            for future in as_completed(future_to_year):
-                year, success, result = future.result()
-                settings_step += 1
+                # Process results as they complete
+                settings_step = len(local_settings_years)  # Start after local settings
+                for future in as_completed(future_to_year):
+                    year, success, result = future.result()
+                    settings_step += 1
 
-                if success:
-                    num_teams = result.get("metadata", {}).get("num_teams", "?")
-                    playoff_teams = result.get("metadata", {}).get("playoff_teams", "?")
-                    bye_teams = result.get("metadata", {}).get("bye_teams", "?")
-                    log(f"[SETTINGS] [OK] {year}: {num_teams} teams, {playoff_teams} playoff spots, {bye_teams} byes")
-                    successful_years.append(year)
-                    tracker.step(settings_step - 1, "league_settings", f"Fetched {year} settings")
-                else:
-                    error_msg = result if isinstance(result, str) else "Failed to fetch settings"
-                    log(f"[SETTINGS] [FAIL] {year}: {error_msg}")
-                    failed_years.append(year)
-                    all_settings_ok = False
+                    if success:
+                        num_teams = result.get("metadata", {}).get("num_teams", "?")
+                        playoff_teams = result.get("metadata", {}).get("playoff_teams", "?")
+                        bye_teams = result.get("metadata", {}).get("bye_teams", "?")
+                        log(f"[SETTINGS] [OK] {year}: {num_teams} teams, {playoff_teams} playoff spots, {bye_teams} byes")
+                        successful_years.append(year)
+                        tracker.step(settings_step - 1, "league_settings", f"Fetched {year} settings")
+                    else:
+                        error_msg = result if isinstance(result, str) else "Failed to fetch settings"
+                        log(f"[SETTINGS] [FAIL] {year}: {error_msg}")
+                        failed_years.append(year)
+                        all_settings_ok = False
 
         # Summary
-        log(f"\n[SETTINGS] Parallel fetch complete: {len(successful_years)} succeeded, {len(failed_years)} failed")
+        yahoo_count = len(successful_years) - len(external_settings_years)
+        log(f"\n[SETTINGS] Settings complete: {len(successful_years)} total ({len(local_settings_years)} local, {len(staging_settings_years)} staging, {yahoo_count} from Yahoo API)")
         if failed_years:
             log(f"[SETTINGS] Failed years: {sorted(failed_years)}")
 
@@ -454,29 +577,35 @@ def main():
         log("\n[SETTINGS] Settings fetch complete. All data fetchers will use these saved settings.")
 
         # -------------------------------------------------------------------------
-        # PHASE 0.5: EXTERNAL DATA - Write settings from MotherDuck staging
+        # PHASE 0.5: EXTERNAL DATA - Verify settings (already written in PHASE 0.2)
         # -------------------------------------------------------------------------
         if ctx.has_external_data:
             log("\n" + "-" * 48)
-            log("[EXTERNAL DATA] Checking for external data in MotherDuck staging...")
-            read_staging_data, write_staging_settings_to_files = _get_staging_functions()
-
-            if read_staging_data and write_staging_settings_to_files:
-                try:
-                    # Write external settings to JSON files
-                    written_years = write_staging_settings_to_files(
-                        db_name=ctx.league_name,
-                        settings_dir=str(settings_dir),
-                        token=os.environ.get("MOTHERDUCK_TOKEN")
-                    )
-                    if written_years:
-                        log(f"[EXTERNAL DATA] Wrote settings for {len(written_years)} external years: {sorted(written_years)}")
-                    else:
-                        log("[EXTERNAL DATA] No external settings found in staging")
-                except Exception as e:
-                    log(f"[EXTERNAL DATA] Warning: Failed to write external settings: {e}")
+            if staging_settings_years:
+                # Settings were already written in PHASE 0.2
+                log(f"[EXTERNAL DATA] Settings already written in PHASE 0.2 for {len(staging_settings_years)} year(s): {sorted(staging_settings_years)}")
+                written_years = list(staging_settings_years)
             else:
-                log("[EXTERNAL DATA] Warning: Staging functions not available (database module not found)")
+                # Fallback: try to write settings if PHASE 0.2 didn't run (e.g., no staging functions available earlier)
+                log("[EXTERNAL DATA] Checking for external data in MotherDuck staging...")
+                read_staging_data, write_staging_settings_to_files = _get_staging_functions()
+
+                if read_staging_data and write_staging_settings_to_files:
+                    try:
+                        # Write external settings to JSON files
+                        written_years = write_staging_settings_to_files(
+                            db_name=ctx.league_name,
+                            settings_dir=str(settings_dir),
+                            token=os.environ.get("MOTHERDUCK_TOKEN")
+                        )
+                        if written_years:
+                            log(f"[EXTERNAL DATA] Wrote settings for {len(written_years)} external years: {sorted(written_years)}")
+                        else:
+                            log("[EXTERNAL DATA] No external settings found in staging")
+                    except Exception as e:
+                        log(f"[EXTERNAL DATA] Warning: Failed to write external settings: {e}")
+                else:
+                    log("[EXTERNAL DATA] Warning: Staging functions not available (database module not found)")
             log("-" * 48)
 
         log("=" * 96)

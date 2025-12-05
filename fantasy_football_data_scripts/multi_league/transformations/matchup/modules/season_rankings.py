@@ -94,21 +94,26 @@ def calculate_season_rankings(
         "  Calculating season rankings "
         + ("(finalized: championship complete)" if championship_complete else "(provisional: championship not complete)")
     )
-    # Calculate final season records per manager
-    season_stats = df.groupby(['year', 'manager']).agg({
+
+    # Use franchise_id for grouping if available (handles multi-team managers correctly)
+    # Falls back to manager name for backwards compatibility
+    group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else 'manager'
+
+    # Calculate final season records per franchise/manager
+    season_stats = df.groupby(['year', group_col]).agg({
         'win': 'sum',
         'loss': 'sum',
         'team_points': ['mean', 'median', 'sum']
     }).reset_index()
-    season_stats.columns = ['year', 'manager', 'total_wins', 'total_losses',
+    season_stats.columns = ['year', group_col, 'total_wins', 'total_losses',
                             'season_mean', 'season_median', 'season_total_points']
     # Regular season only (exclude playoffs and consolation)
     regular_mask = (df['is_playoffs'].fillna(0) != 1) & (df['is_consolation'].fillna(0) != 1)
-    regular_stats = df[regular_mask].groupby(['year', 'manager']).agg({
+    regular_stats = df[regular_mask].groupby(['year', group_col]).agg({
         'win': 'sum',
         'loss': 'sum'
     }).reset_index()
-    regular_stats.columns = ['year', 'manager', 'final_regular_wins', 'final_regular_losses']
+    regular_stats.columns = ['year', group_col, 'final_regular_wins', 'final_regular_losses']
 
     # Drop existing season stats columns to avoid merge conflicts
     existing_cols = ['total_wins', 'total_losses', 'season_mean', 'season_median', 'season_total_points',
@@ -116,20 +121,20 @@ def calculate_season_rankings(
     df = df.drop(columns=[c for c in existing_cols if c in df.columns], errors='ignore')
 
     # Merge back to main dataframe
-    df = df.merge(season_stats, on=['year', 'manager'], how='left')
-    df = df.merge(regular_stats, on=['year', 'manager'], how='left')
+    df = df.merge(season_stats, on=['year', group_col], how='left')
+    df = df.merge(regular_stats, on=['year', group_col], how='left')
     # Rename for final columns
     df['final_wins'] = df['total_wins'].astype("Int64")
     df['final_losses'] = df['total_losses'].astype("Int64")
     df = df.drop(columns=['total_wins', 'total_losses', 'season_total_points'], errors='ignore')
-    # manager_season_ranking: Rank each week's points within that manager's season
-    # 1 = best week for that manager in that season
+    # manager_season_ranking: Rank each week's points within that franchise's season
+    # 1 = best week for that franchise in that season
     # This is RECALCULATE WEEKLY - ranks current week against all prior weeks
     pts_col = next((c for c in ['team_points', 'points_for', 'pf'] if c in df.columns), None)
     if pts_col is not None:
         df[pts_col] = pd.to_numeric(df[pts_col], errors='coerce')
         df['manager_season_ranking'] = (
-            df.groupby(['manager', 'year'])[pts_col]
+            df.groupby([group_col, 'year'])[pts_col]
               .rank(method='dense', ascending=False)
               .astype("Int64")
         )
@@ -160,34 +165,39 @@ def calculate_alltime_rankings(df: pd.DataFrame) -> pd.DataFrame:
         DataFrame with all-time ranking columns added
     """
     df = df.copy()
-    # Calculate all-time totals per manager
-    alltime_stats = df.groupby('manager').agg({
+
+    # Use franchise_id for grouping if available (handles multi-team managers correctly)
+    # Falls back to manager name for backwards compatibility
+    group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else 'manager'
+
+    # Calculate all-time totals per franchise/manager
+    alltime_stats = df.groupby(group_col).agg({
         'win': 'sum',
         'team_points': 'sum'
     }).reset_index()
-    alltime_stats.columns = ['manager', 'alltime_wins', 'alltime_points']
-    # Rank managers by all-time wins
+    alltime_stats.columns = [group_col, 'alltime_wins', 'alltime_points']
+    # Rank franchises/managers by all-time wins
     alltime_stats['manager_all_time_ranking'] = alltime_stats['alltime_wins'].rank(
         method='min',
         ascending=False
     ).astype(int)
     # Calculate percentile
-    total_managers = len(alltime_stats)
+    total_franchises = len(alltime_stats)
     alltime_stats['manager_all_time_ranking_percentile'] = (
-        (1 - (alltime_stats['manager_all_time_ranking'] - 1) / total_managers) * 100
+        (1 - (alltime_stats['manager_all_time_ranking'] - 1) / total_franchises) * 100
     )
     # For league-wide, use same logic (could be different if multiple leagues)
     alltime_stats['league_all_time_ranking'] = alltime_stats['manager_all_time_ranking']
     alltime_stats['league_all_time_ranking_percentile'] = alltime_stats['manager_all_time_ranking_percentile']
     # Merge back
     df = df.merge(
-        alltime_stats[['manager', 'manager_all_time_ranking', 'manager_all_time_ranking_percentile',
+        alltime_stats[[group_col, 'manager_all_time_ranking', 'manager_all_time_ranking_percentile',
                       'league_all_time_ranking', 'league_all_time_ranking_percentile']],
-        on='manager',
+        on=group_col,
         how='left'
     )
     # Convert to proper types
     df['manager_all_time_ranking'] = df['manager_all_time_ranking'].astype("Int64")
     df['league_all_time_ranking'] = df['league_all_time_ranking'].astype("Int64")
-    print(f"  All-time rankings calculated for {total_managers} managers")
+    print(f"  All-time rankings calculated for {total_franchises} franchises/managers")
     return df

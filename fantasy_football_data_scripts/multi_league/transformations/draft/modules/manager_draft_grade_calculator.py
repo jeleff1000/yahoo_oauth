@@ -1038,15 +1038,22 @@ def get_manager_career_grades(
     if missing:
         raise ValueError(f"Missing columns: {missing}. Run calculate_manager_draft_grades first.")
 
-    # Get unique manager-year stats first
-    manager_years = df[[
-        manager_column, 'year', 'manager_draft_score', 'manager_draft_grade',
-        'manager_total_spar', 'manager_avg_spar', 'manager_hit_rate',
-        'manager_total_picks', 'manager_positive_picks'
-    ]].drop_duplicates()
+    # Use franchise_id for career grouping if available (handles multi-team managers correctly)
+    # Falls back to manager_column for backwards compatibility
+    career_group_col = 'franchise_id' if 'franchise_id' in df.columns and df['franchise_id'].notna().any() else manager_column
 
-    # Aggregate to career level
-    career_stats = manager_years.groupby(manager_column, dropna=False).agg(
+    # Get columns to include in manager_years
+    base_cols = [manager_column, 'year', 'manager_draft_score', 'manager_draft_grade',
+                 'manager_total_spar', 'manager_avg_spar', 'manager_hit_rate',
+                 'manager_total_picks', 'manager_positive_picks']
+    if career_group_col == 'franchise_id':
+        base_cols.append('franchise_id')
+
+    # Get unique manager-year stats first
+    manager_years = df[base_cols].drop_duplicates()
+
+    # Aggregate to career level (using franchise_id if available)
+    career_stats = manager_years.groupby(career_group_col, dropna=False).agg(
         seasons=('year', 'nunique'),
         career_total_spar=('manager_total_spar', 'sum'),
         career_avg_score=('manager_draft_score', 'mean'),
@@ -1059,11 +1066,11 @@ def get_manager_career_grades(
     ).reset_index()
 
     # Grade distribution
-    grade_counts = manager_years.groupby([manager_column, 'manager_draft_grade'], dropna=False).size().unstack(fill_value=0)
+    grade_counts = manager_years.groupby([career_group_col, 'manager_draft_grade'], dropna=False).size().unstack(fill_value=0)
     grade_counts.columns = [f'seasons_grade_{g}' for g in grade_counts.columns]
     grade_counts = grade_counts.reset_index()
 
-    career_stats = career_stats.merge(grade_counts, on=manager_column, how='left')
+    career_stats = career_stats.merge(grade_counts, on=career_group_col, how='left')
 
     # Sort by career total SPAR
     career_stats = career_stats.sort_values('career_total_spar', ascending=False).reset_index(drop=True)

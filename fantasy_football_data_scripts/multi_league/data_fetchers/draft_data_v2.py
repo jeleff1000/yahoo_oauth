@@ -230,7 +230,7 @@ def fetch_team_and_player_mappings(
     league_id: str,
     timeout: int = 30,
     manager_name_overrides: Optional[Dict[str, str]] = None
-) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, str]]:
+) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, str]]:
     """
     Fetch team and player mappings from Yahoo API.
 
@@ -241,10 +241,11 @@ def fetch_team_and_player_mappings(
         manager_name_overrides: Dict mapping team names/nicknames to real manager names
 
     Returns:
-        Tuple of (team_key_to_manager, team_key_to_guid, player_id_to_name, player_id_to_team)
+        Tuple of (team_key_to_manager, team_key_to_guid, team_key_to_team_name, player_id_to_name, player_id_to_team)
     """
     team_key_to_manager = {}
     team_key_to_guid = {}
+    team_key_to_team_name = {}
     player_id_to_name = {}
     player_id_to_team = {}
 
@@ -260,9 +261,10 @@ def fetch_team_and_player_mappings(
                 continue
             team_key = team_key_elem.text
 
-            # Get team name (used as fallback for --hidden-- managers)
+            # Get team name (used for franchise tracking and --hidden-- fallback)
             team_name_elem = team_elem.find("name")
             team_name = team_name_elem.text if team_name_elem is not None else None
+            team_key_to_team_name[team_key] = team_name
 
             # Get raw nickname from manager element
             manager_elem = team_elem.find(".//manager/nickname")
@@ -310,6 +312,7 @@ def fetch_team_and_player_mappings(
                 )
                 team_key_to_manager[team_key] = manager_name
                 team_key_to_guid[team_key] = manager_guid if manager_guid else None
+                team_key_to_team_name[team_key] = team_name if team_name else None
 
         players = root.findall("team/roster/players/player")
         player_ids = [p.findtext("player_id") for p in players if p.find("player_id") is not None]
