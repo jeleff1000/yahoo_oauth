@@ -25,8 +25,10 @@ MOTHERDUCK_TOKEN = os.environ.get("MOTHERDUCK_TOKEN")
 try:
     import streamlit as st
     if not MOTHERDUCK_TOKEN:
+        # st.secrets.get() can raise StreamlitSecretNotFoundError in non-Streamlit contexts
         MOTHERDUCK_TOKEN = st.secrets.get("MOTHERDUCK_TOKEN", "")
-except (ImportError, AttributeError):
+except Exception:
+    # Catch all exceptions - ImportError, AttributeError, StreamlitSecretNotFoundError, etc.
     pass
 
 
