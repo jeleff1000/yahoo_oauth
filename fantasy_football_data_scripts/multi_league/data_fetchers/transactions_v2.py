@@ -959,10 +959,10 @@ def fetch_transactions(
 
     # Fetch team mappings (with manager name normalization including --hidden-- fallback)
     manager_overrides = ctx.manager_name_overrides if ctx else {}
-    team_mappings, guid_mappings = fetch_team_mappings(oauth, league_key, manager_name_overrides=manager_overrides)
+    team_mappings, guid_mappings, team_name_mappings = fetch_team_mappings(oauth, league_key, manager_name_overrides=manager_overrides)
 
     # Fetch transactions
-    transactions = fetch_transactions_for_year(oauth, league_key, year, team_mappings, guid_mappings, matchup_windows)
+    transactions = fetch_transactions_for_year(oauth, league_key, year, team_mappings, guid_mappings, team_name_mappings, matchup_windows)
 
     # Convert to DataFrame
     df = transactions_to_dataframe(transactions)
