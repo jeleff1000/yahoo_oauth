@@ -204,7 +204,7 @@ jobs:
           echo "Simulations: ${N_SIMS}"
           echo "========================================"
 
-          python multi_league/transformations/matchup_enrichment/playoff_odds_import.py \
+          python multi_league/transformations/matchup/playoff_odds_import.py \
             --context ../league_context.json \
             --n-sims ${N_SIMS} \
             2>&1 | tee ../playoff_odds.log
