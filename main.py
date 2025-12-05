@@ -1140,72 +1140,42 @@ def main():
 
 def render_open_league_card(existing_dbs: list[str]):
     """
-    Render the Open Existing League card with search + results list.
-    Handles 1000+ leagues efficiently with search filtering.
-    Excludes private (link-only) leagues from search results.
+    Render the Open Existing League card with a simple dropdown.
+    Excludes private (link-only) leagues from the list.
     """
     st.subheader("Open Existing League")
     st.caption("Browse imported leagues.")
 
     if not existing_dbs:
-        st.info("No existing leagues found. Register a new league to get started!")
+        st.info("No leagues found yet. Register one to get started!")
         return
 
-    # Filter out private leagues from search
+    # Filter out private leagues
     private_leagues = get_private_leagues()
     public_dbs = [db for db in existing_dbs if db not in private_leagues]
 
     if not public_dbs:
-        st.info("No public leagues found. Register a new league to get started!")
+        st.info("No public leagues found. Register one to get started!")
         return
 
-    # Search box
-    search = st.text_input(
-        "Search leagues",
-        placeholder="Type a league name (e.g. kmffl, pirates)...",
-        label_visibility="collapsed",
-        key="league_search"
-    )
-
-    # Sort by display name (what users see) for alphabetical order
+    # Sort by display name for alphabetical order
     existing_dbs_sorted = sorted(public_dbs, key=lambda db: format_league_display_name(db).lower())
 
-    # For small lists, show all; for large lists, require search
-    show_all_threshold = 20
+    # Create options list with display names
+    options = ["Select a league..."] + [format_league_display_name(db) for db in existing_dbs_sorted]
+    db_map = {format_league_display_name(db): db for db in existing_dbs_sorted}
 
-    if len(existing_dbs_sorted) <= show_all_threshold:
-        # Small list - show all as buttons
-        results = existing_dbs_sorted
-        if search.strip():
-            # Filter if search provided
-            search_lower = search.strip().lower()
-            results = [db for db in existing_dbs_sorted if search_lower in format_league_display_name(db).lower()]
-    else:
-        # Large list - require search
-        if len(search.strip()) < 2:
-            st.caption(f"Start typing at least 2 characters to search ({len(existing_dbs_sorted)} leagues available).")
-            return
+    selected = st.selectbox(
+        "Choose league",
+        options,
+        label_visibility="collapsed",
+        key="league_dropdown"
+    )
 
-        search_lower = search.strip().lower()
-        results = [db for db in existing_dbs_sorted if search_lower in format_league_display_name(db).lower()]
-
-    if not results:
-        st.caption("No leagues found. Try a different name or check your spelling.")
-        return
-
-    # Limit results to prevent UI overload
-    max_results = 15
-    displayed = results[:max_results]
-    if len(results) > max_results:
-        st.caption(f"Showing {max_results} of {len(results)} matches. Refine your search for more specific results.")
-
-    # Show results as buttons
-    for db_name in displayed:
-        display_name = format_league_display_name(db_name)
-        if st.button(display_name, key=f"league_btn_{db_name}", use_container_width=True):
-            # Clear cached data when switching leagues to free memory
+    if selected and selected != "Select a league...":
+        db_name = db_map[selected]
+        if st.button("Open League", key="open_league_btn", type="primary", use_container_width=True):
             st.cache_data.clear()
-            # Store selected database and set query param for shareable URL
             st.session_state.selected_league_db = db_name
             st.session_state.app_mode = "analytics"
             st.query_params["league"] = db_name
@@ -1221,8 +1191,6 @@ def render_register_card():
     auth_url = build_authorize_url()
     st.link_button("Register New League", auth_url, type="primary", use_container_width=True)
 
-    st.markdown("")
-    st.caption("or")
     st.markdown("")
 
     # Demo league button
