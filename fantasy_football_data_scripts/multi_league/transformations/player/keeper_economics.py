@@ -220,7 +220,9 @@ def calculate_consecutive_keeper_years(df: pd.DataFrame) -> pd.DataFrame:
         player_id = row.get('yahoo_player_id')
         manager = row.get('manager', '')
         year = row.get('year')
-        is_keeper = row.get('is_keeper_status', 0) == 1
+        # Handle NA values explicitly - pd.NA == 1 returns pd.NA, not False
+        is_keeper_val = row.get('is_keeper_status')
+        is_keeper = pd.notna(is_keeper_val) and is_keeper_val == 1
         cost = float(row.get('cost', 0) or 0)
         faab = float(row.get('max_faab_bid_to_date', 0) or 0)
 
