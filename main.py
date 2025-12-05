@@ -1164,6 +1164,8 @@ def render_open_league_card(existing_dbs: list[str]):
     options = ["Select a league..."] + [format_league_display_name(db) for db in existing_dbs_sorted]
     db_map = {format_league_display_name(db): db for db in existing_dbs_sorted}
 
+    st.caption("Choose from the leagues below.")
+
     selected = st.selectbox(
         "Choose league",
         options,
@@ -1179,8 +1181,6 @@ def render_open_league_card(existing_dbs: list[str]):
             st.session_state.app_mode = "analytics"
             st.query_params["league"] = db_name
             st.rerun()
-    else:
-        st.caption("Choose from imported leagues above.")
 
 
 def render_register_card():
