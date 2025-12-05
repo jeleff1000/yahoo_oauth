@@ -1405,6 +1405,17 @@ def run_register_flow():
                 league_url = f"https://leaguehistory.streamlit.app/?league={db_name}"
                 st.markdown(f"**Your league URL:** `{league_url}`")
 
+                # Optional Settings (collapsed by default)
+                st.markdown("##### Optional Settings")
+
+                # Privacy setting with inline explanation
+                is_private = st.checkbox(
+                    "Make my league private — only accessible via direct link, won't appear in public search",
+                    value=False,
+                    key="league_private",
+                )
+                st.session_state.configured_is_private = is_private
+
                 # Hidden Manager Detection
                 cache_key = f"teams_all_years_{selected_league.get('name')}"
                 if cache_key not in st.session_state:
@@ -1428,17 +1439,6 @@ def run_register_flow():
                         st.session_state.configured_manager_overrides = manager_overrides
                 else:
                     st.session_state.configured_manager_overrides = {}
-
-                # Optional Settings (collapsed by default)
-                st.markdown("##### Optional Settings")
-
-                # Privacy setting with inline explanation
-                is_private = st.checkbox(
-                    "Make my league private — only accessible via direct link, won't appear in public search",
-                    value=False,
-                    key="league_private",
-                )
-                st.session_state.configured_is_private = is_private
 
                 # Keeper Rules Tab
                 with st.expander("Keeper Rules", expanded=False):
