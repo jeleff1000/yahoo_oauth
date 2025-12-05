@@ -33,7 +33,8 @@ try:
         CLIENT_ID = st.secrets.get("YAHOO_CLIENT_ID", None)
     if not CLIENT_SECRET:
         CLIENT_SECRET = st.secrets.get("YAHOO_CLIENT_SECRET", None)
-except (ImportError, AttributeError):
+except Exception:
+    # Catch all exceptions including StreamlitSecretNotFoundError
     pass
 
 # Directory for OAuth files
@@ -113,7 +114,8 @@ def save_token_to_motherduck(token_data: dict, league_info: Optional[dict] = Non
         try:
             import streamlit as st
             motherduck_token = st.secrets.get("MOTHERDUCK_TOKEN", "")
-        except (ImportError, AttributeError):
+        except Exception:
+            # Catch all exceptions including StreamlitSecretNotFoundError
             pass
 
     if not motherduck_token:
