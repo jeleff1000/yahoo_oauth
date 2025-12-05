@@ -127,6 +127,78 @@ def _load_from_parquet(data_directory: Path, year: int) -> Optional[Dict]:
         return None
 
 
+def _infer_settings_from_data(df: pd.DataFrame, year: int) -> Optional[Dict]:
+    """
+    Infer playoff settings from data structure when no settings file exists.
+
+    Detects playoffs by finding weeks with fewer games than regular season.
+
+    Args:
+        df: DataFrame with matchup data
+        year: Year to infer settings for
+
+    Returns:
+        Settings dict or None if unable to infer
+    """
+    year_df = df[df['year'] == year]
+    if year_df.empty:
+        return None
+
+    weeks = sorted(year_df['week'].dropna().unique())
+    if len(weeks) < 2:
+        return None
+
+    # Count games per week
+    games_per_week = {}
+    for week in weeks:
+        week_games = len(year_df[year_df['week'] == week]) // 2
+        games_per_week[week] = week_games
+
+    # Find regular season game count (mode of first 10 weeks)
+    early_weeks = [w for w in weeks if w <= 10]
+    if early_weeks:
+        game_counts = [games_per_week[w] for w in early_weeks]
+        regular_game_count = max(set(game_counts), key=game_counts.count)
+    else:
+        regular_game_count = max(games_per_week.values())
+
+    # Detect playoff start: first week with fewer games than regular season
+    playoff_start = None
+    for week in weeks:
+        if games_per_week[week] < regular_game_count:
+            playoff_start = int(week)
+            break
+
+    if playoff_start is None:
+        return None
+
+    # Infer num_playoff_teams from first playoff week games
+    first_playoff_games = games_per_week.get(playoff_start, 2)
+    num_playoff_teams = first_playoff_games * 2
+
+    # Add 2 if there are 3+ playoff weeks (suggests byes)
+    playoff_weeks = [w for w in weeks if w >= playoff_start]
+    if len(playoff_weeks) >= 3:
+        num_playoff_teams = max(num_playoff_teams, 4)
+
+    # Count unique teams in league for num_teams
+    num_teams = len(year_df['manager'].unique())
+
+    config = {
+        'playoff_start_week': playoff_start,
+        'num_playoff_teams': num_playoff_teams,
+        'bye_teams': 0,  # Can't reliably infer byes
+        'has_multiweek_championship': 0,
+        'uses_playoff_reseeding': 0,
+        'num_teams': num_teams
+    }
+
+    print(f"  [SETTINGS] {year} (inferred): playoff_start={playoff_start}, "
+          f"playoff_teams={num_playoff_teams} (detected from {regular_game_count} regular -> {first_playoff_games} playoff games)")
+
+    return config
+
+
 def load_league_settings(
     year: int,
     settings_dir: Optional[str] = None,
@@ -226,6 +298,12 @@ def load_league_settings(
         config = _try_load_json_settings(Path(data_directory))
         if config:
             return config
+
+    # INFERENCE: Try to infer playoff settings from data structure
+    if df is not None and not df.empty:
+        inferred = _infer_settings_from_data(df, year)
+        if inferred:
+            return inferred
 
     # Fall back to defaults
     print(f"  [WARN] No settings found for year {year}, using defaults")
