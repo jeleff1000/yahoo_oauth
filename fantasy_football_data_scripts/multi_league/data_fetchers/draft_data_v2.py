@@ -347,7 +347,7 @@ def fetch_team_and_player_mappings(
 
         start += len(players)
 
-    return team_key_to_manager, team_key_to_guid, player_id_to_name, player_id_to_team
+    return team_key_to_manager, team_key_to_guid, team_key_to_team_name, player_id_to_name, player_id_to_team
 
 
 def fetch_draft_analysis(oauth, league_id: str, year: int, timeout: int = 30) -> pd.DataFrame:
