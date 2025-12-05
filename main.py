@@ -1403,10 +1403,12 @@ def run_register_flow():
                     db_name = f"{db_name}_{league_id_hash}"
 
                 league_url = f"https://leaguehistory.streamlit.app/?league={db_name}"
-                st.markdown("**Your league URL:**")
-                st.code(league_url, language=None)
+                url_label, url_value = st.columns([1, 3])
+                with url_label:
+                    st.markdown("**Your league URL:**")
+                with url_value:
+                    st.code(league_url, language=None)
 
-                # Optional Settings (collapsed by default)
                 st.markdown("##### Optional Settings")
 
                 # Privacy setting with inline explanation
@@ -1464,7 +1466,8 @@ def run_register_flow():
                 st.markdown("---")
 
                 # Import button with league name
-                if st.button(f"Import {selected_league['name']}", key="start_import_btn", type="primary", use_container_width=True):
+                st.caption("⏱️ Import typically takes 1-2 hours depending on league history")
+                if st.button(f"Import {selected_league['name']}", key="start_import_btn", use_container_width=True):
                     mark_import_started()
                     league_info = {
                         "league_key": selected_league.get("league_key"),
