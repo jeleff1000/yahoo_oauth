@@ -174,7 +174,7 @@ def detect_playoffs_by_seed(df: pd.DataFrame, settings_dir: str = None) -> pd.Da
     df['win'] = pd.to_numeric(df['win'], errors='coerce').fillna(0).astype(int)
     df['loss'] = pd.to_numeric(df['loss'], errors='coerce').fillna(0).astype(int)
 
-    # Load settings from JSON files per year
+    # Load settings from JSON or parquet files per year
     from pathlib import Path
     import json
     from core.data_normalization import find_league_settings_directory
@@ -194,44 +194,112 @@ def detect_playoffs_by_seed(df: pd.DataFrame, settings_dir: str = None) -> pd.Da
             settings_dir = str(settings_path)
             safe_print(f"  [SETTINGS] Using settings directory: {settings_path}")
 
-    # Load settings per year
+    # Load settings per year - try parquet first, then JSON
     settings_by_year = {}
-    if settings_dir:
-        settings_path = Path(settings_dir)
-        if settings_path.exists():
-            years = sorted(df['year'].dropna().unique())
-            for year in years:
-                year_int = int(year)
-                settings_files = list(settings_path.glob(f"league_settings_{year_int}_*.json"))
+    data_dir = Path(settings_dir) if settings_dir else None
 
-                if settings_files:
-                    try:
-                        with open(settings_files[0], 'r') as f:
-                            settings = json.load(f)
-                            # Handle both old and new field names
-                            metadata = settings.get('metadata', settings)
-                            settings_by_year[year_int] = {
-                                'playoff_start_week': int(metadata.get('playoff_start_week', 15)),
-                                'num_playoff_teams': int(metadata.get('num_playoff_teams', metadata.get('playoff_teams', 6))),
-                                'bye_teams': int(metadata.get('bye_teams', 0)),
-                            }
-                            safe_print(f"  [SETTINGS] {year_int}: playoff_start={settings_by_year[year_int]['playoff_start_week']}, playoff_teams={settings_by_year[year_int]['num_playoff_teams']}, bye_teams={settings_by_year[year_int]['bye_teams']}")
-                    except Exception as e:
-                        safe_print(f"  [WARN] Failed to load settings from {settings_files[0]}: {e}")
+    # Try loading from parquet (league_settings.parquet)
+    if data_dir:
+        parquet_path = data_dir / 'league_settings.parquet'
+        if parquet_path.exists():
+            try:
+                settings_df = pd.read_parquet(parquet_path)
+                for year in settings_df['year'].unique():
+                    year_int = int(year)
+                    row = settings_df[settings_df['year'] == year].iloc[0]
+                    settings_by_year[year_int] = {
+                        'playoff_start_week': int(row.get('playoff_start_week', 15)),
+                        'num_playoff_teams': int(row.get('num_playoff_teams', row.get('playoff_teams', 6))),
+                        'bye_teams': int(row.get('bye_teams', 0) if pd.notna(row.get('bye_teams')) else 0),
+                    }
+                    safe_print(f"  [SETTINGS] {year_int} (parquet): playoff_start={settings_by_year[year_int]['playoff_start_week']}, playoff_teams={settings_by_year[year_int]['num_playoff_teams']}")
+            except Exception as e:
+                safe_print(f"  [WARN] Failed to load from parquet: {e}")
 
-    # Fallback to defaults if settings not loaded
-    default_playoff_start = 15
-    default_num_teams = 6
+    # Try loading from JSON files for any years not in parquet
+    if data_dir and data_dir.exists():
+        years = sorted(df['year'].dropna().unique())
+        for year in years:
+            year_int = int(year)
+            if year_int in settings_by_year:
+                continue  # Already loaded from parquet
+
+            settings_files = list(data_dir.glob(f"league_settings_{year_int}_*.json"))
+            if settings_files:
+                try:
+                    with open(settings_files[0], 'r') as f:
+                        settings = json.load(f)
+                        metadata = settings.get('metadata', settings)
+                        settings_by_year[year_int] = {
+                            'playoff_start_week': int(metadata.get('playoff_start_week', 15)),
+                            'num_playoff_teams': int(metadata.get('num_playoff_teams', metadata.get('playoff_teams', 6))),
+                            'bye_teams': int(metadata.get('bye_teams', 0)),
+                        }
+                        safe_print(f"  [SETTINGS] {year_int} (json): playoff_start={settings_by_year[year_int]['playoff_start_week']}, playoff_teams={settings_by_year[year_int]['num_playoff_teams']}")
+                except Exception as e:
+                    safe_print(f"  [WARN] Failed to load JSON settings for {year_int}: {e}")
+
+    # For years with no settings, try to INFER playoffs from data structure
+    # Playoffs are detected by: reduced games per week (fewer than regular season)
     for year in df['year'].dropna().unique():
-        if int(year) not in settings_by_year:
-            settings_by_year[int(year)] = {
-                'playoff_start_week': default_playoff_start,
-                'num_playoff_teams': default_num_teams,
+        year_int = int(year)
+        if year_int in settings_by_year:
+            continue
+
+        year_df = df[df['year'] == year]
+        weeks = sorted(year_df['week'].unique())
+
+        if len(weeks) < 2:
+            continue
+
+        # Count games per week
+        games_per_week = {}
+        for week in weeks:
+            week_games = len(year_df[year_df['week'] == week]) // 2
+            games_per_week[week] = week_games
+
+        # Find regular season game count (mode of first 10 weeks)
+        early_weeks = [w for w in weeks if w <= 10]
+        if early_weeks:
+            regular_game_count = max(set([games_per_week[w] for w in early_weeks]),
+                                    key=[games_per_week[w] for w in early_weeks].count)
+        else:
+            regular_game_count = max(games_per_week.values())
+
+        # Detect playoff start: first week with fewer games than regular season
+        playoff_start = None
+        for week in weeks:
+            if games_per_week[week] < regular_game_count:
+                playoff_start = week
+                break
+
+        if playoff_start:
+            # Infer num_playoff_teams from first playoff week games
+            first_playoff_games = games_per_week.get(playoff_start, 2)
+            # First round games * 2 = teams playing, might have byes
+            num_playoff_teams = first_playoff_games * 2
+            # Add 2 if there are bye teams (common for 6-team with 2 byes)
+            if len([w for w in weeks if w >= playoff_start]) >= 3:
+                num_playoff_teams = max(num_playoff_teams, 4)
+
+            settings_by_year[year_int] = {
+                'playoff_start_week': int(playoff_start),
+                'num_playoff_teams': num_playoff_teams,
                 'bye_teams': 0,
             }
+            safe_print(f"  [SETTINGS] {year_int} (inferred): playoff_start={playoff_start}, playoff_teams={num_playoff_teams} (detected from {regular_game_count} regular games -> {games_per_week.get(playoff_start, '?')} playoff games)")
+        else:
+            # No playoffs detected - use defaults but warn
+            max_week = max(weeks)
+            settings_by_year[year_int] = {
+                'playoff_start_week': max_week + 1,  # Beyond last week = no playoffs
+                'num_playoff_teams': 0,
+                'bye_teams': 0,
+            }
+            safe_print(f"  [WARN] {year_int}: No playoff structure detected (all weeks have {regular_game_count} games)")
 
     if not settings_by_year:
-        safe_print(f"  [SETTINGS] Using defaults: playoff_start_week={default_playoff_start}, num_playoff_teams={default_num_teams}")
+        safe_print(f"  [SETTINGS] No settings found, no years to process")
 
     # Initialize flags
     df['is_playoffs'] = 0

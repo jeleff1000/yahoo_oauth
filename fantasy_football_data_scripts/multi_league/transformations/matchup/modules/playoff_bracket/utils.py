@@ -168,7 +168,45 @@ def load_league_settings(
             else:
                 print(f"  [WARN] Invalid parquet settings for {year}: {error_msg}")
 
-    # Try JSON files
+    # Helper function to load and validate JSON settings
+    def _try_load_json_settings(search_path: Path) -> Optional[Dict]:
+        """Try to load JSON settings from a directory."""
+        settings_files = list(search_path.glob(f"league_settings_{year}_*.json"))
+        if not settings_files:
+            return None
+        try:
+            with open(settings_files[0], 'r') as f:
+                settings = json.load(f)
+                metadata = settings.get('metadata', settings)
+
+                config = {
+                    'playoff_start_week': int(metadata.get('playoff_start_week', 15)),
+                    'num_playoff_teams': int(metadata.get('num_playoff_teams', metadata.get('playoff_teams', 6))),
+                    'bye_teams': int(metadata.get('bye_teams', 2)),
+                    'has_multiweek_championship': int(metadata.get('has_multiweek_championship', 0)),
+                    'uses_playoff_reseeding': int(metadata.get('uses_playoff_reseeding', 0)),
+                    'num_teams': int(metadata.get('num_teams', 10))
+                }
+
+                # Validate bracket structure
+                is_valid, error_msg = validate_bracket_structure(
+                    config['num_playoff_teams'],
+                    config['bye_teams'],
+                    config['num_teams']
+                )
+
+                if is_valid:
+                    print(f"  [SETTINGS] {year}: playoff_start={config['playoff_start_week']}, "
+                          f"playoff_teams={config['num_playoff_teams']}, bye_teams={config['bye_teams']}")
+                    return config
+                else:
+                    print(f"  [WARN] Invalid JSON settings for {year}: {error_msg}")
+                    return None
+        except Exception as e:
+            print(f"  [WARN] Failed to load JSON settings: {e}")
+            return None
+
+    # Try JSON files from settings_dir (explicit or auto-detected)
     if settings_dir is None:
         # Use centralized league-agnostic discovery function
         if data_directory:
@@ -179,40 +217,15 @@ def load_league_settings(
             settings_dir = str(settings_path)
 
     if settings_dir:
-        settings_path = Path(settings_dir)
-        settings_files = list(settings_path.glob(f"league_settings_{year}_*.json"))
+        config = _try_load_json_settings(Path(settings_dir))
+        if config:
+            return config
 
-        if settings_files:
-            try:
-                with open(settings_files[0], 'r') as f:
-                    settings = json.load(f)
-                    metadata = settings.get('metadata', settings)
-
-                    config = {
-                        'playoff_start_week': int(metadata.get('playoff_start_week', 15)),
-                        'num_playoff_teams': int(metadata.get('num_playoff_teams', metadata.get('playoff_teams', 6))),
-                        'bye_teams': int(metadata.get('bye_teams', 2)),
-                        'has_multiweek_championship': int(metadata.get('has_multiweek_championship', 0)),
-                        'uses_playoff_reseeding': int(metadata.get('uses_playoff_reseeding', 0)),
-                        'num_teams': int(metadata.get('num_teams', 10))
-                    }
-
-                    # Validate bracket structure
-                    is_valid, error_msg = validate_bracket_structure(
-                        config['num_playoff_teams'],
-                        config['bye_teams'],
-                        config['num_teams']
-                    )
-
-                    if is_valid:
-                        print(f"  [SETTINGS] {year}: playoff_start={config['playoff_start_week']}, "
-                              f"playoff_teams={config['num_playoff_teams']}, bye_teams={config['bye_teams']}")
-                        return config
-                    else:
-                        print(f"  [WARN] Invalid JSON settings for {year}: {error_msg}")
-
-            except Exception as e:
-                print(f"  [WARN] Failed to load JSON settings: {e}")
+    # FALLBACK: Try JSON files directly in data_directory (for league imports)
+    if data_directory:
+        config = _try_load_json_settings(Path(data_directory))
+        if config:
+            return config
 
     # Fall back to defaults
     print(f"  [WARN] No settings found for year {year}, using defaults")
