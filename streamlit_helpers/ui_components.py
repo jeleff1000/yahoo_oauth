@@ -263,9 +263,19 @@ def load_custom_css():
     /* Mobile-specific adjustments */
     @media (max-width: 768px) {
         .hero {
-            padding: 1.5rem 1rem;
-            border-radius: 0.75rem;
-            margin-bottom: 1rem;
+            padding: 1rem 0.75rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .hero h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .hero p {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
         }
 
         .feature-card {
