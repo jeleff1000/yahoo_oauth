@@ -1405,7 +1405,7 @@ def run_register_flow():
                 league_url = f"https://leaguehistory.streamlit.app/?league={db_name}"
                 st.markdown(f"**Your league URL:** `{league_url}`")
 
-                # Hidden Manager Detection - show directly (not in expander)
+                # Hidden Manager Detection
                 cache_key = f"teams_all_years_{selected_league.get('name')}"
                 if cache_key not in st.session_state:
                     with st.spinner("Checking for hidden managers..."):
@@ -1420,8 +1420,12 @@ def run_register_flow():
                 hidden_teams = find_hidden_managers(teams)
 
                 if hidden_teams:
-                    manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
-                    st.session_state.configured_manager_overrides = manager_overrides
+                    # Show warning outside expander so user knows action is needed
+                    unique_hidden = set(t.get("team_name") for t in hidden_teams)
+                    st.warning(f"Found {len(unique_hidden)} hidden manager(s) - please identify them below")
+                    with st.expander("Identify Hidden Managers", expanded=False):
+                        manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
+                        st.session_state.configured_manager_overrides = manager_overrides
                 else:
                     st.session_state.configured_manager_overrides = {}
 
