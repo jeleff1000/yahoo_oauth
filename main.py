@@ -1434,10 +1434,8 @@ def run_register_flow():
                 hidden_teams = find_hidden_managers(teams)
 
                 if hidden_teams:
-                    # Show warning outside expander so user knows action is needed
                     unique_hidden = set(t.get("team_name") for t in hidden_teams)
-                    st.warning(f"Found {len(unique_hidden)} hidden manager(s) - please identify them below")
-                    with st.expander("Identify Hidden Managers", expanded=False):
+                    with st.expander(f"⚠️ Found {len(unique_hidden)} hidden manager(s) - click to identify", expanded=False):
                         manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
                         st.session_state.configured_manager_overrides = manager_overrides
                 else:
