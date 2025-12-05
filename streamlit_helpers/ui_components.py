@@ -57,24 +57,24 @@ def load_custom_css():
     /* Hero section */
     .hero {
         text-align: center;
-        padding: 1rem 1rem;
+        padding: 0.75rem 1rem;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 0.75rem;
-        margin-bottom: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 0.75rem;
         color: white;
     }
 
     .hero h1 {
-        font-size: 1.75rem;
+        font-size: 1.5rem;
         font-weight: 700;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.15rem;
         text-shadow: 0 2px 4px rgba(0,0,0,0.1);
         line-height: 1.2;
     }
 
     .hero p {
-        font-size: 1rem;
-        opacity: 0.95;
+        font-size: 0.9rem;
+        opacity: 0.9;
         margin-bottom: 0;
     }
 
@@ -323,7 +323,7 @@ def render_hero():
     st.markdown("""
     <div class="hero">
         <h1>🏈 Fantasy Football Analytics</h1>
-        <p>Transform your Yahoo Fantasy Football data into powerful insights</p>
+        <p>Import or explore fantasy leagues from any season</p>
     </div>
     """, unsafe_allow_html=True)
 

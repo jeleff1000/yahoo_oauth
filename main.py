@@ -1143,11 +1143,10 @@ def render_open_league_card(existing_dbs: list[str]):
     Render the Open Existing League card with a simple dropdown.
     Excludes private (link-only) leagues from the list.
     """
-    st.subheader("Open Existing League")
-    st.caption("Browse imported leagues.")
+    st.markdown("**Returning User**")
 
     if not existing_dbs:
-        st.info("No leagues found yet. Register one to get started!")
+        st.caption("No leagues imported yet.")
         return
 
     # Filter out private leagues
@@ -1155,7 +1154,7 @@ def render_open_league_card(existing_dbs: list[str]):
     public_dbs = [db for db in existing_dbs if db not in private_leagues]
 
     if not public_dbs:
-        st.info("No public leagues found. Register one to get started!")
+        st.caption("No public leagues available.")
         return
 
     # Sort by display name for alphabetical order
@@ -1171,6 +1170,7 @@ def render_open_league_card(existing_dbs: list[str]):
         label_visibility="collapsed",
         key="league_dropdown"
     )
+    st.caption("Recently imported leagues appear here.")
 
     if selected and selected != "Select a league...":
         db_name = db_map[selected]
@@ -1184,14 +1184,15 @@ def render_open_league_card(existing_dbs: list[str]):
 
 def render_register_card():
     """Render the Register New League card."""
-    st.subheader("Register New League")
-    st.caption("Connect your Yahoo account to import your league.")
+    st.markdown("**New User**")
+    st.caption("Connect once — we sync your league's full history automatically.")
 
     # Direct OAuth redirect
     auth_url = build_authorize_url()
-    st.link_button("Register New League", auth_url, type="primary", use_container_width=True)
+    st.link_button("Import From Yahoo", auth_url, type="primary", use_container_width=True)
 
     st.markdown("")
+    st.caption("No Yahoo access? Try the demo first:")
 
     # Demo league button
     if st.button("👀 Preview Demo League", key="demo_league_btn", use_container_width=True):
@@ -1200,6 +1201,7 @@ def render_register_card():
         st.session_state.app_mode = "analytics"
         st.query_params["league"] = "kmffl"
         st.rerun()
+    st.caption("Explore the dashboard with sample data.")
 
 
 def render_landing_page():
@@ -1375,14 +1377,14 @@ def run_register_flow():
                     db_name = f"{db_name}_{league_id_hash}"
 
                 league_url = f"https://leaguehistory.streamlit.app/?league={db_name}"
-                st.caption("Your league URL:")
+                st.caption("📎 Share this link with your league:")
                 st.code(league_url, language=None)
 
                 st.markdown("##### Optional Settings")
 
-                # Privacy setting with inline explanation
+                # Privacy setting
                 is_private = st.checkbox(
-                    "Make my league private — only accessible via direct link, won't appear in public search",
+                    "🔒 Make league private (direct link only)",
                     value=False,
                     key="league_private",
                 )
@@ -1404,19 +1406,22 @@ def run_register_flow():
 
                 if hidden_teams:
                     unique_hidden = set(t.get("team_name") for t in hidden_teams)
-                    with st.expander(f"⚠️ Found {len(unique_hidden)} hidden manager(s) - click to identify", expanded=False):
+                    with st.expander(f"👤 Hidden Managers ({len(unique_hidden)}) — Review", expanded=False):
+                        st.caption("Some managers have hidden profiles. Match them to team names.")
                         manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
                         st.session_state.configured_manager_overrides = manager_overrides
                 else:
                     st.session_state.configured_manager_overrides = {}
 
                 # Keeper Rules Tab
-                with st.expander("Keeper Rules", expanded=False):
+                with st.expander("🏆 Keeper Rules", expanded=False):
+                    st.caption("Configure custom keeper pricing & max years.")
                     keeper_rules = render_keeper_rules_ui()
                     st.session_state.configured_keeper_rules = keeper_rules
 
                 # External Data Files Tab
-                with st.expander("Import Historical Data (ESPN, other years, etc.)", expanded=False):
+                with st.expander("📁 Import Historical Data", expanded=False):
+                    st.caption("Add data from ESPN, older seasons, or other sources.")
                     # Clear uploaded files if league changed
                     current_league_for_uploads = st.session_state.get("_external_uploads_league")
                     if current_league_for_uploads != selected_league.get("name"):
@@ -1432,8 +1437,8 @@ def run_register_flow():
 
                 st.markdown("---")
 
-                # Import button with league name
-                st.caption("⏱️ Importing typically takes 1-2 hours depending on league history")
+                # Import button
+                st.caption("Full history import • 1-2 hours • safe to close browser")
                 if st.button(f"🚀 Import {selected_league['name']}", key="start_import_btn", type="primary", use_container_width=True):
                     mark_import_started()
                     league_info = {
