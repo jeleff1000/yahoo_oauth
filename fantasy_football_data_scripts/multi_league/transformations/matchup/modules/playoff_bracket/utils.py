@@ -76,6 +76,57 @@ def validate_bracket_structure(num_playoff_teams: int, bye_teams: int, num_teams
     return True, ""
 
 
+def _get_default_settings() -> Dict:
+    """Return default league settings."""
+    return {
+        'playoff_start_week': 15,
+        'num_playoff_teams': 6,
+        'bye_teams': 2,
+        'has_multiweek_championship': 0,
+        'uses_playoff_reseeding': 0,
+        'num_teams': 10
+    }
+
+
+def _load_from_parquet(data_directory: Path, year: int) -> Optional[Dict]:
+    """
+    Try to load settings from league_settings.parquet file.
+
+    Args:
+        data_directory: Directory containing the parquet file
+        year: Year to load settings for
+
+    Returns:
+        Settings dict or None if not found
+    """
+    parquet_path = data_directory / 'league_settings.parquet'
+    if not parquet_path.exists():
+        return None
+
+    try:
+        settings_df = pd.read_parquet(parquet_path)
+        year_settings = settings_df[settings_df['year'] == year]
+
+        if year_settings.empty:
+            return None
+
+        row = year_settings.iloc[0]
+
+        config = {
+            'playoff_start_week': int(row.get('playoff_start_week', 15)),
+            'num_playoff_teams': int(row.get('num_playoff_teams', row.get('playoff_teams', 6))),
+            'bye_teams': int(row.get('bye_teams', 2) if pd.notna(row.get('bye_teams')) else 2),
+            'has_multiweek_championship': int(row.get('has_multiweek_championship', 0) if pd.notna(row.get('has_multiweek_championship')) else 0),
+            'uses_playoff_reseeding': int(row.get('uses_playoff_reseeding', 0) if pd.notna(row.get('uses_playoff_reseeding')) else 0),
+            'num_teams': int(row.get('num_teams', 10))
+        }
+
+        return config
+    except Exception as e:
+        print(f"  [WARN] Failed to load from parquet: {e}")
+        return None
+
+
 def load_league_settings(
     year: int,
     settings_dir: Optional[str] = None,
@@ -83,7 +134,12 @@ def load_league_settings(
     data_directory: Optional[str] = None
 ) -> Dict:
     """
-    Load league settings from JSON file for a specific year.
+    Load league settings for a specific year.
+
+    Tries multiple sources in order:
+    1. JSON files in settings_dir (league_settings_{year}_*.json)
+    2. Parquet file in data_directory (league_settings.parquet)
+    3. Default values
 
     Args:
         year: Season year
@@ -94,9 +150,27 @@ def load_league_settings(
     Returns:
         Dictionary with playoff_start_week, num_playoff_teams, bye_teams, has_multiweek_championship, uses_playoff_reseeding
     """
+    # Try parquet first if data_directory is provided (most reliable for imports)
+    if data_directory:
+        parquet_config = _load_from_parquet(Path(data_directory), year)
+        if parquet_config:
+            # Validate bracket structure
+            is_valid, error_msg = validate_bracket_structure(
+                parquet_config['num_playoff_teams'],
+                parquet_config['bye_teams'],
+                parquet_config['num_teams']
+            )
+
+            if is_valid:
+                print(f"  [SETTINGS] {year}: playoff_start={parquet_config['playoff_start_week']}, "
+                      f"playoff_teams={parquet_config['num_playoff_teams']}, bye_teams={parquet_config['bye_teams']}")
+                return parquet_config
+            else:
+                print(f"  [WARN] Invalid parquet settings for {year}: {error_msg}")
+
+    # Try JSON files
     if settings_dir is None:
         # Use centralized league-agnostic discovery function
-        # If data_directory provided, use it for more reliable lookup
         if data_directory:
             settings_path = find_league_settings_directory(data_directory=Path(data_directory), df=df)
         else:
@@ -104,79 +178,42 @@ def load_league_settings(
         if settings_path:
             settings_dir = str(settings_path)
 
-    if not settings_dir:
-        print(f"  [WARN] Could not find league_settings directory, using defaults")
-        return {
-            'playoff_start_week': 15,
-            'num_playoff_teams': 6,
-            'bye_teams': 2,
-            'has_multiweek_championship': 0,
-            'uses_playoff_reseeding': 0,
-            'num_teams': 10
-        }
+    if settings_dir:
+        settings_path = Path(settings_dir)
+        settings_files = list(settings_path.glob(f"league_settings_{year}_*.json"))
 
-    # Find settings file for this year
-    settings_path = Path(settings_dir)
-    settings_files = list(settings_path.glob(f"league_settings_{year}_*.json"))
+        if settings_files:
+            try:
+                with open(settings_files[0], 'r') as f:
+                    settings = json.load(f)
+                    metadata = settings.get('metadata', settings)
 
-    if not settings_files:
-        print(f"  [WARN] No settings file found for year {year}, using defaults")
-        return {
-            'playoff_start_week': 15,
-            'num_playoff_teams': 6,
-            'bye_teams': 2,
-            'has_multiweek_championship': 0,
-            'uses_playoff_reseeding': 0,
-            'num_teams': 10
-        }
+                    config = {
+                        'playoff_start_week': int(metadata.get('playoff_start_week', 15)),
+                        'num_playoff_teams': int(metadata.get('num_playoff_teams', metadata.get('playoff_teams', 6))),
+                        'bye_teams': int(metadata.get('bye_teams', 2)),
+                        'has_multiweek_championship': int(metadata.get('has_multiweek_championship', 0)),
+                        'uses_playoff_reseeding': int(metadata.get('uses_playoff_reseeding', 0)),
+                        'num_teams': int(metadata.get('num_teams', 10))
+                    }
 
-    try:
-        with open(settings_files[0], 'r') as f:
-            settings = json.load(f)
-            metadata = settings.get('metadata', settings)
+                    # Validate bracket structure
+                    is_valid, error_msg = validate_bracket_structure(
+                        config['num_playoff_teams'],
+                        config['bye_teams'],
+                        config['num_teams']
+                    )
 
-            config = {
-                'playoff_start_week': int(metadata.get('playoff_start_week', 15)),
-                'num_playoff_teams': int(metadata.get('num_playoff_teams', metadata.get('playoff_teams', 6))),
-                'bye_teams': int(metadata.get('bye_teams', 2)),
-                'has_multiweek_championship': int(metadata.get('has_multiweek_championship', 0)),
-                'uses_playoff_reseeding': int(metadata.get('uses_playoff_reseeding', 0)),
-                'num_teams': int(metadata.get('num_teams', 10))
-            }
+                    if is_valid:
+                        print(f"  [SETTINGS] {year}: playoff_start={config['playoff_start_week']}, "
+                              f"playoff_teams={config['num_playoff_teams']}, bye_teams={config['bye_teams']}")
+                        return config
+                    else:
+                        print(f"  [WARN] Invalid JSON settings for {year}: {error_msg}")
 
-            # Validate bracket structure
-            is_valid, error_msg = validate_bracket_structure(
-                config['num_playoff_teams'],
-                config['bye_teams'],
-                config['num_teams']
-            )
+            except Exception as e:
+                print(f"  [WARN] Failed to load JSON settings: {e}")
 
-            if not is_valid:
-                print(f"  [ERROR] Invalid bracket configuration for {year}: {error_msg}")
-                print(f"          Using defaults instead")
-                return {
-                    'playoff_start_week': 15,
-                    'num_playoff_teams': 6,
-                    'bye_teams': 2,
-                    'has_multiweek_championship': 0,
-                    'uses_playoff_reseeding': 0,
-                    'num_teams': 10
-                }
-
-            print(f"  [SETTINGS] {year}: playoff_start={config['playoff_start_week']}, "
-                  f"playoff_teams={config['num_playoff_teams']}, bye_teams={config['bye_teams']}, "
-                  f"multiweek_champ={config['has_multiweek_championship']}, "
-                  f"reseeding={config['uses_playoff_reseeding']}")
-
-            return config
-
-    except Exception as e:
-        print(f"  [ERROR] Failed to load settings from {settings_files[0]}: {e}")
-        return {
-            'playoff_start_week': 15,
-            'num_playoff_teams': 6,
-            'bye_teams': 2,
-            'has_multiweek_championship': 0,
-            'uses_playoff_reseeding': 0,
-            'num_teams': 10
-        }
+    # Fall back to defaults
+    print(f"  [WARN] No settings found for year {year}, using defaults")
+    return _get_default_settings()

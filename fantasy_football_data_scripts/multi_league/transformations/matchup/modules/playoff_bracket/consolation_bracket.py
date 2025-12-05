@@ -52,6 +52,7 @@ def detect_sacko(
         return df
 
     # Find consolation games in the championship week (last playoff week)
+    # Only consider games with valid placement_rank (excludes exhibition games)
     year_mask = df['year'] == year
     final_week_cons = df[(df['week'] == championship_week) & (df['is_consolation'] == 1) & year_mask]
 
@@ -63,15 +64,22 @@ def detect_sacko(
         print(f"  [WARN] No placement_rank column found for year {year}")
         return df
 
+    # Filter to only games with valid placement_rank (excludes exhibition games)
+    placement_games = final_week_cons[final_week_cons['placement_rank'] > 0]
+
+    if placement_games.empty:
+        print(f"  [WARN] No valid placement games found for year {year}")
+        return df
+
     # Find the worst (highest) placement_rank game
-    max_placement = final_week_cons['placement_rank'].max()
+    max_placement = placement_games['placement_rank'].max()
 
     if pd.isna(max_placement) or max_placement == 0:
         print(f"  [WARN] No valid placement_rank found for year {year}")
         return df
 
     # Find who lost this worst placement game
-    worst_game = final_week_cons[final_week_cons['placement_rank'] == max_placement]
+    worst_game = placement_games[placement_games['placement_rank'] == max_placement]
     losers = worst_game[worst_game['loss'] == 1]
 
     if losers.empty:
