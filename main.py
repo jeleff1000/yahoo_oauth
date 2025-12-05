@@ -1390,34 +1390,42 @@ def run_register_flow():
                 )
                 st.session_state.configured_is_private = is_private
 
-                # Hidden Manager Detection - lazy load on expand
-                with st.expander("👤 Hidden Managers — Check", expanded=False):
-                    st.caption("Some managers hide their profiles. Click to scan and identify them.")
-                    if st.button("Scan for Hidden Managers", key="scan_hidden_btn"):
-                        cache_key = f"teams_all_years_{selected_league.get('name')}"
-                        with st.spinner("Scanning all seasons..."):
-                            teams = get_league_teams_all_years(
-                                st.session_state.access_token,
-                                selected_league.get("name"),
-                                st.session_state.get("games_data", {})
-                            )
-                            st.session_state[cache_key] = teams
-                        st.rerun()
+                # Hidden Manager Detection - deferred scan (runs after all UI renders)
+                cache_key = f"teams_all_years_{selected_league.get('name')}"
+                needs_scan = cache_key not in st.session_state
 
-                    cache_key = f"teams_all_years_{selected_league.get('name')}"
-                    if cache_key in st.session_state:
+                # Determine expander title based on scan status
+                if not needs_scan:
+                    teams = st.session_state[cache_key]
+                    hidden_teams = find_hidden_managers(teams)
+                    unique_count = len(set(t.get("team_name") for t in hidden_teams)) if hidden_teams else 0
+                    if unique_count > 0:
+                        expander_title = f"👤 Hidden Managers ({unique_count}) — Review"
+                    else:
+                        expander_title = "👤 Hidden Managers — None found"
+                else:
+                    expander_title = "👤 Hidden Managers — Scanning..."
+                    # Mark that we need to scan (will run at end of render)
+                    st.session_state["_pending_hidden_scan"] = {
+                        "cache_key": cache_key,
+                        "league_name": selected_league.get("name"),
+                    }
+
+                with st.expander(expander_title, expanded=False):
+                    if needs_scan:
+                        st.caption("Scanning all seasons for hidden managers...")
+                        st.session_state.configured_manager_overrides = {}
+                    else:
+                        # Show results
                         teams = st.session_state[cache_key]
                         hidden_teams = find_hidden_managers(teams)
                         if hidden_teams:
-                            unique_hidden = set(t.get("team_name") for t in hidden_teams)
-                            st.warning(f"Found {len(unique_hidden)} hidden manager(s)")
+                            st.caption("Some managers hide their profiles. Identify them below:")
                             manager_overrides = render_hidden_manager_ui(hidden_teams, teams)
                             st.session_state.configured_manager_overrides = manager_overrides
                         else:
                             st.success("No hidden managers found!")
                             st.session_state.configured_manager_overrides = {}
-                    else:
-                        st.session_state.configured_manager_overrides = {}
 
                 # Keeper Rules Tab
                 with st.expander("🏆 Keeper Rules", expanded=False):
@@ -1486,6 +1494,21 @@ def run_register_flow():
             st.session_state.app_mode = "landing"
             st.rerun()
         return
+
+    # Deferred hidden manager scan - runs after all UI has rendered
+    if "_pending_hidden_scan" in st.session_state:
+        scan_info = st.session_state.pop("_pending_hidden_scan")
+        cache_key = scan_info["cache_key"]
+        league_name = scan_info["league_name"]
+
+        # Run the scan now (UI above is already rendered)
+        teams = get_league_teams_all_years(
+            st.session_state.access_token,
+            league_name,
+            st.session_state.get("games_data", {})
+        )
+        st.session_state[cache_key] = teams
+        st.rerun()
 
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
