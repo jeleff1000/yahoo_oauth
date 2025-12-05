@@ -1145,7 +1145,7 @@ def render_open_league_card(existing_dbs: list[str]):
     Excludes private (link-only) leagues from search results.
     """
     st.subheader("Open Existing League")
-    st.caption("Browse any league that's already been imported.")
+    st.caption("Browse imported leagues.")
 
     if not existing_dbs:
         st.info("No existing leagues found. Register a new league to get started!")
@@ -1215,22 +1215,31 @@ def render_open_league_card(existing_dbs: list[str]):
 def render_register_card():
     """Render the Register New League card."""
     st.subheader("Register New League")
-    st.caption("Connect your Yahoo account and import a league into the app.")
+    st.caption("Connect your Yahoo account to import your league.")
 
     # Direct OAuth redirect
     auth_url = build_authorize_url()
     st.link_button("Register New League", auth_url, type="primary", use_container_width=True)
+
+    st.markdown("")
+    st.caption("or")
+    st.markdown("")
+
+    # Demo league button
+    if st.button("👀 Preview Demo League", key="demo_league_btn", use_container_width=True):
+        st.cache_data.clear()
+        st.session_state.selected_league_db = "kmffl"
+        st.session_state.app_mode = "analytics"
+        st.query_params["league"] = "kmffl"
+        st.rerun()
 
 
 def render_landing_page():
     """Render the landing page with search-based league selection and register option."""
     render_hero()
 
-    st.markdown("---")
-    st.markdown("### Get Started")
-
     # Load existing databases once and cache for collision detection in register flow
-    with st.spinner("Loading available leagues..."):
+    with st.spinner("Loading leagues..."):
         existing_dbs = get_existing_league_databases()
         st.session_state.existing_dbs_cache = set(existing_dbs)
 
@@ -1242,11 +1251,6 @@ def render_landing_page():
 
     with right:
         render_register_card()
-
-    # Footer
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.markdown("---")
-    st.caption("Made with ❤️ for fantasy football managers | Powered by MotherDuck & GitHub Actions")
 
 
 def run_analytics_app():
