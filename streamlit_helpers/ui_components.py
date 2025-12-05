@@ -57,25 +57,25 @@ def load_custom_css():
     /* Hero section */
     .hero {
         text-align: center;
-        padding: 2rem 1rem;
+        padding: 1rem 1rem;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 1rem;
-        margin-bottom: 1.5rem;
+        border-radius: 0.75rem;
+        margin-bottom: 1rem;
         color: white;
     }
 
     .hero h1 {
-        font-size: clamp(1.75rem, 5vw, 3rem);
+        font-size: 1.75rem;
         font-weight: 700;
-        margin-bottom: 0.75rem;
+        margin-bottom: 0.25rem;
         text-shadow: 0 2px 4px rgba(0,0,0,0.1);
         line-height: 1.2;
     }
 
     .hero p {
-        font-size: clamp(0.95rem, 2.5vw, 1.2rem);
+        font-size: 1rem;
         opacity: 0.95;
-        margin-bottom: 1rem;
+        margin-bottom: 0;
     }
 
     /* Feature cards - theme aware */
