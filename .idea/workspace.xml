@@ -61,30 +61,6 @@
       <option name="presentableId" value="Default" />
       <updated>1760740985328</updated>
     </task>
-    <task id="LOCAL-00126" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
-      <option name="closed" value="true" />
-      <created>1764815944566</created>
-      <option name="number" value="00126" />
-      <option name="presentableId" value="LOCAL-00126" />
-      <option name="project" value="LOCAL" />
-      <updated>1764815944568</updated>
-    </task>
-    <task id="LOCAL-00127" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
-      <option name="closed" value="true" />
-      <created>1764821312231</created>
-      <option name="number" value="00127" />
-      <option name="presentableId" value="LOCAL-00127" />
-      <option name="project" value="LOCAL" />
-      <updated>1764821312231</updated>
-    </task>
-    <task id="LOCAL-00128" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
-      <option name="closed" value="true" />
-      <created>1764821533934</created>
-      <option name="number" value="00128" />
-      <option name="presentableId" value="LOCAL-00128" />
-      <option name="project" value="LOCAL" />
-      <updated>1764821533934</updated>
-    </task>
     <task id="LOCAL-00129" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
       <option name="closed" value="true" />
       <created>1764822408926</created>
@@ -453,7 +429,31 @@
       <option name="project" value="LOCAL" />
       <updated>1764970190593</updated>
     </task>
-    <option name="localTasksCounter" value="175" />
+    <task id="LOCAL-00175" summary="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'">
+      <option name="closed" value="true" />
+      <created>1764970785468</created>
+      <option name="number" value="00175" />
+      <option name="presentableId" value="LOCAL-00175" />
+      <option name="project" value="LOCAL" />
+      <updated>1764970785468</updated>
+    </task>
+    <task id="LOCAL-00176" summary="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'">
+      <option name="closed" value="true" />
+      <created>1764973842000</created>
+      <option name="number" value="00176" />
+      <option name="presentableId" value="LOCAL-00176" />
+      <option name="project" value="LOCAL" />
+      <updated>1764973842002</updated>
+    </task>
+    <task id="LOCAL-00177" summary="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'">
+      <option name="closed" value="true" />
+      <created>1764975020679</created>
+      <option name="number" value="00177" />
+      <option name="presentableId" value="LOCAL-00177" />
+      <option name="project" value="LOCAL" />
+      <updated>1764975020681</updated>
+    </task>
+    <option name="localTasksCounter" value="178" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -486,7 +486,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/main.py</url>
-          <line>1768</line>
+          <line>1735</line>
           <option name="timeStamp" value="1" />
         </line-breakpoint>
       </breakpoints>
