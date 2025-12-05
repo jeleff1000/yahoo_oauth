@@ -1170,7 +1170,6 @@ def render_open_league_card(existing_dbs: list[str]):
         label_visibility="collapsed",
         key="league_dropdown"
     )
-    st.caption("Recently imported leagues appear here.")
 
     if selected and selected != "Select a league...":
         db_name = db_map[selected]
@@ -1180,6 +1179,8 @@ def render_open_league_card(existing_dbs: list[str]):
             st.session_state.app_mode = "analytics"
             st.query_params["league"] = db_name
             st.rerun()
+    else:
+        st.caption("Select a league to view your dashboard.")
 
 
 def render_register_card():
