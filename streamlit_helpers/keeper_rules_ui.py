@@ -157,12 +157,11 @@ def _render_step_basic(v: dict):
         )
     with col2:
         v["max_years"] = st.number_input(
-            "Maximum years kept",
+            "Maximum years kept (0 = no maximum)",
             min_value=0, max_value=20,
             value=v["max_years"],
             key="step1_max_years"
         )
-        st.caption("*0 = no maximum*")
 
     # Auction-specific
     if v["draft_type"] == "auction":

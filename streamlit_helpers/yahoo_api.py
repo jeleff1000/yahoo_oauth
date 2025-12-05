@@ -272,3 +272,79 @@ def seasons_for_league_name(access_token: str, all_games: list[dict], target_lea
         except Exception:
             pass
     return sorted(seasons)
+
+
+def get_all_leagues_with_years(access_token: str, all_games: list[dict]) -> list[dict]:
+    """
+    Get all unique leagues across all seasons with their year ranges.
+
+    Returns list of dicts:
+        - name: league name
+        - years: sorted list of years [2015, 2016, ..., 2025]
+        - year_range: formatted string like "(2015-2025)" or "(2024)"
+        - display_name: "League Name (2015-2025)"
+        - latest_league_key: league_key from most recent season
+        - latest_season: most recent season
+        - num_teams: team count from most recent season
+    """
+    from collections import defaultdict
+
+    # Map league_name -> list of (season, league_key, num_teams)
+    league_info = defaultdict(list)
+
+    for g in all_games:
+        game_key = g.get("game_key")
+        season = str(g.get("season", "")).strip()
+        if not game_key or not season:
+            continue
+        try:
+            leagues_data = get_user_football_leagues(access_token, game_key)
+            leagues = (
+                leagues_data.get("fantasy_content", {})
+                .get("users", {}).get("0", {}).get("user", [])[1]
+                .get("games", {}).get("0", {}).get("game", [])[1]
+                .get("leagues", {})
+            )
+            for key in leagues:
+                if key == "count":
+                    continue
+                league = leagues[key].get("league", [])[0]
+                name = league.get("name")
+                league_key = league.get("league_key")
+                num_teams = league.get("num_teams")
+                if name:
+                    league_info[name].append({
+                        "season": int(season),
+                        "league_key": league_key,
+                        "num_teams": num_teams,
+                    })
+        except Exception:
+            pass
+
+    # Build result list
+    result = []
+    for name, seasons_list in league_info.items():
+        # Sort by season descending
+        seasons_list.sort(key=lambda x: x["season"], reverse=True)
+        years = sorted([s["season"] for s in seasons_list])
+
+        # Format year range
+        if len(years) == 1:
+            year_range = f"({years[0]})"
+        else:
+            year_range = f"({years[0]}-{years[-1]})"
+
+        latest = seasons_list[0]
+        result.append({
+            "name": name,
+            "years": years,
+            "year_range": year_range,
+            "display_name": f"{name} {year_range}",
+            "latest_league_key": latest["league_key"],
+            "latest_season": latest["season"],
+            "num_teams": latest["num_teams"],
+        })
+
+    # Sort by latest season descending, then name
+    result.sort(key=lambda x: (-x["latest_season"], x["name"]))
+    return result
