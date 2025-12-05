@@ -1403,7 +1403,8 @@ def run_register_flow():
                     db_name = f"{db_name}_{league_id_hash}"
 
                 league_url = f"https://leaguehistory.streamlit.app/?league={db_name}"
-                st.text_input("Your league URL (copy to share)", value=league_url, disabled=True)
+                st.caption("Your league URL:")
+                st.code(league_url, language=None)
 
                 st.markdown("##### Optional Settings")
 
