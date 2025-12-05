@@ -127,12 +127,12 @@ class WeeklyProjectedStatsViewer:
         if "underdog_wins" in df.columns:
             df["surprise_win"] = df["underdog_wins"] == 1
         else:
-            df["surprise_win"] = (df["win"]) & (not df["favored"])
+            df["surprise_win"] = df["win"] & ~df["favored"]
 
         if "favorite_losses" in df.columns:
             df["surprise_loss"] = df["favorite_losses"] == 1
         else:
-            df["surprise_loss"] = (not df["win"]) & (df["favored"])
+            df["surprise_loss"] = ~df["win"] & df["favored"]
 
         df["surprise_outcome"] = df["surprise_win"] | df["surprise_loss"]
 
@@ -293,7 +293,7 @@ class WeeklyProjectedStatsViewer:
 
         # When underdog
         underdog_games = (
-            df[not df["Favored?"]] if "Favored?" in df.columns else pd.DataFrame()
+            df[~df["Favored?"]] if "Favored?" in df.columns else pd.DataFrame()
         )
         underdog_wins = underdog_games["Result"].sum() if len(underdog_games) > 0 else 0
         underdog_win_pct = (

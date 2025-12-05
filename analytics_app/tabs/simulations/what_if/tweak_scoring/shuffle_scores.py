@@ -23,7 +23,7 @@ def calculate_std_dev(df, selected_year, show_regular_season, show_postseason):
         mask &= df["is_playoffs"]
 
     if not show_postseason:
-        mask &= not df["is_playoffs"]
+        mask &= ~df["is_playoffs"]
 
     filtered = df[mask]
 

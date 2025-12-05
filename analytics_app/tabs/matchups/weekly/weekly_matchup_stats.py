@@ -208,7 +208,7 @@ class WeeklyMatchupStatsViewer:
         # Best/worst performances
         best_win = df[df["Result"]].nlargest(1, "Margin") if wins > 0 else None
         worst_loss = (
-            df[not df["Result"]].nsmallest(1, "Margin") if losses > 0 else None
+            df[~df["Result"]].nsmallest(1, "Margin") if losses > 0 else None
         )
 
         return {
