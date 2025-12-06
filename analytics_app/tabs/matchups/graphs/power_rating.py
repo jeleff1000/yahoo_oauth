@@ -293,35 +293,35 @@ def display_power_rating_graph(df_dict=None, prefix="graphs_manager_power_rating
 
                     with col1:
                         st.metric(
-                            "💪 Strongest Team",
-                            strongest["Manager"],
-                            f"{strongest['Power Rating']:.2f}",
+                            "Strongest Team",
+                            strongest["manager"],
+                            f"{strongest['power_rating']:.2f}",
                         )
 
                     with col2:
                         st.metric(
-                            "📈 Most Improved", best_improver, f"+{improvement:.2f}"
+                            "Most Improved", best_improver, f"+{improvement:.2f}"
                         )
 
                     with col3:
                         st.metric(
-                            "⚠️ Needs Work",
-                            weakest["Manager"],
-                            f"{weakest['Power Rating']:.2f}",
+                            "Needs Work",
+                            weakest["manager"],
+                            f"{weakest['power_rating']:.2f}",
                         )
             else:
                 col1, col2 = st.columns(2)
 
                 with col1:
                     st.metric(
-                        "💪 Strongest Team",
-                        strongest["Manager"],
-                        f"{strongest['Power Rating']:.2f}",
+                        "Strongest Team",
+                        strongest["manager"],
+                        f"{strongest['power_rating']:.2f}",
                     )
 
                 with col2:
                     st.metric(
-                        "⚠️ Needs Work",
-                        weakest["Manager"],
-                        f"{weakest['Power Rating']:.2f}",
+                        "Needs Work",
+                        weakest["manager"],
+                        f"{weakest['power_rating']:.2f}",
                     )
