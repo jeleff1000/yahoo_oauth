@@ -1266,6 +1266,272 @@ def apply_modern_styles():
         .stTabs, .stButton { display: none; }
         * { box-shadow: none !important; }
     }
+
+    /* ===========================================
+       VISUALIZATION SPECIFIC STYLES
+       Chart containers, mobile scroll, etc.
+       =========================================== */
+
+    /* Chart container with mobile horizontal scroll */
+    .chart-scroll-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+    }
+
+    .chart-scroll-container::-webkit-scrollbar {
+        height: 6px;
+    }
+
+    .chart-scroll-container::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .chart-scroll-container::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+    }
+
+    /* Segmented control / pill selector */
+    .segmented-control {
+        display: flex;
+        gap: 0.25rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 0.25rem;
+    }
+
+    .segmented-control-option {
+        flex: 1;
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        font-size: 0.85rem;
+        font-weight: 500;
+        text-align: center;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        background: transparent;
+        color: var(--text-secondary);
+        border: none;
+    }
+
+    .segmented-control-option:hover {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+
+    .segmented-control-option.active {
+        background: var(--accent);
+        color: white;
+        font-weight: 600;
+    }
+
+    .segmented-control-helper {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        text-align: center;
+        margin-top: 0.25rem;
+    }
+
+    /* Manager selection card wrapper */
+    .manager-selector-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .manager-selector-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .manager-selector-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .manager-count-badge {
+        background: var(--accent-subtle);
+        border: 1px solid var(--accent);
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        color: var(--text-primary);
+    }
+
+    /* Chart title with subtitle */
+    .chart-title-container {
+        margin-bottom: 0.75rem;
+    }
+
+    .chart-title {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .chart-subtitle {
+        margin: 0.25rem 0 0 0;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+
+    /* Quick stat cards row */
+    .quick-stats-row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin: 1rem 0;
+    }
+
+    .quick-stat-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 0.5rem;
+        text-align: center;
+        min-width: 100px;
+        flex: 1;
+    }
+
+    .quick-stat-name {
+        font-weight: 600;
+        font-size: 0.8rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .quick-stat-value {
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+    }
+
+    /* Trend indicator cards */
+    .trend-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 0.5rem;
+        text-align: center;
+    }
+
+    .trend-card-name {
+        font-weight: 600;
+        font-size: 0.75rem;
+    }
+
+    .trend-card-arrow {
+        font-size: 1.2rem;
+        font-weight: bold;
+    }
+
+    .trend-card-arrow.up { color: var(--success); }
+    .trend-card-arrow.down { color: var(--error); }
+    .trend-card-arrow.stable { color: var(--text-muted); }
+
+    .trend-card-value {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+    }
+
+    /* Mobile chart optimizations */
+    @media (max-width: 768px) {
+        /* Chart containers scroll horizontally */
+        [data-testid="stPlotlyChart"] {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Plotly charts minimum width for scroll */
+        .js-plotly-plot {
+            min-width: 500px;
+        }
+
+        /* Stack chart options vertically */
+        .chart-options-row {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        /* Smaller quick stat cards */
+        .quick-stat-card {
+            min-width: 80px;
+            padding: 0.375rem;
+        }
+
+        .quick-stat-name {
+            font-size: 0.7rem;
+        }
+
+        .quick-stat-value {
+            font-size: 0.6rem;
+        }
+
+        /* Trend cards wrap */
+        .trend-cards-row {
+            flex-wrap: wrap;
+        }
+
+        .trend-card {
+            min-width: 60px;
+            padding: 0.375rem;
+        }
+
+        .trend-card-name {
+            font-size: 0.65rem;
+        }
+
+        .trend-card-arrow {
+            font-size: 1rem;
+        }
+
+        .trend-card-value {
+            font-size: 0.55rem;
+        }
+
+        /* Segmented control stacks on very small screens */
+        .segmented-control {
+            flex-wrap: wrap;
+        }
+
+        .segmented-control-option {
+            flex: 1 1 30%;
+            padding: 0.375rem 0.5rem;
+            font-size: 0.75rem;
+        }
+    }
+
+    @media (max-width: 480px) {
+        /* Extra small screens - legend becomes dropdown style */
+        .plotly .legend {
+            font-size: 0.6rem !important;
+        }
+
+        .chart-title {
+            font-size: 0.95rem;
+        }
+
+        .chart-subtitle {
+            font-size: 0.7rem;
+        }
+
+        /* Manager selector compact */
+        .manager-selector-card {
+            padding: 0.5rem;
+        }
+
+        .manager-selector-title {
+            font-size: 0.75rem;
+        }
+    }
     </style>
     """,
         unsafe_allow_html=True,
