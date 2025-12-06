@@ -20,6 +20,7 @@ import pandas as pd
 # Re-export everything from the centralized styles module
 from ...shared.modern_styles import (
     render_metric_card,
+    render_empty_state,
 )
 
 

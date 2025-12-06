@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'">
-      <change beforePath="$PROJECT_DIR$/analytics_app/tabs/matchups/graphs/scoring_trends.py" beforeDir="false" afterPath="$PROJECT_DIR$/analytics_app/tabs/matchups/graphs/scoring_trends.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/analytics_app/tabs/shared/modern_styles.py" beforeDir="false" afterPath="$PROJECT_DIR$/analytics_app/tabs/shared/modern_styles.py" afterDir="false" />
-    </list>
+    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -63,22 +60,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1760740985328</updated>
-    </task>
-    <task id="LOCAL-00136" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
-      <option name="closed" value="true" />
-      <created>1764823386064</created>
-      <option name="number" value="00136" />
-      <option name="presentableId" value="LOCAL-00136" />
-      <option name="project" value="LOCAL" />
-      <updated>1764823386064</updated>
-    </task>
-    <task id="LOCAL-00137" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
-      <option name="closed" value="true" />
-      <created>1764823591990</created>
-      <option name="number" value="00137" />
-      <option name="presentableId" value="LOCAL-00137" />
-      <option name="project" value="LOCAL" />
-      <updated>1764823591990</updated>
     </task>
     <task id="LOCAL-00138" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
       <option name="closed" value="true" />
@@ -456,7 +437,23 @@
       <option name="project" value="LOCAL" />
       <updated>1765034041590</updated>
     </task>
-    <option name="localTasksCounter" value="185" />
+    <task id="LOCAL-00185" summary="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'">
+      <option name="closed" value="true" />
+      <created>1765035455696</created>
+      <option name="number" value="00185" />
+      <option name="presentableId" value="LOCAL-00185" />
+      <option name="project" value="LOCAL" />
+      <updated>1765035455696</updated>
+    </task>
+    <task id="LOCAL-00186" summary="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'">
+      <option name="closed" value="true" />
+      <created>1765035720189</created>
+      <option name="number" value="00186" />
+      <option name="presentableId" value="LOCAL-00186" />
+      <option name="project" value="LOCAL" />
+      <updated>1765035720189</updated>
+    </task>
+    <option name="localTasksCounter" value="187" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
