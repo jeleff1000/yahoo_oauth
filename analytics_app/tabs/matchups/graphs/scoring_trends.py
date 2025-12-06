@@ -420,20 +420,42 @@ def _render_weekly_view(data: pd.DataFrame, year: str, selected_managers: list, 
             )
         )
 
-    # Add manager traces
+    # Add manager traces - highlighted manager gets glow effect
+    highlighted_idx = None
     for i, manager in enumerate(data["manager"].unique()):
         manager_data = data[data["manager"] == manager].sort_values("week")
 
-        # Determine opacity based on highlight mode
+        # Determine opacity based on highlight mode (40% dimming for non-highlighted)
         if highlight_manager != "None":
-            opacity = 1.0 if manager == highlight_manager else 0.25
-            line_width = 4 if manager == highlight_manager else 1.5
+            is_highlighted = manager == highlight_manager
+            opacity = 1.0 if is_highlighted else 0.35
+            line_width = 4.5 if is_highlighted else 1.5
+            marker_size = 10 if is_highlighted else 6
+            if is_highlighted:
+                highlighted_idx = i
         else:
             opacity = 1.0
             line_width = 2.5
+            marker_size = 8
 
         color = _get_chart_color(i)
         line_shape = "spline" if smooth_lines else "linear"
+
+        # Add glow effect behind highlighted manager
+        if highlight_manager != "None" and manager == highlight_manager:
+            # Shadow/glow trace (wider, semi-transparent)
+            fig.add_trace(
+                go.Scatter(
+                    x=manager_data["week"],
+                    y=manager_data["team_points"],
+                    mode="lines",
+                    name=f"{manager}_glow",
+                    line=dict(width=12, color=color, shape=line_shape),
+                    opacity=0.15,
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
 
         fig.add_trace(
             go.Scatter(
@@ -442,7 +464,7 @@ def _render_weekly_view(data: pd.DataFrame, year: str, selected_managers: list, 
                 mode="lines+markers",
                 name=manager,
                 line=dict(width=line_width, color=color, shape=line_shape),
-                marker=dict(size=8),
+                marker=dict(size=marker_size),
                 opacity=opacity,
                 hovertemplate=(
                     f"<b>{manager}</b><br>"
@@ -599,13 +621,14 @@ def _render_cumulative_view(data: pd.DataFrame, selected_managers: list, prefix:
                 year_label = years[i + 1] if i + 1 < len(years) else ""
                 fig.add_vline(
                     x=boundary,
-                    line_dash="dash",
-                    line_color="rgba(128, 128, 128, 0.3)",
+                    line_dash="dot",
+                    line_color="rgba(128, 128, 128, 0.15)",
                     line_width=1,
                     annotation_text=str(year_label),
                     annotation_position="top",
-                    annotation_font_size=9,
-                    annotation_font_color="rgba(128, 128, 128, 0.7)",
+                    annotation_font_size=10,
+                    annotation_font_color="rgba(200, 200, 200, 0.9)",
+                    annotation_font_weight=500,
                 )
 
     # Add manager traces

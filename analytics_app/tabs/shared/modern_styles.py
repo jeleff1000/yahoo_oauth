@@ -76,10 +76,19 @@ def apply_modern_styles():
         --space-xl: 1.25rem;
         --space-xxl: 1.5rem;
 
+        /* Section spacing tokens */
+        --section-gap: 1.75rem;
+        --subsection-gap: 0.875rem;
+        --nav-subnav-gap: 0.75rem;
+
         /* Radius */
         --radius-sm: 4px;
         --radius-md: 6px;
         --radius-lg: 8px;
+
+        /* Card background token - standardized */
+        --card-bg: rgba(255, 255, 255, 0.03);
+        --card-bg-hover: rgba(255, 255, 255, 0.06);
 
         /* Shadows */
         --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
@@ -138,6 +147,10 @@ def apply_modern_styles():
             --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
             --shadow-md: 0 2px 4px rgba(0,0,0,0.25);
             --shadow-lg: 0 4px 8px rgba(0,0,0,0.3);
+
+            /* Card background token - dark mode */
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-bg-hover: rgba(255, 255, 255, 0.06);
         }
     }
 
@@ -1294,110 +1307,173 @@ def apply_modern_styles():
         border-radius: 3px;
     }
 
-    /* Segmented control / pill selector */
+    /* ===========================================
+       SUBNAV STYLING - Better visual separation
+       =========================================== */
+    .subnav-container {
+        background: var(--card-bg);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 0.5rem;
+        margin-top: var(--nav-subnav-gap);
+        margin-bottom: var(--subsection-gap);
+    }
+
+    /* Selected tab more prominent */
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background-color: var(--accent) !important;
+        color: white !important;
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 8px rgba(129, 140, 248, 0.4) !important;
+        font-weight: 600 !important;
+    }
+
+    /* ===========================================
+       SEGMENTED CONTROL - Connected pills style
+       =========================================== */
     .segmented-control {
         display: flex;
-        gap: 0.25rem;
+        gap: 0;
         background: var(--bg-secondary);
         border: 1px solid var(--border);
-        border-radius: var(--radius-lg);
-        padding: 0.25rem;
+        border-radius: 6px;
+        padding: 3px;
+        overflow: hidden;
     }
 
     .segmented-control-option {
         flex: 1;
         padding: 0.5rem 1rem;
-        border-radius: var(--radius-md);
+        border-radius: 4px;
         font-size: 0.85rem;
         font-weight: 500;
         text-align: center;
         cursor: pointer;
         transition: all var(--transition-fast);
         background: transparent;
-        color: var(--text-secondary);
+        color: var(--text-muted);
         border: none;
+        margin: 0;
     }
 
-    .segmented-control-option:hover {
+    .segmented-control-option:hover:not(.active) {
         background: var(--bg-tertiary);
-        color: var(--text-primary);
+        color: var(--text-secondary);
     }
 
     .segmented-control-option.active {
         background: var(--accent);
         color: white;
         font-weight: 600;
+        box-shadow: 0 0 6px rgba(129, 140, 248, 0.3);
     }
 
     .segmented-control-helper {
         font-size: 0.65rem;
         color: var(--text-muted);
         text-align: center;
-        margin-top: 0.25rem;
+        margin-top: 0.5rem;
+        line-height: 1.3;
     }
 
-    /* Manager selection card wrapper */
+    /* ===========================================
+       MANAGER SELECTION - Enhanced card
+       =========================================== */
     .manager-selector-card {
-        background: var(--bg-secondary);
+        background: var(--card-bg);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        padding: 0.75rem;
-        margin-bottom: 0.75rem;
+        padding: 1rem;
+        margin-bottom: var(--subsection-gap);
     }
 
     .manager-selector-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border-subtle);
     }
 
     .manager-selector-title {
-        font-size: 0.85rem;
+        font-size: 0.9rem;
         font-weight: 600;
         color: var(--text-primary);
+        letter-spacing: 0.02em;
     }
 
     .manager-count-badge {
         background: var(--accent-subtle);
         border: 1px solid var(--accent);
-        padding: 0.25rem 0.5rem;
+        padding: 0.25rem 0.75rem;
         border-radius: 12px;
         font-size: 0.75rem;
+        font-weight: 500;
         color: var(--text-primary);
     }
 
-    /* Chart title with subtitle */
+    /* Chips area padding */
+    .manager-chips-area {
+        padding: 0.5rem 0;
+    }
+
+    /* Collapsed mobile badge */
+    .manager-collapsed-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        background: var(--accent-subtle);
+        border: 1px solid var(--accent);
+        padding: 0.5rem 0.875rem;
+        border-radius: 16px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .manager-collapsed-badge:hover {
+        background: var(--accent-light);
+    }
+
+    /* ===========================================
+       CHART TITLES - Better hierarchy
+       =========================================== */
     .chart-title-container {
-        margin-bottom: 0.75rem;
+        margin-bottom: var(--subsection-gap);
     }
 
     .chart-title {
         margin: 0;
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 600;
         color: var(--text-primary);
     }
 
     .chart-subtitle {
-        margin: 0.25rem 0 0 0;
+        margin: 0.375rem 0 0 0;
         font-size: 0.8rem;
         color: var(--text-secondary);
+        line-height: 1.4;
     }
 
-    /* Quick stat cards row */
+    /* ===========================================
+       QUICK STAT CARDS - Consistent grid
+       =========================================== */
     .quick-stats-row {
         display: flex;
         gap: 0.5rem;
         flex-wrap: wrap;
-        margin: 1rem 0;
+        margin: var(--subsection-gap) 0;
     }
 
     .quick-stat-card {
-        background: var(--bg-secondary);
+        background: var(--card-bg);
         border: 1px solid var(--border);
         border-radius: var(--radius-md);
-        padding: 0.5rem;
+        padding: 0.625rem 0.5rem;
         text-align: center;
         min-width: 100px;
         flex: 1;
@@ -1414,23 +1490,45 @@ def apply_modern_styles():
         color: var(--text-secondary);
     }
 
-    /* Trend indicator cards */
+    /* ===========================================
+       TREND INDICATOR CARDS - Fixed height grid
+       =========================================== */
+    .trend-cards-container {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin: var(--subsection-gap) 0;
+    }
+
     .trend-card {
-        background: var(--bg-secondary);
+        background: var(--card-bg);
         border: 1px solid var(--border);
         border-radius: var(--radius-md);
-        padding: 0.5rem;
+        padding: 0.625rem 0.5rem;
         text-align: center;
+        min-width: 70px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 70px;
     }
 
     .trend-card-name {
         font-weight: 600;
         font-size: 0.75rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
     }
 
     .trend-card-arrow {
-        font-size: 1.2rem;
+        font-size: 1.25rem;
         font-weight: bold;
+        line-height: 1.2;
+        margin: 0.25rem 0;
     }
 
     .trend-card-arrow.up { color: var(--success); }
@@ -1440,6 +1538,22 @@ def apply_modern_styles():
     .trend-card-value {
         font-size: 0.65rem;
         color: var(--text-muted);
+    }
+
+    /* ===========================================
+       SECTION SPACING - Consistent gaps
+       =========================================== */
+    .viz-section {
+        margin-bottom: var(--section-gap);
+    }
+
+    .viz-subsection {
+        margin-bottom: var(--subsection-gap);
+    }
+
+    /* Typography - slightly reduced weight on headers */
+    .viz-section h2, .viz-section h3 {
+        font-weight: 500;
     }
 
     /* Mobile chart optimizations */
