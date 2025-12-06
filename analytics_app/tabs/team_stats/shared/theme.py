@@ -17,10 +17,13 @@ import streamlit as st
 from typing import Optional, Dict, Any, List, Tuple
 import pandas as pd
 
-# Re-export from the centralized styles module
-from tabs.shared.modern_styles import (
-    render_metric_card,
-)
+# Try to import from centralized module, fallback to local definition
+try:
+    from tabs.shared.modern_styles import render_metric_card
+except ImportError:
+    def render_metric_card(label, value, delta=None, delta_label=None):
+        """Fallback metric card renderer."""
+        st.metric(label=label, value=value, delta=delta)
 
 
 def render_empty_state(
