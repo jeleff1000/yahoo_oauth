@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="are" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -62,14 +60,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1760740985328</updated>
-    </task>
-    <task id="LOCAL-00138" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
-      <option name="closed" value="true" />
-      <created>1764823661723</created>
-      <option name="number" value="00138" />
-      <option name="presentableId" value="LOCAL-00138" />
-      <option name="project" value="LOCAL" />
-      <updated>1764823661723</updated>
     </task>
     <task id="LOCAL-00139" summary="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10;🤖 Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;">
       <option name="closed" value="true" />
@@ -455,7 +445,15 @@
       <option name="project" value="LOCAL" />
       <updated>1765035720189</updated>
     </task>
-    <option name="localTasksCounter" value="187" />
+    <task id="LOCAL-00187" summary="are">
+      <option name="closed" value="true" />
+      <created>1765047164638</created>
+      <option name="number" value="00187" />
+      <option name="presentableId" value="LOCAL-00187" />
+      <option name="project" value="LOCAL" />
+      <updated>1765047164638</updated>
+    </task>
+    <option name="localTasksCounter" value="188" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -481,7 +479,8 @@
     <MESSAGE value="Add separate playoff odds workflow with generic league settings support&#10;&#10;- Create playoff_odds_worker.yml for dedicated Monte Carlo simulations (10,000 default)&#10;- Add league_settings.parquet consolidation step to main import workflow&#10;- Download and extract league settings in playoff workflow for per-year config&#10;- Build league_ids mapping in context for proper year isolation&#10;- 3-hour timeout for full simulations&#10;&#10;This makes playoff odds calculation generic for any league configuration&#10;(playoff teams, bye slots, reseeding rules) instead of hardcoded defaults.&#10;&#10; Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
     <MESSAGE value="Fix manager_week/manager_year_week column mismatch causing transformation failures&#10;&#10;- Add bidirectional alias in add_composite_keys(): if either column exists,&#10;  create the other to ensure consistency between matchup and player data&#10;- Update player_to_matchup_v2.py to handle either column name when validating&#10;- Stop dropping manager_week after processing to preserve it for downstream scripts&#10;- This fixes the root cause of 16/18 transformation failures in cloud imports&#10;&#10; Generated with [Claude Code](https://claude.com/claude-code)&#10;&#10;Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;" />
     <MESSAGE value="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'" />
-    <option name="LAST_COMMIT_MESSAGE" value="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'" />
+    <MESSAGE value="are" />
+    <option name="LAST_COMMIT_MESSAGE" value="are" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
