@@ -753,14 +753,14 @@ def _render_season_averages_view(data: pd.DataFrame, selected_managers: list, pr
     # Create figure
     fig = go.Figure()
 
-    # Add alternating season background highlights
+    # Add alternating season background highlights (subtle 3% opacity)
     years = sorted(data["year"].unique())
     for i, year in enumerate(years):
         if i % 2 == 0:
             fig.add_vrect(
                 x0=year - 0.5,
                 x1=year + 0.5,
-                fillcolor="rgba(128, 128, 128, 0.05)",
+                fillcolor="rgba(128, 128, 128, 0.03)",
                 line_width=0,
             )
 
@@ -799,17 +799,26 @@ def _render_season_averages_view(data: pd.DataFrame, selected_managers: list, pr
 
     # Add manager traces with trend arrows
     trend_info = []
+    compare_annotations = []
 
     for i, manager in enumerate(data["manager"].unique()):
         manager_data = data[data["manager"] == manager].sort_values("year")
 
-        # Determine opacity for compare mode
+        # Determine opacity for compare mode (more dramatic: 15% for non-compared)
         if compare_mode and compare_managers:
-            opacity = 1.0 if manager in compare_managers else 0.2
-            line_width = 3 if manager in compare_managers else 1.5
+            is_compared = manager in compare_managers
+            opacity = 1.0 if is_compared else 0.15
+            line_width = 4 if is_compared else 1.2
+            marker_size = 12 if is_compared else 6
+            # Store annotation info for compared managers
+            if is_compared and len(manager_data) > 0:
+                last_year = manager_data.iloc[-1]["year"]
+                last_avg = manager_data.iloc[-1]["avg_points"]
+                compare_annotations.append((last_year, last_avg, manager, _get_chart_color(i)))
         else:
             opacity = 1.0
             line_width = 2.5
+            marker_size = 10
 
         color = _get_chart_color(i)
 
@@ -832,7 +841,7 @@ def _render_season_averages_view(data: pd.DataFrame, selected_managers: list, pr
                 mode="lines+markers",
                 name=manager,
                 line=dict(width=line_width, color=color),
-                marker=dict(size=10),
+                marker=dict(size=marker_size),
                 opacity=opacity,
                 error_y=error_y_config,
                 hovertemplate=(
@@ -856,6 +865,19 @@ def _render_season_averages_view(data: pd.DataFrame, selected_managers: list, pr
                 else:
                     trend = ("stable", recent_3[-1])
                 trend_info.append((manager, trend[0], trend[1], color))
+
+    # Add annotations for compared managers at rightmost point
+    if compare_mode and compare_annotations:
+        for year, avg, name, color in compare_annotations:
+            fig.add_annotation(
+                x=year + 0.3,
+                y=avg,
+                text=f"<b>{name}</b><br>{avg:.1f}",
+                showarrow=False,
+                font=dict(size=10, color=color),
+                align="left",
+                xanchor="left",
+            )
 
     # Apply layout
     layout = _get_base_chart_layout(height=500)
