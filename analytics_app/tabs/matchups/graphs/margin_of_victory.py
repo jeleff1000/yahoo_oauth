@@ -88,7 +88,7 @@ def display_margin_of_victory_graph(df_dict=None, prefix=""):
         "Select Season", options=year_options, key=f"{prefix}_year"
     )
 
-    # Load data - include close_game preset column if available
+    # Load data - close_game is a preset column from source data
     with st.spinner("Loading margin data..."):
         if selected_year == "All Seasons":
             query = f"""
@@ -100,7 +100,7 @@ def display_margin_of_victory_graph(df_dict=None, prefix=""):
                     opponent_points,
                     (team_points - opponent_points) as margin,
                     CASE WHEN team_points > opponent_points THEN 1 ELSE 0 END as win,
-                    CASE WHEN ABS(team_points - opponent_points) <= 10 THEN 1 ELSE 0 END as close_game
+                    close_game
                 FROM {T['matchup']}
                 WHERE manager IS NOT NULL
                   AND team_points IS NOT NULL
@@ -116,7 +116,7 @@ def display_margin_of_victory_graph(df_dict=None, prefix=""):
                     opponent_points,
                     (team_points - opponent_points) as margin,
                     CASE WHEN team_points > opponent_points THEN 1 ELSE 0 END as win,
-                    CASE WHEN ABS(team_points - opponent_points) <= 10 THEN 1 ELSE 0 END as close_game
+                    close_game
                 FROM {T['matchup']}
                 WHERE year = {int(selected_year)}
                   AND manager IS NOT NULL
@@ -323,7 +323,7 @@ def _render_close_games_tab(filtered_data: pd.DataFrame, selected_managers: list
     st.markdown("""
     <div class="chart-title-container">
         <h3 class="chart-title">Close Game Analysis</h3>
-        <p class="chart-subtitle">Games decided by 10 points or less - who's clutch and who's unlucky?</p>
+        <p class="chart-subtitle">Close games as defined in source data - who's clutch and who's unlucky?</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -475,7 +475,7 @@ def _render_close_games_tab(filtered_data: pd.DataFrame, selected_managers: list
     st.plotly_chart(fig_close, use_container_width=True, key=f"{prefix}_close")
 
     # Close game win percentage horizontal bar chart
-    st.markdown("##### Close Game Win % (games within 10 pts)")
+    st.markdown("##### Close Game Win %")
 
     fig_close_pct = go.Figure()
 
