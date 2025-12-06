@@ -17,11 +17,32 @@ import streamlit as st
 from typing import Optional, Dict, Any, List, Tuple
 import pandas as pd
 
-# Re-export everything from the centralized styles module
-from ...shared.modern_styles import (
+# Re-export from the centralized styles module
+from tabs.shared.modern_styles import (
     render_metric_card,
-    render_empty_state,
 )
+
+
+def render_empty_state(
+    title: str = "No Data Available",
+    message: str = "Try adjusting your filters or selection.",
+    icon: str = "",
+) -> None:
+    """Render a styled empty state."""
+    st.markdown(
+        f"""
+        <div style="
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted, #9CA3AF);
+        ">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">{icon}</div>
+            <div style="font-size: 1.1rem; font-weight: 500; margin-bottom: 0.25rem;">{title}</div>
+            <div style="font-size: 0.9rem;">{message}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def apply_theme_styles():
