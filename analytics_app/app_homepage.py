@@ -555,12 +555,12 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # Navigation using sidebar radio buttons (proper theme support)
-    with st.sidebar:
-        st.markdown("### Navigation")
-        menu_options = [f"{icon} {name}" for icon, name in zip(tab_icons, tab_names)]
+    # Hamburger menu with radio buttons (better theme support than buttons)
+    menu_options = [f"{icon} {name}" for icon, name in zip(tab_icons, tab_names)]
+
+    with st.popover("☰ Menu"):
         new_idx = st.radio(
-            "Section",
+            "Navigate to",
             options=range(len(menu_options)),
             format_func=lambda i: menu_options[i],
             index=current_idx,
