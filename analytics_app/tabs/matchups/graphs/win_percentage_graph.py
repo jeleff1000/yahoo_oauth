@@ -226,7 +226,7 @@ def _render_yearly_view(prefix: str):
     filtered_data = data[data["manager"].isin(selected_managers)]
 
     # Chart options
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         show_trend_lines = st.checkbox(
             "Show Trend Lines",
@@ -239,6 +239,13 @@ def _render_yearly_view(prefix: str):
             value=True,
             key=f"{prefix}_yearly_dynamic",
             help="Scale Y-axis to data range instead of 0-100",
+        )
+    with col3:
+        show_benchmarks = st.checkbox(
+            "Show Benchmarks",
+            value=True,
+            key=f"{prefix}_yearly_benchmarks",
+            help="Show league average and quartile lines",
         )
 
     # Create figure
@@ -301,11 +308,56 @@ def _render_yearly_view(prefix: str):
         line_dash="dash",
         line_color="rgba(255,255,255,0.6)",
         line_width=2,
-        annotation_text=".500 (league average)",
+        annotation_text=".500 (break-even)",
         annotation_position="right",
         annotation_font_size=11,
         annotation_font_color="rgba(255,255,255,0.8)",
     )
+
+    # Add benchmark lines if enabled
+    if show_benchmarks:
+        # Calculate league-wide stats for selected years
+        all_pcts = data["win_pct"]
+        league_avg = all_pcts.mean()
+        q25 = all_pcts.quantile(0.25)
+        q75 = all_pcts.quantile(0.75)
+
+        # League average line (different from .500)
+        if abs(league_avg - 50) > 1:  # Only show if meaningfully different from .500
+            fig.add_hline(
+                y=league_avg,
+                line_dash="dot",
+                line_color="rgba(99, 102, 241, 0.6)",
+                line_width=1.5,
+                annotation_text=f"Avg: {league_avg:.0f}%",
+                annotation_position="left",
+                annotation_font_size=9,
+                annotation_font_color="rgba(99, 102, 241, 0.8)",
+            )
+
+        # Top quartile (75th percentile)
+        fig.add_hline(
+            y=q75,
+            line_dash="dot",
+            line_color="rgba(16, 185, 129, 0.4)",
+            line_width=1,
+            annotation_text=f"Top 25%: {q75:.0f}%",
+            annotation_position="left",
+            annotation_font_size=8,
+            annotation_font_color="rgba(16, 185, 129, 0.7)",
+        )
+
+        # Bottom quartile (25th percentile)
+        fig.add_hline(
+            y=q25,
+            line_dash="dot",
+            line_color="rgba(239, 68, 68, 0.4)",
+            line_width=1,
+            annotation_text=f"Bottom 25%: {q25:.0f}%",
+            annotation_position="left",
+            annotation_font_size=8,
+            annotation_font_color="rgba(239, 68, 68, 0.7)",
+        )
 
     # Apply layout
     layout = _get_base_layout(height=500)

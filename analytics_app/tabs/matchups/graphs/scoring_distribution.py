@@ -185,7 +185,7 @@ def display_scoring_distribution_graph(prefix=""):
         fig.update_layout(
             yaxis_title="Team Points",
             showlegend=False,
-            height=500,
+            height=550,
             template="plotly_white",
             margin=dict(l=50, r=20, t=30, b=100),
             xaxis=dict(tickangle=-45, tickfont=dict(size=10)),
@@ -328,23 +328,23 @@ def display_scoring_distribution_graph(prefix=""):
         fig2.add_hline(y=avg_pts, line_dash="dash", line_color="rgba(255,255,255,0.3)", line_width=1)
         fig2.add_vline(x=avg_cv, line_dash="dash", line_color="rgba(255,255,255,0.3)", line_width=1)
 
-        # Add quadrant labels
+        # Add quadrant labels (softened for less visual noise)
         fig2.add_annotation(text="Elite<br>(High + Consistent)", x=0.12, y=0.95,
                            xref="paper", yref="paper", showarrow=False,
-                           font=dict(size=10, color="rgba(16,185,129,0.9)"),
-                           bgcolor="rgba(16,185,129,0.15)", borderpad=6)
+                           font=dict(size=9, color="rgba(16,185,129,0.6)"),
+                           bgcolor="rgba(16,185,129,0.08)", borderpad=5)
         fig2.add_annotation(text="High Variance<br>Winners", x=0.88, y=0.95,
                            xref="paper", yref="paper", showarrow=False,
-                           font=dict(size=10, color="rgba(245,158,11,0.9)"),
-                           bgcolor="rgba(245,158,11,0.15)", borderpad=6)
+                           font=dict(size=9, color="rgba(245,158,11,0.6)"),
+                           bgcolor="rgba(245,158,11,0.08)", borderpad=5)
         fig2.add_annotation(text="Consistent<br>Mediocrity", x=0.12, y=0.05,
                            xref="paper", yref="paper", showarrow=False,
-                           font=dict(size=10, color="rgba(156,163,175,0.9)"),
-                           bgcolor="rgba(156,163,175,0.15)", borderpad=6)
+                           font=dict(size=9, color="rgba(156,163,175,0.6)"),
+                           bgcolor="rgba(156,163,175,0.08)", borderpad=5)
         fig2.add_annotation(text="Boom or<br>Bust", x=0.88, y=0.05,
                            xref="paper", yref="paper", showarrow=False,
-                           font=dict(size=10, color="rgba(239,68,68,0.9)"),
-                           bgcolor="rgba(239,68,68,0.15)", borderpad=6)
+                           font=dict(size=9, color="rgba(239,68,68,0.6)"),
+                           bgcolor="rgba(239,68,68,0.08)", borderpad=5)
 
         fig2.update_layout(
             xaxis_title="Coefficient of Variation % (lower = more consistent)",
