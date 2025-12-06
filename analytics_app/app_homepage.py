@@ -504,7 +504,7 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Clean hamburger menu - main sections only, subtabs shown as horizontal tabs in content
+    # Simple CSS - minimal styling, let Streamlit handle button colors
     st.markdown(
         """
     <style>
@@ -513,39 +513,7 @@ def main():
         min-width: 200px !important;
     }
 
-    /* Primary button (current section) - bright glow */
-    .stPopover button[kind="primary"],
-    [data-testid="stPopoverBody"] button[kind="primary"] {
-        background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%) !important;
-        border: none !important;
-        box-shadow: 0 0 12px rgba(129, 140, 248, 0.4) !important;
-        font-weight: 600 !important;
-    }
-    .stPopover button[kind="primary"]:hover,
-    [data-testid="stPopoverBody"] button[kind="primary"]:hover {
-        box-shadow: 0 0 18px rgba(129, 140, 248, 0.6) !important;
-    }
-
-    /* Secondary buttons (other sections) */
-    .stPopover button:not([kind="primary"]),
-    [data-testid="stPopoverBody"] button:not([kind="primary"]) {
-        background: transparent !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        color: rgba(255, 255, 255, 0.8) !important;
-    }
-    .stPopover button:not([kind="primary"]):hover,
-    [data-testid="stPopoverBody"] button:not([kind="primary"]):hover {
-        background: rgba(255, 255, 255, 0.08) !important;
-        border-color: rgba(129, 140, 248, 0.4) !important;
-    }
-
-    @media (max-width: 768px) {
-        [data-testid="stPopoverBody"] {
-            min-width: 180px !important;
-        }
-    }
-
-    /* Horizontal subtab buttons - compact tab style (not bulky pills) */
+    /* Horizontal subtab buttons - compact tab style */
     .stColumns button {
         padding: 0.4rem 0.75rem !important;
         min-height: unset !important;
@@ -558,7 +526,7 @@ def main():
         background: transparent !important;
         border: none !important;
         border-bottom: 2px solid #818CF8 !important;
-        color: #A78BFA !important;
+        color: #667eea !important;
         font-weight: 600 !important;
         box-shadow: none !important;
     }
@@ -567,22 +535,15 @@ def main():
         background: transparent !important;
         border: none !important;
         border-bottom: 2px solid transparent !important;
-        color: rgba(255, 255, 255, 0.5) !important;
         font-weight: 500 !important;
+        opacity: 0.6;
     }
     .stColumns button[kind="secondary"]:hover,
     .stColumns button:not([kind="primary"]):hover {
-        background: rgba(255, 255, 255, 0.05) !important;
         border-bottom: 2px solid rgba(129, 140, 248, 0.4) !important;
-        color: rgba(255, 255, 255, 0.85) !important;
-    }
-    /* Underline container for subtabs */
-    .stColumns {
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        margin-bottom: 0.75rem !important;
+        opacity: 1;
     }
 
-    /* Mobile: smaller text */
     @media (max-width: 768px) {
         .stColumns button {
             font-size: 0.75rem !important;
@@ -594,33 +555,29 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # Simple hamburger menu - main sections only
-    with st.popover("☰ Menu"):
-        for i, (name, icon) in enumerate(zip(tab_names, tab_icons)):
-            is_current = i == current_idx
+    # Navigation using sidebar radio buttons (proper theme support)
+    with st.sidebar:
+        st.markdown("### Navigation")
+        menu_options = [f"{icon} {name}" for icon, name in zip(tab_icons, tab_names)]
+        new_idx = st.radio(
+            "Section",
+            options=range(len(menu_options)),
+            format_func=lambda i: menu_options[i],
+            index=current_idx,
+            key="nav_radio",
+            label_visibility="collapsed",
+        )
 
-            if is_current:
-                st.button(
-                    f"{icon} {name}",
-                    key=f"current_{name}",
-                    use_container_width=True,
-                    type="primary",
-                    disabled=True,
-                )
-            else:
-                if st.button(
-                    f"{icon} {name}", key=f"main_{i}", use_container_width=True
-                ):
-                    st.session_state["active_main_tab"] = i
-                    st.session_state[f"subtab_{name}"] = 0
-                    st.rerun()
+        if new_idx != current_idx:
+            st.session_state["active_main_tab"] = new_idx
+            st.session_state[f"subtab_{tab_names[new_idx]}"] = 0
+            st.rerun()
 
     # Get subtabs for current section
     section_subtabs = subtabs.get(selected_tab)
 
     # Show horizontal subtab navigation for sections that have subtabs
     if section_subtabs:
-        # Create pill-style buttons for subtab navigation
         cols = st.columns(len(section_subtabs))
         for idx, (col, subtab_name) in enumerate(zip(cols, section_subtabs)):
             with col:
