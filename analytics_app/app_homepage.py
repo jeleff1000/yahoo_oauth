@@ -504,13 +504,41 @@ def main():
     selected_tab = tab_names[current_idx]
     current_subtab_idx = st.session_state.get(f"subtab_{selected_tab}", 0)
 
-    # Simple CSS - minimal styling, let Streamlit handle button colors
+    # CSS for popover menu and subtabs
     st.markdown(
         """
     <style>
     /* Wider popover */
     [data-testid="stPopoverBody"] {
         min-width: 200px !important;
+    }
+
+    /* Hide radio button circles in popover, show only labels */
+    [data-testid="stPopoverBody"] .stRadio > div {
+        flex-direction: column !important;
+        gap: 0 !important;
+    }
+    [data-testid="stPopoverBody"] .stRadio label {
+        padding: 0.6rem 1rem !important;
+        margin: 0 !important;
+        border-radius: 6px !important;
+        cursor: pointer !important;
+        transition: background 0.15s ease !important;
+    }
+    [data-testid="stPopoverBody"] .stRadio label:hover {
+        background: var(--accent-subtle, rgba(102, 126, 234, 0.1)) !important;
+    }
+    [data-testid="stPopoverBody"] .stRadio label[data-checked="true"] {
+        background: var(--accent, #667eea) !important;
+        color: white !important;
+        font-weight: 600 !important;
+    }
+    /* Hide the actual radio button circle */
+    [data-testid="stPopoverBody"] .stRadio input[type="radio"] {
+        display: none !important;
+    }
+    [data-testid="stPopoverBody"] .stRadio label > div:first-child {
+        display: none !important;
     }
 
     /* Horizontal subtab buttons - compact tab style */
