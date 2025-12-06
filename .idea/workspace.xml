@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'" />
+    <list default="true" id="4fd5fdfa-1f72-4bf5-9283-4a1ab46f72ec" name="Changes" comment="Traceback (most recent call last):&#10;  File &quot;/mount/src/yahoo_oauth/main.py&quot;, line 1594, in perform_import_flow&#10;    if &quot;year&quot; in row and row[&quot;year&quot;]:&#10;                         ~~~^^^^^^^^&#10;TypeError: string indices must be integers, not 'str'">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
