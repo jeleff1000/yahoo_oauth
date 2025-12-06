@@ -521,9 +521,11 @@ def main():
     [data-testid="stPopoverBody"] .stRadio label {
         padding: 0.6rem 1rem !important;
         margin: 0 !important;
+        border: none !important;
         border-radius: 6px !important;
         cursor: pointer !important;
         transition: background 0.15s ease !important;
+        background: transparent !important;
     }
     [data-testid="stPopoverBody"] .stRadio label:hover {
         background: var(--accent-subtle, rgba(102, 126, 234, 0.1)) !important;
