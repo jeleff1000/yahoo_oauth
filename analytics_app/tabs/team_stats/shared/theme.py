@@ -1,9 +1,6 @@
 """
 Theming system and styled UI components for team stats.
 
-This module re-exports all styling utilities from the centralized modern_styles module.
-Import from here for backwards compatibility, but all styles are now centralized.
-
 Provides:
 - Light/dark mode support via CSS variables
 - Styled info/success/warning/error boxes
@@ -11,6 +8,8 @@ Provides:
 - Metric cards for displaying statistics
 - Theme-aware table styling
 - Loading states and empty states
+
+Updated: Force cache clear
 """
 
 import streamlit as st
